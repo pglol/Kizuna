@@ -222,6 +222,12 @@ public final class Classes {
     public float heal(ServerPlayerEntity healer, LivingEntity target, float amount) {
         if (amount <= 0 || !target.isAlive()) return 0;
         if (pr(healer).has(Skill.MED_STEADY)) amount *= 1.25f;
+        // A medic in the thick of it can't out-heal a fight: mending yourself works at half, mending
+        // anyone who's under attack (or while you're swinging yourself) far less. Cut them down fast
+        // and the healing can't keep up; get them out of the fight first.
+        if (target == healer) amount *= 0.5f;
+        if (target.getAttacker() != null && target.age - target.getLastAttackedTime() < 100) amount *= 0.4f;
+        if (healer.age - healer.getLastAttackTime() < 80) amount *= 0.5f;
         float before = target.getHealth();
         target.heal(amount);
         float done = target.getHealth() - before;
@@ -534,8 +540,8 @@ public final class Classes {
             heal(p, a, a.getMaxHealth());
             a.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 120, 0, false, true, true));
             if (a == p && st(p).alone) {
-                a.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 160, 2, false, true, true));
-                a.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 300, 1, false, true, true));
+                a.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 120, 0, false, true, true));
+                a.addStatusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 200, 0, false, true, true));
             }
             for (var e : new ArrayList<>(a.getStatusEffects())) {
                 if (e.getEffectType().value().getCategory() == net.minecraft.entity.effect.StatusEffectCategory.HARMFUL) a.removeStatusEffect(e.getEffectType());
@@ -899,7 +905,10 @@ public final class Classes {
                 for (ServerPlayerEntity a : z.world().getPlayers()) {
                     if (a.getPos().squaredDistanceTo(z.at()) > 36) continue;
                     if (!a.getUuid().equals(z.owner()) && !AotRpg.PARTIES.same(z.owner(), a.getUuid())) continue;
-                    a.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40, 1, false, false, true));
+                    // The medic's own zone mends them slower, and not at all mid-fight.
+                    boolean self = a.getUuid().equals(z.owner());
+                    if (self && a.getAttacker() != null && a.age - a.getLastAttackedTime() < 100) continue;
+                    a.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40, self ? 0 : 1, false, false, true));
                 }
             }
         }

@@ -36,30 +36,24 @@ public class AotPauseScreen extends Screen {
         boolean war = ClientState.factions != null && !ClientState.factions.event().isEmpty();
         gridW = 3 * TW + 2 * GAP;
         gridX = Math.max(12, Math.min(width / 2 - gridW + 40, width - gridW - 12));
-        // Rows: resume, 4 sections (2 rows each), system; shrink the buttons on short screens.
-        int bh = height >= 330 ? 20 : 18;
-        int total = (bh + 6) + 4 * 11 + 7 * (bh + GAP) + (bh + 8);
+        int bh = height >= 330 ? 22 : 18;
+        int total = (bh + 6) + 11 + 3 * (bh + GAP) + (bh + 8);
         int y = Math.max(48, (height - total) / 2 + 12);
         int x = gridX;
 
-        add(x, y, gridW, bh, Ui.title("RESUME"), () -> client.setScreen(null)).textScale = 1.2f;
-        y += bh + 6;
-
-        y = section(y, bh, "Character", new Tile[] {
-            new Tile("Character [K]", "minecraft:writable_book", hasChar, () -> client.setScreen(new CharacterScreen(0)), "character"),
-            new Tile("Satchel [B]", "minecraft:bundle", hasChar, () -> ClientPlayNetworking.send(new Net.OpenSatchel())),
+        // Few buttons: the four you use most, and four groups that open in place.
+        Tile[] character = {
             new Tile("Characters", "minecraft:armor_stand", open, () -> ClientPlayNetworking.send(new Net.CharacterAction("list", 0))),
-            new Tile("Game Mode", "minecraft:compass", hasChar && open, () -> ClientPlayNetworking.send(new Net.ModeAction("open")))});
-        locking = !open;
-        y = section(y, bh, "Adventure", new Tile[] {
-            new Tile("Journal [J]", "minecraft:book", hasChar, () -> client.setScreen(new JournalScreen())),
-            new Tile("World Map [M]", "minecraft:filled_map", true, () -> client.setScreen(new WorldMapScreen())),
+            new Tile("Game Mode", "minecraft:compass", hasChar && open, () -> ClientPlayNetworking.send(new Net.ModeAction("open"))),
+            new Tile("Combat Camera", "minecraft:spyglass", true, () -> client.setScreen(new ShoulderSettingsScreen(this))),
+            new Tile("Server & Ranks", "minecraft:gold_ingot", true, () -> client.setScreen(new StatsScreen(this, 1))),
+            new Tile("Options", "minecraft:comparator", true, () -> client.setScreen(new OptionsScreen(this, client.options))),
+            mods ? new Tile("Mods", "minecraft:command_block", true, this::openModMenu) : null};
+        Tile[] progress = {
             new Tile("Tasks & Titles", "minecraft:target", hasChar, () -> ClientPlayNetworking.send(new Net.TaskAction("open", "")), "tasks"),
             new Tile("Battle Pass", "minecraft:nether_star", hasChar, () -> ClientPlayNetworking.send(new Net.PassAction("open", 0)), "pass"),
-            new Tile("Events", "minecraft:firework_rocket", hasChar, () -> ClientPlayNetworking.send(new Net.EventAction("open", ""))),
-            new Tile("Server & Ranks", "minecraft:gold_ingot", true, () -> client.setScreen(new StatsScreen(this, 1))),
-            new Tile("Combat Camera", "minecraft:spyglass", true, () -> client.setScreen(new ShoulderSettingsScreen(this)))});
-        y = section(y, bh, "Community", new Tile[] {
+            new Tile("Events", "minecraft:firework_rocket", hasChar, () -> ClientPlayNetworking.send(new Net.EventAction("open", "")))};
+        Tile[] community = {
             new Tile("Social", "minecraft:bell", hasChar, () -> ClientPlayNetworking.send(new Net.SocialAction("open", null))),
             new Tile(war ? "Factions ⚔" : "Factions", "minecraft:shield", hasChar, () -> ClientPlayNetworking.send(new Net.FactionAction("open", ""))),
             new Tile("Regiment", "minecraft:white_banner", hasChar, () -> ClientPlayNetworking.send(new Net.RegimentAction("open", ""))),
@@ -71,15 +65,39 @@ public class AotPauseScreen extends Screen {
             new Tile(InboxScreen.waiting() > 0 ? "Inbox (" + InboxScreen.waiting() + ")" : "Inbox", "minecraft:chest", hasChar, () -> {
                 client.setScreen(new InboxScreen(this));
                 ClientPlayNetworking.send(new Net.InboxAction("open", ""));
-            }, "inbox")});
-        locking = false;
-        y = section(y, bh, "Home", new Tile[] {
+            }, "inbox")};
+        Tile[] home = {
             new Tile("Home", "minecraft:oak_door", hasChar, () -> ClientPlayNetworking.send(new Net.HomeAction("list", -1, ""))),
             new Tile("Stables", "minecraft:saddle", hasChar, () -> ClientPlayNetworking.send(new Net.StableAction("view", "", ""))),
             new Tile("Estate & Pets", "minecraft:bricks", hasChar, () -> ClientPlayNetworking.send(new Net.EstateAction("open", ""))),
-            // Operators: every property in the world, owners, offers and resets.
-            new Tile("Properties", "minecraft:filled_map", client.player != null && client.player.hasPermissionLevel(2),
-                () -> client.player.networkHandler.sendChatCommand("home admin"))});
+            op ? new Tile("Properties", "minecraft:filled_map", true, () -> client.player.networkHandler.sendChatCommand("home admin")) : null};
+
+        if (page == null) {
+            add(x, y, gridW, bh, Ui.title("RESUME"), () -> client.setScreen(null)).textScale = 1.2f;
+            y += bh + 6;
+            y = section(y, bh, "", new Tile[] {
+                new Tile("Character [K]", "minecraft:writable_book", hasChar, () -> client.setScreen(new CharacterScreen(0)), "character"),
+                new Tile("Satchel [B]", "minecraft:bundle", hasChar, () -> ClientPlayNetworking.send(new Net.OpenSatchel())),
+                new Tile("Journal [J]", "minecraft:book", hasChar, () -> client.setScreen(new JournalScreen())),
+                new Tile("World Map [M]", "minecraft:filled_map", true, () -> client.setScreen(new WorldMapScreen())),
+                group("Progress", "minecraft:nether_star", progress),
+                group(war ? "Community ⚔" : "Community", "minecraft:bell", community),
+                group("Home", "minecraft:oak_door", home),
+                group("Settings", "minecraft:comparator", character)});
+        } else {
+            add(x, y, gridW, bh, Text.literal("‹  Back"), () -> {
+                page = null;
+                clearAndInit();
+            });
+            y += bh + 6;
+            Tile[] tiles = switch (page) {
+                case "Progress" -> progress;
+                case "Home" -> home;
+                case "Settings" -> character;
+                default -> community;
+            };
+            y = section(y, bh, page, tiles);
+        }
         if (war) {
             for (var el : children()) {
                 if (el instanceof AotButton b && b.getMessage().getString().startsWith("Factions")) b.accent = 0xFFE04A3A;
@@ -87,13 +105,27 @@ public class AotPauseScreen extends Screen {
         }
 
         y += 4;
-        int n = mods ? 3 : 2;
-        int sw = (gridW - (n - 1) * GAP) / n;
-        add(x, y, sw, bh, Text.literal("Options"), () -> client.setScreen(new OptionsScreen(this, client.options)));
-        if (mods) add(x + sw + GAP, y, sw, bh, Text.literal("Mods"), this::openModMenu);
-        AotButton leave = add(x + (n - 1) * (sw + GAP), y, gridW - (n - 1) * (sw + GAP), bh,
-            Text.literal(client.isInSingleplayer() ? "Save and quit" : "Leave server"), this::leave);
+        AotButton leave = add(x, y, gridW, bh, Text.literal(client.isInSingleplayer() ? "Save and quit" : "Leave server"), this::leave);
         leave.accent = Ui.RED;
+    }
+
+    /** Which group page is open (null: the main page). */
+    private static String page;
+
+    @Override
+    public void removed() {
+        page = null;
+    }
+
+    /** A tile that opens a group of tiles in place; it lights up if anything inside wants you. */
+    private Tile group(String name, String icon, Tile[] tiles) {
+        String alert = null;
+        for (Tile t : tiles) if (t != null && t.alert() != null && ClientState.alerts.contains(t.alert())) alert = t.alert();
+        String key = name.startsWith("Community") ? "Community" : name;
+        return new Tile(name + "  ›", icon, true, () -> {
+            page = key;
+            clearAndInit();
+        }, alert);
     }
 
     private record Tile(String label, String icon, boolean active, Runnable action, String alert) {
@@ -116,9 +148,14 @@ public class AotPauseScreen extends Screen {
     private final java.util.List<String> headerNames = new java.util.ArrayList<>();
 
     /** A labelled block of tiles, three per row. Returns the y below it. */
-    private int section(int y, int bh, String name, Tile[] tiles) {
-        headers.add(new int[] {gridX, y});
-        headerNames.add(name);
+    private int section(int y, int bh, String name, Tile[] all) {
+        java.util.List<Tile> list = new java.util.ArrayList<>();
+        for (Tile t : all) if (t != null) list.add(t);
+        Tile[] tiles = list.toArray(new Tile[0]);
+        if (!name.isEmpty()) {
+            headers.add(new int[] {gridX, y});
+            headerNames.add(name);
+        }
         y += 11;
         for (int i = 0; i < tiles.length; i++) {
             Tile t = tiles[i];
