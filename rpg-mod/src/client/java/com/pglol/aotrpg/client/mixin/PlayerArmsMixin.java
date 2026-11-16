@@ -14,6 +14,8 @@ public abstract class PlayerArmsMixin {
     @Inject(method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V", at = @At("TAIL"), require = 0)
     private void aotrpg$arms(LivingEntity e, float a, float b, float c, float d, float f, CallbackInfo ci) {
         PlayerEntityModel<?> m = (PlayerEntityModel<?>) (Object) this;
+        // Run styles and air moves first, so the blades' effects follow the arms as drawn.
+        com.pglol.aotrpg.client.Poses.apply(m, e, a, b, c);
         InfusionFx.arms(e.getId(), m.rightArm, m.leftArm);
     }
 }

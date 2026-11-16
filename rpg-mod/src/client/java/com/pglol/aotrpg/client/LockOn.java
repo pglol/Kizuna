@@ -40,6 +40,10 @@ public final class LockOn {
     private static Part part = Part.BODY;
     private static long lastFrame;
 
+    public static Entity target() {
+        return target;
+    }
+
     public static boolean locked() {
         return target != null;
     }

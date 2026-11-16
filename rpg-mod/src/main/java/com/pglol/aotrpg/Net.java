@@ -1576,6 +1576,21 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Server -> client: how this player runs (a style id; "" for the ordinary run). */
+    public record RunStyle(java.util.UUID player, String style) implements CustomPayload {
+        public static final Id<RunStyle> ID = id("run_style");
+        public static final PacketCodec<RegistryByteBuf, RunStyle> CODEC = PacketCodec.of((v, b) -> { b.writeUuid(v.player); b.writeString(v.style); },
+            b -> new RunStyle(b.readUuid(), b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Client -> server: the run style I picked. */
+    public record RunStyleSet(String style) implements CustomPayload {
+        public static final Id<RunStyleSet> ID = id("run_style_set");
+        public static final PacketCodec<RegistryByteBuf, RunStyleSet> CODEC = PacketCodec.of((v, b) -> b.writeString(v.style), b -> new RunStyleSet(b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: a duel's face-off: the two fighters side by side, VS, and the count to the fight. */
     public record DuelIntro(java.util.UUID a, String aName, int aLevel, String aRole, java.util.UUID b, String bName, int bLevel, String bRole,
                             String rules) implements CustomPayload {
@@ -2504,6 +2519,8 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(TroopAnim.ID, TroopAnim.CODEC);
         PayloadTypeRegistry.playS2C().register(CraftView.ID, CraftView.CODEC);
         PayloadTypeRegistry.playS2C().register(IslandSky.ID, IslandSky.CODEC);
+        PayloadTypeRegistry.playS2C().register(RunStyle.ID, RunStyle.CODEC);
+        PayloadTypeRegistry.playC2S().register(RunStyleSet.ID, RunStyleSet.CODEC);
         PayloadTypeRegistry.playC2S().register(CraftAction.ID, CraftAction.CODEC);
         PayloadTypeRegistry.playS2C().register(Quake.ID, Quake.CODEC);
         PayloadTypeRegistry.playS2C().register(DuelIntro.ID, DuelIntro.CODEC);

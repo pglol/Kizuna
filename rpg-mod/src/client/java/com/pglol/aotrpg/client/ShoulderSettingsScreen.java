@@ -52,7 +52,27 @@ public final class ShoulderSettingsScreen extends Screen {
     @Override
     protected void init() {
         var c = ShoulderCam.cfg;
-        int w = 220, x = width / 2 - w / 2, y = 56, gap = 24;
+        // Two columns: the camera on the left, how you move and fight in the air on the right.
+        int w = 220, x = width / 2 - w - 6, y = 56, gap = 24;
+        int mx = width / 2 + 6, my = 56;
+        moveY = my - 14;
+        moveX = mx;
+        addDrawableChild(new AotButton(mx, my, w, 20, Text.literal("Run style: " + Poses.name(c.runStyle)), () -> {
+            c.runStyle = Poses.next(c.runStyle);
+            Poses.announce();
+            clearAndInit();
+        }));
+        my += gap;
+        String[] slams = {"Crescent Slam", "Spiral Drop", "Piercing Dive"};
+        addDrawableChild(new AotButton(mx, my, w, 20, Text.literal("Air slam: " + slams[Math.max(0, Math.min(2, c.slam - 3))]), () -> {
+            c.slam = c.slam >= 5 ? 3 : c.slam + 1;
+            clearAndInit();
+        }));
+        my += gap;
+        addDrawableChild(new AotButton(mx, my, w, 20, Text.literal("Dash at targets: " + (c.dashHoming ? "On" : "Off")), () -> {
+            c.dashHoming = !c.dashHoming;
+            clearAndInit();
+        })).selected(c.dashHoming);
         addDrawableChild(new AotButton(x, y, w, 20, Text.literal("On lock-on: " + (c.onLockOn ? "On" : "Off")), () -> {
             c.onLockOn = !c.onLockOn;
             clearAndInit();
@@ -80,16 +100,25 @@ public final class ShoulderSettingsScreen extends Screen {
         addDrawableChild(new Slider(x, y, w, "Banking", 0f, 2f, c.bank, v -> c.bank = v, pct));
         y += gap + 6;
         addDrawableChild(new AotButton(x, y, w / 2 - 2, 20, Text.literal("Defaults"), () -> {
+            String run = ShoulderCam.cfg.runStyle;
+            int slam = ShoulderCam.cfg.slam;
+            boolean dash = ShoulderCam.cfg.dashHoming;
             ShoulderCam.cfg = new ShoulderCam.Settings();
+            ShoulderCam.cfg.runStyle = run;
+            ShoulderCam.cfg.slam = slam;
+            ShoulderCam.cfg.dashHoming = dash;
             clearAndInit();
         }));
         addDrawableChild(new AotButton(x + w / 2 + 2, y, w / 2 - 2, 20, Text.literal("Done"), this::close));
     }
 
+    private int moveX, moveY;
+
     @Override
     public void renderBackground(DrawContext c, int mouseX, int mouseY, float delta) {
         Ui.backdrop(c, width, height);
-        Ui.text(c, Ui.title("COMBAT CAMERA"), width / 2f, 22, 1.3f, Ui.GOLD, true);
+        Ui.text(c, Ui.heading("MOVEMENT & MOVES"), moveX, moveY, 0.7f, Ui.GOLD, false);
+        Ui.text(c, Ui.title("COMBAT & MOVEMENT"), width / 2f, 22, 1.3f, Ui.GOLD, true);
         String key = ShoulderCam.swapKey == null ? "Caps Lock" : ShoulderCam.swapKey.getBoundKeyLocalizedText().getString();
         Ui.text(c, Text.literal("Swap shoulders: " + key), width / 2f, 38, 0.75f, 0xFFB8B0A0, true);
     }

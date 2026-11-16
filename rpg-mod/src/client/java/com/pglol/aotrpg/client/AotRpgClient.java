@@ -298,6 +298,8 @@ public final class AotRpgClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(Net.GrabProgress.ID, (payload, ctx) -> TitanState.onProgress(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.OdmState.ID, (payload, ctx) -> OdmMoves.onState(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.OdmMove.ID, (payload, ctx) -> OdmMoves.onMove(payload));
+        ClientPlayNetworking.registerGlobalReceiver(Net.RunStyle.ID, (payload, ctx) -> Poses.on(payload));
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((h, sender, mc) -> mc.execute(Poses::announce));
         ClientPlayNetworking.registerGlobalReceiver(Net.Chatter.ID, (payload, ctx) -> ChatterFx.onChatter(payload));
         WorldRenderEvents.AFTER_ENTITIES.register(TitanPlates::render);
         HudRenderCallback.EVENT.register(TitanPlates::renderHud);

@@ -40,6 +40,11 @@ public final class ShoulderCam {
         public float fovKick = 12f;
         /** Banking into turns (0 none .. 2 a lot). */
         public float bank = 1f;
+        /** How you run (see Poses), and the moves you take into the air. */
+        public String runStyle = "";
+        /** Slam slash: 3 Crescent, 4 Spiral, 5 Piercing Dive. */
+        public int slam = 3;
+        public boolean dashHoming = true;
     }
 
     public static Settings cfg = new Settings();
@@ -73,6 +78,19 @@ public final class ShoulderCam {
     private static Vec3d offset, offsetVel = Vec3d.ZERO;
     private static float roll, fovNow, lastYaw;
     private static double aimDist;
+    /** Aiming down the APG (0 .. 1, eased). */
+    private static float aimNow;
+
+    /** Right mouse held with the APG gun in hand, in third person: tight over the shoulder, zoomed. */
+    private static boolean aiming(MinecraftClient mc) {
+        return mc.player != null && mc.currentScreen == null && mc.options.useKey.isPressed()
+            && com.pglol.aotrpg.AotItems.isApgGun(mc.player.getMainHandStack())
+            && mc.options.getPerspective() == Perspective.THIRD_PERSON_BACK;
+    }
+
+    public static boolean aimingDown() {
+        return aimNow > 0.05f;
+    }
     private static long lastFrame;
     private static boolean wanted;
 
@@ -82,6 +100,7 @@ public final class ShoulderCam {
         if (mc.player.isSleeping()) return false;
         Perspective per = mc.options.getPerspective();
         if (cfg.onLockOn && LockOn.locked() && per != Perspective.THIRD_PERSON_FRONT) return true;
+        if (aiming(mc)) return true;
         return cfg.inThirdPerson && per == Perspective.THIRD_PERSON_BACK;
     }
 
@@ -106,6 +125,7 @@ public final class ShoulderCam {
         float dt = lastFrame == 0 ? 0.016f : MathHelper.clamp((now - lastFrame) / 1000f, 0.001f, 0.1f);
         lastFrame = now;
         wanted = want(mc);
+        aimNow = MathHelper.clamp(aimNow + (aiming(mc) ? dt : -dt) / 0.18f, 0, 1);
         // Ease in and out (about a third of a second each way).
         weight = MathHelper.clamp(weight + (wanted ? dt : -dt) / 0.32f, 0, 1);
         if (weight <= 0.001f || mc.player == null || mc.world == null) {
@@ -123,10 +143,12 @@ public final class ShoulderCam {
         Vec3d up = right.crossProduct(fwd).normalize();
         // Shoulders swap with a smooth slide across.
         sideNow += (sideWant - sideNow) * (1 - (float) Math.exp(-dt * 10));
-        Vec3d want = up.multiply(cfg.height).add(right.multiply(cfg.side * sideNow)).subtract(fwd.multiply(cfg.distance));
+        float ak = aimNow * aimNow * (3 - 2 * aimNow);
+        float dist = MathHelper.lerp(ak, cfg.distance, 1.45f), side = MathHelper.lerp(ak, cfg.side, 0.62f), height = MathHelper.lerp(ak, cfg.height, 0.12f);
+        Vec3d want = up.multiply(height).add(right.multiply(side * sideNow)).subtract(fwd.multiply(dist));
         // Trailing your speed: flying on your gear pulls the camera back a little.
         Vec3d vel = p.getVelocity();
-        Vec3d trail = vel.multiply(-cfg.lag * 2.2);
+        Vec3d trail = vel.multiply(-cfg.lag * 2.2 * (1 - ak * 0.8));
         if (trail.length() > 1.6) trail = trail.normalize().multiply(1.6);
         want = want.add(trail);
         // A critically damped spring toward where it wants to be (relative to your eyes, so it
@@ -194,6 +216,18 @@ public final class ShoulderCam {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (!active() || mc.options.hudHidden || mc.options.getPerspective().isFirstPerson() || mc.currentScreen != null) return;
         int x = c.getScaledWindowWidth() / 2, y = c.getScaledWindowHeight() / 2;
+        if (aimNow > 0.05f) {
+            // Down the sights: a tight red ring and a dot.
+            int ra = (int) (230 * aimNow) << 24;
+            int r = Math.round(MathHelper.lerp(aimNow, 9, 5));
+            for (int i = 0; i < 16; i++) {
+                double an = i * Math.PI / 8;
+                int px = x + (int) Math.round(Math.cos(an) * r), py = y + (int) Math.round(Math.sin(an) * r);
+                c.fill(px, py, px + 1, py + 1, ra | 0xFF4A3A);
+            }
+            c.fill(x, y, x + 1, y + 1, ra | 0xFFFFFF);
+            return;
+        }
         int a = (int) (220 * weight) << 24;
         c.fill(x - 4, y, x - 1, y + 1, a | 0xFFFFFF);
         c.fill(x + 2, y, x + 5, y + 1, a | 0xFFFFFF);
@@ -204,6 +238,7 @@ public final class ShoulderCam {
 
     /** Degrees to add to the field of view. */
     public static float fovKick() {
-        return active() ? fovNow * weight : 0;
+        // The lens widens with speed, and closes right in down the APG's sights.
+        return active() ? fovNow * weight - 24f * aimNow * aimNow : 0;
     }
 }

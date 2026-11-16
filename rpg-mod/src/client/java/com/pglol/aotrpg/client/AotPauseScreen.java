@@ -45,7 +45,7 @@ public class AotPauseScreen extends Screen {
         Tile[] character = {
             new Tile("Characters", "minecraft:armor_stand", open, () -> ClientPlayNetworking.send(new Net.CharacterAction("list", 0))),
             new Tile("Game Mode", "minecraft:compass", hasChar && open, () -> ClientPlayNetworking.send(new Net.ModeAction("open"))),
-            new Tile("Combat Camera", "minecraft:spyglass", true, () -> client.setScreen(new ShoulderSettingsScreen(this))),
+            new Tile("Combat & Movement", "minecraft:spyglass", true, () -> client.setScreen(new ShoulderSettingsScreen(this))),
             new Tile("Server & Ranks", "minecraft:gold_ingot", true, () -> client.setScreen(new StatsScreen(this, 1))),
             new Tile("Options", "minecraft:comparator", true, () -> client.setScreen(new OptionsScreen(this, client.options))),
             mods ? new Tile("Mods", "minecraft:command_block", true, this::openModMenu) : null};

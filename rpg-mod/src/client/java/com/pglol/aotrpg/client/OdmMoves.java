@@ -24,8 +24,10 @@ import java.util.Map;
 public final class OdmMoves {
     private OdmMoves() {}
 
-    public static final int DASH = 0, UP = 1, FLIP = 2;
-    private static final long COOLDOWN_MS = 1000, EARLY_MS = 350, FLIP_MS = 560, LEAN_MS = 460;
+    public static final int DASH = 0, UP = 1, FLIP = 2, SLAM = 3;
+    private static final long COOLDOWN_MS = 1000, EARLY_MS = 350, FLIP_MS = 560, LEAN_MS = 460, SLAM_MS = 650, SLAM_COOLDOWN_MS = 3000, HOLD_MS = 260;
+    private static long attackHeldSince, slamUntil;
+    private static boolean slamming;
 
     public static boolean gear;
     public static float gas = -1;
@@ -56,6 +58,7 @@ public final class OdmMoves {
         long now = Util.getMeasuringTimeMs();
         anims.values().removeIf(a -> now - a.at() > 1000);
         boolean onGround = pl.isOnGround();
+        slamTick(mc, pl, now, onGround);
         if (onGround || pl.isTouchingWater() || pl.hasVehicle() || pl.isClimbing()) {
             airUsed = 0;
             releasedInAir = false;
@@ -113,6 +116,12 @@ public final class OdmMoves {
                 v = v.multiply(0.1, 1, 0.1);
             } else {
                 dir = moving ? look.add(wish.multiply(0.6)).normalize() : look;
+                // A dash at someone: straight for whoever you're locked on to, or right under your crosshair.
+                net.minecraft.entity.Entity foe = ShoulderCam.cfg.dashHoming ? dashTarget(mc, pl) : null;
+                if (foe != null) {
+                    Vec3d to = foe.getBoundingBox().getCenter().subtract(pl.getEyePos());
+                    if (to.lengthSquared() > 1) dir = to.normalize();
+                }
             }
             nv = v.multiply(0.3).add(dir.multiply(1.3));
             nv = new Vec3d(nv.x, Math.max(nv.y, dir.y * 1.3 + 0.3), nv.z);
@@ -126,17 +135,78 @@ public final class OdmMoves {
         anims.put(pl.getId(), new Anim(kind, dirYaw, now, pl.getYaw()));
     }
 
+    /** Who a dash homes in on: the lock-on target, else whoever's nearest the crosshair (within ~16° and 22 blocks). */
+    private static net.minecraft.entity.Entity dashTarget(MinecraftClient mc, ClientPlayerEntity pl) {
+        net.minecraft.entity.Entity t = LockOn.target();
+        if (t != null && t.isAlive() && t.squaredDistanceTo(pl) < 26 * 26) return t;
+        Vec3d eye = pl.getEyePos(), look = pl.getRotationVec(1f);
+        net.minecraft.entity.Entity best = null;
+        double bd = 0.96;
+        for (net.minecraft.entity.Entity e : mc.world.getOtherEntities(pl, pl.getBoundingBox().expand(22))) {
+            if (!(e instanceof net.minecraft.entity.LivingEntity le) || !le.isAlive() || e.isInvisible()) continue;
+            boolean foe = e instanceof net.minecraft.entity.player.PlayerEntity || e instanceof net.minecraft.entity.mob.Monster || LockOn.titan(e)
+                || e.hasCustomName() && e.getCustomName().getString().contains("Marleyan");
+            if (!foe || LockOn.titanPart(e)) continue;
+            Vec3d to = e.getBoundingBox().getCenter().subtract(eye);
+            double d = to.length();
+            if (d > 22 || d < 1.5) continue;
+            double dot = to.multiply(1 / d).dotProduct(look);
+            if (dot > bd) {
+                bd = dot;
+                best = e;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Hold the attack button in the air with blades in hand: a slam slash down the way you're
+     * looking (the further out you look, the further it carries you), coming down cutting.
+     */
+    private static void slamTick(MinecraftClient mc, ClientPlayerEntity pl, long now, boolean onGround) {
+        if (onGround || pl.isTouchingWater()) slamming = false;
+        boolean held = mc.options.attackKey.isPressed() && mc.currentScreen == null;
+        if (!held || onGround) {
+            attackHeldSince = 0;
+            return;
+        }
+        if (attackHeldSince == 0) attackHeldSince = now;
+        if (slamming || now - attackHeldSince < HOLD_MS || now < slamUntil) return;
+        if (pl.getAbilities().flying || pl.hasVehicle() || pl.isClimbing() || pl.isFallFlying() || TitanState.grabbed() || TitanState.shifted()) return;
+        var held0 = pl.getMainHandStack();
+        if (!com.pglol.aotrpg.Guard.melee(held0) || com.pglol.aotrpg.AotItems.isApgGun(held0)) return;
+        // High enough to make it a dive.
+        Vec3d from = pl.getPos();
+        var hit = mc.world.raycast(new net.minecraft.world.RaycastContext(from, from.add(0, -2.2, 0),
+            net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.ANY, pl));
+        if (hit.getType() != net.minecraft.util.hit.HitResult.Type.MISS) return;
+        Vec3d look = pl.getRotationVec(1f);
+        Vec3d dir = new Vec3d(look.x, Math.min(look.y, -0.55), look.z).normalize();
+        pl.setVelocity(dir.multiply(1.7));
+        int kind = MathHelper.clamp(ShoulderCam.cfg.slam, 3, 5);
+        float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
+        slamming = true;
+        slamUntil = now + SLAM_COOLDOWN_MS;
+        ClientPlayNetworking.send(new Net.OdmJump(kind, yaw));
+        anims.put(pl.getId(), new Anim(kind, yaw, now, pl.getYaw()));
+        pl.playSound(net.minecraft.sound.SoundEvents.ITEM_TRIDENT_RIPTIDE_1.value(), 0.6f, 1.5f);
+    }
+
     /** The move playing on an entity, or null. */
     public static Anim anim(int entityId) {
         Anim a = anims.get(entityId);
         if (a == null) return null;
         long age = Util.getMeasuringTimeMs() - a.at();
-        return age > (a.kind() == FLIP ? FLIP_MS : LEAN_MS) ? null : a;
+        return age > duration(a) ? null : a;
+    }
+
+    private static long duration(Anim a) {
+        return a.kind() == FLIP ? FLIP_MS : a.kind() >= SLAM ? SLAM_MS : LEAN_MS;
     }
 
     /** 0..1 through the move, eased. */
     public static float progress(Anim a) {
-        float t = (Util.getMeasuringTimeMs() - a.at()) / (float) (a.kind() == FLIP ? FLIP_MS : LEAN_MS);
+        float t = (Util.getMeasuringTimeMs() - a.at()) / (float) duration(a);
         t = MathHelper.clamp(t, 0, 1);
         return t * t * (3 - 2 * t);
     }
@@ -147,6 +217,8 @@ public final class OdmMoves {
         return switch (a.kind()) {
             case FLIP -> 360 * e;
             case DASH -> (float) Math.sin(Math.PI * e) * 55;
+            // The dive: pitched head-down along the line of it, coming back upright to land.
+            case 3, 4, 5 -> (float) Math.sin(Math.PI * Math.min(1, e * 1.1)) * 60;
             default -> 0;
         };
     }

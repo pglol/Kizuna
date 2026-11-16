@@ -231,6 +231,11 @@ public final class OdmBoost {
     // ------------------------------------------------------------------ the boost
 
     public void boost(ServerPlayerEntity p, Net.OdmJump j) {
+        // Slam slashes ride the same message, but cost stamina rather than gas.
+        if (j.kind() >= AirMoves.CRESCENT) {
+            AirMoves.slam(p, j.kind(), j.yaw());
+            return;
+        }
         if (AotRpg.DUELS.blocksOdm(p)) return;
         St s = states.computeIfAbsent(p.getUuid(), k -> new St());
         long now = p.getServerWorld().getTime();
