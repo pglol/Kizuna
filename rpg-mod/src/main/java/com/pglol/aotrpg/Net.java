@@ -1567,6 +1567,15 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Server -> client: how an island's sky looks for the map cycle (its world, time of day, rain, thunder). */
+    public record IslandSky(String world, int time, boolean rain, boolean thunder) implements CustomPayload {
+        public static final Id<IslandSky> ID = id("island_sky");
+        public static final PacketCodec<RegistryByteBuf, IslandSky> CODEC = PacketCodec.of((v, b) -> {
+            b.writeString(v.world); b.writeVarInt(v.time); b.writeBoolean(v.rain); b.writeBoolean(v.thunder);
+        }, b -> new IslandSky(b.readString(), b.readVarInt(), b.readBoolean(), b.readBoolean()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: a duel's face-off: the two fighters side by side, VS, and the count to the fight. */
     public record DuelIntro(java.util.UUID a, String aName, int aLevel, String aRole, java.util.UUID b, String bName, int bLevel, String bRole,
                             String rules) implements CustomPayload {
@@ -2039,7 +2048,8 @@ public final class Net {
     }
 
     /** An island on the lobby's map picker. */
-    public record LobbyIsland(String id, String name, int min, int max, int color) { }
+    public record LobbyIsland(String id, String name, int min, int max, int color, String condition, int conditionColor, boolean bonus,
+                              String next, int minutesLeft) { }
 
     /** Someone in the lobby's social tab: a friend or a recent teammate, and where they are ("aboard", "online", "offline"). */
     public record LobbyFriend(java.util.UUID id, String name, boolean friend, boolean recent, String where) { }
@@ -2059,6 +2069,7 @@ public final class Net {
             b.writeVarInt(v.islands.size());
             for (LobbyIsland i : v.islands) {
                 b.writeString(i.id()); b.writeString(i.name()); b.writeVarInt(i.min()); b.writeVarInt(i.max()); b.writeInt(i.color());
+                b.writeString(i.condition()); b.writeInt(i.conditionColor()); b.writeBoolean(i.bonus()); b.writeString(i.next()); b.writeVarInt(i.minutesLeft());
             }
             b.writeString(v.island); b.writeBoolean(v.fill); b.writeBoolean(v.leader);
             b.writeVarInt(v.squad.size());
@@ -2073,7 +2084,8 @@ public final class Net {
         }, b -> {
             int n = Math.min(b.readVarInt(), 16);
             java.util.List<LobbyIsland> is = new java.util.ArrayList<>();
-            for (int i = 0; i < n; i++) is.add(new LobbyIsland(b.readString(), b.readString(), b.readVarInt(), b.readVarInt(), b.readInt()));
+            for (int i = 0; i < n; i++) is.add(new LobbyIsland(b.readString(), b.readString(), b.readVarInt(), b.readVarInt(), b.readInt(),
+                b.readString(), b.readInt(), b.readBoolean(), b.readString(), b.readVarInt()));
             String island = b.readString();
             boolean fill = b.readBoolean(), leader = b.readBoolean();
             int m = Math.min(b.readVarInt(), 8);
@@ -2491,6 +2503,7 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(Threats.ID, Threats.CODEC);
         PayloadTypeRegistry.playS2C().register(TroopAnim.ID, TroopAnim.CODEC);
         PayloadTypeRegistry.playS2C().register(CraftView.ID, CraftView.CODEC);
+        PayloadTypeRegistry.playS2C().register(IslandSky.ID, IslandSky.CODEC);
         PayloadTypeRegistry.playC2S().register(CraftAction.ID, CraftAction.CODEC);
         PayloadTypeRegistry.playS2C().register(Quake.ID, Quake.CODEC);
         PayloadTypeRegistry.playS2C().register(DuelIntro.ID, DuelIntro.CODEC);

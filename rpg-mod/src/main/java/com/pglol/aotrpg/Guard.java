@@ -99,10 +99,37 @@ public final class Guard {
             return;
         }
         if (!guarding(p)) return;
+        // A raised guard shakes off anyone's hooks: they can't reel you in or swing off you.
+        if (ticks % 2 == 0) shedHooks(p);
         AotRpg.STAMINA.hold(p);
         if (p.isSprinting()) p.setSprinting(false);
         // Raising the blade already slows you like any held use; the key guard needs its own slow.
         if (!raising && ticks % 10 == 0) p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 14, 0, false, false, false));
+    }
+
+    /** An ODM hook (or wire anchor) from someone's gear: not the player's own. */
+    static boolean hook(Entity e, ServerPlayerEntity self) {
+        var id = net.minecraft.registry.Registries.ENTITY_TYPE.getId(e.getType());
+        if (id.getNamespace().equals("minecraft")) return false;
+        String path = id.getPath();
+        if (!(path.contains("hook") || path.contains("grapple") || path.contains("anchor"))) return false;
+        Entity owner = e instanceof net.minecraft.entity.projectile.ProjectileEntity pe ? pe.getOwner() : null;
+        return owner != self;
+    }
+
+    private static void shedHooks(ServerPlayerEntity p) {
+        ServerWorld w = p.getServerWorld();
+        boolean any = false;
+        for (Entity e : w.getOtherEntities(p, p.getBoundingBox().expand(1.2), e -> hook(e, p))) {
+            e.discard();
+            any = true;
+        }
+        if (any) {
+            Vec3d at = p.getEyePos().add(p.getRotationVec(1f).multiply(0.5));
+            w.spawnParticles(net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK, at.x, at.y, at.z, 10, 0.3, 0.3, 0.3, 0.2);
+            w.playSound(null, p.getX(), p.getY() + 1, p.getZ(), SoundEvents.ITEM_SHIELD_BLOCK, SoundCategory.PLAYERS, 0.9f, 1.6f);
+            w.playSound(null, p.getX(), p.getY() + 1, p.getZ(), SoundEvents.BLOCK_CHAIN_BREAK, SoundCategory.PLAYERS, 0.9f, 1.2f);
+        }
     }
 
     public void forget(UUID id) {
@@ -183,7 +210,14 @@ public final class Guard {
                 }
             }
             // Block: a guarding fighter facing the hit.
-            if (!(entity instanceof ServerPlayerEntity def) || !guarding(def) || !inFront(def, src)) return true;
+            if (!(entity instanceof ServerPlayerEntity def) || !guarding(def)) return true;
+            // A hook's hit is turned from any side, and the hook falls away.
+            if (source.getSource() != null && hook(source.getSource(), def)) {
+                source.getSource().discard();
+                shedHooks(def);
+                return false;
+            }
+            if (!inFront(def, src)) return true;
             boolean titan = AotRpg.isTitan(src);
             // A perfect parry: the guard came up just as the hit arrived. Nothing gets through, it
             // costs nothing, the attacker is thrown off balance, and your next cut lands harder.

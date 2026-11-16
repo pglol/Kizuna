@@ -53,7 +53,8 @@ public final class RarityTint {
             outerMode = mode;
             recording = mode != null && mode != net.minecraft.client.render.model.json.ModelTransformationMode.GUI
                 && mode != net.minecraft.client.render.model.json.ModelTransformationMode.FIXED
-                && owner != null && !owner.isEmpty() && com.pglol.aotrpg.Infusions.of(owner) != null && GearUi.rarity(owner) >= 2;
+                && owner != null && !owner.isEmpty() && com.pglol.aotrpg.Infusions.of(owner) != null && GearUi.rarity(owner) >= 2
+                && com.pglol.aotrpg.Infusions.armed(owner);
             if (recording) {
                 vn = 0;
                 recStack = owner;

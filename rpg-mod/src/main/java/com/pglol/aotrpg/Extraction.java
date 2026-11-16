@@ -113,6 +113,92 @@ public final class Extraction {
         }
     }
 
+    /**
+     * The map cycle: every island goes through its own run of conditions, twenty minutes each, the
+     * same for everyone. Night raids and storms pay better (barrels roll a step luckier) and play
+     * harder: dark, or lashed with lightning.
+     */
+    public enum Condition {
+        CLEAR("Clear Skies", 0xFFE8DCA0, 6000, false, false, 0),
+        DUSK("Dusk", 0xFFE0823A, 12500, false, false, 0),
+        NIGHT("Night Raid", 0xFF7A8CFF, 18000, false, false, 1),
+        STORM("Thunderstorm", 0xFF9AD0FF, 7000, true, true, 1),
+        FOG("Grey Rain", 0xFFB8B8B0, 9000, true, false, 0);
+
+        public final String title;
+        public final int color, time, luck;
+        public final boolean rain, thunder;
+
+        Condition(String title, int color, int time, boolean rain, boolean thunder, int luck) {
+            this.title = title;
+            this.color = color;
+            this.time = time;
+            this.rain = rain;
+            this.thunder = thunder;
+            this.luck = luck;
+        }
+    }
+
+    static final long WINDOW_MS = 20 * 60_000L;
+
+    private static Condition[] cycle(Island i) {
+        return switch (i) {
+            case VERDANT -> new Condition[] {Condition.CLEAR, Condition.FOG, Condition.DUSK, Condition.NIGHT, Condition.CLEAR, Condition.STORM};
+            case ASHEN -> new Condition[] {Condition.DUSK, Condition.CLEAR, Condition.STORM, Condition.NIGHT, Condition.CLEAR};
+            case FROSTFELL -> new Condition[] {Condition.CLEAR, Condition.NIGHT, Condition.FOG, Condition.DUSK, Condition.STORM, Condition.NIGHT};
+        };
+    }
+
+    /** The island's condition at this moment (offset = 1 for the next window). */
+    public static Condition condition(Island i, long now, int offset) {
+        Condition[] c = cycle(i);
+        return c[(int) Math.floorMod(now / WINDOW_MS + offset + i.ordinal() * 2L, c.length)];
+    }
+
+    /** What the island feels like right now: its time, its weather. Heralds a change to whoever's out there. */
+    private final Map<Island, Condition> shown = new HashMap<>();
+
+    private void weather(int ticks) {
+        if (ticks % 100 != 13) return;
+        long now = System.currentTimeMillis();
+        for (Island i : Island.values()) {
+            ServerWorld w = server.getWorld(i.world);
+            if (w == null) continue;
+            Condition c = condition(i, now, 0);
+            // The islands share the overworld's clock and weather: each diver's sky is painted on their end.
+            Net.IslandSky sky = new Net.IslandSky(i.world.getValue().toString(), c.time, c.rain, c.thunder);
+            for (ServerPlayerEntity p : w.getPlayers()) if (ServerPlayNetworking.canSend(p, Net.IslandSky.ID)) ServerPlayNetworking.send(p, sky);
+            Condition was = shown.put(i, c);
+            if (was != null && was != c && !w.getPlayers().isEmpty()) {
+                String title = switch (c) {
+                    case NIGHT -> "NIGHT FALLS";
+                    case STORM -> "A STORM ROLLS IN";
+                    case FOG -> "GREY RAIN";
+                    case DUSK -> "DUSK";
+                    default -> "THE SKIES CLEAR";
+                };
+                for (ServerPlayerEntity p : w.getPlayers()) {
+                    String sub = c.luck > 0 ? "Better pickings out here now" : c.title;
+                    if (ServerPlayNetworking.canSend(p, Net.EventBanner.ID)) ServerPlayNetworking.send(p, new Net.EventBanner(title, sub, c.color, "minecraft:clock"));
+                    p.playSoundToPlayer(SoundEvents.ENTITY_ELDER_GUARDIAN_AMBIENT, SoundCategory.MASTER, 0.4f, 0.6f);
+                }
+            }
+            // Storms strike now and then near whoever's out in them (for show; it still makes you jump).
+            if (c.thunder) {
+                for (ServerPlayerEntity p : w.getPlayers()) {
+                    if (w.random.nextInt(6) != 0) continue;
+                    double a = w.random.nextDouble() * Math.PI * 2, d = 14 + w.random.nextInt(40);
+                    int x = (int) (p.getX() + Math.cos(a) * d), z = (int) (p.getZ() + Math.sin(a) * d);
+                    var bolt = net.minecraft.entity.EntityType.LIGHTNING_BOLT.create(w);
+                    if (bolt == null) continue;
+                    bolt.setCosmetic(true);
+                    bolt.refreshPositionAfterTeleport(x + 0.5, w.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING, x, z), z + 0.5);
+                    w.spawnEntity(bolt);
+                }
+            }
+        }
+    }
+
     static final class Run {
         Island island;
         final LinkedHashSet<UUID> members = new LinkedHashSet<>();
@@ -919,7 +1005,12 @@ public final class Extraction {
         Lobby lb = lobby(slot);
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         List<Net.LobbyIsland> is = new ArrayList<>();
-        for (Island i : Island.values()) if (server.getWorld(i.world) != null) is.add(new Net.LobbyIsland(i.id, i.title, i.min, i.max, i.color));
+        long nowMs = System.currentTimeMillis();
+        int minsLeft = (int) Math.ceil((WINDOW_MS - Math.floorMod(nowMs, WINDOW_MS)) / 60_000.0);
+        for (Island i : Island.values()) if (server.getWorld(i.world) != null) {
+            Condition c = condition(i, nowMs, 0), n = condition(i, nowMs, 1);
+            is.add(new Net.LobbyIsland(i.id, i.title, i.min, i.max, i.color, c.title, c.color, c.luck > 0, n.title, minsLeft));
+        }
         UUID lead = leader(slot);
         List<Net.LobbyMember> squad = new ArrayList<>();
         for (ServerPlayerEntity m : aboard(slot)) {
@@ -1332,10 +1423,13 @@ public final class Extraction {
 
     /** A supply barrel: gear for the island's level, gas, blades, and now and then a refueler. */
     static void fill(BarrelBlockEntity b, int level, Random r) {
+        // The island's conditions make for better pickings (night raids, storms).
+        Island isl = b.getWorld() == null ? null : Island.of(b.getWorld());
+        int luck = 1 + (isl == null ? 0 : condition(isl, System.currentTimeMillis(), 0).luck);
         List<ItemStack> loot = new ArrayList<>();
-        int gear = 1 + r.nextInt(3);
+        int gear = 1 + r.nextInt(3) + (luck > 1 && r.nextBoolean() ? 1 : 0);
         for (int i = 0; i < gear; i++) {
-            ItemStack s = Gear.roll(r, Gear.rollRarity(r, 1), Math.max(1, level + r.nextInt(3) - 1));
+            ItemStack s = Gear.roll(r, Gear.rollRarity(r, luck), Math.max(1, level + r.nextInt(3) - 1));
             if (!s.isEmpty()) loot.add(s);
         }
         net.minecraft.item.Item gas = AotItems.exact("gas_canister"), blades = AotItems.exact("blade_component");
@@ -1396,6 +1490,7 @@ public final class Extraction {
             Troops.learnGrip(server, p.getOffHandStack());
         }
         lobbyTick(ticks);
+        weather(ticks);
         if (ticks % 20 == 9) {
             // Aboard but below the basket (a glitch, a lag spike): caught and put back on a bench.
             ServerWorld sw = sky();

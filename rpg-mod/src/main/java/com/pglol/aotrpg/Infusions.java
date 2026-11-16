@@ -1,6 +1,7 @@
 package com.pglol.aotrpg;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
@@ -89,6 +90,48 @@ public final class Infusions {
         }
     }
 
+    /**
+     * Is there steel to carry the element? Danny's blade grips are only armed with a blade loaded,
+     * and that lives on the item as the mod's own data (an empty grip carries none). Anything else
+     * infused (an APG) is always armed.
+     */
+    public static boolean armed(ItemStack s) {
+        if (s == null || s.isEmpty()) return false;
+        var id = net.minecraft.registry.Registries.ITEM.getId(s.getItem());
+        if (!id.getPath().equals("blade")) return true;
+        var cd = s.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA);
+        if (cd != null) {
+            var n = cd.copyNbt();
+            for (String k : n.getKeys()) {
+                if (k.startsWith("aot_")) continue;
+                String lk = k.toLowerCase(java.util.Locale.ROOT);
+                // A count of blades that's run out means empty.
+                if ((lk.contains("count") || lk.equals("blades") || lk.contains("loaded")) && n.get(k) instanceof net.minecraft.nbt.AbstractNbtNumber num) {
+                    if (num.intValue() <= 0) return false;
+                }
+            }
+            for (String k : n.getKeys()) if (!k.startsWith("aot_")) return true;
+        }
+        for (var c : s.getComponents()) {
+            var cid = net.minecraft.registry.Registries.DATA_COMPONENT_TYPE.getId(c.type());
+            if (cid != null && !cid.getNamespace().equals("minecraft")) return true;
+        }
+        return false;
+    }
+
+    /** A hit that came from a grappling hook (or anything thrown), not a blade in hand. */
+    private static boolean thrown(net.minecraft.entity.damage.DamageSource source, LivingEntity attacker, LivingEntity victim) {
+        Entity direct = source.getSource();
+        if (direct instanceof net.minecraft.entity.projectile.ProjectileEntity) return true;
+        if (direct != null && direct != attacker) {
+            String path = net.minecraft.registry.Registries.ENTITY_TYPE.getId(direct.getType()).getPath();
+            if (path.contains("hook") || path.contains("grapple") || path.contains("anchor") || path.contains("wire")) return true;
+        }
+        // Out of blade's reach: it wasn't a cut.
+        double reach = 6 + victim.getWidth() * 0.5;
+        return attacker.squaredDistanceTo(victim) > reach * reach;
+    }
+
     public static Infusion of(ItemStack s) {
         if (!Gear.isGear(s)) return null;
         String id = Gear.data(s).getString("infusion");
@@ -132,11 +175,13 @@ public final class Infusions {
     public static void register() {
         ServerLivingEntityEvents.AFTER_DAMAGE.register((victim, source, base, taken, blocked) -> {
             if (busy || blocked || taken <= 0 || !(source.getAttacker() instanceof ServerPlayerEntity p) || victim == p) return;
+            // Only a cut carries the element: never the hooks, never from range.
+            if (thrown(source, p, victim)) return;
             ItemStack w = p.getMainHandStack();
-            Infusion inf = of(w);
+            Infusion inf = armed(w) ? of(w) : null;
             if (inf == null) {
                 w = p.getOffHandStack();
-                inf = of(w);
+                inf = armed(w) ? of(w) : null;
             }
             if (inf == null) return;
             hit(p, victim, inf, mythic(w), taken);
@@ -236,7 +281,7 @@ public final class Infusions {
     public static void trail(ServerPlayerEntity p, int ticks) {
         if (ticks % 4 != 0 || p.isSpectator() || p.isInvisible()) return;
         ItemStack main = p.getMainHandStack(), off = p.getOffHandStack();
-        Infusion a = of(main), b = of(off);
+        Infusion a = armed(main) ? of(main) : null, b = armed(off) ? of(off) : null;
         if (a == null && b == null) return;
         ServerWorld w = p.getServerWorld();
         double yaw = Math.toRadians(p.getBodyYaw());

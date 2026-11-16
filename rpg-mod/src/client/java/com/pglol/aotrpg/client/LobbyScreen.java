@@ -290,6 +290,10 @@ public final class LobbyScreen extends Screen {
             int lw = 110;
             float pulse = 0.6f + 0.4f * MathHelper.sin(t * 0.004f);
             c.fill(width / 2 - lw, 46, width / 2 + lw, 47, ((int) (160 * pulse) << 24) | (col & 0xFFFFFF));
+            // The map cycle: what it's like out there now, and what's coming.
+            String cond = is.condition().toUpperCase(Locale.ROOT) + (is.bonus() ? "  ·  BONUS LOOT" : "");
+            Ui.text(c, Ui.heading(cond), width / 2f, 51, 0.8f, (a << 24) | (is.conditionColor() & 0xFFFFFF), true);
+            Ui.text(c, Text.literal(is.next() + " in " + is.minutesLeft() + "m"), width / 2f, 61, 0.65f, (a << 24) | 0xB8B0A0, true);
         }
         // Salvage and stash, top right.
         String sv = String.format(Locale.ROOT, "%,d", view.salvage());

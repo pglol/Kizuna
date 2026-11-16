@@ -78,6 +78,8 @@ public final class AotRpgClient implements ClientModInitializer {
         ShoulderCam.load();
         ClientTickEvents.END_CLIENT_TICK.register(ShoulderCam::tick);
         ClientTickEvents.END_CLIENT_TICK.register(WalkInMenus::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(IslandSky::tick);
+        ClientPlayNetworking.registerGlobalReceiver(Net.IslandSky.ID, (payload, ctx) -> IslandSky.on(payload));
         HudRenderCallback.EVENT.register(ShoulderCam::crosshair);
         CombatUi.guardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.guard",
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "category.aot_rpg"));
