@@ -44,6 +44,7 @@ public final class TitanLevels {
     private static final class Nape {
         int strikes;
         long lastAt, approvedUntil;
+        boolean hardSkip;
     }
 
     private final Map<UUID, Nape> napes = new HashMap<>();
@@ -352,7 +353,17 @@ public final class TitanLevels {
         // One strike per swing: Danny's blades can report several hits for one cut.
         if (now - n.lastAt < 180) return true;
         // Twin Cut blades count each nape strike twice.
-        n.strikes += Gear.napeStrikes(p, p.getMainHandStack()) + AotRpg.CLASSES.napeBonus(p, titan);
+        int add = Gear.napeStrikes(p, p.getMainHandStack()) + AotRpg.CLASSES.napeBonus(p, titan);
+        // A shifter's or a boss's nape is hardened: only every other strike bites until a Recon
+        // marks it or an Infantry breaks it open.
+        if (AotRpg.CLASSES.hardened(titan)) {
+            n.hardSkip = !n.hardSkip;
+            if (n.hardSkip) {
+                add = 0;
+                p.sendMessage(net.minecraft.text.Text.literal("HARDENED NAPE · mark it or break it open").formatted(net.minecraft.util.Formatting.GRAY), true);
+            }
+        }
+        n.strikes += add;
         n.lastAt = now;
         int need = needed(p, titan);
         ServerWorld w = (ServerWorld) titan.getWorld();

@@ -131,6 +131,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(AdrenalineClient::render);
         ClientTickEvents.END_CLIENT_TICK.register(AdrenalineClient::tick);
         ClientTickEvents.END_CLIENT_TICK.register(SwingClient::tick);
+        ClientPlayNetworking.registerGlobalReceiver(Net.MentorView.ID, (payload, ctx) -> MentorScreen.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.SwingSpeeds.ID, (payload, ctx) -> SwingClient.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.SwingSeen.ID, (payload, ctx) -> SwingClient.seen(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.RushFx.ID, (payload, ctx) -> AdrenalineClient.on(payload));

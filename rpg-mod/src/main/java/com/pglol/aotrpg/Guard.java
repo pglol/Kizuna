@@ -246,6 +246,7 @@ public final class Guard {
                     net.minecraft.sound.SoundCategory.PLAYERS, 1f, 1.4f);
                 AotRpg.STAMINA.spend(def, -15);
                 counterUntil.put(def.getUuid(), now + 1500);
+                Mentors.count(def, "parries", 1);
                 def.sendMessage(Text.literal("PERFECT PARRY").formatted(Formatting.GOLD, Formatting.BOLD), true);
                 if (titan) {
                     // Nothing stops a titan: you turn the blow and are thrown clear of it.

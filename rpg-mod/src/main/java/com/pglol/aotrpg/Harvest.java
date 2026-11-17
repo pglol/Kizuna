@@ -247,6 +247,7 @@ public final class Harvest {
         AotRpg.CARE.regrowLater(cut, REGROW_TICKS);
         // Wear on the axe: a notch for every few logs.
         tool.damage(Math.max(1, logs.size() / 4), p, EquipmentSlot.MAINHAND);
+        Mentors.count(p, "trees", 1);
         skill(p, cutState, logs.size());
         w.playSound(null, cut, SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR, SoundCategory.BLOCKS, 1f, 0.5f);
         w.playSound(null, cut, SoundEvents.BLOCK_WOOD_BREAK, SoundCategory.BLOCKS, 1.2f, 0.6f);

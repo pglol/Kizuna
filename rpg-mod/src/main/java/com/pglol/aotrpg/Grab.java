@@ -59,6 +59,8 @@ public final class Grab {
         if (vehicle == null || !titan(vehicle) || vehicle.getControllingPassenger() == p) return false;
         // Early story titans are for learning the nape: they never get a grip at all.
         if (vehicle.getCommandTags().contains(Story.GENTLE)) return true;
+        // Inside a Tank's Bulwark, or under Erwin's Advance, nobody gets picked up.
+        if (AotRpg.CLASSES.sheltered(p) || Mentors.unshakable(p)) return true;
         Hold h = holds.get(p.getUuid());
         return h != null && p.getServerWorld().getTime() < h.immuneUntil;
     }

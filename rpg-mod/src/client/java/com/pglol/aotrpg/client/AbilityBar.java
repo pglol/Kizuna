@@ -22,14 +22,14 @@ import org.lwjgl.glfw.GLFW;
 public final class AbilityBar {
     private AbilityBar() {}
 
-    public static KeyBinding[] keys = new KeyBinding[3];
+    public static KeyBinding[] keys = new KeyBinding[4];
     public static Net.ClassHud hud;
     private static long gotAt;
 
     public static void register() {
-        int[] def = {GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_V};
-        String[] ids = {"key.aot_rpg.ability1", "key.aot_rpg.ability2", "key.aot_rpg.ultimate"};
-        for (int i = 0; i < 3; i++) {
+        int[] def = {GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_C};
+        String[] ids = {"key.aot_rpg.ability1", "key.aot_rpg.ability2", "key.aot_rpg.ultimate", "key.aot_rpg.technique"};
+        for (int i = 0; i < 4; i++) {
             keys[i] = KeyBindingHelper.registerKeyBinding(new KeyBinding(ids[i], InputUtil.Type.KEYSYM, def[i], "category.aot_rpg"));
         }
     }
@@ -40,7 +40,7 @@ public final class AbilityBar {
     }
 
     public static void tick(MinecraftClient mc) {
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             while (keys[i].wasPressed()) {
                 if (mc.currentScreen == null && ClientState.profile != null && !DownedFx.meDown()) ClientPlayNetworking.send(new Net.UseAbility(i));
             }

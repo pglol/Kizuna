@@ -246,12 +246,15 @@ public final class Downed {
             sendClear(p);
             return;
         }
+        // Only a Medic brings someone back whole; anyone else gets them up Wounded.
+        if (AotRpg.PROFILES.get(by.getUuid()).cls() != PlayerClass.MEDIC) wound(p);
         AotRpg.CLASSES.revived(by);
         Notify.toast(p, Text.literal("Revived!").formatted(Formatting.GOLD, Formatting.BOLD),
             Text.literal(them + " brought you back"), 0xF2C14E, "minecraft:totem_of_undying", "downed");
         Notify.toast(by, Text.literal("You saved " + me).formatted(Formatting.GOLD, Formatting.BOLD),
             Text.literal("+" + 40 + " Marks · pass XP"), 0xF2C14E, "minecraft:totem_of_undying", "downed");
         AotRpg.WALLET.earn(by, 40, "a revive");
+        Mentors.count(by, "revives", 1);
         AotRpg.SEASON.xp(by, 120);
         AotRpg.REGIMENTS.gain(by, 15);
         sendClear(p);
@@ -277,6 +280,44 @@ public final class Downed {
             for (ServerPlayerEntity o : server.getPlayerManager().getPlayerList()) {
                 if (ServerPlayNetworking.canSend(o, Net.DownedView.ID)) ServerPlayNetworking.send(o, msg);
             }
+        }
+    }
+
+    private static final net.minecraft.util.Identifier WOUND = net.minecraft.util.Identifier.of("aot_rpg", "wounded");
+    private static final Map<UUID, Long> wounded = new HashMap<>();
+
+    /** Up again, but not right: a third of your health is gone until a Medic sees to you (or two minutes pass). */
+    private static void wound(ServerPlayerEntity p) {
+        var hp = p.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH);
+        if (hp == null) return;
+        hp.removeModifier(WOUND);
+        hp.addTemporaryModifier(new net.minecraft.entity.attribute.EntityAttributeModifier(WOUND, -0.33,
+            net.minecraft.entity.attribute.EntityAttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
+        if (p.getHealth() > p.getMaxHealth()) p.setHealth(p.getMaxHealth());
+        wounded.put(p.getUuid(), System.currentTimeMillis() + 120_000);
+        Notify.toast(p, Text.literal("Wounded").formatted(Formatting.RED, Formatting.BOLD), Text.literal("A Medic can patch you up"), 0xC0463A, "minecraft:red_dye", "wounded");
+    }
+
+    /** A Medic's care: the wound closes. */
+    public static void mend(ServerPlayerEntity p) {
+        if (wounded.remove(p.getUuid()) == null) return;
+        var hp = p.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH);
+        if (hp != null) hp.removeModifier(WOUND);
+        Notify.toast(p, Text.literal("Patched up").formatted(Formatting.GREEN, Formatting.BOLD), null, 0x5BC06A, "minecraft:paper", "wounded");
+    }
+
+    /** Wounds heal on their own in time. */
+    public static void tickWounds(MinecraftServer server) {
+        if (wounded.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        for (var e : new ArrayList<>(wounded.entrySet())) {
+            if (now < e.getValue()) continue;
+            ServerPlayerEntity p = server.getPlayerManager().getPlayer(e.getKey());
+            if (p == null) {
+                wounded.remove(e.getKey());
+                continue;
+            }
+            mend(p);
         }
     }
 

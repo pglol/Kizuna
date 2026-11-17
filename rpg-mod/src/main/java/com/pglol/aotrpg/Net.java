@@ -1638,6 +1638,35 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Server -> client: a mentor's trials and technique (state: 0 training, 1 ready to learn, 2 learned). */
+    public record MentorView(String id, String name, String title, String quote, String tech, String techDesc, int cooldown,
+                             java.util.List<String> steps, java.util.List<Integer> have, java.util.List<Integer> need, int state, boolean equipped,
+                             boolean open) implements CustomPayload {
+        public static final Id<MentorView> ID = id("mentor_view");
+        public static final PacketCodec<RegistryByteBuf, MentorView> CODEC = PacketCodec.of((v, b) -> {
+            b.writeString(v.id); b.writeString(v.name); b.writeString(v.title); b.writeString(v.quote); b.writeString(v.tech); b.writeString(v.techDesc);
+            b.writeVarInt(v.cooldown); b.writeVarInt(v.steps.size());
+            for (int i = 0; i < v.steps.size(); i++) { b.writeString(v.steps.get(i)); b.writeVarInt(v.have.get(i)); b.writeVarInt(v.need.get(i)); }
+            b.writeVarInt(v.state); b.writeBoolean(v.equipped); b.writeBoolean(v.open);
+        }, b -> {
+            String id = b.readString(), name = b.readString(), title = b.readString(), quote = b.readString(), tech = b.readString(), desc = b.readString();
+            int cd = b.readVarInt(), n = Math.min(8, b.readVarInt());
+            java.util.List<String> st = new java.util.ArrayList<>();
+            java.util.List<Integer> h = new java.util.ArrayList<>(), nd = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) { st.add(b.readString()); h.add(b.readVarInt()); nd.add(b.readVarInt()); }
+            return new MentorView(id, name, title, quote, tech, desc, cd, st, h, nd, b.readVarInt(), b.readBoolean(), b.readBoolean());
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Client -> server: at a mentor: "learn" or "equip". */
+    public record MentorAction(String action, String mentor) implements CustomPayload {
+        public static final Id<MentorAction> ID = id("mentor_action");
+        public static final PacketCodec<RegistryByteBuf, MentorAction> CODEC = PacketCodec.of((v, b) -> { b.writeString(v.action); b.writeString(v.mentor); },
+            b -> new MentorAction(b.readString(), b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: a duel's face-off: the two fighters side by side, VS, and the count to the fight. */
     public record DuelIntro(java.util.UUID a, String aName, int aLevel, String aRole, java.util.UUID b, String bName, int bLevel, String bRole,
                             String rules) implements CustomPayload {
@@ -2569,6 +2598,8 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(RunStyle.ID, RunStyle.CODEC);
         PayloadTypeRegistry.playC2S().register(Rush.ID, Rush.CODEC);
         PayloadTypeRegistry.playC2S().register(SwingDir.ID, SwingDir.CODEC);
+        PayloadTypeRegistry.playS2C().register(MentorView.ID, MentorView.CODEC);
+        PayloadTypeRegistry.playC2S().register(MentorAction.ID, MentorAction.CODEC);
         PayloadTypeRegistry.playS2C().register(SwingSeen.ID, SwingSeen.CODEC);
         PayloadTypeRegistry.playS2C().register(SwingSpeeds.ID, SwingSpeeds.CODEC);
         PayloadTypeRegistry.playS2C().register(RushFx.ID, RushFx.CODEC);

@@ -11,19 +11,19 @@ import net.minecraft.item.Items;
  */
 public enum PlayerClass {
     INFANTRY("Infantry", "DPS", Items.IRON_SWORD, 0xFFD0563A,
-        "Front-line blade. Dashes through titans, rallies the squad, and tears napes apart.",
+        "Front-line blade. Blade Rush breaks titans open for the whole squad (hardened napes included); rallies the squad.",
         new String[] {"Blade Rush", "War Cry", "Humanity's Strongest"}),
     TANK("Tank", "Defender", Items.SHIELD, 0xFF4A7AC0,
-        "Holds the line. Draws titans onto itself and shields everyone nearby.",
+        "Holds the line. Only a Tank can make a titan drop a squadmate (Provoke), and nobody in its Bulwark can be grabbed.",
         new String[] {"Provoke", "Bulwark", "Armored Resolve"}),
     MEDIC("Medic", "Healer", Items.GOLDEN_APPLE, 0xFF5BC06A,
-        "Keeps the squad breathing. Heals, revives, and turns a lost fight around.",
+        "Keeps the squad breathing. Only a Medic brings the fallen back whole; anyone else's revive leaves them Wounded.",
         new String[] {"Field Dressing", "Sanctuary", "Blessing of the Walls"}),
     RECON("Recon", "Scout", Items.SPYGLASS, 0xFFC9A53A,
-        "Eyes of the Survey Corps. Marks weak points, vanishes into smoke, and hunts napes.",
+        "Eyes of the Survey Corps. A shifter's or boss's nape stays hardened until a Recon marks it.",
         new String[] {"Hunter's Mark", "Smoke Bomb", "Hunter's Eye"}),
     ENGINEER("Engineer", "Support", Items.PISTON, 0xFFC0803A,
-        "Keeps the squad in the air. Refuels gas in the field, overdrives ODM gear, and builds Gas Refuelers.",
+        "Keeps the squad in the air. The only one who refuels gas and re-edges worn blades in the field.",
         new String[] {"Gas Rig", "Overdrive", "Airlift"});
 
     public final String title, role, blurb;

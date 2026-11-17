@@ -609,6 +609,7 @@ final class Commands {
             return 1;
         }));
         Swings.commands(d);
+        Mentors.commands(d);
         d.register(CommandManager.literal("bladecheck").executes(c -> {
             var bp = c.getSource().getPlayerOrThrow();
             String info = BladeCare.describe(bp.getMainHandStack()) + " | " + AotRpg.BLADES.session(bp.getUuid());

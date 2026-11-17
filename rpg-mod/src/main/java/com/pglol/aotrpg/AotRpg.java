@@ -143,6 +143,7 @@ public final class AotRpg implements ModInitializer {
         Impact.register();
         Adrenaline.register();
         Swings.register();
+        Mentors.register();
         // The Extraction lobby's board and stash, and a run's supply barrels (ahead of the land protection).
         UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
             if (world.isClient || !(player instanceof ServerPlayerEntity sp) || hand != net.minecraft.util.Hand.MAIN_HAND) return ActionResult.PASS;
@@ -831,6 +832,8 @@ public final class AotRpg implements ModInitializer {
         AirMoves.tick(server);
         Impact.tick(server);
         Adrenaline.tick(server);
+        if (ticks % 20 == 17) Downed.tickWounds(server);
+        Mentors.tick(server, ticks);
         LOOT.tick(ticks);
         TITAN_LEVELS.tick(server, ticks);
         RAID_BOSSES.tick(ticks);
@@ -875,6 +878,7 @@ public final class AotRpg implements ModInitializer {
         ACTIVITY.onKill(killer, dead);
         EXTRACT.onTitanKill(killer, dead);
         if (killer == null) return;
+        Mentors.count(killer, "titans", 1);
         long xp = Math.max(15, Math.round(10 + dead.getMaxHealth() / 4));
         if (PROFILES.get(killer.getUuid()).has(Skill.TITAN_SLAYER)) xp = Math.round(xp * 1.25);
         reward(killer, xp, true, "Titan slain");

@@ -131,7 +131,7 @@ public final class Classes {
     }
 
     /** You and your party within r blocks. */
-    private static List<ServerPlayerEntity> squad(ServerPlayerEntity p, double r) {
+    static List<ServerPlayerEntity> squad(ServerPlayerEntity p, double r) {
         List<ServerPlayerEntity> out = new ArrayList<>();
         out.add(p);
         for (ServerPlayerEntity o : p.getServerWorld().getPlayers()) {
@@ -147,7 +147,7 @@ public final class Classes {
         return e instanceof HostileEntity || AotRpg.isTitan(e) || e instanceof MobEntity m && m.getTarget() instanceof PlayerEntity;
     }
 
-    private static List<LivingEntity> foes(ServerPlayerEntity p, double r) {
+    static List<LivingEntity> foes(ServerPlayerEntity p, double r) {
         Box box = p.getBoundingBox().expand(r);
         List<LivingEntity> out = new ArrayList<>();
         for (LivingEntity e : p.getServerWorld().getEntitiesByClass(LivingEntity.class, box, e -> foe(p, e))) {
@@ -157,7 +157,7 @@ public final class Classes {
     }
 
     /** The living thing you're looking at within range (a titan's whole body counts). */
-    private static LivingEntity lookedAt(ServerPlayerEntity p, double range, java.util.function.Predicate<LivingEntity> ok) {
+    static LivingEntity lookedAt(ServerPlayerEntity p, double range, java.util.function.Predicate<LivingEntity> ok) {
         Vec3d eye = p.getEyePos(), end = eye.add(p.getRotationVec(1f).multiply(range));
         LivingEntity best = null;
         double bd = Double.MAX_VALUE;
@@ -228,6 +228,7 @@ public final class Classes {
         if (target == healer) amount *= 0.5f;
         if (target.getAttacker() != null && target.age - target.getLastAttackedTime() < 100) amount *= 0.4f;
         if (healer.age - healer.getLastAttackTime() < 80) amount *= 0.5f;
+        if (pr(healer).cls() == PlayerClass.MEDIC && target instanceof ServerPlayerEntity tp) Downed.mend(tp);
         float before = target.getHealth();
         target.heal(amount);
         float done = target.getHealth() - before;
@@ -304,8 +305,13 @@ public final class Classes {
 
     public void use(ServerPlayerEntity p, int slot) {
         Profile pr = pr(p);
-        if (!pr.created || slot < 0 || slot > 2 || p.isSpectator() || AotRpg.DOWNED.isDowned(p)) return;
+        if (!pr.created || slot < 0 || slot > 3 || p.isSpectator() || AotRpg.DOWNED.isDowned(p)) return;
         if (AotRpg.DUELS.blocksAbilities(p)) return;
+        // The fourth key: the mentor's technique you have ready.
+        if (slot == 3) {
+            Mentors.use(p);
+            return;
+        }
         PlayerClass c = pr.cls();
         Skill sk = skill(c, slot);
         if (sk == null) return;
@@ -340,7 +346,7 @@ public final class Classes {
         double cd = COOLDOWN[c.ordinal()][slot];
         if (c == PlayerClass.INFANTRY && pr.has(Skill.INF_QUICK)) cd *= 0.7;
         if (c == PlayerClass.MEDIC && slot == 0 && pr.has(Skill.MED_PURGE)) cd *= 0.75;
-        if (c == PlayerClass.RECON && pr.has(Skill.RCN_LONE) && s.alone) cd *= 0.75;
+        if (c == PlayerClass.RECON && pr.has(Skill.RCN_LONE) && s.alone) cd *= 0.9;
         if (c == PlayerClass.ENGINEER && slot == 0 && pr.has(Skill.ENG_QUICK)) cd *= 0.7;
         s.max[slot] = Math.round(cd * 1000);
         s.ready[slot] = now + s.max[slot];
@@ -362,7 +368,9 @@ public final class Classes {
         Profile pr = pr(p);
         boolean lone = pr.has(Skill.ENG_LONE) && st(p).alone;
         for (ServerPlayerEntity a : squad(p, 8)) {
-            OdmBoost.refuel(a, a == p && lone ? 1.0 : 0.35);
+            OdmBoost.refuel(a, a == p && lone ? 0.6 : 0.35);
+            // Only an Engineer can put an edge back on worn blades in the field.
+            BladeCare.sharpen(a, 0.5);
             if (pr.has(Skill.ENG_BURST)) a.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 80, 1, false, true, true));
             fx(a, ParticleTypes.CLOUD, 16, 0.5);
         }
@@ -402,6 +410,29 @@ public final class Classes {
     }
 
     // ---- Infantry
+
+    /** Titans an Infantry's Blade Rush has broken open: everyone hits them harder, and hardened napes give. */
+    private final Map<UUID, Long> exposed = new HashMap<>();
+
+    public boolean exposed(LivingEntity titan) {
+        return System.currentTimeMillis() < exposed.getOrDefault(titan.getUuid(), 0L);
+    }
+
+    /** A shifter's or a boss's nape is hardened: only every other strike counts until a Recon marks it or an Infantry breaks it open. */
+    public boolean hardened(LivingEntity titan) {
+        if (!(TitanGuard.isShifter(titan) || titan.hasCustomName() || titan.getMaxHealth() >= 300)) return false;
+        Mark mk = reconMarks.get(titan.getUuid());
+        return !(mk != null && System.currentTimeMillis() < mk.until()) && !exposed(titan);
+    }
+
+    /** A Tank's Bulwark: nobody inside it can be grabbed. */
+    public boolean sheltered(ServerPlayerEntity p) {
+        long now = System.currentTimeMillis();
+        for (ServerPlayerEntity o : p.getServerWorld().getPlayers()) {
+            if (now < st(o).wallUntil && o.squaredDistanceTo(p) < 8 * 8 && (o == p || AotRpg.PARTIES.same(o.getUuid(), p.getUuid()))) return true;
+        }
+        return false;
+    }
 
     private boolean rush(ServerPlayerEntity p) {
         Vec3d look = p.getRotationVec(1f);
@@ -447,6 +478,16 @@ public final class Classes {
     private boolean provoke(ServerPlayerEntity p, boolean loud) {
         long until = System.currentTimeMillis() + 6000;
         int n = 0;
+        // The Tank's job: nobody else can make a titan let go. Squadmates in its hands are torn free.
+        if (loud) for (ServerPlayerEntity a : squad(p, 16)) {
+            if (a != p && Grab.grabbed(a)) {
+                a.stopRiding();
+                a.addVelocity(0, 0.6, 0);
+                a.velocityModified = true;
+                Notify.toast(a, Text.literal("Torn free").formatted(Formatting.BLUE, Formatting.BOLD), Text.literal(pr(p).name + " made it drop you"), 0x4A7AC0, "minecraft:shield", "freed");
+                n++;
+            }
+        }
         for (LivingEntity e : foes(p, 16)) {
             if (e instanceof MobEntity m) {
                 m.setTarget(p);
@@ -502,7 +543,7 @@ public final class Classes {
             return true;
         }
         float amount = 6 + pr.level / 8f;
-        if (pr.has(Skill.MED_LONE) && st(p).alone) amount *= 2;
+        if (pr.has(Skill.MED_LONE) && st(p).alone) amount *= 1.3f;
         heal(p, t, amount);
         if (pr.has(Skill.MED_ADRENALINE)) {
             t.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 100, 0, false, true, true));
@@ -640,7 +681,7 @@ public final class Classes {
             m *= 1 + 0.03 * s.rhythm;
         }
         if (pr.has(Skill.INF_BERSERK) && att.getHealth() < att.getMaxHealth() / 2) m *= 1.25;
-        if (pr.has(Skill.INF_LONE) && s.alone) m *= 1.2;
+        if (pr.has(Skill.INF_LONE) && s.alone) m *= 1.08;
         if (pr.has(Skill.RCN_LONE) && s.alone && titan) m *= 1.15;
         if (ult) m *= c == PlayerClass.INFANTRY ? 1.6 : c == PlayerClass.RECON ? 1.3 : c == PlayerClass.TANK ? 1.25 : 1;
         if (now < s.buffUntil) m *= 1.2;
@@ -650,6 +691,7 @@ public final class Classes {
             m *= 1.15;
             if (mk.owner().equals(att.getUuid()) && pr.has(Skill.RCN_EYE)) m *= 1.1;
         }
+        if (exposed(target)) m *= 1.2;
         Mark co = coordMarks.get(target.getUuid());
         if (co != null && now < co.until() && AotRpg.PARTIES.same(co.owner(), att.getUuid())) m *= 1.12;
         if (pr.has(Skill.RCN_AMBUSH) && !s.ambushUsed && now - s.smokeAt < 5000) {
@@ -746,7 +788,7 @@ public final class Classes {
             charge(att, Math.min(4f, 1 + taken * 0.15f));
             float steal = 0;
             if (pr.has(Skill.INF_BERSERK) && att.getHealth() < att.getMaxHealth() / 2) steal += 0.08f;
-            if (pr.has(Skill.INF_LONE) && s.alone) steal += 0.10f;
+            if (pr.has(Skill.INF_LONE) && s.alone) steal += 0.04f;
             if (steal > 0) att.heal(Math.min(4f, taken * steal));
             if (pr.has(Skill.INF_COORD) && !(victim instanceof PlayerEntity)) coordMarks.put(victim.getUuid(), new Mark(att.getUuid(), now + 4000));
             if (pr.has(Skill.MED_COMBAT)) {
@@ -834,7 +876,7 @@ public final class Classes {
             }
             // Triage Aura: 1 health every 4s to you and your squad within 8 blocks.
             if (ticks % 80 == 0 && pr.has(Skill.MED_AURA)) for (ServerPlayerEntity a : squad(p, 8)) if (!AotRpg.DOWNED.isDowned(a)) heal(p, a, 1);
-            if (ticks % 60 == 0) {
+            if (ticks % 120 == 0) {
                 if (pr.has(Skill.TNK_LONE) && s.alone && p.getHealth() < p.getMaxHealth()) p.heal(1);
             }
             if (now < s.wallUntil && ticks % 10 == 0) ring(w, p.getPos(), 8, ParticleTypes.END_ROD, 24);
@@ -868,6 +910,12 @@ public final class Classes {
             p.getServerWorld().spawnParticles(ParticleTypes.SWEEP_ATTACK, p.getX(), p.getY() + 1, p.getZ(), 1, 0.2, 0.2, 0.2, 0);
             for (LivingEntity f : p.getServerWorld().getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(2.2), f -> foe(p, f))) {
                 if (!d.hit.add(f.getId())) continue;
+                // Cutting through a titan breaks it open for the squad.
+                if (AotRpg.isTitan(f) && pr.cls() == PlayerClass.INFANTRY) {
+                    exposed.put(f.getUuid(), System.currentTimeMillis() + 8000);
+                    fx(f, ParticleTypes.CRIT, 30, f.getWidth() / 2);
+                    callout(p, "EXPOSED", Formatting.RED);
+                }
                 float dmg = 5 + pr.level * 0.12f;
                 f.damage(p.getDamageSources().playerAttack(p), pr.has(Skill.INF_REND) ? dmg * 1.3f : dmg);
                 fx(f, ParticleTypes.CRIT, 10, 0.4);
@@ -887,6 +935,7 @@ public final class Classes {
             }
             taunts.values().removeIf(t -> now > t.until());
             reconMarks.values().removeIf(t -> now > t.until());
+            exposed.values().removeIf(t -> now > t);
             coordMarks.values().removeIf(t -> now > t.until());
             // Taunted foes keep turning on their tank.
             for (var t : taunts.entrySet()) {

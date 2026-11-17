@@ -394,6 +394,7 @@ public final class Crafting {
             for (int i = 1; i < n; i++) Loot.claim(p, r.make().apply(p));
         }
         Lifestyle.add(p, d.bench().skill, (long) r.xp() * n);
+        Mentors.count(p, "crafts", n);
         ServerWorld w = p.getServerWorld();
         var c = d.pos().toCenterPos();
         w.playSound(null, d.pos(), sound(d.bench()), SoundCategory.BLOCKS, 0.8f, 0.9f + w.random.nextFloat() * 0.2f);

@@ -1972,6 +1972,7 @@ public final class Extraction {
     }
 
     private void extracted(Run r, ServerPlayerEntity p) {
+        Mentors.count(p, "extracts", 1);
         r.members.remove(p.getUuid());
         r.extracting.remove(p.getUuid());
         int gear = 0;

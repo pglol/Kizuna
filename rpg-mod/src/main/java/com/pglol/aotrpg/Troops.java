@@ -1285,6 +1285,7 @@ public final class Troops {
             w.spawnEntity(ie);
         }
         if (src.getAttacker() instanceof ServerPlayerEntity killer) {
+            Mentors.count(killer, "troops", 1);
             long pay = officer ? 350 : 90;
             AotRpg.WALLET.addMarks(killer, pay, "Marleyan troop");
             killer.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 0.8f, 0.6f);

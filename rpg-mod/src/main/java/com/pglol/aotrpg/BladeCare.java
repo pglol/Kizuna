@@ -201,6 +201,18 @@ public final class BladeCare {
         return NbtInt.of(v);
     }
 
+    /** An Engineer's whetstone: takes back this share of the wear on a player's grips (both hands and the sheath). */
+    public static void sharpen(ServerPlayerEntity p, double share) {
+        List<ItemStack> grips = new ArrayList<>(List.of(p.getMainHandStack(), p.getOffHandStack(), Loadout.sheathStack(p, 0), Loadout.sheathStack(p, 2)));
+        for (ItemStack s : grips) {
+            if (!Loadout.isGrip(s) || AotItems.isApgGun(s)) continue;
+            Wear w = find(s);
+            if (w != null && w.get() < 0) w.set((int) Math.round(w.get() * (1 - share)));
+            else if (s.isDamageable()) s.setDamage((int) Math.round(s.getDamage() * (1 - share)));
+        }
+        AotRpg.BLADES.forget(p.getUuid());
+    }
+
     /** Every couple of ticks: wear on held blades may be undone by good steel. */
     public void tick(ServerPlayerEntity p) {
         Seen[] last = seen.computeIfAbsent(p.getUuid(), k -> new Seen[2]);

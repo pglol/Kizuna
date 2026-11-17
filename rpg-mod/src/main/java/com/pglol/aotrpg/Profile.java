@@ -86,6 +86,10 @@ public final class Profile {
     public java.util.Set<String> discovered = new java.util.HashSet<>();
     /** Recipes learned from schematics (see Recipes). */
     public java.util.Set<String> recipes = new java.util.HashSet<>();
+    /** Mentors: what they count, the techniques learned, and the one on the technique key. */
+    public java.util.Map<String, Integer> mentorCounts = new java.util.HashMap<>();
+    public java.util.Set<String> techniques = new java.util.LinkedHashSet<>();
+    public String technique = "";
     /** Map cells walked (Fog.CELL blocks square), packed x << 32 | z: the rest is fogged on the map. */
     public java.util.Set<Long> explored = new java.util.HashSet<>();
     /** Marks owed for crimes seen in town (a drawn weapon, theft). */

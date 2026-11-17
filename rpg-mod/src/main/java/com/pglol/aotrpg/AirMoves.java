@@ -166,6 +166,7 @@ public final class AirMoves {
         w.spawnParticles(kind == PIERCE ? ParticleTypes.CRIT : ParticleTypes.EXPLOSION, at.x, at.y + 0.3, at.z, kind == PIERCE ? 20 : 2, 0.3, 0.1, 0.3, 0.2);
         w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.PLAYERS, 0.45f, 1.5f);
         w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.PLAYERS, 1f, kind == PIERCE ? 1.4f : 0.8f);
+        if (!hit.isEmpty()) Mentors.count(p, "slams", 1);
         if (!hit.isEmpty()) w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, SoundCategory.PLAYERS, 1f, 0.9f);
         for (ServerPlayerEntity o : PlayerLookup.around(w, at, 16)) {
             if (ServerPlayNetworking.canSend(o, Net.Quake.ID)) ServerPlayNetworking.send(o, new Net.Quake(o == p ? 0.35f : 0.2f, 6));
