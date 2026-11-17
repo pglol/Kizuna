@@ -286,6 +286,7 @@ public final class AirMoves {
         by.sendMessage(Text.literal("SLAM COUNTERED").formatted(Formatting.GOLD, Formatting.BOLD), true);
         diver.sendMessage(Text.literal("Countered!").formatted(Formatting.RED, Formatting.BOLD), true);
         AotRpg.STAMINA.spend(by, -20);
+        Adrenaline.gain(by, 20);
     }
 
     private static boolean foe(ServerPlayerEntity p, LivingEntity e) {

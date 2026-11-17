@@ -108,6 +108,20 @@ public final class AdrenalineClient {
                 if (mc.player != null && f.entity() == mc.player.getId()) EffectFx.quake(0.8f, 12);
             }
             case Adrenaline.FX_CHAIN -> MovesHud.chain(f.arg());
+            case Adrenaline.FX_METER -> meter = f.arg();
+            case Adrenaline.FX_STRIKE -> {
+                MovesHud.popup("CHARGE STRIKE", 0xFFFF6A4A);
+                punchFov = -8;
+            }
+            case Adrenaline.FX_SURGE -> {
+                surging.put(f.entity(), Util.getMeasuringTimeMs() + f.arg() * 50L);
+                if (mc.player != null && f.entity() == mc.player.getId()) {
+                    MovesHud.popup("ADRENALINE SURGE", 0xFFFF3A2A);
+                    ImpactFrames.rush(1f, 400);
+                    EffectFx.quake(0.4f, 8);
+                    punchFov = 14;
+                }
+            }
             case Adrenaline.FX_AFTER -> {
                 if (e != null) {
                     Afterimages.leave(e, f.arg(), 280);
@@ -178,6 +192,11 @@ public final class AdrenalineClient {
         }
         pinned.values().removeIf(u -> Util.getMeasuringTimeMs() > u + 500);
         faceplants.values().removeIf(u -> Util.getMeasuringTimeMs() > u[1] + 500);
+        surging.values().removeIf(u -> Util.getMeasuringTimeMs() > u);
+        if (mc.world.getTime() % 3 == 0) for (int id : surging.keySet()) {
+            Entity e = mc.world.getEntityById(id);
+            if (e != null && e.getVelocity().horizontalLengthSquared() > 0.02) Afterimages.leave(e, 0xFF4A2A, 220);
+        }
         stunnedUntil.values().removeIf(u -> Util.getMeasuringTimeMs() > u);
         if (mc.world.getTime() % 2 == 0) for (int id : stunnedUntil.keySet()) {
             Entity e = mc.world.getEntityById(id);
@@ -207,36 +226,72 @@ public final class AdrenalineClient {
         startTick(mc, pl);
     }
 
+    /** Your adrenaline (0-100, from the server), and when the next charge may start. */
+    private static int meter;
+    private static long chargeReadyAt;
+    private static int buildUp, lurches;
+    /** Everyone surging: entity -> until (ms). */
+    private static final Map<Integer, Long> surging = new HashMap<>();
+
+    public static int meter() {
+        return meter;
+    }
+
+    public static long chargeReadyAt() {
+        return chargeReadyAt;
+    }
+
+    /**
+     * The charge: locked on and sprinting straight at them, from a fair way out, with adrenaline to
+     * spend. A beat of build-up (the heartbeat climbs), then the rush: faster than a run, a couple
+     * of lurches that leave your shape behind. It ends when you're on them, and the first blow
+     * lands harder (the server's Charge Strike). Then a cooldown: one charge per approach.
+     */
     private static void chargeTick(MinecraftClient mc, ClientPlayerEntity pl) {
+        long now = Util.getMeasuringTimeMs();
         Entity t = LockOn.target();
-        boolean want = false;
         Vec3d to = Vec3d.ZERO;
-        if (t != null && t.isAlive() && pl.isSprinting() && pl.input.movementForward > 0.5f && !pl.isUsingItem()) {
+        double d = 0, dot = -1;
+        boolean running = t != null && t.isAlive() && pl.isSprinting() && pl.input.movementForward > 0.5f && !pl.isUsingItem();
+        if (running) {
             to = t.getPos().subtract(pl.getPos()).multiply(1, 0, 1);
-            double d = to.length();
+            d = to.length();
             Vec3d look = pl.getRotationVec(1f).multiply(1, 0, 1);
-            want = d > 3.5 && d < 40 && look.lengthSquared() > 1e-4 && look.normalize().dotProduct(to.multiply(1 / d)) > 0.8;
+            dot = d < 1e-3 || look.lengthSquared() < 1e-4 ? 1 : look.normalize().dotProduct(to.multiply(1 / d));
         }
-        if (want != charging) {
-            charging = want;
+        if (!charging) {
+            // Lining it up: straight at them, far enough out, ready, and enough in you.
+            boolean lined = running && d > 7 && d < 40 && dot > 0.88 && now >= chargeReadyAt && meter >= com.pglol.aotrpg.Adrenaline.CHARGE_COST;
+            buildUp = lined ? buildUp + 1 : 0;
+            if (buildUp == 4) pl.playSound(net.minecraft.sound.SoundEvents.ENTITY_WARDEN_HEARTBEAT, 0.6f, 1.1f);
+            if (buildUp < 10) return;
+            charging = true;
             chargeTicks = 0;
-            ClientPlayNetworking.send(new Net.Rush(want ? Adrenaline.RUSH_START : Adrenaline.RUSH_STOP, t == null ? -1 : t.getId(), pl.getYaw()));
-            if (want) {
-                pl.playSound(net.minecraft.sound.SoundEvents.ENTITY_WARDEN_HEARTBEAT, 0.9f, 1.4f);
-                punchFov = 8;
-            }
+            lurches = 0;
+            lurchIn = 6;
+            buildUp = 0;
+            chargeReadyAt = now + 7500;
+            ClientPlayNetworking.send(new Net.Rush(Adrenaline.RUSH_START, t.getId(), pl.getYaw()));
+            pl.playSound(net.minecraft.sound.SoundEvents.ENTITY_WARDEN_HEARTBEAT, 1f, 1.5f);
+            MovesHud.popup("CHARGE", 0xFFFF4A3A);
+            punchFov = 10;
+            return;
         }
-        if (!charging) return;
         chargeTicks++;
-        if (chargeTicks % 80 == 0) ClientPlayNetworking.send(new Net.Rush(Adrenaline.RUSH_START, t.getId(), pl.getYaw()));
+        // Over: on them, turned away, stopped running, or run out.
+        if (!running || d < 2.8 || dot < 0.55 || chargeTicks > 55) {
+            charging = false;
+            ClientPlayNetworking.send(new Net.Rush(Adrenaline.RUSH_STOP, -1, pl.getYaw()));
+            return;
+        }
         Vec3d dir = to.normalize();
         Vec3d v = pl.getVelocity();
         double cur = Math.sqrt(v.x * v.x + v.z * v.z);
-        // Faster than a run has any right to be; on the gear, a little more of whatever you had.
-        double want2 = pl.isOnGround() ? Math.max(cur, 0.5) : Math.min(1.6, Math.max(cur * 1.03, 0.55));
-        // Now and then a lurch: a sudden surge that leaves your shape behind.
-        if (--lurchIn <= 0) {
-            lurchIn = 9 + pl.getRandom().nextInt(7);
+        double want2 = pl.isOnGround() ? Math.max(cur, 0.52) : Math.min(1.6, Math.max(cur * 1.03, 0.55));
+        // Two lurches at most: sudden surges that leave your shape behind.
+        if (--lurchIn <= 0 && lurches < 2) {
+            lurches++;
+            lurchIn = 12 + pl.getRandom().nextInt(6);
             want2 = Math.max(want2, 1.05);
             Afterimages.leave(pl, 0xC01A1A, 300);
             streaks(mc, pl, pl.getYaw(), 6, true);
@@ -330,6 +385,8 @@ public final class AdrenalineClient {
         if (mc.player == null || mc.options.hudHidden) return;
         long now = Util.getMeasuringTimeMs();
         float red = chargeFov / 14f;
+        Long su = surging.get(mc.player.getId());
+        if (su != null && su > now) red = Math.max(red, 0.7f);
         float dark = huntedUntil > now ? Math.min(1, (huntedUntil - now) / 600f) : 0;
         if (pinned(mc.player.getId())) dark = Math.max(dark, 0.8f);
         if (red < 0.02f && dark < 0.02f) return;

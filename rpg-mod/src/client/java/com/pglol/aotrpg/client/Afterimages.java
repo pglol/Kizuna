@@ -62,7 +62,7 @@ public final class Afterimages {
         for (Ghost g : ghosts) {
             Entity e = mc.world.getEntityById(g.entity());
             if (!(e instanceof net.minecraft.entity.LivingEntity p)) continue;
-            var renderer = mc.getEntityRenderDispatcher().getRenderer(p);
+            Object renderer = mc.getEntityRenderDispatcher().getRenderer(p);
             PlayerEntityModel model;
             net.minecraft.util.Identifier tex;
             if (renderer instanceof com.pglol.aotrpg.client.story.ActorRenderer ar && p instanceof net.minecraft.entity.passive.VillagerEntity ve) {

@@ -35,7 +35,7 @@ import java.util.UUID;
 public final class Adrenaline {
     private Adrenaline() {}
 
-    public static final int FX_CHARGE = 0, FX_CHARGE_END = 1, FX_VANISH = 2, FX_HEAVY = 3, FX_KICK = 4, FX_PINNED = 5, FX_HUNTED = 6, FX_STUNNED = 7, FX_FACEPLANT = 8, FX_AFTER = 9, FX_CHAIN = 10;
+    public static final int FX_CHARGE = 0, FX_CHARGE_END = 1, FX_VANISH = 2, FX_HEAVY = 3, FX_KICK = 4, FX_PINNED = 5, FX_HUNTED = 6, FX_STUNNED = 7, FX_FACEPLANT = 8, FX_AFTER = 9, FX_CHAIN = 10, FX_METER = 11, FX_SURGE = 12, FX_STRIKE = 13;
     /** Client -> server kinds. */
     public static final int RUSH_START = 0, RUSH_STOP = 1, START_VANISH = 2, START_PLAIN = 3;
 
@@ -44,7 +44,81 @@ public final class Adrenaline {
     private static final Map<UUID, Charge> charging = new HashMap<>();
     private static final Map<UUID, Long> dodgeUntil = new HashMap<>(), startCd = new HashMap<>();
 
+    // ------------------------------------------------------------------ the meter
+
+    /**
+     * Adrenaline: built in the fight (landing blows, taking them, parries, dodges, kills), gone
+     * again when it's over. A charge spends some; a full meter turns your next blow into a Surge.
+     */
+    private static final Map<UUID, float[]> meter = new HashMap<>();
+    /** The charge's pay-off (a first blow that lands harder and staggers) and the surge, until (ticks). */
+    private static final Map<UUID, Long> strikeUntil = new HashMap<>(), surgeUntil = new HashMap<>(), lastCharge = new HashMap<>();
+    public static final float CHARGE_COST = 25, FULL = 100;
+
+    public static float meter(ServerPlayerEntity p) {
+        float[] m = meter.get(p.getUuid());
+        return m == null ? 0 : m[0];
+    }
+
+    public static void gain(ServerPlayerEntity p, float by) {
+        float[] m = meter.computeIfAbsent(p.getUuid(), k -> new float[] {0, 0, -1});
+        if (surging(p)) return;
+        m[0] = Math.min(FULL, m[0] + by);
+        m[1] = System.currentTimeMillis();
+        sync(p, m);
+    }
+
+    private static void sync(ServerPlayerEntity p, float[] m) {
+        int v = (int) m[0];
+        if (v == (int) m[2]) return;
+        m[2] = v;
+        if (ServerPlayNetworking.canSend(p, Net.RushFx.ID)) ServerPlayNetworking.send(p, new Net.RushFx(p.getId(), FX_METER, 0, v));
+    }
+
+    public static boolean surging(ServerPlayerEntity p) {
+        Long u = surgeUntil.get(p.getUuid());
+        return u != null && p.getServerWorld().getTime() < u;
+    }
+
+    /**
+     * A blow you're landing: what adrenaline does to it. The charge's first strike hits 40% harder
+     * and staggers; a full meter turns into a Surge (six seconds faster and 20% harder).
+     */
+    public static double strike(ServerPlayerEntity att, net.minecraft.entity.LivingEntity target) {
+        long now = att.getServerWorld().getTime();
+        double m = surging(att) ? 1.2 : 1;
+        Long su = strikeUntil.get(att.getUuid());
+        if (su != null && now < su) {
+            strikeUntil.remove(att.getUuid());
+            m *= 1.4;
+            if (!AotRpg.isTitan(target)) Stuns.stun(target, 12);
+            Impact.frame(att.getServerWorld(), target.getPos().add(0, target.getHeight() * 0.6, 0), 0.8f, att, target);
+            if (ServerPlayNetworking.canSend(att, Net.RushFx.ID)) ServerPlayNetworking.send(att, new Net.RushFx(att.getId(), FX_STRIKE, 0, 0));
+        }
+        float[] mt = meter.get(att.getUuid());
+        if (mt != null && mt[0] >= FULL && !surging(att)) {
+            mt[0] = 0;
+            sync(att, mt);
+            surgeUntil.put(att.getUuid(), now + 120);
+            att.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SPEED, 120, 1, false, false, true));
+            att.getServerWorld().playSound(null, att.getBlockPos(), SoundEvents.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.4f, 0.8f);
+            att.getServerWorld().playSound(null, att.getBlockPos(), SoundEvents.ENTITY_RAVAGER_ROAR, SoundCategory.PLAYERS, 0.5f, 1.4f);
+            broadcast(att, new Net.RushFx(att.getId(), FX_SURGE, att.getYaw(), 120));
+            Impact.frame(att.getServerWorld(), att.getEyePos(), 1f, att);
+        }
+        return m;
+    }
+
     public static void register() {
+        // The fight feeds it.
+        ServerLivingEntityEvents.AFTER_DAMAGE.register((victim, source, base, taken, blocked) -> {
+            if (taken <= 0) return;
+            if (source.getAttacker() instanceof ServerPlayerEntity a && a != victim) gain(a, Combat.melee(source) ? 4 : 2);
+            if (victim instanceof ServerPlayerEntity v && source.getAttacker() != null) gain(v, 5);
+        });
+        ServerLivingEntityEvents.AFTER_DEATH.register((e, src) -> {
+            if (src.getAttacker() instanceof ServerPlayerEntity a && a != e) gain(a, AotRpg.isTitan(e) ? 18 : 12);
+        });
         ServerPlayNetworking.registerGlobalReceiver(Net.Rush.ID, (payload, ctx) -> on(ctx.player(), payload));
         // Aiming down the sights: everyone around sees the stance.
         ServerPlayNetworking.registerGlobalReceiver(Net.AimSet.ID, (payload, ctx) -> {
@@ -59,6 +133,7 @@ public final class Adrenaline {
             if (until == null || p.getServerWorld().getTime() > until || src.getAttacker() == null) return true;
             AotParticles.burst(p.getServerWorld(), AotParticles.STREAK, 0xEAF4FF, 0.7f, p.getX(), p.getY() + 1, p.getZ(), 10, 0.4, 0.5);
             if (src.getAttacker() instanceof ServerPlayerEntity a) a.sendMessage(Text.literal("Evaded").formatted(Formatting.GRAY), true);
+            gain(p, 10);
             return false;
         });
     }
@@ -70,7 +145,15 @@ public final class Adrenaline {
             case RUSH_START -> {
                 Entity t = w.getEntityById(r.target());
                 if (!(t instanceof LivingEntity le) || !le.isAlive() || t.squaredDistanceTo(p) > 48 * 48 || AotRpg.DOWNED.isDowned(p)) return;
-                charging.put(p.getUuid(), new Charge(r.target(), now + 100));
+                // A charge costs adrenaline and can't be run back to back.
+                if (charging.containsKey(p.getUuid()) || now - lastCharge.getOrDefault(p.getUuid(), -1000L) < 150) return;
+                float[] mt = meter.get(p.getUuid());
+                if (mt == null || mt[0] < CHARGE_COST) return;
+                mt[0] -= CHARGE_COST;
+                sync(p, mt);
+                lastCharge.put(p.getUuid(), now);
+                strikeUntil.put(p.getUuid(), now + 80);
+                charging.put(p.getUuid(), new Charge(r.target(), now + 70));
                 broadcast(p, new Net.RushFx(p.getId(), FX_CHARGE, r.yaw(), r.target()));
                 // The one being run down feels it.
                 if (t instanceof ServerPlayerEntity tp) {
@@ -133,6 +216,17 @@ public final class Adrenaline {
     }
 
     public static void tick(MinecraftServer server) {
+        // Out of the fight for a while: it drains away.
+        if (server.getTicks() % 20 == 5) {
+            long nowMs = System.currentTimeMillis();
+            for (var e : meter.entrySet()) {
+                float[] m = e.getValue();
+                if (m[0] <= 0 || nowMs - m[1] < 6000) continue;
+                m[0] = Math.max(0, m[0] - 4);
+                ServerPlayerEntity p = server.getPlayerManager().getPlayer(e.getKey());
+                if (p != null) sync(p, m);
+            }
+        }
         if (charging.isEmpty()) return;
         for (var e : new ArrayList<>(charging.entrySet())) {
             ServerPlayerEntity p = server.getPlayerManager().getPlayer(e.getKey());

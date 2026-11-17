@@ -65,11 +65,24 @@ public final class MovesHud {
             Ui.text(c, Ui.title(chain + ""), x, y, s, ((int) (255 * a) << 24) | (col & 0xFFFFFF), true);
             Ui.text(c, Ui.heading("CHAIN"), x, y + 9 * s, 0.7f, ((int) (220 * a) << 24) | (col & 0xFFFFFF), true);
         }
+        // Adrenaline: a thin bar over the hotbar while there's any; full, it burns.
+        int am = AdrenalineClient.meter();
+        if (am > 0) {
+            int bw = 120, bx = w / 2 - bw / 2, by = h - 64;
+            boolean full = am >= 100;
+            float pulse = full ? 0.6f + 0.4f * MathHelper.sin(now / 90f) : 1;
+            c.fill(bx - 1, by - 1, bx + bw + 1, by + 3, 0x90000000);
+            c.fill(bx, by, bx + (int) (bw * am / 100f), by + 2, ((int) (255 * pulse) << 24) | (full ? 0xFF3A2A : 0xC0463A));
+            int cost = (int) (bw * com.pglol.aotrpg.Adrenaline.CHARGE_COST / 100f);
+            c.fill(bx + cost, by - 1, bx + cost + 1, by + 3, 0x80FFFFFF);
+            if (full) Ui.text(c, Ui.heading("SURGE READY"), w / 2f, by - 9, 0.6f, ((int) (255 * pulse) << 24) | 0xFF5A3A, true);
+        }
         Pip[] pips = {
             new Pip("SLAM", OdmMoves.slamReadyAt(), 10_000),
             new Pip("RISE", OdmMoves.riseReadyAt(), 8_000),
             new Pip("BURST", AdrenalineClient.burstReadyAt(), 3_500),
-            new Pip("CRUSH", OdmMoves.crushReadyAt(), 9_000)};
+            new Pip("CRUSH", OdmMoves.crushReadyAt(), 9_000),
+            new Pip("CHARGE", AdrenalineClient.chargeReadyAt(), 7_500)};
         boolean any = false;
         for (Pip p : pips) if (p.until() > now) any = true;
         if (!any) return;
