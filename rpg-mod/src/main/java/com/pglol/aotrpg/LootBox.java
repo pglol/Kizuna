@@ -88,6 +88,7 @@ public final class LootBox {
             ItemStack sch = Recipes.randomSchematic(r, level >= 20 ? 3 : 2);
             if (!sch.isEmpty()) put.add(sch);
         }
+        if (r.nextFloat() < 0.06f) put.add(Cosmetics.randomGarment(r));
         if (r.nextFloat() < 0.12f) {
             Gear.Rarity rar = r.nextFloat() < 0.25f ? Gear.Rarity.RARE : r.nextBoolean() ? Gear.Rarity.UNCOMMON : Gear.Rarity.COMMON;
             ItemStack g = Gear.roll(r, rar, level);

@@ -50,6 +50,15 @@ public final class CosmeticFx {
 
     public record Category(String slot, String title, String blurb, List<Entry> entries) { }
 
+    private static List<Entry> dyes() {
+        List<Entry> out = new java.util.ArrayList<>();
+        for (String[] d : com.pglol.aotrpg.Cosmetics.DYES) {
+            int c = d[0].equals("dye_none") ? 0x8A8478 : Integer.parseInt(d[2], 16);
+            out.add(new Entry(d[0], d[1], d[0].equals("dye_none") ? "Each piece in its own colour." : "Dye your outfit " + d[1].toLowerCase() + ".", c, c));
+        }
+        return out;
+    }
+
     public static final List<Category> CATEGORIES = List.of(
         new Category("trail", "Bullet Trails", "The streak your APG shots leave.", List.of(
             new Entry("trail_tracer", "Tracer", "A clean white tracer. Standard issue.", 0xEDE3C8, 0xFFFFFF),
@@ -116,6 +125,19 @@ public final class CosmeticFx {
             new Entry("head_crows", "Crows of the Paths", "Dark birds circle over you.", 0x2A2A38, 0x5AD8FF, 3),
             new Entry("head_sun", "Sunburst", "A turning crown of golden rays.", 0xFFD24A, 0xFFF6C0, 3),
             new Entry("head_founder", "Founder's Crown", "A crown of red light, turning, with a burning heart.", 0xE02A2A, 0xFFD24A, 4))),
+        new Category("outfit", "Outfits", "Clothes over your uniform, found in the world and in crates.", List.of(
+            new Entry("outfit_none", "None", "Just the uniform.", 0x55524A, 0x55524A),
+            new Entry("outfit_scout_jacket", "Scout's Jacket", "Cropped at the ribs, straps over it.", 0x8A6A44, 0x3A2A1A, 1),
+            new Entry("outfit_garrison_coat", "Garrison Greatcoat", "Long and belted, for the wall in winter.", 0x6E6650, 0x2A2A20, 2),
+            new Entry("outfit_mp_coat", "Military Police Coat", "High collar, two rows of buttons.", 0x3A3F48, 0xEDE3C8, 2),
+            new Entry("outfit_marley_tunic", "Marleyan Tunic", "Taken off a soldier who won't need it.", 0x6A6A48, 0xEDE3C8, 2),
+            new Entry("outfit_officer_sash", "Officer's Sash", "Shoulder to hip.", 0xA0202A, 0xE0B96A, 1),
+            new Entry("outfit_hooded_cape", "Hooded Cape", "Hood up, face in shadow.", 0x2F4A2A, 0x1A2A1A, 3),
+            new Entry("outfit_scarf", "Red Scarf", "Wound twice; someone gave it to you.", 0x9A1A1A, 0x5A0A0A, 3),
+            new Entry("outfit_civilian_vest", "Townsman's Vest", "Open at the front, three buttons.", 0x5A4632, 0x2A2018, 1),
+            new Entry("outfit_bandana", "Bandana", "Knotted at the back.", 0x2A3A6A, 0x1A2440, 1),
+            new Entry("outfit_armband", "Armband", "A band on the left arm.", 0xEDE3C8, 0x9A1A1A, 1))),
+        new Category("dye", "Dye", "The colour your outfit is dyed.", dyes()),
         new Category("back", "Back & Wings", "Worn on your back: cloaks, banners and wings.", List.of(
             new Entry("back_none", "None", "Nothing at all.", 0x55524A, 0x55524A),
             new Entry("back_cloak_green", "Survey Cloak", "The green cloak with the Wings of Freedom.", 0x2F4A2A, 0x9AB8D8),

@@ -140,6 +140,11 @@ public final class Crafting {
         UseItemCallback.EVENT.register((player, world, hand) -> {
             ItemStack stack = player.getStackInHand(hand);
             if (world.isClient || !(player instanceof ServerPlayerEntity sp)) return TypedActionResult.pass(stack);
+            String garment = Cosmetics.garmentOf(stack);
+            if (garment != null) {
+                AotRpg.COSMETICS.wearGarment(sp, stack, garment);
+                return TypedActionResult.success(stack);
+            }
             String id = Recipes.schematicOf(stack);
             if (id != null) {
                 learn(sp, stack, id);

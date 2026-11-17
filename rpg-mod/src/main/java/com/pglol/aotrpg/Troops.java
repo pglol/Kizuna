@@ -1271,6 +1271,7 @@ public final class Troops {
             ItemStack sch = Recipes.randomSchematic(r, officer ? 3 : 2);
             if (!sch.isEmpty()) drops.add(sch);
         }
+        if (r.nextFloat() < (officer ? 0.12f : 0.02f)) drops.add(Cosmetics.garment("outfit_marley_tunic"));
         if (officer && r.nextFloat() < 0.15f && AotItems.exact("apg_gun") != null) drops.add(new ItemStack(AotItems.exact("apg_gun")));
         for (ItemStack s : drops) {
             // Cut down by someone: it's theirs, straight into the bag. (Eaten by a titan, it spills.)

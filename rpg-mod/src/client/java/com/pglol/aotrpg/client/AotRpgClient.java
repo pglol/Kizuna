@@ -90,7 +90,7 @@ public final class AotRpgClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(Net.SlashFx.ID, (payload, ctx) -> CosmeticFx.slash(payload));
         WorldRenderEvents.AFTER_ENTITIES.register(CosmeticFx::render);
         net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
-            if (renderer instanceof net.minecraft.client.render.entity.PlayerEntityRenderer pr) helper.register(new CosmeticLayer(pr));
+            if (renderer instanceof net.minecraft.client.render.entity.PlayerEntityRenderer pr) { helper.register(new OutfitLayer(pr)); helper.register(new CosmeticLayer(pr)); }
         });
         WorldRenderEvents.AFTER_ENTITIES.register(DuelRing::render);
         WorldRenderEvents.AFTER_ENTITIES.register(GroundLoot::render);

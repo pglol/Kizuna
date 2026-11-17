@@ -25,9 +25,29 @@ public final class Cosmetics {
     public record Def(String id, String slot, String title, boolean free) { }
 
     /** Every cosmetic slot, in menu order. */
-    public static final List<String> SLOTS = List.of("trail", "slash", "body", "odm", "horse", "head", "back", "kill", "block", "clash");
+    public static final List<String> SLOTS = List.of("outfit", "dye", "trail", "slash", "body", "odm", "horse", "head", "back", "kill", "block", "clash");
 
-    public static final List<Def> ALL = List.of(
+    /** Clothes worn over your uniform (found in the world and in crates), and the colour they're dyed. */
+    public static final String[][] OUTFITS = {
+        {"outfit_scout_jacket", "Scout's Jacket"}, {"outfit_garrison_coat", "Garrison Greatcoat"}, {"outfit_mp_coat", "Military Police Coat"},
+        {"outfit_marley_tunic", "Marleyan Tunic"}, {"outfit_officer_sash", "Officer's Sash"}, {"outfit_hooded_cape", "Hooded Cape"},
+        {"outfit_scarf", "Red Scarf"}, {"outfit_civilian_vest", "Townsman's Vest"}, {"outfit_bandana", "Bandana"}, {"outfit_armband", "Armband"}};
+    public static final String[][] DYES = {
+        {"dye_none", "Natural", "000000"}, {"dye_white", "Chalk", "EDE8DC"}, {"dye_black", "Charcoal", "2A2A2E"}, {"dye_grey", "Ash", "7A7A78"},
+        {"dye_brown", "Leather", "8A6A44"}, {"dye_tan", "Sand", "C8A878"}, {"dye_red", "Crimson", "9A1A1A"}, {"dye_wine", "Wine", "5A1A2A"},
+        {"dye_orange", "Rust", "B05A2A"}, {"dye_gold", "Ochre", "C8962A"}, {"dye_olive", "Olive", "6A6A3A"}, {"dye_green", "Survey Green", "2F4A2A"},
+        {"dye_teal", "Teal", "2A6A6A"}, {"dye_blue", "Garrison Blue", "2A4A7A"}, {"dye_navy", "Navy", "1A2440"}, {"dye_violet", "Royal Violet", "4A2A6A"}};
+
+    private static List<Def> defs() {
+        List<Def> out = new ArrayList<>();
+        out.add(new Def("outfit_none", "outfit", "None", true));
+        for (String[] o : OUTFITS) out.add(new Def(o[0], "outfit", o[1], false));
+        for (String[] d : DYES) out.add(new Def(d[0], "dye", d[1], true));
+        out.addAll(BASE);
+        return List.copyOf(out);
+    }
+
+    private static final List<Def> BASE = List.of(
         new Def("slash_steel", "slash", "Steel", true),
         new Def("slash_crimson", "slash", "Crimson", false),
         new Def("slash_frost", "slash", "Frostbite", false),
@@ -122,6 +142,53 @@ public final class Cosmetics {
         new Def("body_coordinate", "body", "The Coordinate", false),
         new Def("head_founder", "head", "Founder's Crown", false),
         new Def("slash_moon", "slash", "Crimson Moon", false));
+
+    public static final List<Def> ALL = defs();
+
+    // ------------------------------------------------------------------ garments
+
+    private static final String GARMENT = "aot_garment";
+
+    /** A garment to find: use it and it's yours to wear for good. */
+    public static net.minecraft.item.ItemStack garment(String id) {
+        Def d = def(id);
+        if (d == null) return net.minecraft.item.ItemStack.EMPTY;
+        net.minecraft.item.ItemStack s = new net.minecraft.item.ItemStack(net.minecraft.item.Items.LEATHER);
+        net.minecraft.nbt.NbtCompound tag = new net.minecraft.nbt.NbtCompound();
+        tag.putString(GARMENT, id);
+        s.set(net.minecraft.component.DataComponentTypes.CUSTOM_DATA, net.minecraft.component.type.NbtComponent.of(tag));
+        s.set(net.minecraft.component.DataComponentTypes.CUSTOM_NAME, net.minecraft.text.Text.literal(d.title()).styled(x -> x.withItalic(false).withColor(0xE8C47A)));
+        s.set(net.minecraft.component.DataComponentTypes.LORE, new net.minecraft.component.type.LoreComponent(List.of(
+            net.minecraft.text.Text.literal("Garment").styled(x -> x.withItalic(false).withColor(0xB8B0A0)))));
+        s.set(net.minecraft.component.DataComponentTypes.MAX_STACK_SIZE, 1);
+        return s;
+    }
+
+    public static net.minecraft.item.ItemStack randomGarment(net.minecraft.util.math.random.Random r) {
+        return garment(OUTFITS[r.nextInt(OUTFITS.length)][0]);
+    }
+
+    public static String garmentOf(net.minecraft.item.ItemStack s) {
+        if (s.isEmpty() || !s.isOf(net.minecraft.item.Items.LEATHER)) return null;
+        var c = s.get(net.minecraft.component.DataComponentTypes.CUSTOM_DATA);
+        if (c == null) return null;
+        String id = c.copyNbt().getString(GARMENT);
+        return id.isEmpty() ? null : id;
+    }
+
+    /** Trying it on: unlocked for good, and worn straight away. */
+    public void wearGarment(ServerPlayerEntity p, net.minecraft.item.ItemStack stack, String id) {
+        Def d = def(id);
+        if (d == null) return;
+        Set<String> g = data.grants.computeIfAbsent(p.getUuidAsString(), k -> new LinkedHashSet<>());
+        boolean fresh = g.add(id);
+        if (fresh) stack.decrement(1);
+        save();
+        select(p, id);
+        Notify.toast(p, net.minecraft.text.Text.literal(fresh ? "NEW OUTFIT" : "Wearing it").styled(x -> x.withBold(fresh).withColor(0xE8C47A)),
+            net.minecraft.text.Text.literal(d.title()), 0xE8C47A, "minecraft:leather_chestplate", null);
+        p.playSoundToPlayer(net.minecraft.sound.SoundEvents.ITEM_ARMOR_EQUIP_LEATHER.value(), net.minecraft.sound.SoundCategory.PLAYERS, 1f, 1f);
+    }
 
     private static final class Data {
         Set<String> allowlist = new LinkedHashSet<>();

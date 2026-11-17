@@ -1437,6 +1437,7 @@ public final class Extraction {
         if (blades != null && r.nextFloat() < 0.6f) loot.add(new ItemStack(blades, 4 + r.nextInt(9)));
         if (r.nextFloat() < 0.5f) loot.add(new ItemStack(Items.BREAD, 2 + r.nextInt(4)));
         if (Refueler.ITEM != null && r.nextFloat() < 0.08f) loot.add(new ItemStack(Refueler.ITEM));
+        if (r.nextFloat() < 0.05f * luck) loot.add(Cosmetics.randomGarment(r));
         for (ItemStack s : loot) {
             for (int tries = 0; tries < 10; tries++) {
                 int slot = r.nextInt(b.size());
