@@ -21,7 +21,7 @@ public final class IslandSky {
     public static Long hour(net.minecraft.client.world.ClientWorld w) {
         Net.IslandSky n = now;
         if (n == null || !w.getRegistryKey().getValue().toString().equals(n.world())) return null;
-        return n.time();
+        return (long) n.time();
     }
 
     public static void tick(MinecraftClient mc) {

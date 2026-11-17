@@ -1330,11 +1330,14 @@ public final class Extraction {
                 ses.pois.add(poi);
             }
             RunObjectives.create(this, iw, ses, c, rnd);
-            // Marleyans are already out here: a patrol or two, and one sitting on a hot zone.
-            for (int i = 0; i < 2; i++) {
-                double a = rnd.nextDouble() * Math.PI * 2, d = 120 + rnd.nextInt(200);
+            // Marleyans are already out here and looking for trouble: hunting parties that go after
+            // whoever (or whatever) is nearest, a couple of patrols, and one sitting on a hot zone.
+            for (int i = 0; i < 4; i++) {
+                double a = rnd.nextDouble() * Math.PI * 2, d = 120 + rnd.nextInt(220);
                 BlockPos at = land(iw, c.getX() + (int) (Math.cos(a) * d), c.getZ() + (int) (Math.sin(a) * d), rnd, 30);
-                if (at != null) Troops.squad(iw, at, 3 + rnd.nextInt(2), island.level(), ses.id, c, ISLAND, rnd);
+                if (at == null) continue;
+                if (i < 2) Troops.hunters(iw, at, 3 + rnd.nextInt(2), island.level(), ses.id, c, ISLAND, rnd);
+                else Troops.squad(iw, at, 3 + rnd.nextInt(2), island.level(), ses.id, c, ISLAND, rnd);
             }
             if (!ses.pois.isEmpty()) {
                 Poi guard = ses.pois.get(rnd.nextInt(ses.pois.size()));
@@ -1657,7 +1660,7 @@ public final class Extraction {
             ServerPlayerEntity p = divers.get(r.nextInt(divers.size()));
             double a = r.nextDouble() * Math.PI * 2, d = 55 + r.nextInt(40);
             BlockPos at = land(w, (int) (p.getX() + Math.cos(a) * d), (int) (p.getZ() + Math.sin(a) * d), r, 15);
-            if (at == null || Troops.count(ses.id) > 14) return;
+            if (at == null || Troops.count(ses.id) > 20) return;
             // The entrance: flares go up, the horn sounds, and a few seconds later they're there.
             flares(w, at, 3, 0xE02020);
             announce(divers, "MARLEYAN LANDING", at, 0xC0463A, "minecraft:crossbow", SoundEvents.EVENT_RAID_HORN.value(), 1f, ses.island);
@@ -1668,7 +1671,7 @@ public final class Extraction {
                 if (!sessions.contains(ses)) return;
                 w.spawnParticles(ParticleTypes.CLOUD, land.getX() + 0.5, land.getY() + 0.5, land.getZ() + 0.5, 60, 3, 0.3, 3, 0.1);
                 w.playSound(null, land, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.HOSTILE, 1.5f, 0.7f);
-                Troops.squad(w, land, 4 + w.random.nextInt(2), lvl, sid, ses.centre, ISLAND, w.random);
+                Troops.hunters(w, land, 4 + w.random.nextInt(2), lvl, sid, ses.centre, ISLAND, w.random);
                 quake(w, land, 40, 0.4f, 14);
             });
         } else {

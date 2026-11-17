@@ -108,6 +108,8 @@ public final class Troops {
         /** Where the squad stands (the middle of it), and when the next shots at each target may start. */
         Vec3d mid;
         int plan;
+        /** Out looking for a fight: goes after the nearest player (or a titan) rather than wandering. */
+        boolean hunter;
         final Map<UUID, Integer> volleys = new HashMap<>();
 
         Squad(int id, String session, BlockPos centre, int radius, int level) {
@@ -234,6 +236,23 @@ public final class Troops {
         return made;
     }
 
+    /** A squad that hunts: it goes looking for the nearest player, or failing that a titan. */
+    public static int hunters(ServerWorld w, BlockPos at, int n, int level, String session, BlockPos centre, int radius, Random r) {
+        int first = nextSquad;
+        int made = squad(w, at, n, level, session, centre, radius, r);
+        for (int id = first; id < nextSquad; id++) {
+            Squad sq = squads.get(id);
+            if (sq != null) sq.hunter = true;
+        }
+        return made;
+    }
+
+    /** Where a session's squads stand (the middle of the first one still up), or null. */
+    public static Vec3d where(String session) {
+        for (Squad sq : squads.values()) if (sq.session.equals(session) && sq.mid != null) return sq.mid;
+        return null;
+    }
+
     /** A match is over: its troops go. */
     public static void clear(ServerWorld w, String session) {
         for (var it = troops.entrySet().iterator(); it.hasNext(); ) {
@@ -278,6 +297,36 @@ public final class Troops {
         List<ServerPlayerEntity> players = new ArrayList<>(w.getPlayers());
         trackMotion(players);
         for (Squad sq : squads.values()) {
+            if (sq.hunter && (--sq.regoal <= 0 || sq.goal == null)) {
+                // Hunting: towards the nearest fighter on the map, else the nearest titan.
+                sq.regoal = 60;
+                Vec3d from = sq.mid != null ? sq.mid : Vec3d.ofCenter(sq.centre);
+                ServerPlayerEntity prey = null;
+                double best = 400 * 400;
+                for (ServerPlayerEntity p : players) {
+                    if (p.isSpectator() || p.isCreative()) continue;
+                    double d = p.squaredDistanceTo(from);
+                    if (d < best) {
+                        best = d;
+                        prey = p;
+                    }
+                }
+                if (prey != null) sq.goal = prey.getBlockPos();
+                else {
+                    Entity ti = null;
+                    double tb = 160 * 160;
+                    for (Entity e : w.getOtherEntities(null, new Box(from, from).expand(160, 60, 160), e -> AotRpg.isTitan(e) && e.isAlive() && TitanLevels.rootOf(e) == e)) {
+                        double d = e.squaredDistanceTo(from);
+                        if (d < tb) {
+                            tb = d;
+                            ti = e;
+                        }
+                    }
+                    if (ti != null) sq.goal = ti.getBlockPos();
+                    else if (sq.goal == null) sq.goal = sq.centre;
+                }
+                continue;
+            }
             if (--sq.regoal <= 0 || sq.goal == null) {
                 sq.regoal = 400 + w.random.nextInt(400);
                 BlockPos lure = lures.get(sq.session);
@@ -405,7 +454,7 @@ public final class Troops {
         List<ServerPlayerEntity> people = new ArrayList<>();
         for (ServerPlayerEntity p : players) {
             if (p.isSpectator() || p.isCreative() || AotRpg.DOWNED.isDowned(p)) continue;
-            if (p.squaredDistanceTo(m) < 42 * 42) people.add(p);
+            if (p.squaredDistanceTo(m) < (sq.hunter ? 64 * 64 : 42 * 42)) people.add(p);
         }
         people.sort((a, b) -> Double.compare(a.squaredDistanceTo(m), b.squaredDistanceTo(m)));
         LivingEntity titan = null;
