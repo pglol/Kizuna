@@ -1682,7 +1682,7 @@ public final class Extraction {
             double a = r.nextDouble() * Math.PI * 2, d = 80 + r.nextInt(40);
             BlockPos at = land(w, (int) (p.getX() + Math.cos(a) * d), (int) (p.getZ() + Math.sin(a) * d), r, 15);
             if (at == null) return;
-            Entity t = kinds.get(r.nextInt(kinds.size())).create(w);
+            Entity t = TitanTypes.roll(r, kinds, 0.4f).create(w);
             if (!(t instanceof net.minecraft.entity.mob.MobEntity mob)) return;
             t.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, r.nextFloat() * 360, 0);
             mob.initialize(w, w.getLocalDifficulty(at), net.minecraft.entity.SpawnReason.EVENT, null);
@@ -1829,7 +1829,7 @@ public final class Extraction {
             double a = w.getRandom().nextDouble() * Math.PI * 2, d = 70 + w.getRandom().nextInt(50);
             BlockPos at = land(w, (int) (p.getX() + Math.cos(a) * d), (int) (p.getZ() + Math.sin(a) * d), w.getRandom(), 10);
             if (at == null) continue;
-            Entity t = kinds.get(w.getRandom().nextInt(kinds.size())).create(w);
+            Entity t = TitanTypes.roll(w.getRandom(), kinds, 0.1f).create(w);
             if (t == null) continue;
             t.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, w.getRandom().nextFloat() * 360, 0);
             if (t instanceof net.minecraft.entity.mob.MobEntity mob) {
@@ -1856,7 +1856,7 @@ public final class Extraction {
             BlockPos at = land(w, around.getX() + w.getRandom().nextInt(spread * 2 + 1) - spread,
                 around.getZ() + w.getRandom().nextInt(spread * 2 + 1) - spread, w.getRandom(), 10);
             if (at == null) continue;
-            Entity t = kinds.get(w.getRandom().nextInt(kinds.size())).create(w);
+            Entity t = TitanTypes.roll(w.getRandom(), kinds, 0.15f).create(w);
             if (t == null) continue;
             t.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, w.getRandom().nextFloat() * 360, 0);
             if (t instanceof net.minecraft.entity.mob.MobEntity mob) {

@@ -45,6 +45,14 @@ public final class Poses {
         lastAim = now;
     }
 
+    /** How far into the Reverse Grip run a body is (0 .. 1): its blades turned back while it lasts. */
+    public static float reverseGrip(net.minecraft.entity.LivingEntity e) {
+        if (!(e instanceof PlayerEntity pl) || !"reverse_grip".equals(styles.get(pl.getUuid()))) return 0;
+        float[] b = blend.get(e.getId());
+        if (b == null) return 0;
+        return b[0] * b[0] * (3 - 2 * b[0]);
+    }
+
     /** In the air on the gear (not just a hop): well clear of the ground. */
     public static boolean airborne(PlayerEntity p) {
         if (p.isOnGround() || p.isTouchingWater() || p.hasVehicle() || p.isFallFlying() || p.isClimbing() || p.getAbilities().flying) return false;

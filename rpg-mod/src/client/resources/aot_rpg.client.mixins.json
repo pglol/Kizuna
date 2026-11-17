@@ -41,7 +41,8 @@
     "CrosshairMixin",
     "HiddenSlotMixin",
     "IslandTimeMixin",
-    "DyeArmorMixin"
+    "DyeArmorMixin",
+    "ReverseGripMixin"
   ],
   "injectors": {
     "defaultRequire": 0

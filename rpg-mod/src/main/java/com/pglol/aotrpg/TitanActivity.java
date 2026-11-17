@@ -96,6 +96,7 @@ public final class TitanActivity {
         long now = System.currentTimeMillis();
         tickHorde(w, now);
         tickAbnormal(w, now);
+        tickOgre(w, now);
         if (ticks % 200 == 9) tickCaves(w, now);
         if (ticks % 1200 == 609) titanFights(w);
     }
@@ -116,6 +117,25 @@ public final class TitanActivity {
             Entity t = spawn(w, kinds.get(w.getRandom().nextInt(kinds.size())), (int) (p.getX() + Math.cos(a) * 40), (int) (p.getZ() + Math.sin(a) * 40), 0, TAG);
             if (t instanceof MobEntity m) m.setTarget(v instanceof LivingEntity lv ? lv : p);
         }
+    }
+
+    private long nextOgre = System.currentTimeMillis() + 8 * 60_000L;
+
+    /** Now and then an ogre roams out beyond the walls, somewhere near whoever's out there. */
+    private void tickOgre(ServerWorld w, long now) {
+        if (now < nextOgre) return;
+        nextOgre = now + (7 + w.getRandom().nextInt(6)) * 60_000L;
+        List<EntityType<?>> og = TitanTypes.ogres();
+        List<ServerPlayerEntity> out = outside(w);
+        if (og.isEmpty() || out.isEmpty()) return;
+        ServerPlayerEntity p = out.get(w.getRandom().nextInt(out.size()));
+        Box box = p.getBoundingBox().expand(160);
+        if (!w.getEntitiesByClass(LivingEntity.class, box, e -> e.isAlive() && net.minecraft.registry.Registries.ENTITY_TYPE.getId(e.getType()).getPath().contains("ogre")).isEmpty()) return;
+        double a = w.getRandom().nextDouble() * Math.PI * 2, d = 110 + w.getRandom().nextInt(80);
+        int x = (int) (p.getX() + Math.cos(a) * d), z = (int) (p.getZ() + Math.sin(a) * d);
+        if (!beyondWalls(x, z)) return;
+        Entity t = spawn(w, og.get(w.getRandom().nextInt(og.size())), x, z, 0, TAG);
+        if (t != null) TitanLevels.fix(t, AotRpg.PLACES.levelAt(x, z) + 3);
     }
 
     private List<ServerPlayerEntity> outside(ServerWorld w) {
@@ -154,7 +174,7 @@ public final class TitanActivity {
             List<EntityType<?>> kinds = TitanTypes.ordinary();
             if (kinds.isEmpty()) return;
             for (int i = 0; i < n; i++) {
-                Entity t = spawn(w, kinds.get(w.getRandom().nextInt(kinds.size())), x, z, 18, HORDE);
+                Entity t = spawn(w, TitanTypes.roll(w.getRandom(), kinds, 0.12f), x, z, 18, HORDE);
                 if (t != null) h.titans.add(t.getUuid());
             }
             if (h.titans.isEmpty()) return;
@@ -234,7 +254,7 @@ public final class TitanActivity {
             if (!beyondWalls(x, z)) return;
             List<EntityType<?>> kinds = TitanTypes.ordinary();
             if (kinds.isEmpty()) return;
-            Entity t = spawn(w, kinds.get(w.getRandom().nextInt(kinds.size())), x, z, 0, ABNORMAL);
+            Entity t = spawn(w, TitanTypes.roll(w.getRandom(), kinds, 0.35f), x, z, 0, ABNORMAL);
             if (t == null) return;
             TitanLevels.fix(t, AotRpg.PLACES.levelAt(x, z) + 8);
             t.addCommandTag(Raids.STRIKES + 5);

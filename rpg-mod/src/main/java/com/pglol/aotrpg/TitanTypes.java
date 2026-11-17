@@ -29,7 +29,7 @@ public final class TitanTypes {
      * Titans too fast and wild to fight on ODM gear (abnormals, crawlers, jumpers, runners, ogres...).
      * They're kept for titan-against-titan fights: they only exist near a player in titan form.
      */
-    private static final String[] FAST = {"abnormal", "crawl", "jump", "runner", "sprint", "deviant", "ogre", "fast", "berserk",
+    private static final String[] FAST = {"abnormal", "crawl", "jump", "runner", "sprint", "deviant", "fast", "berserk",
         "rabid", "hunter"};
 
     public static boolean fast(String path) {
@@ -77,9 +77,27 @@ public final class TitanTypes {
             String path = id.getPath();
             if (!id.getNamespace().equals(AotItems.namespace) || !path.contains("titan") || part(path) || banned(path)) continue;
             // Ordinary lists never include the fast ones (they're for titan fights only).
-            if (isShifterPath(path) == shifters && (shifters || !fast(path))) out.add(Registries.ENTITY_TYPE.get(id));
+            if (isShifterPath(path) == shifters && (shifters || !fast(path) && !path.contains("ogre"))) out.add(Registries.ENTITY_TYPE.get(id));
         }
         return out;
+    }
+
+    /** The ogre titan: big, heavy, and only sometimes about (see roll). */
+    public static List<EntityType<?>> ogres() {
+        List<EntityType<?>> out = new ArrayList<>();
+        for (Identifier id : Registries.ENTITY_TYPE.getIds()) {
+            String path = id.getPath();
+            if (!id.getNamespace().equals(AotItems.namespace) || !path.contains("ogre") || !path.contains("titan") || part(path) || banned(path)) continue;
+            out.add(Registries.ENTITY_TYPE.get(id));
+        }
+        return out;
+    }
+
+    /** One of these titans, or (now and then, by chance) an ogre instead. */
+    public static EntityType<?> roll(net.minecraft.util.math.random.Random r, List<EntityType<?>> kinds, float ogreChance) {
+        List<EntityType<?>> og = ogres();
+        if (!og.isEmpty() && (kinds.isEmpty() || r.nextFloat() < ogreChance)) return og.get(r.nextInt(og.size()));
+        return kinds.isEmpty() ? null : kinds.get(r.nextInt(kinds.size()));
     }
 
     /** Ordinary (pure) titans. */
