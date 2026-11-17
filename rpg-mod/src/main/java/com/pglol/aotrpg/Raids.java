@@ -66,6 +66,9 @@ public final class Raids {
         final java.util.Set<UUID> fallen = new java.util.HashSet<>();
         /** The boss driver: ticks until its next swipe and its next stomp. */
         int swipeIn = 40, stompIn = 200;
+        /** The boss's standing height, and how long it's been down (knocked flat by Danny's mod). */
+        float bossH;
+        int downT;
         int wave;
         long started, nextWave, endAt;
         boolean won, over;
@@ -289,6 +292,27 @@ public final class Raids {
         ServerWorld w = server.getOverworld();
         if (ticks % 600 == 123) placeCommanders(w);
         for (Raid r : raids) if (!r.over && r.bossId != null) drive(w, r);
+        // The wave titans go for the raiders (not just the middle of the field).
+        if (ticks % 40 == 17) for (Raid r : raids) {
+            if (r.over) continue;
+            for (UUID id : r.mobs) {
+                if (!(w.getEntity(id) instanceof MobEntity mob) || !mob.isAlive()) continue;
+                ServerPlayerEntity near = null;
+                double nd = 64 * 64;
+                for (UUID pid : r.players) {
+                    ServerPlayerEntity m = server.getPlayerManager().getPlayer(pid);
+                    if (m == null || m.isSpectator() || m.isDead()) continue;
+                    double d = m.squaredDistanceTo(mob);
+                    if (d < nd) {
+                        nd = d;
+                        near = m;
+                    }
+                }
+                if (near == null) continue;
+                mob.setTarget(near);
+                if (mob.getNavigation().isIdle()) mob.getNavigation().startMovingTo(near, 1.1);
+            }
+        }
         if (ticks % 10 != 0 || raids.isEmpty()) return;
         long now = System.currentTimeMillis();
         for (Raid r : new ArrayList<>(raids)) {
@@ -387,6 +411,7 @@ public final class Raids {
         TitanLevels.fix(b, raidLevel(r));
         b.setCustomName(Text.literal(r.boss.name()).formatted(Formatting.DARK_RED, Formatting.BOLD));
         r.bossId = b.getUuid();
+        r.bossH = b.getHeight();
         List<ServerPlayerEntity> squad = new ArrayList<>();
         for (UUID id : r.players) {
             ServerPlayerEntity m = server.getPlayerManager().getPlayer(id);
@@ -424,6 +449,19 @@ public final class Raids {
             }
         }
         if (target == null) return;
+        // Down (legs cut, knocked flat) or reeling from a nape strike: it doesn't slide about. If it
+        // stays down too long, it's put back on its feet.
+        boolean down = b.getPose() != net.minecraft.entity.EntityPose.STANDING || r.bossH > 0 && b.getHeight() < r.bossH * 0.7f;
+        if (down || b.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.SLOWNESS)) {
+            b.setVelocity(0, Math.min(0, b.getVelocity().y), 0);
+            b.velocityModified = true;
+            if (down && ++r.downT > 100) {
+                b.setPose(net.minecraft.entity.EntityPose.STANDING);
+                r.downT = 0;
+            }
+            return;
+        }
+        r.downT = 0;
         double dx = target.getX() - b.getX(), dz = target.getZ() - b.getZ(), dist = Math.sqrt(dx * dx + dz * dz);
         float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90);
         b.setYaw(yaw);

@@ -61,11 +61,19 @@ public final class OdmMoves {
         ImpactFrames.rush(0.8f, 220);
     }
 
+    /** Strike at someone down and nearly done: a finisher. */
+    private static boolean finishTick(MinecraftClient mc, ClientPlayerEntity pl, boolean press) {
+        if (!press || Finish.target(mc) == null) return false;
+        ClientPlayNetworking.send(new Net.OdmJump(com.pglol.aotrpg.Finishers.KIND, pl.getYaw()));
+        return true;
+    }
+
     /** Look up and strike on the ground: Rising Cut, throwing whoever's in front of you up. */
     private static void riseTick(MinecraftClient mc, ClientPlayerEntity pl, long now, boolean onGround) {
         boolean down = mc.options.attackKey.isPressed() && mc.currentScreen == null;
         boolean press = down && !attackWas;
         attackWas = down;
+        if (finishTick(mc, pl, press)) return;
         if (!press || !onGround || pl.getPitch() > -30 || now < riseUntil) return;
         var held = pl.getMainHandStack();
         if (!com.pglol.aotrpg.Guard.melee(held) || com.pglol.aotrpg.AotItems.isApgGun(held)) return;
@@ -189,6 +197,11 @@ public final class OdmMoves {
             nv = new Vec3d(nv.x, Math.max(nv.y, dir.y * 1.3 + 0.3), nv.z);
             if (nv.length() > 2.0) nv = nv.normalize().multiply(2.0);
             dirYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
+        }
+        // A titan surge: every burst flies further.
+        if (AdrenalineClient.titanSurge()) {
+            nv = nv.multiply(1.3);
+            AdrenalineClient.titanTrail(pl);
         }
         pl.setVelocity(nv);
         cooldownUntil = now + COOLDOWN_MS;

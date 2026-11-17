@@ -94,7 +94,7 @@ public final class TitanLevels {
     public int strikesOn(Entity e) {
         if (e == null) return 0;
         Nape n = napes.get(e.getUuid());
-        return n != null && System.currentTimeMillis() - n.lastAt < STRIKE_MEMORY_MS ? n.strikes : 0;
+        return n != null && (Raids.strikes(e) > 0 || System.currentTimeMillis() - n.lastAt < STRIKE_MEMORY_MS) ? n.strikes : 0;
     }
 
     public static int level(Entity e) {
@@ -349,14 +349,16 @@ public final class TitanLevels {
         Nape n = napes.computeIfAbsent(titan.getUuid(), k -> new Nape());
         if (now < n.approvedUntil) return false;
         if (level(titan) <= 0) assign(titan, p);
-        if (now - n.lastAt > STRIKE_MEMORY_MS) n.strikes = 0;
+        // A raid boss's nape keeps every strike for the whole fight (it takes many); others close up.
+        boolean raidBoss = Raids.strikes(titan) > 0;
+        if (!raidBoss && now - n.lastAt > STRIKE_MEMORY_MS) n.strikes = 0;
         // One strike per swing: Danny's blades can report several hits for one cut.
         if (now - n.lastAt < 180) return true;
         // Twin Cut blades count each nape strike twice.
         int add = Gear.napeStrikes(p, p.getMainHandStack()) + AotRpg.CLASSES.napeBonus(p, titan);
         // A shifter's or a boss's nape is hardened: only every other strike bites until a Recon
         // marks it or an Infantry breaks it open.
-        if (AotRpg.CLASSES.hardened(titan)) {
+        if (!raidBoss && AotRpg.CLASSES.hardened(titan)) {
             n.hardSkip = !n.hardSkip;
             if (n.hardSkip) {
                 add = 0;
@@ -364,6 +366,7 @@ public final class TitanLevels {
             }
         }
         n.strikes += add;
+        if (add > 0) Adrenaline.gain(p, 8);
         n.lastAt = now;
         int need = needed(p, titan);
         ServerWorld w = (ServerWorld) titan.getWorld();

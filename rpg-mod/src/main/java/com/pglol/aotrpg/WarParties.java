@@ -34,6 +34,14 @@ public final class WarParties {
             server = s;
             groups.clear();
         });
+        // Sparring partners pull their cuts: steel rings, nobody bleeds.
+        net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DAMAGE.register((e, src, amt) -> {
+            if (!Troops.sameSquad(e, src.getAttacker()) || !(e.getWorld() instanceof ServerWorld w)) return true;
+            var at = e.getPos().add(0, 1.2, 0);
+            AotParticles.burst(w, AotParticles.SPARK, 0xFFE08A, 0.4f, at.x, at.y, at.z, 6, 0.2, 0.3);
+            w.playSound(null, e.getBlockPos(), net.minecraft.sound.SoundEvents.BLOCK_ANVIL_PLACE, net.minecraft.sound.SoundCategory.HOSTILE, 0.5f, 1.9f);
+            return false;
+        });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             if (s.getTicks() % 60 == 13) tick();
         });
@@ -102,7 +110,8 @@ public final class WarParties {
         } else if (roll < 0.82f) {
             made = Troops.group(w, at, 2, level + 2, session, at, 180, r, Troops.Arch.MERCENARY, 3);
         } else if (roll < 0.97f) {
-            made = Troops.group(w, at, 1, level + 3, session, at, 200, r, Troops.Arch.SWORDSMAN, 3 + r.nextInt(3));
+            // Alone, or a master travelling with an apprentice (they spar when nobody's about).
+            made = Troops.group(w, at, r.nextInt(5) < 2 ? 2 : 1, level + 3, session, at, 200, r, Troops.Arch.SWORDSMAN, 3 + r.nextInt(3));
         } else {
             made = Troops.group(w, at, 1, level + 8, session, at, 200, r, Troops.Arch.MASTER, 5);
         }

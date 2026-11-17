@@ -35,7 +35,7 @@ import java.util.UUID;
 public final class Adrenaline {
     private Adrenaline() {}
 
-    public static final int FX_CHARGE = 0, FX_CHARGE_END = 1, FX_VANISH = 2, FX_HEAVY = 3, FX_KICK = 4, FX_PINNED = 5, FX_HUNTED = 6, FX_STUNNED = 7, FX_FACEPLANT = 8, FX_AFTER = 9, FX_CHAIN = 10, FX_METER = 11, FX_SURGE = 12, FX_STRIKE = 13;
+    public static final int FX_CHARGE = 0, FX_CHARGE_END = 1, FX_VANISH = 2, FX_HEAVY = 3, FX_KICK = 4, FX_PINNED = 5, FX_HUNTED = 6, FX_STUNNED = 7, FX_FACEPLANT = 8, FX_AFTER = 9, FX_CHAIN = 10, FX_METER = 11, FX_SURGE = 12, FX_STRIKE = 13, FX_FINISH = 14;
     /** Client -> server kinds. */
     public static final int RUSH_START = 0, RUSH_STOP = 1, START_VANISH = 2, START_PLAIN = 3;
 
@@ -75,6 +75,13 @@ public final class Adrenaline {
         if (ServerPlayNetworking.canSend(p, Net.RushFx.ID)) ServerPlayNetworking.send(p, new Net.RushFx(p.getId(), FX_METER, 0, v));
     }
 
+    /** A surge earned against titans: the gear runs on almost nothing and every burst flies further. */
+    private static final java.util.Set<UUID> titanSurge = new java.util.HashSet<>();
+
+    public static boolean titanSurge(ServerPlayerEntity p) {
+        return surging(p) && titanSurge.contains(p.getUuid());
+    }
+
     public static boolean surging(ServerPlayerEntity p) {
         Long u = surgeUntil.get(p.getUuid());
         return u != null && p.getServerWorld().getTime() < u;
@@ -99,11 +106,14 @@ public final class Adrenaline {
         if (mt != null && mt[0] >= FULL && !surging(att)) {
             mt[0] = 0;
             sync(att, mt);
-            surgeUntil.put(att.getUuid(), now + 120);
+            boolean onTitan = AotRpg.isTitan(target) || TitanLevels.rootOf(target) != null && AotRpg.isTitan(TitanLevels.rootOf(target));
+            surgeUntil.put(att.getUuid(), now + (onTitan ? 160 : 120));
+            if (onTitan) titanSurge.add(att.getUuid());
+            else titanSurge.remove(att.getUuid());
             att.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SPEED, 120, 1, false, false, true));
             att.getServerWorld().playSound(null, att.getBlockPos(), SoundEvents.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.4f, 0.8f);
             att.getServerWorld().playSound(null, att.getBlockPos(), SoundEvents.ENTITY_RAVAGER_ROAR, SoundCategory.PLAYERS, 0.5f, 1.4f);
-            broadcast(att, new Net.RushFx(att.getId(), FX_SURGE, att.getYaw(), 120));
+            broadcast(att, new Net.RushFx(att.getId(), FX_SURGE, onTitan ? 1 : 0, onTitan ? 160 : 120));
             Impact.frame(att.getServerWorld(), att.getEyePos(), 1f, att);
         }
         return m;

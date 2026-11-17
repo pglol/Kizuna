@@ -109,6 +109,16 @@ public final class AdrenalineClient {
             }
             case Adrenaline.FX_CHAIN -> MovesHud.chain(f.arg());
             case Adrenaline.FX_METER -> meter = f.arg();
+            case Adrenaline.FX_FINISH -> {
+                if (e != null) {
+                    Afterimages.leave(e, 0xFF3A2A, 400);
+                    streaks(mc, e, e.getYaw(), 14, true);
+                }
+                if (mc.player != null && f.entity() == mc.player.getId()) {
+                    MovesHud.popup("FINISHER", 0xFFFF3A2A);
+                    punchFov = -14;
+                }
+            }
             case Adrenaline.FX_STRIKE -> {
                 MovesHud.popup("CHARGE STRIKE", 0xFFFF6A4A);
                 punchFov = -8;
@@ -116,7 +126,8 @@ public final class AdrenalineClient {
             case Adrenaline.FX_SURGE -> {
                 surging.put(f.entity(), Util.getMeasuringTimeMs() + f.arg() * 50L);
                 if (mc.player != null && f.entity() == mc.player.getId()) {
-                    MovesHud.popup("ADRENALINE SURGE", 0xFFFF3A2A);
+                    if (f.yaw() >= 1) titanSurgeUntil = Util.getMeasuringTimeMs() + f.arg() * 50L;
+                    MovesHud.popup(f.yaw() >= 1 ? "TITAN SURGE" : "ADRENALINE SURGE", f.yaw() >= 1 ? 0xFFFFC84A : 0xFFFF3A2A);
                     ImpactFrames.rush(1f, 400);
                     EffectFx.quake(0.4f, 8);
                     punchFov = 14;
@@ -232,6 +243,19 @@ public final class AdrenalineClient {
     private static int buildUp, lurches;
     /** Everyone surging: entity -> until (ms). */
     private static final Map<Integer, Long> surging = new HashMap<>();
+
+    private static long titanSurgeUntil;
+
+    public static boolean titanSurge() {
+        return Util.getMeasuringTimeMs() < titanSurgeUntil;
+    }
+
+    /** A burst on a titan surge: a gold wake and streaks behind you. */
+    public static void titanTrail(Entity e) {
+        Afterimages.leave(e, 0xFFC84A, 320);
+        for (int i = 0; i < 8; i++) FxParticle.spawn(com.pglol.aotrpg.AotParticles.STREAK, 0xFFD27A, 0.8f, e.getX(), e.getY() + 1, e.getZ(),
+            (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.8);
+    }
 
     public static int meter() {
         return meter;

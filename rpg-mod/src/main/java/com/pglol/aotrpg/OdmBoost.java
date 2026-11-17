@@ -224,6 +224,8 @@ public final class OdmBoost {
         double m = max != null && max.value() > 0 ? max.value() : Math.max(v.value(), FULL);
         // Efficient Valves (Engineer): every burst costs a fifth less.
         double cost = Math.max(1, m * 0.05) * (AotRpg.PROFILES.get(p.getUuid()).has(Skill.ENG_VALVES) ? 0.8 : 1);
+        // A titan surge: the gear runs on almost nothing.
+        if (Adrenaline.titanSurge(p)) cost *= 0.25;
         v.set().accept(Math.max(0, v.value() - cost));
         return true;
     }
@@ -232,6 +234,10 @@ public final class OdmBoost {
 
     public void boost(ServerPlayerEntity p, Net.OdmJump j) {
         // Slam slashes ride the same message, but cost stamina rather than gas.
+        if (j.kind() == Finishers.KIND) {
+            Finishers.finish(p);
+            return;
+        }
         if (j.kind() == AirMoves.CRUSH) {
             AirMoves.crush(p, j.yaw());
             return;

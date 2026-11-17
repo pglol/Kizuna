@@ -582,7 +582,17 @@ public final class Troops {
                     foe = ov;
                 }
             }
-            if (foe == null) return;
+            if (foe == null) {
+                // A master and an apprentice with nothing else to do: they spar (blunted: nobody bleeds).
+                if (sq.arch == Arch.SWORDSMAN && men.size() == 2 && bodies.size() == 2) {
+                    sq.plan = 1;
+                    men.get(0).job = 3;
+                    men.get(0).orders = bodies.get(1).getUuid();
+                    men.get(1).job = 3;
+                    men.get(1).orders = bodies.get(0).getUuid();
+                }
+                return;
+            }
             sq.plan = 1;
             for (Troop t : men) {
                 t.job = 3;
@@ -1090,6 +1100,13 @@ public final class Troops {
         if (lead != null) w.playSound(null, lead.getX(), lead.getY() + 1.6, lead.getZ(), SoundEvents.ENTITY_PILLAGER_AMBIENT, SoundCategory.HOSTILE, 1.6f, 0.8f);
         if (sq.arch != Arch.MARLEY) p.sendMessage(Text.literal(sq.arch.name + (sq.arch == Arch.SWORDSMAN || sq.arch == Arch.MASTER ? " draws on you" : "s turn on you"))
             .formatted(Formatting.RED), true);
+    }
+
+    /** Two of the same group (sparring, never really hurting each other). */
+    public static boolean sameSquad(Entity a, Entity b) {
+        if (a == null || b == null) return false;
+        Troop x = troops.get(a.getUuid()), y = troops.get(b.getUuid());
+        return x != null && y != null && x.squad == y.squad;
     }
 
     /** Old grudges: who goes for whom when they meet out there. */

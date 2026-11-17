@@ -195,6 +195,8 @@ public final class Guard {
                     && att.getRandom().nextFloat() < CLASH_CHANCE) {
                     swings.remove(def.getUuid());
                     swings.remove(att.getUuid());
+                    // The second clash running between the same two: the blades bind.
+                    if (Clashes.clash(att, def)) return false;
                     // Usually an even clash, both thrown apart. Now and then one side overpowers the
                     // other (strength and stamina behind the blow) and sends them flying.
                     Profile ap = AotRpg.PROFILES.get(att.getUuid()), dp0 = AotRpg.PROFILES.get(def.getUuid());

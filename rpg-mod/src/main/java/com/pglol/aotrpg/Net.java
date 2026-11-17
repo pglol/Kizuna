@@ -1694,6 +1694,22 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Server -> client: locked blade to blade with someone (ticks left, 0 ends it); balance -1 losing .. 1 winning. */
+    public record ClashLock(int other, int ticks, float balance) implements CustomPayload {
+        public static final Id<ClashLock> ID = Net.id("clash_lock");
+        public static final PacketCodec<RegistryByteBuf, ClashLock> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.other); b.writeVarInt(v.ticks); b.writeFloat(v.balance);
+        }, b -> new ClashLock(b.readVarInt(), b.readVarInt(), b.readFloat()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Client -> server: how many times you've struck during a blade lock (running total). */
+    public record ClashMash(int presses) implements CustomPayload {
+        public static final Id<ClashMash> ID = Net.id("clash_mash");
+        public static final PacketCodec<RegistryByteBuf, ClashMash> CODEC = PacketCodec.of((v, b) -> b.writeVarInt(v.presses), b -> new ClashMash(b.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: an impact frame at this spot (strength 0..1+). */
     public record ImpactFx(double x, double y, double z, float strength) implements CustomPayload {
         public static final Id<ImpactFx> ID = Net.id("impact_fx");
@@ -2705,6 +2721,8 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(ArenaAction.ID, ArenaAction.CODEC);
         PayloadTypeRegistry.playS2C().register(ArenaHud.ID, ArenaHud.CODEC);
         PayloadTypeRegistry.playS2C().register(ImpactFx.ID, ImpactFx.CODEC);
+        PayloadTypeRegistry.playS2C().register(ClashLock.ID, ClashLock.CODEC);
+        PayloadTypeRegistry.playC2S().register(ClashMash.ID, ClashMash.CODEC);
         PayloadTypeRegistry.playC2S().register(AimSet.ID, AimSet.CODEC);
         PayloadTypeRegistry.playS2C().register(AimSeen.ID, AimSeen.CODEC);
         PayloadTypeRegistry.playC2S().register(MentorAction.ID, MentorAction.CODEC);
