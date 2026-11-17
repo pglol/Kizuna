@@ -46,7 +46,7 @@ public final class ShoulderCam {
         public int slam = 3;
         public boolean dashHoming = true;
         /** Reverse Grip: where the blade turns in the fist (up the handle, out, across). */
-        public float gripAlong = 0.20f, gripDepth = 0.03125f, gripSide = 0f;
+        public float gripAlong = -0.17f, gripDepth = 0.10f, gripSide = 0f;
     }
 
     public static Settings cfg = new Settings();
@@ -62,6 +62,11 @@ public final class ShoulderCam {
             if (Files.exists(file())) {
                 Settings s = GSON.fromJson(Files.readString(file()), Settings.class);
                 if (s != null) cfg = s;
+                // The old guess for where the grip turns (never tuned): move to the handle itself.
+                if (cfg.gripAlong == 0.20f && cfg.gripDepth == 0.03125f && cfg.gripSide == 0f) {
+                    cfg.gripAlong = -0.17f;
+                    cfg.gripDepth = 0.10f;
+                }
             }
         } catch (Exception ignored) { }
     }
