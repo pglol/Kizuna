@@ -34,7 +34,8 @@
     "FallShakeMixin",
     "PotionSwirlMixin",
     "PlayerArmsMixin",
-    "ShoulderHandMixin"
+    "ShoulderHandMixin",
+    "SwingTimeMixin"
   ],
   "injectors": {
     "defaultRequire": 0

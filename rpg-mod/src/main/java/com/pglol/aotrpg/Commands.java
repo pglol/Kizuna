@@ -608,6 +608,7 @@ final class Commands {
             for (String line : OdmBoost.describe(c.getSource().getPlayerOrThrow())) c.getSource().sendFeedback(() -> Text.literal(line), false);
             return 1;
         }));
+        Swings.commands(d);
         d.register(CommandManager.literal("bladecheck").executes(c -> {
             var bp = c.getSource().getPlayerOrThrow();
             String info = BladeCare.describe(bp.getMainHandStack()) + " | " + AotRpg.BLADES.session(bp.getUuid());

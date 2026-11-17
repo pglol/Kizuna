@@ -1608,6 +1608,36 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Client -> server: the direction of the swing I just made (Swings.Dir ordinal). */
+    public record SwingDir(int dir) implements CustomPayload {
+        public static final Id<SwingDir> ID = id("swing_dir");
+        public static final PacketCodec<RegistryByteBuf, SwingDir> CODEC = PacketCodec.of((v, b) -> b.writeVarInt(v.dir), b -> new SwingDir(b.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Server -> client: someone else's swing and its direction. */
+    public record SwingSeen(int entity, int dir) implements CustomPayload {
+        public static final Id<SwingSeen> ID = id("swing_seen");
+        public static final PacketCodec<RegistryByteBuf, SwingSeen> CODEC = PacketCodec.of((v, b) -> { b.writeVarInt(v.entity); b.writeVarInt(v.dir); },
+            b -> new SwingSeen(b.readVarInt(), b.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Server -> client: swing time multipliers by direction. */
+    public record SwingSpeeds(float[] speed) implements CustomPayload {
+        public static final Id<SwingSpeeds> ID = id("swing_speeds");
+        public static final PacketCodec<RegistryByteBuf, SwingSpeeds> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.speed.length);
+            for (float f : v.speed) b.writeFloat(f);
+        }, b -> {
+            int n = Math.min(8, b.readVarInt());
+            float[] f = new float[n];
+            for (int i = 0; i < n; i++) f[i] = b.readFloat();
+            return new SwingSpeeds(f);
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: a duel's face-off: the two fighters side by side, VS, and the count to the fight. */
     public record DuelIntro(java.util.UUID a, String aName, int aLevel, String aRole, java.util.UUID b, String bName, int bLevel, String bRole,
                             String rules) implements CustomPayload {
@@ -2538,6 +2568,9 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(IslandSky.ID, IslandSky.CODEC);
         PayloadTypeRegistry.playS2C().register(RunStyle.ID, RunStyle.CODEC);
         PayloadTypeRegistry.playC2S().register(Rush.ID, Rush.CODEC);
+        PayloadTypeRegistry.playC2S().register(SwingDir.ID, SwingDir.CODEC);
+        PayloadTypeRegistry.playS2C().register(SwingSeen.ID, SwingSeen.CODEC);
+        PayloadTypeRegistry.playS2C().register(SwingSpeeds.ID, SwingSpeeds.CODEC);
         PayloadTypeRegistry.playS2C().register(RushFx.ID, RushFx.CODEC);
         PayloadTypeRegistry.playC2S().register(RunStyleSet.ID, RunStyleSet.CODEC);
         PayloadTypeRegistry.playC2S().register(CraftAction.ID, CraftAction.CODEC);

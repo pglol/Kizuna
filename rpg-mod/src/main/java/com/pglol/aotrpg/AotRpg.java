@@ -142,6 +142,7 @@ public final class AotRpg implements ModInitializer {
         AirMoves.register();
         Impact.register();
         Adrenaline.register();
+        Swings.register();
         // The Extraction lobby's board and stash, and a run's supply barrels (ahead of the land protection).
         UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
             if (world.isClient || !(player instanceof ServerPlayerEntity sp) || hand != net.minecraft.util.Hand.MAIN_HAND) return ActionResult.PASS;
