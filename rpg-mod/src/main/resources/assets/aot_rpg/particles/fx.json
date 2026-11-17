@@ -1,0 +1,11 @@
+{
+  "textures": [
+    "aot_rpg:fx_streak",
+    "aot_rpg:fx_spark",
+    "aot_rpg:fx_ring",
+    "aot_rpg:fx_puff",
+    "aot_rpg:fx_arc",
+    "aot_rpg:fx_shard",
+    "aot_rpg:fx_flash"
+  ]
+}

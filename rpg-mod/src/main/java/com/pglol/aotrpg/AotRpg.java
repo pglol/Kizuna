@@ -136,6 +136,7 @@ public final class AotRpg implements ModInitializer {
     public void onInitialize() {
         Refueler.register();
         GiantTrees.register();
+        AotParticles.register();
         Net.register();
         SatchelHandler.register();
         Crafting.register();

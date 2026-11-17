@@ -25,8 +25,39 @@ import java.util.UUID;
 public final class Poses {
     private Poses() {}
 
-    public static final String[] STYLES = {"", "shinobi", "blade_runner", "scout", "charger"};
-    public static final String[] NAMES = {"Ordinary", "Shinobi", "Blade Runner", "Scout", "Charger"};
+    public static final String[] STYLES = {"", "shinobi", "blade_runner", "scout", "charger", "reverse_grip", "feral", "glide", "drill"};
+    public static final String[] NAMES = {"Ordinary", "Shinobi", "Blade Runner", "Scout", "Charger", "Reverse Grip", "Feral", "Glide", "Drill"};
+
+    /** Who else is aiming down a gun's sights. */
+    private static final java.util.Set<Integer> aimers = new java.util.HashSet<>();
+
+    public static void on(Net.AimSeen a) {
+        if (a.on()) aimers.add(a.entity());
+        else aimers.remove(a.entity());
+    }
+
+    private static boolean lastAim;
+
+    /** Tells the server when I start or stop aiming (so others see the stance). */
+    public static void tickAim() {
+        boolean now = ShoulderCam.aimingDown();
+        if (now != lastAim && ClientPlayNetworking.canSend(Net.AimSet.ID)) ClientPlayNetworking.send(new Net.AimSet(now));
+        lastAim = now;
+    }
+
+    /** In the air on the gear (not just a hop): well clear of the ground. */
+    public static boolean airborne(PlayerEntity p) {
+        if (p.isOnGround() || p.isTouchingWater() || p.hasVehicle() || p.isFallFlying() || p.isClimbing() || p.getAbilities().flying) return false;
+        var w = p.getWorld();
+        var b = p.getBlockPos();
+        return w.getBlockState(b.down()).isAir() && w.getBlockState(b.down(2)).isAir();
+    }
+
+    /** No running in mid-air: whatever animates the legs (resource packs too) sees them still. */
+    public static void stillLegs(net.minecraft.client.MinecraftClient mc) {
+        if (mc.world == null) return;
+        for (PlayerEntity p : mc.world.getPlayers()) if (airborne(p)) p.limbAnimator.setSpeed(p.limbAnimator.getSpeed() * 0.3f);
+    }
 
     private static final Map<UUID, String> styles = new HashMap<>();
     /** How far into the run style each body is (0 .. 1), and when it was last drawn. */
@@ -90,15 +121,45 @@ public final class Poses {
             return;
         }
         String style = styles.getOrDefault(pl.getUuid(), "");
-        float[] b = blend.computeIfAbsent(e.getId(), k -> new float[] {0, now});
+        float[] b = blend.computeIfAbsent(e.getId(), k -> new float[] {0, now, 0, 0});
         float dt = MathHelper.clamp((now - b[1]) / 1000f, 0, 0.1f);
         b[1] = now;
         boolean running = !style.isEmpty() && pl.isSprinting() && !pl.isSwimming() && !pl.isFallFlying() && !pl.hasVehicle() && !pl.isUsingItem()
             && limbDistance > 0.3f;
         b[0] = MathHelper.clamp(b[0] + (running ? dt / 0.22f : -dt / 0.18f), 0, 1);
+        b[2] = MathHelper.clamp(b[2] + (airborne(pl) ? dt / 0.25f : -dt / 0.15f), 0, 1);
+        var mc = net.minecraft.client.MinecraftClient.getInstance();
+        boolean aim = pl == mc.player ? ShoulderCam.aimingDown() : aimers.contains(pl.getId());
+        b[3] = MathHelper.clamp(b[3] + (aim ? dt / 0.12f : -dt / 0.15f), 0, 1);
         if (blend.size() > 256) blend.clear();
         float k = b[0] * b[0] * (3 - 2 * b[0]);
-        if (k <= 0.001f || style.isEmpty()) return;
+        if (k > 0.001f && !style.isEmpty()) run(m, style, k, limbAngle, limbDistance);
+        // On the gear: legs together and trailing, not running on air.
+        float fk = b[2] * b[2] * (3 - 2 * b[2]);
+        if (fk > 0.001f) {
+            float sway = MathHelper.sin(age * 0.12f) * 0.05f;
+            m.rightLeg.pitch = MathHelper.lerp(fk, m.rightLeg.pitch, 0.18f + sway);
+            m.leftLeg.pitch = MathHelper.lerp(fk, m.leftLeg.pitch, 0.42f - sway);
+            m.rightLeg.roll = MathHelper.lerp(fk, m.rightLeg.roll, 0.06f);
+            m.leftLeg.roll = MathHelper.lerp(fk, m.leftLeg.roll, -0.04f);
+            m.rightLeg.yaw = MathHelper.lerp(fk, m.rightLeg.yaw, 0);
+            m.leftLeg.yaw = MathHelper.lerp(fk, m.leftLeg.yaw, 0);
+        }
+        // Down the sights: the gun up at the shoulder, the other hand bracing it.
+        float ak = b[3] * b[3] * (3 - 2 * b[3]);
+        if (ak > 0.001f) {
+            float hp = m.head.pitch, hy = m.head.yaw;
+            m.rightArm.pitch = MathHelper.lerp(ak, m.rightArm.pitch, hp - MathHelper.HALF_PI);
+            m.rightArm.yaw = MathHelper.lerp(ak, m.rightArm.yaw, hy - 0.1f);
+            m.rightArm.roll = MathHelper.lerp(ak, m.rightArm.roll, 0);
+            m.leftArm.pitch = MathHelper.lerp(ak, m.leftArm.pitch, hp - MathHelper.HALF_PI + 0.08f);
+            m.leftArm.yaw = MathHelper.lerp(ak, m.leftArm.yaw, hy + 0.55f);
+            m.leftArm.roll = MathHelper.lerp(ak, m.leftArm.roll, 0);
+        }
+        sync(m);
+    }
+
+    private static void run(PlayerEntityModel<?> m, String style, float k, float limbAngle, float limbDistance) {
         float swing = MathHelper.cos(limbAngle * 0.6662f) * Math.min(1, limbDistance);
         float lean;
         float rp, lp, rr, lr, ry = 0, ly = 0;
@@ -126,6 +187,42 @@ public final class Poses {
                 ry = -0.2f;
                 ly = 0.2f;
             }
+            case "reverse_grip" -> {
+                // Blades reversed and swept back along the forearms, low and fast.
+                lean = 0.5f;
+                rp = 1.15f + swing * 0.08f;
+                lp = 1.15f - swing * 0.08f;
+                rr = 0.5f;
+                lr = -0.5f;
+                ry = 0.35f;
+                ly = -0.35f;
+            }
+            case "feral" -> {
+                // Hunched right over, arms hanging and swinging loose, like something hunting.
+                lean = 0.75f;
+                rp = -0.55f - swing * 0.7f;
+                lp = -0.55f + swing * 0.7f;
+                rr = 0.25f;
+                lr = -0.25f;
+            }
+            case "glide" -> {
+                // Arms flung out wide like wings.
+                lean = 0.4f;
+                rp = 0.3f + swing * 0.05f;
+                lp = 0.3f - swing * 0.05f;
+                rr = 1.25f;
+                lr = -1.25f;
+            }
+            case "drill" -> {
+                // A soldier's run: upright, fists tight, short hard swings.
+                lean = 0.06f;
+                rp = -swing * 0.85f - 0.25f;
+                lp = swing * 0.85f - 0.25f;
+                rr = 0.08f;
+                lr = -0.08f;
+                ry = 0.1f;
+                ly = -0.1f;
+            }
             default -> { // charger
                 lean = 0.1f;
                 rp = -swing * 1.7f;
@@ -142,11 +239,10 @@ public final class Poses {
         m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, ry);
         m.leftArm.yaw = MathHelper.lerp(k, m.leftArm.yaw, ly);
         // Longer strides for the hard leans.
-        if (style.equals("shinobi") || style.equals("blade_runner")) {
+        if (style.equals("shinobi") || style.equals("blade_runner") || style.equals("reverse_grip") || style.equals("feral")) {
             m.rightLeg.pitch *= 1 + 0.35f * k;
             m.leftLeg.pitch *= 1 + 0.35f * k;
         }
-        sync(m);
     }
 
     /** Leans the whole upper body forward about the hips (the way crouching does), keeping the eyes up. */

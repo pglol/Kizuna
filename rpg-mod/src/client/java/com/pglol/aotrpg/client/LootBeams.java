@@ -29,9 +29,9 @@ public final class LootBeams {
             var rnd = mc.world.random;
             for (int k = 0; k < (r >= 4 ? 4 : 2); k++) {
                 double y = e.getY() + 0.3 + rnd.nextDouble() * tall;
-                mc.world.addParticle(new DustParticleEffect(rgb, r >= 4 ? 1.1f : 0.8f), true, e.getX(), y, e.getZ(), 0, 0.02, 0);
+                mc.world.addParticle(Fxs.dot(rgb, r >= 4 ? 1.1f : 0.8f), true, e.getX(), y, e.getZ(), 0, 0.02, 0);
             }
-            if (r >= 5 && rnd.nextInt(3) == 0) mc.world.addParticle(ParticleTypes.END_ROD, true, e.getX(), e.getY() + tall, e.getZ(),
+            if (r >= 5 && rnd.nextInt(3) == 0) mc.world.addParticle(Fxs.END_ROD, true, e.getX(), e.getY() + tall, e.getZ(),
                 (rnd.nextDouble() - 0.5) * 0.05, 0.02, (rnd.nextDouble() - 0.5) * 0.05);
         }
     }

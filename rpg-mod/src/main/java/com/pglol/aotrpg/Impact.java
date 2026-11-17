@@ -64,6 +64,23 @@ public final class Impact {
         e.addVelocity(d.x * strength, 0.22 + strength * 0.08, d.z * strength);
         e.velocityModified = true;
         if (strength >= 0.9) flying.put(e.getUuid(), new Flight(e, d, e.getWorld().getTime() + 12));
+        // A big one cuts to an impact frame for the two of them.
+        if (strength >= 1.1 && e.getWorld() instanceof ServerWorld w) {
+            Vec3d at = e.getPos().add(from.getPos()).multiply(0.5).add(0, 1.2, 0);
+            frame(w, at, (float) Math.min(1.2, strength / 1.5), e, from);
+            AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFFFFF, 6f), at.x, at.y, at.z, 0, 0, 0);
+            AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFF4D8, 4f), at.x, at.y, at.z, 0, 0, 0);
+            AotParticles.burst(w, AotParticles.SPARK, 0xFFE8A8, 0.6f, at.x, at.y, at.z, 14, 0.3, 0.6);
+            AotParticles.burst(w, AotParticles.STREAK, 0xFFFFFF, 0.8f, e.getX(), e.getY() + 1, e.getZ(), 10, 0.3, strength * 0.8);
+        }
+    }
+
+    /** An impact frame: for whoever was in it, and anyone standing right there. */
+    public static void frame(ServerWorld w, Vec3d at, float strength, net.minecraft.entity.Entity... involved) {
+        Net.ImpactFx fx = new Net.ImpactFx(at.x, at.y, at.z, strength);
+        java.util.Set<ServerPlayerEntity> to = new java.util.HashSet<>(PlayerLookup.around(w, at, 7));
+        for (var e : involved) if (e instanceof ServerPlayerEntity sp) to.add(sp);
+        for (ServerPlayerEntity o : to) if (ServerPlayNetworking.canSend(o, Net.ImpactFx.ID)) ServerPlayNetworking.send(o, fx);
     }
 
     public static void tick(MinecraftServer server) {
@@ -103,6 +120,19 @@ public final class Impact {
         }
     }
 
+    /** Driven into the ground from above: held there, limp, for a moment. */
+    public static void pinDown(ServerWorld w, LivingEntity e, int ticks) {
+        flying.remove(e.getUuid());
+        e.setVelocity(Vec3d.ZERO);
+        e.velocityModified = true;
+        e.fallDistance = 0;
+        pinned.put(e.getUuid(), new Pin(e, e.getPos(), w.getTime() + ticks));
+        e.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, ticks, 6, false, false, false));
+        if (Troops.is(e)) Troops.stagger(e, ticks);
+        Net.RushFx fx = new Net.RushFx(e.getId(), Adrenaline.FX_PINNED, e.getYaw(), ticks);
+        for (ServerPlayerEntity o : PlayerLookup.around(w, e.getPos(), 64)) if (ServerPlayNetworking.canSend(o, Net.RushFx.ID)) ServerPlayNetworking.send(o, fx);
+    }
+
     private static void slam(ServerWorld w, LivingEntity e, BlockState wall, Vec3d dir) {
         e.setVelocity(Vec3d.ZERO);
         e.velocityModified = true;
@@ -113,7 +143,10 @@ public final class Impact {
         if (Troops.is(e)) Troops.stagger(e, PIN_TICKS);
         Vec3d at = e.getPos().add(dir.multiply(e.getWidth() * 0.5)).add(0, e.getHeight() * 0.55, 0);
         w.spawnParticles(new BlockStateParticleEffect(ParticleTypes.BLOCK, wall), at.x, at.y, at.z, 40, 0.3, 0.6, 0.3, 0.25);
-        w.spawnParticles(ParticleTypes.EXPLOSION, at.x, at.y, at.z, 1, 0, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFFFFF, 5f), at.x, at.y, at.z, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFF0D0, 5f), at.x, at.y, at.z, 0, 0, 0);
+        AotParticles.burst(w, AotParticles.SHARD, 0x9A9080, 0.55f, at.x, at.y, at.z, 16, 0.3, 0.45);
+        frame(w, at, 1f, e);
         w.playSound(null, e.getBlockPos(), SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.PLAYERS, 0.5f, 1.4f);
         w.playSound(null, e.getBlockPos(), SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.PLAYERS, 0.7f, 0.6f);
         float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));

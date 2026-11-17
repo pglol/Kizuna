@@ -1694,6 +1694,30 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Server -> client: an impact frame at this spot (strength 0..1+). */
+    public record ImpactFx(double x, double y, double z, float strength) implements CustomPayload {
+        public static final Id<ImpactFx> ID = Net.id("impact_fx");
+        public static final PacketCodec<RegistryByteBuf, ImpactFx> CODEC = PacketCodec.of((v, b) -> {
+            b.writeDouble(v.x); b.writeDouble(v.y); b.writeDouble(v.z); b.writeFloat(v.strength);
+        }, b -> new ImpactFx(b.readDouble(), b.readDouble(), b.readDouble(), b.readFloat()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Client -> server: aiming down a gun's sights (or not). */
+    public record AimSet(boolean on) implements CustomPayload {
+        public static final Id<AimSet> ID = Net.id("aim_set");
+        public static final PacketCodec<RegistryByteBuf, AimSet> CODEC = PacketCodec.of((v, b) -> b.writeBoolean(v.on), b -> new AimSet(b.readBoolean()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Server -> client: someone is aiming (or stopped). */
+    public record AimSeen(int entity, boolean on) implements CustomPayload {
+        public static final Id<AimSeen> ID = Net.id("aim_seen");
+        public static final PacketCodec<RegistryByteBuf, AimSeen> CODEC = PacketCodec.of((v, b) -> { b.writeVarInt(v.entity); b.writeBoolean(v.on); },
+            b -> new AimSeen(b.readVarInt(), b.readBoolean()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** One PvP arena on the board: what it is, who's waiting and playing, its state ("open", "starting", "live"), and you in it. */
     public record ArenaEntry(String id, String name, String blurb, int queued, int playing, String state, int secs, String you, boolean ready) { }
 
@@ -2680,6 +2704,9 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(ArenaView.ID, ArenaView.CODEC);
         PayloadTypeRegistry.playC2S().register(ArenaAction.ID, ArenaAction.CODEC);
         PayloadTypeRegistry.playS2C().register(ArenaHud.ID, ArenaHud.CODEC);
+        PayloadTypeRegistry.playS2C().register(ImpactFx.ID, ImpactFx.CODEC);
+        PayloadTypeRegistry.playC2S().register(AimSet.ID, AimSet.CODEC);
+        PayloadTypeRegistry.playS2C().register(AimSeen.ID, AimSeen.CODEC);
         PayloadTypeRegistry.playC2S().register(MentorAction.ID, MentorAction.CODEC);
         PayloadTypeRegistry.playS2C().register(SwingSeen.ID, SwingSeen.CODEC);
         PayloadTypeRegistry.playS2C().register(SwingSpeeds.ID, SwingSpeeds.CODEC);

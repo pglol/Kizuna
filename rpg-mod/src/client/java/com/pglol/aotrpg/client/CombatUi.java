@@ -219,15 +219,15 @@ public final class CombatUi {
             double vx = (Math.random() - 0.5) * spread, vy = (Math.random() - 0.2) * spread, vz = (Math.random() - 0.5) * spread;
             mc.world.addParticle(i % 3 == 0 ? s.second : s.main, fx.x(), fx.y(), fx.z(), vx, vy, vz);
         }
-        if (fx.kind() == 1) mc.world.addParticle(ParticleTypes.FLASH, fx.x(), fx.y(), fx.z(), 0, 0, 0);
-        if (fx.kind() == 2) for (int i = 0; i < 8; i++) mc.world.addParticle(ParticleTypes.LARGE_SMOKE, fx.x(), fx.y(), fx.z(), 0, 0.05, 0);
+        if (fx.kind() == 1) mc.world.addParticle(Fxs.FLASH, fx.x(), fx.y(), fx.z(), 0, 0, 0);
+        if (fx.kind() == 2) for (int i = 0; i < 8; i++) mc.world.addParticle(Fxs.CAMPFIRE_COSY_SMOKE, fx.x(), fx.y(), fx.z(), 0, 0.05, 0);
     }
 
     /** Particle pairs for block and clash styles (cosmetics); the defaults are steel sparks. */
     record Style(ParticleEffect main, ParticleEffect second) {
         static Style of(String id, int kind) {
             if (id.isEmpty() || id.endsWith("_steel")) {
-                return kind == 1 ? new Style(ParticleTypes.ELECTRIC_SPARK, ParticleTypes.CRIT) : new Style(ParticleTypes.CRIT, ParticleTypes.ELECTRIC_SPARK);
+                return kind == 1 ? new Style(Fxs.ELECTRIC_SPARK, Fxs.CRIT) : new Style(Fxs.CRIT, Fxs.ELECTRIC_SPARK);
             }
             ParticleEffect[] p = CosmeticFx.particles(id);
             return new Style(p[0], p[p.length > 1 ? 1 : 0]);

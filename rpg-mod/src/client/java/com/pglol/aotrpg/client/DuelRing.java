@@ -42,7 +42,7 @@ public final class DuelRing {
         if (center == null || mc.world == null || mc.player == null || mc.world.getTime() % 3 != 0) return;
         // Motes drifting up the wall near you.
         double a = Math.atan2(mc.player.getZ() - center.z, mc.player.getX() - center.x) + (Math.random() - 0.5) * 1.2;
-        mc.world.addParticle(new DustParticleEffect(new Vector3f(1f, 0.8f, 0.35f), 0.8f), center.x + Math.cos(a) * radius,
+        mc.world.addParticle(Fxs.dot(new Vector3f(1f, 0.8f, 0.35f), 0.8f), center.x + Math.cos(a) * radius,
             center.y + Math.random() * 3, center.z + Math.sin(a) * radius, 0, 0.05, 0);
     }
 

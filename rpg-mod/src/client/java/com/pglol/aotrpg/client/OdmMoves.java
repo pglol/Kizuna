@@ -28,6 +28,9 @@ public final class OdmMoves {
     private static final long COOLDOWN_MS = 1000, EARLY_MS = 350, FLIP_MS = 560, LEAN_MS = 460, SLAM_MS = 650, SLAM_COOLDOWN_MS = 3000, HOLD_MS = 260;
     private static long attackHeldSince, slamUntil;
     private static boolean slamming;
+    /** The dive under way: its line, speed now, and how high it began. */
+    private static Vec3d diveDir;
+    private static double diveSpeed, diveFrom;
 
     public static boolean gear;
     public static float gas = -1;
@@ -164,7 +167,29 @@ public final class OdmMoves {
      * looking (the further out you look, the further it carries you), coming down cutting.
      */
     private static void slamTick(MinecraftClient mc, ClientPlayerEntity pl, long now, boolean onGround) {
-        if (onGround || pl.isTouchingWater()) slamming = false;
+        if (onGround || pl.isTouchingWater()) {
+            if (slamming && diveDir != null) {
+                ImpactFrames.rush(0, 0);
+                FxParticle.spawn(com.pglol.aotrpg.AotParticles.RING, 0xFFFFFF, 3f, pl.getX(), pl.getY() + 0.05, pl.getZ(), 0, 0, 0);
+            }
+            slamming = false;
+            diveDir = null;
+        }
+        // Diving: faster every moment, the further there is to fall.
+        if (slamming && diveDir != null && !onGround) {
+            double max = 2.2 + Math.min(50, diveFrom) * 0.05;
+            diveSpeed = Math.min(max, diveSpeed + 0.1 + Math.min(50, diveFrom) * 0.004);
+            diveDir = diveDir.add(0, -0.06, 0).normalize();
+            pl.setVelocity(diveDir.multiply(diveSpeed));
+            pl.fallDistance = 0;
+            if (diveSpeed > 1.4) ImpactFrames.rush(Math.min(1, (float) (diveSpeed / max)), 120);
+            var r = mc.world.random;
+            for (int i = 0; i < 2; i++) {
+                double a = r.nextDouble() * Math.PI * 2, rr = 0.7 + r.nextDouble() * 0.4;
+                FxParticle.spawn(com.pglol.aotrpg.AotParticles.STREAK, 0xEAF4FF, 0.55f, pl.getX() + Math.cos(a) * rr, pl.getY() + r.nextDouble() * 1.8,
+                    pl.getZ() + Math.sin(a) * rr, -diveDir.x * diveSpeed * 0.5, -diveDir.y * diveSpeed * 0.5, -diveDir.z * diveSpeed * 0.5);
+            }
+        }
         boolean held = mc.options.attackKey.isPressed() && mc.currentScreen == null;
         if (!held || onGround) {
             attackHeldSince = 0;
@@ -181,8 +206,15 @@ public final class OdmMoves {
             net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.ANY, pl));
         if (hit.getType() != net.minecraft.util.hit.HitResult.Type.MISS) return;
         Vec3d look = pl.getRotationVec(1f);
-        Vec3d dir = new Vec3d(look.x, Math.min(look.y, -0.55), look.z).normalize();
-        pl.setVelocity(dir.multiply(1.7));
+        Vec3d dir = new Vec3d(look.x, Math.min(look.y, -0.75), look.z).normalize();
+        // How far down it is: the further, the harder it starts.
+        var floor = mc.world.raycast(new net.minecraft.world.RaycastContext(from, from.add(0, -80, 0),
+            net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.ANY, pl));
+        diveFrom = floor.getType() == net.minecraft.util.hit.HitResult.Type.MISS ? 80 : from.y - floor.getPos().y;
+        diveSpeed = 1.2 + Math.min(40, diveFrom) * 0.03;
+        diveDir = dir;
+        pl.setVelocity(dir.multiply(diveSpeed));
+        ImpactFrames.rush(0.7f, 200);
         int kind = MathHelper.clamp(ShoulderCam.cfg.slam, 3, 5);
         float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
         slamming = true;

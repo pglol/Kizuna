@@ -39,9 +39,9 @@ public final class HitFx {
         Entity e = mc.world == null ? null : mc.world.getEntityById(h.entity());
         if (e != null && mc.world != null) {
             double y = e.getY() + Math.min(e.getHeight() * 0.6, 3);
-            if (!ranged) mc.world.addParticle(ParticleTypes.SWEEP_ATTACK, e.getX(), y, e.getZ(), 0, 0, 0);
+            if (!ranged) mc.world.addParticle(Fxs.SWEEP_ATTACK, e.getX(), y, e.getZ(), 0, 0, 0);
             for (int i = 0; i < (kill ? 10 : 4); i++) {
-                mc.world.addParticle(ParticleTypes.CRIT, e.getX(), y, e.getZ(),
+                mc.world.addParticle(Fxs.CRIT, e.getX(), y, e.getZ(),
                     (Math.random() - 0.5) * 0.6, Math.random() * 0.3, (Math.random() - 0.5) * 0.6);
             }
         }

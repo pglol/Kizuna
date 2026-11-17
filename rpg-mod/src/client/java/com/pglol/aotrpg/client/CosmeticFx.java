@@ -219,24 +219,24 @@ public final class CosmeticFx {
     static ParticleEffect[] particles(String id) {
         String k = id.contains("_") ? id.substring(id.indexOf('_') + 1) : id;
         return switch (k) {
-            case "embers", "ember" -> new ParticleEffect[] {ParticleTypes.FLAME, ParticleTypes.SMALL_FLAME, ParticleTypes.LAVA};
-            case "frost" -> new ParticleEffect[] {ParticleTypes.SNOWFLAKE, new DustParticleEffect(rgb(0xBFEFFF), 1f)};
-            case "sparkle", "holy" -> new ParticleEffect[] {ParticleTypes.END_ROD, new DustParticleEffect(rgb(0xFFF6C0), 0.9f)};
-            case "petals", "petal" -> new ParticleEffect[] {ParticleTypes.CHERRY_LEAVES, new DustParticleEffect(rgb(0xFFB0D0), 1f)};
-            case "soul" -> new ParticleEffect[] {ParticleTypes.SOUL_FIRE_FLAME, ParticleTypes.SOUL};
-            case "void" -> new ParticleEffect[] {ParticleTypes.REVERSE_PORTAL, new DustParticleEffect(rgb(0x5A2A8A), 1.2f)};
-            case "lightning", "thunder" -> new ParticleEffect[] {ParticleTypes.ELECTRIC_SPARK, ParticleTypes.END_ROD};
-            case "rainbow" -> new ParticleEffect[] {new DustParticleEffect(rgb(MathHelper.hsvToRgb((Util.getMeasuringTimeMs() % 2000) / 2000f, 0.8f, 1f)), 1.2f)};
-            case "crimson" -> new ParticleEffect[] {new DustParticleEffect(rgb(0xE03A3A), 1.2f), ParticleTypes.CRIT};
-            case "dust" -> new ParticleEffect[] {ParticleTypes.POOF, new DustParticleEffect(rgb(0xB89A6A), 1.3f)};
-            case "steam" -> new ParticleEffect[] {ParticleTypes.CLOUD, ParticleTypes.WHITE_SMOKE, new DustParticleEffect(rgb(0xF0F0F0), 1.4f)};
-            case "spark" -> new ParticleEffect[] {ParticleTypes.ELECTRIC_SPARK, ParticleTypes.ELECTRIC_SPARK, new DustParticleEffect(rgb(0xFFE08A), 1f)};
-            case "leaves" -> new ParticleEffect[] {new DustParticleEffect(rgb(0x5E8C4A), 1.1f), new DustParticleEffect(rgb(0x9AC060), 0.9f), ParticleTypes.COMPOSTER};
-            case "coordinate" -> new ParticleEffect[] {new DustParticleEffect(rgb(0x9FE3FF), 1.2f), ParticleTypes.END_ROD, new DustParticleEffect(rgb(0xE02A2A), 0.8f)};
-            case "moon" -> new ParticleEffect[] {new DustParticleEffect(rgb(0xE02A2A), 1.7f), new DustParticleEffect(rgb(0x7A0A0A), 1.3f), ParticleTypes.CRIMSON_SPORE};
-            case "gold" -> new ParticleEffect[] {new DustParticleEffect(rgb(0xF2C14E), 1f), ParticleTypes.WAX_ON, new DustParticleEffect(rgb(0xFFF3B0), 0.7f)};
-            case "wind" -> new ParticleEffect[] {ParticleTypes.CLOUD, new DustParticleEffect(rgb(0xEDEDED), 0.8f)};
-            default -> new ParticleEffect[] {ParticleTypes.CRIT, ParticleTypes.ELECTRIC_SPARK};
+            case "embers", "ember" -> new ParticleEffect[] {Fxs.FLAME, Fxs.SMALL_FLAME, Fxs.LAVA};
+            case "frost" -> new ParticleEffect[] {Fxs.SNOWFLAKE, Fxs.dot(0xBFEFFF, 1f)};
+            case "sparkle", "holy" -> new ParticleEffect[] {Fxs.END_ROD, Fxs.dot(0xFFF6C0, 0.9f)};
+            case "petals", "petal" -> new ParticleEffect[] {Fxs.CHERRY_LEAVES, Fxs.dot(0xFFB0D0, 1f)};
+            case "soul" -> new ParticleEffect[] {Fxs.SOUL_FIRE_FLAME, Fxs.SOUL};
+            case "void" -> new ParticleEffect[] {Fxs.REVERSE_PORTAL, Fxs.dot(0x5A2A8A, 1.2f)};
+            case "lightning", "thunder" -> new ParticleEffect[] {Fxs.ELECTRIC_SPARK, Fxs.END_ROD};
+            case "rainbow" -> new ParticleEffect[] {Fxs.dot(MathHelper.hsvToRgb((Util.getMeasuringTimeMs() % 2000) / 2000f, 0.8f, 1f), 1.2f)};
+            case "crimson" -> new ParticleEffect[] {Fxs.dot(0xE03A3A, 1.2f), Fxs.CRIT};
+            case "dust" -> new ParticleEffect[] {Fxs.POOF, Fxs.dot(0xB89A6A, 1.3f)};
+            case "steam" -> new ParticleEffect[] {Fxs.CLOUD, Fxs.WHITE_SMOKE, Fxs.dot(0xF0F0F0, 1.4f)};
+            case "spark" -> new ParticleEffect[] {Fxs.ELECTRIC_SPARK, Fxs.ELECTRIC_SPARK, Fxs.dot(0xFFE08A, 1f)};
+            case "leaves" -> new ParticleEffect[] {Fxs.dot(0x5E8C4A, 1.1f), Fxs.dot(0x9AC060, 0.9f), Fxs.COMPOSTER};
+            case "coordinate" -> new ParticleEffect[] {Fxs.dot(0x9FE3FF, 1.2f), Fxs.END_ROD, Fxs.dot(0xE02A2A, 0.8f)};
+            case "moon" -> new ParticleEffect[] {Fxs.dot(0xE02A2A, 1.7f), Fxs.dot(0x7A0A0A, 1.3f), Fxs.dot(0xB01A1A, 0.6f)};
+            case "gold" -> new ParticleEffect[] {Fxs.dot(0xF2C14E, 1f), Fxs.END_ROD, Fxs.dot(0xFFF3B0, 0.7f)};
+            case "wind" -> new ParticleEffect[] {Fxs.CLOUD, Fxs.dot(0xEDEDED, 0.8f)};
+            default -> new ParticleEffect[] {Fxs.CRIT, Fxs.ELECTRIC_SPARK};
         };
     }
 
@@ -253,8 +253,8 @@ public final class CosmeticFx {
             return;
         }
         ParticleEffect[] set = fx.style().equals("slash_steel") || fx.style().isEmpty()
-            ? new ParticleEffect[] {new DustParticleEffect(rgb(0xF4F0E6), 0.9f), ParticleTypes.CRIT}
-            : fx.style().equals("slash_crimson") ? new ParticleEffect[] {new DustParticleEffect(rgb(0xE03A3A), 1.1f), new DustParticleEffect(rgb(0x7A1010), 1f)}
+            ? new ParticleEffect[] {Fxs.dot(0xF4F0E6, 0.9f), Fxs.CRIT}
+            : fx.style().equals("slash_crimson") ? new ParticleEffect[] {Fxs.dot(0xE03A3A, 1.1f), Fxs.dot(0x7A1010, 1f)}
             : particles(fx.style());
         double yaw = Math.toRadians(fx.yaw());
         double rx = Math.cos(yaw), rz = Math.sin(yaw); // the attacker's right
@@ -264,7 +264,7 @@ public final class CosmeticFx {
             double x = fx.x() + rx * u * 1.1, z = fx.z() + rz * u * 1.1, y = fx.y() + u * 0.5 * tilt - (1 - u * u) * 0.2;
             mc.world.addImportantParticle(pick(set), x, y, z, rx * 0.02, 0, rz * 0.02);
         }
-        mc.world.addImportantParticle(ParticleTypes.SWEEP_ATTACK, fx.x(), fx.y(), fx.z(), 0, 0, 0);
+        mc.world.addImportantParticle(Fxs.SWEEP_ATTACK, fx.x(), fx.y(), fx.z(), 0, 0, 0);
     }
 
     /** A kill effect at (x, y, z): the centre of what died, h tall. */
@@ -276,14 +276,14 @@ public final class CosmeticFx {
             case "kill_ember" -> {
                 for (int i = 0; i < 90; i++) {
                     double a = rnd.nextDouble() * Math.PI * 2, rr = rnd.nextDouble() * r * 0.6;
-                    w.addImportantParticle(i % 3 == 0 ? ParticleTypes.LAVA : ParticleTypes.FLAME, x + Math.cos(a) * rr, bottom + rnd.nextDouble() * 0.5,
+                    w.addImportantParticle(i % 3 == 0 ? Fxs.LAVA : Fxs.FLAME, x + Math.cos(a) * rr, bottom + rnd.nextDouble() * 0.5,
                         z + Math.sin(a) * rr, 0, 0.25 + rnd.nextDouble() * 0.35, 0);
                 }
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.ITEM_FIRECHARGE_USE, net.minecraft.sound.SoundCategory.PLAYERS, 1f, 0.8f, false);
             }
             case "kill_petal" -> {
                 for (int i = 0; i < 140; i++) {
-                    w.addImportantParticle(i % 2 == 0 ? ParticleTypes.CHERRY_LEAVES : new DustParticleEffect(rgb(0xFFB0D0), 1.5f),
+                    w.addImportantParticle(i % 2 == 0 ? Fxs.CHERRY_LEAVES : Fxs.dot(0xFFB0D0, 1.5f),
                         x + (rnd.nextDouble() - 0.5) * r * 3, top + 2 + rnd.nextDouble() * 3, z + (rnd.nextDouble() - 0.5) * r * 3, 0, -0.05, 0);
                 }
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.BLOCK_CHERRY_LEAVES_BREAK, net.minecraft.sound.SoundCategory.PLAYERS, 1f, 1f, false);
@@ -292,9 +292,9 @@ public final class CosmeticFx {
                 for (int i = 0; i < 120; i++) {
                     double a = rnd.nextDouble() * Math.PI * 2, b = rnd.nextDouble() * Math.PI - Math.PI / 2, rr = r * 1.6;
                     double px = Math.cos(a) * Math.cos(b) * rr, py = Math.sin(b) * rr, pz = Math.sin(a) * Math.cos(b) * rr;
-                    w.addImportantParticle(ParticleTypes.REVERSE_PORTAL, x + px, y + py, z + pz, -px * 0.12, -py * 0.12, -pz * 0.12);
+                    w.addImportantParticle(Fxs.REVERSE_PORTAL, x + px, y + py, z + pz, -px * 0.12, -py * 0.12, -pz * 0.12);
                 }
-                w.addImportantParticle(ParticleTypes.SONIC_BOOM, x, y, z, 0, 0, 0);
+                w.addImportantParticle(Fxs.EXPLOSION_EMITTER, x, y, z, 0, 0, 0);
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.ENTITY_ENDERMAN_TELEPORT, net.minecraft.sound.SoundCategory.PLAYERS, 1f, 0.5f, false);
             }
             case "kill_firework" -> {
@@ -312,11 +312,11 @@ public final class CosmeticFx {
                 for (double yy = top + 18; yy > bottom; yy -= 0.35) {
                     bx += (rnd.nextDouble() - 0.5) * 0.5;
                     bz += (rnd.nextDouble() - 0.5) * 0.5;
-                    w.addImportantParticle(ParticleTypes.ELECTRIC_SPARK, bx, yy, bz, 0, 0, 0);
-                    if (rnd.nextInt(3) == 0) w.addImportantParticle(ParticleTypes.END_ROD, bx, yy, bz, 0, 0, 0);
+                    w.addImportantParticle(Fxs.ELECTRIC_SPARK, bx, yy, bz, 0, 0, 0);
+                    if (rnd.nextInt(3) == 0) w.addImportantParticle(Fxs.END_ROD, bx, yy, bz, 0, 0, 0);
                 }
-                w.addImportantParticle(ParticleTypes.FLASH, x, y, z, 0, 0, 0);
-                w.addImportantParticle(ParticleTypes.EXPLOSION_EMITTER, x, y, z, 0, 0, 0);
+                w.addImportantParticle(Fxs.FLASH, x, y, z, 0, 0, 0);
+                w.addImportantParticle(Fxs.EXPLOSION_EMITTER, x, y, z, 0, 0, 0);
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.ENTITY_LIGHTNING_BOLT_THUNDER, net.minecraft.sound.SoundCategory.PLAYERS, 0.8f, 1.2f, false);
             }
             case "kill_rumbling" -> {
@@ -325,16 +325,16 @@ public final class CosmeticFx {
                     double rr = ring * 2.5 * Math.max(1, r * 0.5);
                     for (int k = 0; k < 10 + ring * 4; k++) {
                         double a = k * Math.PI * 2 / (10 + ring * 4);
-                        w.addImportantParticle(k % 3 == 0 ? ParticleTypes.EXPLOSION : ParticleTypes.CAMPFIRE_COSY_SMOKE,
+                        w.addImportantParticle(k % 3 == 0 ? Fxs.EXPLOSION : Fxs.CAMPFIRE_COSY_SMOKE,
                             x + Math.cos(a) * rr, bottom + 0.3, z + Math.sin(a) * rr, Math.cos(a) * 0.05, 0.04, Math.sin(a) * 0.05);
-                        w.addImportantParticle(new DustParticleEffect(rgb(0xE02A2A), 2f), x + Math.cos(a) * rr, bottom + 0.5, z + Math.sin(a) * rr, 0, 0.1, 0);
+                        w.addImportantParticle(Fxs.dot(0xE02A2A, 2f), x + Math.cos(a) * rr, bottom + 0.5, z + Math.sin(a) * rr, 0, 0.1, 0);
                     }
                 }
                 for (int i = 0; i < 120; i++) {
-                    w.addImportantParticle(i % 2 == 0 ? ParticleTypes.CLOUD : ParticleTypes.WHITE_SMOKE, x + (rnd.nextDouble() - 0.5) * 2,
+                    w.addImportantParticle(i % 2 == 0 ? Fxs.CLOUD : Fxs.WHITE_SMOKE, x + (rnd.nextDouble() - 0.5) * 2,
                         bottom + i * 0.25, z + (rnd.nextDouble() - 0.5) * 2, 0, 0.3, 0);
                 }
-                w.addImportantParticle(ParticleTypes.EXPLOSION_EMITTER, x, bottom + 1, z, 0, 0, 0);
+                w.addImportantParticle(Fxs.EXPLOSION_EMITTER, x, bottom + 1, z, 0, 0, 0);
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.ENTITY_GENERIC_EXPLODE.value(), net.minecraft.sound.SoundCategory.PLAYERS, 1.2f, 0.5f, false);
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.ENTITY_WARDEN_SONIC_BOOM, net.minecraft.sound.SoundCategory.PLAYERS, 0.8f, 0.6f, false);
                 if (mc.player != null && mc.player.squaredDistanceTo(x, y, z) < 40 * 40) {
@@ -346,7 +346,7 @@ public final class CosmeticFx {
             case "kill_holy" -> {
                 for (int i = 0; i < 160; i++) {
                     double a = i * 0.45, rr = r * 0.5 + (i % 7) * 0.05;
-                    w.addImportantParticle(i % 4 == 0 ? new DustParticleEffect(rgb(0xFFE08A), 2f) : ParticleTypes.END_ROD,
+                    w.addImportantParticle(i % 4 == 0 ? Fxs.dot(0xFFE08A, 2f) : Fxs.END_ROD,
                         x + Math.cos(a) * rr, bottom + (i / 160.0) * (h + 10), z + Math.sin(a) * rr, 0, 0.12, 0);
                 }
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.BLOCK_BEACON_ACTIVATE, net.minecraft.sound.SoundCategory.PLAYERS, 1f, 1.4f, false);
@@ -357,7 +357,7 @@ public final class CosmeticFx {
                     for (int f = 0; f < 7; f++) {
                         double a = Math.toRadians(-20 + f * 17), len = (2.2 + (f % 3) * 0.3) * Math.max(1, r * 0.6);
                         for (double u = 0.15; u <= 1; u += 0.06) {
-                            w.addImportantParticle(f % 2 == 0 ? ParticleTypes.END_ROD : new DustParticleEffect(rgb(u > 0.7 ? 0xFFFFFF : 0x5A8FD8), 1.6f),
+                            w.addImportantParticle(f % 2 == 0 ? Fxs.END_ROD : Fxs.dot(u > 0.7 ? 0xFFFFFF : 0x5A8FD8, 1.6f),
                                 x + s * Math.cos(a) * len * u, top + 0.5 + Math.sin(a) * len * u, z, 0, 0.01, 0);
                         }
                     }
@@ -367,7 +367,7 @@ public final class CosmeticFx {
             default -> {
                 // Evaporate: a billow of steam.
                 for (int i = 0; i < 70; i++) {
-                    w.addImportantParticle(i % 3 == 0 ? ParticleTypes.CLOUD : ParticleTypes.WHITE_SMOKE, x + (rnd.nextDouble() - 0.5) * r * 2,
+                    w.addImportantParticle(i % 3 == 0 ? Fxs.CLOUD : Fxs.WHITE_SMOKE, x + (rnd.nextDouble() - 0.5) * r * 2,
                         bottom + rnd.nextDouble() * h, z + (rnd.nextDouble() - 0.5) * r * 2, 0, 0.08 + rnd.nextDouble() * 0.1, 0);
                 }
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.BLOCK_FIRE_EXTINGUISH, net.minecraft.sound.SoundCategory.PLAYERS, 0.8f, 0.7f, false);
@@ -377,6 +377,34 @@ public final class CosmeticFx {
 
     /** Each client tick: body particles, speed trails, horse trails, ember rings. */
     public static void tick(MinecraftClient mc) {
+        GasSwap.busy++;
+        try {
+            tick0(mc);
+        } finally {
+            GasSwap.busy--;
+        }
+    }
+
+    /**
+     * One puff of ODM gas in a style: what the gear vents when you boost, drawn as your cosmetic
+     * (soft gas in its colours, with the style's own sparks, shards or streaks through it).
+     */
+    public static void odmPuff(String style, double x, double y, double z, double vx, double vy, double vz) {
+        Entry en = entry(style);
+        int c1 = en == null ? 0xF0F0F0 : en.color(), c2 = en == null ? 0xBFBFBF : en.color2();
+        var r = new java.util.Random();
+        if (style.equals("odm_rainbow")) c1 = MathHelper.hsvToRgb((Util.getMeasuringTimeMs() % 1500) / 1500f, 0.75f, 1f);
+        FxParticle.spawn(com.pglol.aotrpg.AotParticles.PUFF, r.nextBoolean() ? c1 : c2, 0.9f + r.nextFloat() * 0.5f, x, y, z, vx, vy, vz);
+        int extra = switch (style) {
+            case "odm_wind" -> com.pglol.aotrpg.AotParticles.STREAK;
+            case "odm_ember", "odm_gold", "odm_lightning" -> com.pglol.aotrpg.AotParticles.SPARK;
+            case "odm_frost", "odm_petal", "odm_void" -> com.pglol.aotrpg.AotParticles.SHARD;
+            default -> -1;
+        };
+        if (extra >= 0 && r.nextInt(3) == 0) FxParticle.spawn(extra, c2, 0.45f, x, y, z, vx * 1.4, vy * 1.4, vz * 1.4);
+    }
+
+    private static void tick0(MinecraftClient mc) {
         if (mc.world == null || mc.player == null || mc.isPaused()) return;
         long t = mc.world.getTime();
         for (PlayerEntity p : mc.world.getPlayers()) {
@@ -404,12 +432,12 @@ public final class CosmeticFx {
             } else if (!p.hasVehicle() && !p.isOnGround() && speed > 0.55) {
                 // ODM flight: a trail behind the flier once they are really moving.
                 String style = worn(p.getUuid(), "odm");
-                if (!style.isEmpty() && !(me && speed < 0.8)) {
-                    ParticleEffect[] set = particles(style);
+                // While they boost the gear's own gas is drawn in the style already: no second trail.
+                if (!style.isEmpty() && !(me && speed < 0.8) && !GasSwap.boosting(p.getId())) {
                     int n = speed > 1.2 ? 3 : 2;
                     for (int i = 0; i < n; i++) {
                         double k = i / (double) n;
-                        mc.world.addParticle(pick(set), p.getX() - v.x * k, p.getY() + 0.9 - v.y * k, p.getZ() - v.z * k, 0, 0, 0);
+                        odmPuff(style, p.getX() - v.x * k, p.getY() + 0.9 - v.y * k, p.getZ() - v.z * k, -v.x * 0.15, -v.y * 0.15, -v.z * 0.15);
                     }
                 }
             }
@@ -418,27 +446,27 @@ public final class CosmeticFx {
                 double yaw = Math.toRadians(p.bodyYaw);
                 for (int s = -1; s <= 1; s += 2) {
                     double sx = Math.cos(yaw) * 0.3 * s + Math.sin(yaw) * 0.2, sz = Math.sin(yaw) * 0.3 * s - Math.cos(yaw) * 0.2;
-                    mc.world.addParticle(Math.random() < 0.5 ? ParticleTypes.CLOUD : ParticleTypes.WHITE_SMOKE,
+                    mc.world.addParticle(Math.random() < 0.5 ? Fxs.CLOUD : Fxs.WHITE_SMOKE,
                         p.getX() + sx, p.getY() + 1.4, p.getZ() + sz, sx * 0.05, 0.06, sz * 0.05);
                 }
             }
             if (back.equals("back_wings_crimson") && t % 2 == 0 && !me) {
-                mc.world.addParticle(new DustParticleEffect(rgb(Math.random() < 0.5 ? 0xE02A2A : 0x7A0A0A), 1.3f),
+                mc.world.addParticle(Fxs.dot(Math.random() < 0.5 ? 0xE02A2A : 0x7A0A0A, 1.3f),
                     p.getX() + (Math.random() - 0.5) * 2.2, p.getY() + 1.1 + Math.random() * 1.2, p.getZ() + (Math.random() - 0.5) * 2.2, 0, -0.04, 0);
             }
             if (back.equals("back_wings_ember") && t % 3 == 0 && !me) {
-                mc.world.addParticle(Math.random() < 0.3 ? ParticleTypes.LAVA : ParticleTypes.SMALL_FLAME,
+                mc.world.addParticle(Math.random() < 0.3 ? Fxs.LAVA : Fxs.SMALL_FLAME,
                     p.getX() + (Math.random() - 0.5) * 1.6, p.getY() + 1.2 + Math.random() * 0.8, p.getZ() + (Math.random() - 0.5) * 1.6, 0, -0.02, 0);
             }
             if (body.equals("body_spark") && t % 100 == p.getId() % 100 && !me) {
-                mc.world.addParticle(ParticleTypes.FLASH, p.getX(), p.getY() + 1, p.getZ(), 0, 0, 0);
+                mc.world.addParticle(Fxs.FLASH, p.getX(), p.getY() + 1, p.getZ(), 0, 0, 0);
             }
             String head = worn(p.getUuid(), "head");
             if (head.equals("head_embers") && t % 2 == 0 && !me) {
                 double a = (t % 40) / 40.0 * Math.PI * 2;
                 for (int i = 0; i < 2; i++) {
                     double b = a + i * Math.PI;
-                    mc.world.addParticle(ParticleTypes.SMALL_FLAME, p.getX() + Math.cos(b) * 0.45, p.getY() + p.getHeight() + 0.35,
+                    mc.world.addParticle(Fxs.SMALL_FLAME, p.getX() + Math.cos(b) * 0.45, p.getY() + p.getHeight() + 0.35,
                         p.getZ() + Math.sin(b) * 0.45, 0, 0.005, 0);
                 }
             }

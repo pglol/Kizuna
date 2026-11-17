@@ -46,12 +46,18 @@ public final class Adrenaline {
 
     public static void register() {
         ServerPlayNetworking.registerGlobalReceiver(Net.Rush.ID, (payload, ctx) -> on(ctx.player(), payload));
+        // Aiming down the sights: everyone around sees the stance.
+        ServerPlayNetworking.registerGlobalReceiver(Net.AimSet.ID, (payload, ctx) -> {
+            ServerPlayerEntity p = ctx.player();
+            Net.AimSeen seen = new Net.AimSeen(p.getId(), payload.on());
+            for (ServerPlayerEntity o : PlayerLookup.tracking(p)) if (o != p && ServerPlayNetworking.canSend(o, Net.AimSeen.ID)) ServerPlayNetworking.send(o, seen);
+        });
         // Vanished: for a moment nothing lands.
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((e, src, amount) -> {
             if (!(e instanceof ServerPlayerEntity p)) return true;
             Long until = dodgeUntil.get(p.getUuid());
             if (until == null || p.getServerWorld().getTime() > until || src.getAttacker() == null) return true;
-            p.getServerWorld().spawnParticles(ParticleTypes.CLOUD, p.getX(), p.getY() + 1, p.getZ(), 8, 0.3, 0.5, 0.3, 0.05);
+            AotParticles.burst(p.getServerWorld(), AotParticles.STREAK, 0xEAF4FF, 0.7f, p.getX(), p.getY() + 1, p.getZ(), 10, 0.4, 0.5);
             if (src.getAttacker() instanceof ServerPlayerEntity a) a.sendMessage(Text.literal("Evaded").formatted(Formatting.GRAY), true);
             return false;
         });
@@ -87,17 +93,20 @@ public final class Adrenaline {
         if (now - startCd.getOrDefault(p.getUuid(), -1000L) < cd - 4 || p.hasVehicle() || AotRpg.DOWNED.isDowned(p)) return;
         startCd.put(p.getUuid(), now);
         if (vanish && b == Builds.SWIFT && AotRpg.STAMINA.spend(p, 12)) {
-            dodgeUntil.put(p.getUuid(), now + 7);
+            // The faster you are, the longer you're gone.
+            int ms = Math.min(320, 90 + pr.total(Stat.AGILITY) * 14);
+            dodgeUntil.put(p.getUuid(), now + 4 + ms / 50);
             w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_BREEZE_WIND_BURST.value(), SoundCategory.PLAYERS, 0.8f, 1.7f);
             w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_PHANTOM_FLAP, SoundCategory.PLAYERS, 0.6f, 1.8f);
-            broadcast(p, new Net.RushFx(p.getId(), FX_VANISH, yaw, 0));
+            broadcast(p, new Net.RushFx(p.getId(), FX_VANISH, yaw, ms));
             return;
         }
         if (b == Builds.HEAVY) {
             // The ground takes it: a crack underfoot and anyone right there is shouldered aside.
             BlockState under = w.getBlockState(p.getBlockPos().down());
             if (!under.isAir()) w.spawnParticles(new BlockStateParticleEffect(ParticleTypes.BLOCK, under), p.getX(), p.getY() + 0.1, p.getZ(), 30, 0.6, 0.05, 0.6, 0.15);
-            w.spawnParticles(ParticleTypes.EXPLOSION, p.getX(), p.getY() + 0.2, p.getZ(), 1, 0, 0, 0, 0);
+            AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xE8D8B8, 5f), p.getX(), p.getY() + 0.08, p.getZ(), 0, 0, 0);
+            AotParticles.burst(w, AotParticles.SHARD, 0x8A7A60, 0.5f, p.getX(), p.getY() + 0.3, p.getZ(), 14, 0.5, 0.35);
             w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.PLAYERS, 0.9f, 0.6f);
             w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.PLAYERS, 0.3f, 1.8f);
             for (Entity e : w.getOtherEntities(p, p.getBoundingBox().expand(2.2, 0.5, 2.2), x -> x instanceof LivingEntity le && le.isAlive() && !AotRpg.isTitan(x))) {
@@ -113,7 +122,7 @@ public final class Adrenaline {
             }
             return;
         }
-        w.spawnParticles(ParticleTypes.POOF, p.getX(), p.getY() + 0.1, p.getZ(), 10, 0.3, 0.05, 0.3, 0.04);
+        AotParticles.burst(w, AotParticles.PUFF, 0xF0F0F0, 0.6f, p.getX(), p.getY() + 0.1, p.getZ(), 8, 0.3, 0.05);
         w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_BREEZE_JUMP, SoundCategory.PLAYERS, 0.5f, 1.3f);
         broadcast(p, new Net.RushFx(p.getId(), FX_KICK, yaw, 0));
     }

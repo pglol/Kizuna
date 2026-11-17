@@ -49,6 +49,24 @@ public final class AdrenalineClient {
         return s == null || s.total() == null || s.total().length <= Stat.AGILITY.ordinal() ? 0 : s.total()[Stat.AGILITY.ordinal()];
     }
 
+    /** Bodies mid-vanish: entity -> {until ms, from x, y, z}. Not drawn at all until then. */
+    private static final Map<Integer, double[]> vanishing = new HashMap<>();
+
+    public static boolean vanished(int entity) {
+        double[] v = vanishing.get(entity);
+        return v != null && Util.getMeasuringTimeMs() < v[0];
+    }
+
+    /** A kick to the lens (negative snaps it in). */
+    public static void punch(float deg) {
+        punchFov = deg;
+    }
+
+    private static void vanish(Entity e, long ms) {
+        vanishing.put(e.getId(), new double[] {Util.getMeasuringTimeMs() + ms, e.getX(), e.getY(), e.getZ(), 0});
+        Afterimages.leave(e, 0xCFE4FF, 320);
+    }
+
     public static boolean pinned(int entity) {
         Long u = pinned.get(entity);
         return u != null && Util.getMeasuringTimeMs() < u;
@@ -70,7 +88,10 @@ public final class AdrenalineClient {
                 if (mc.player != null && f.entity() == mc.player.getId()) EffectFx.quake(0.7f, 10);
             }
             case Adrenaline.FX_VANISH -> {
-                if (e != null) streaks(mc, e, f.yaw(), 26, true);
+                if (e != null) {
+                    streaks(mc, e, f.yaw(), 26, false);
+                    if (!vanished(e.getId())) vanish(e, Math.max(60, f.arg()));
+                }
             }
             case Adrenaline.FX_HEAVY -> {
                 if (e != null) streaks(mc, e, f.yaw(), 8, false);
@@ -81,28 +102,18 @@ public final class AdrenalineClient {
         }
     }
 
-    /** Wind streaks left behind (and, for a vanish, a pale silhouette where you stood). */
-    private static void streaks(MinecraftClient mc, Entity e, float yaw, int n, boolean ghost) {
+    /** Wind streaks torn off behind a body, the way it went. */
+    private static void streaks(MinecraftClient mc, Entity e, float yaw, int n, boolean red) {
         double y = Math.toRadians(yaw);
         Vec3d back = new Vec3d(Math.sin(y), 0, -Math.cos(y));
         var r = mc.world.random;
         for (int i = 0; i < n; i++) {
-            double h = 0.2 + r.nextDouble() * 1.6;
-            mc.world.addParticle(ParticleTypes.CLOUD, e.getX() + (r.nextDouble() - 0.5) * 0.6, e.getY() + h, e.getZ() + (r.nextDouble() - 0.5) * 0.6,
-                back.x * (0.4 + r.nextDouble() * 0.5), 0.01, back.z * (0.4 + r.nextDouble() * 0.5));
+            double h = 0.1 + r.nextDouble() * 1.8, sp = 0.5 + r.nextDouble() * 0.7;
+            FxParticle.spawn(com.pglol.aotrpg.AotParticles.STREAK, red ? 0xFF3A3A : 0xEAF4FF, 0.5f + r.nextFloat() * 0.5f,
+                e.getX() + (r.nextDouble() - 0.5) * 0.8, e.getY() + h, e.getZ() + (r.nextDouble() - 0.5) * 0.8,
+                back.x * sp, (r.nextDouble() - 0.5) * 0.05, back.z * sp);
         }
-        if (ghost) silhouette(mc, e.getPos(), new Vector3f(0.92f, 0.95f, 1f));
-    }
-
-    /** A body-shaped smear of colour at a spot: an afterimage. */
-    private static void silhouette(MinecraftClient mc, Vec3d at, Vector3f col) {
-        DustParticleEffect d = new DustParticleEffect(col, 1.1f);
-        for (double h = 0.1; h < 1.9; h += 0.18) {
-            double w = h > 1.4 ? 0.18 : h > 0.75 ? 0.32 : 0.2;
-            mc.world.addParticle(d, at.x - w, at.y + h, at.z, 0, 0, 0);
-            mc.world.addParticle(d, at.x + w, at.y + h, at.z, 0, 0, 0);
-            mc.world.addParticle(d, at.x, at.y + h, at.z + w * 0.5, 0, 0, 0);
-        }
+        FxParticle.spawn(com.pglol.aotrpg.AotParticles.RING, red ? 0xFF5A4A : 0xFFFFFF, 2.2f, e.getX(), e.getY() + 0.05, e.getZ(), 0, 0, 0);
     }
 
     public static void tick(MinecraftClient mc) {
@@ -117,9 +128,22 @@ public final class AdrenalineClient {
         for (int id : chargers) {
             Entity e = mc.world.getEntityById(id);
             if (e == null) continue;
-            if (mc.world.getTime() % 2 == 0) silhouette(mc, e.getPos(), new Vector3f(0.55f, 0.05f, 0.05f));
+            if (mc.world.getTime() % 2 == 0) Afterimages.leave(e, 0xC01A1A, 260);
         }
         pinned.values().removeIf(u -> Util.getMeasuringTimeMs() > u + 500);
+        // Back into sight: a blur of images across the gap the vanish crossed.
+        long nowMs = Util.getMeasuringTimeMs();
+        for (var it = vanishing.entrySet().iterator(); it.hasNext(); ) {
+            var en = it.next();
+            double[] v = en.getValue();
+            if (nowMs < v[0]) continue;
+            it.remove();
+            Entity e = mc.world.getEntityById(en.getKey());
+            if (e == null) continue;
+            Afterimages.smear(e, new Vec3d(v[1], v[2], v[3]), 0xCFE4FF, 5, 300);
+            streaks(mc, e, e.getYaw(), 10, false);
+        }
+        sideTaps(mc, pl);
         if (pinned(pl.getId())) return;
         chargeTick(mc, pl);
         startTick(mc, pl);
@@ -156,7 +180,9 @@ public final class AdrenalineClient {
         if (--lurchIn <= 0) {
             lurchIn = 9 + pl.getRandom().nextInt(7);
             want2 = Math.max(want2, 1.05);
-            silhouette(mc, pl.getPos(), new Vector3f(0.55f, 0.05f, 0.05f));
+            Afterimages.leave(pl, 0xC01A1A, 300);
+            streaks(mc, pl, pl.getYaw(), 6, true);
+            ImpactFrames.rush(0.5f, 200);
             punchFov = 6;
         }
         pl.setVelocity(dir.x * want2, v.y, dir.z * want2);
@@ -172,7 +198,31 @@ public final class AdrenalineClient {
         wasSprinting = sprint;
         if (!began || stillTicks < 3 || !pl.isOnGround() || charging || Util.getMeasuringTimeMs() < startCdUntil || mc.currentScreen != null) return;
         stillTicks = 0;
-        float fwd = pl.input.movementForward, side = pl.input.movementSideways;
+        burst(mc, pl, pl.input.movementForward, pl.input.movementSideways);
+    }
+
+    private static final long[] lastTap = new long[3];
+    private static final boolean[] wasDown = new boolean[3];
+
+    /** Double-tapping left, back or right: the same burst W gives, that way. */
+    private static void sideTaps(MinecraftClient mc, ClientPlayerEntity pl) {
+        var o = mc.options;
+        boolean[] down = {o.leftKey.isPressed(), o.backKey.isPressed(), o.rightKey.isPressed()};
+        long now = Util.getMeasuringTimeMs();
+        for (int i = 0; i < 3; i++) {
+            boolean press = down[i] && !wasDown[i];
+            wasDown[i] = down[i];
+            if (!press || mc.currentScreen != null) continue;
+            if (now - lastTap[i] < 260 && pl.isOnGround() && !charging && now >= startCdUntil) {
+                lastTap[i] = 0;
+                burst(mc, pl, i == 1 ? -1 : 0, i == 0 ? 1 : i == 2 ? -1 : 0);
+            } else lastTap[i] = now;
+        }
+    }
+
+    /** Breaking off the mark the way your build does (forward and side are the input axes). */
+    private static void burst(MinecraftClient mc, ClientPlayerEntity pl, float fwd, float side) {
+        Vec3d v = pl.getVelocity();
         double yr = Math.toRadians(pl.getYaw());
         Vec3d f = new Vec3d(-Math.sin(yr), 0, Math.cos(yr)), left = new Vec3d(Math.cos(yr), 0, Math.sin(yr));
         Vec3d wish = f.multiply(fwd).add(left.multiply(side));
@@ -185,7 +235,8 @@ public final class AdrenalineClient {
         switch (b) {
             case SWIFT -> {
                 vanish = pl.getRandom().nextFloat() < Math.min(0.75f, 0.3f + agility() * 0.04f);
-                push = vanish ? 1.25 : 0.6;
+                // The faster you are, the further the vanish carries you.
+                push = vanish ? Math.min(1.9, 1.25 + agility() * 0.035) : 0.6;
                 startCdUntil = Util.getMeasuringTimeMs() + 3500;
             }
             case HEAVY -> {
@@ -200,7 +251,12 @@ public final class AdrenalineClient {
         }
         pl.setVelocity(wish.x * push, v.y + (b == Builds.HEAVY ? 0.05 : 0.02), wish.z * push);
         punchFov = vanish ? 18 : b == Builds.HEAVY ? 4 : 8;
-        if (vanish) silhouette(mc, pl.getPos(), new Vector3f(0.92f, 0.95f, 1f));
+        if (vanish) {
+            vanish(pl, Math.min(320, 90 + agility() * 14L));
+            ImpactFrames.rush(0.9f, 240);
+        } else if (b == Builds.HEAVY) {
+            FxParticle.spawn(com.pglol.aotrpg.AotParticles.RING, 0xD8C8A8, 3.5f, pl.getX(), pl.getY() + 0.05, pl.getZ(), 0, 0, 0);
+        } else streaks(mc, pl, yaw, 5, false);
         ClientPlayNetworking.send(new Net.Rush(vanish ? Adrenaline.START_VANISH : Adrenaline.START_PLAIN, -1, yaw));
     }
 

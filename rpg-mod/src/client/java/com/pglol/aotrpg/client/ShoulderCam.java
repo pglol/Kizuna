@@ -84,8 +84,16 @@ public final class ShoulderCam {
     /** Right mouse held with the APG gun in hand, in third person: tight over the shoulder, zoomed. */
     private static boolean aiming(MinecraftClient mc) {
         return mc.player != null && mc.currentScreen == null && mc.options.useKey.isPressed()
-            && com.pglol.aotrpg.AotItems.isApgGun(mc.player.getMainHandStack())
-            && mc.options.getPerspective() == Perspective.THIRD_PERSON_BACK;
+            && aimable(mc.player.getMainHandStack()) && mc.options.getPerspective() != Perspective.THIRD_PERSON_FRONT;
+    }
+
+    /** Guns you can aim down: the APG, the ODM APG grips, muskets and flintlocks. */
+    public static boolean aimable(net.minecraft.item.ItemStack s) {
+        if (s.isEmpty()) return false;
+        var id = net.minecraft.registry.Registries.ITEM.getId(s.getItem());
+        if (!id.getNamespace().equals("dannys-aot")) return false;
+        String p = id.getPath();
+        return p.contains("apg") && !p.contains("cartridge") || p.contains("musket") || p.contains("flinstock") || p.contains("flintlock");
     }
 
     public static boolean aimingDown() {
@@ -100,7 +108,7 @@ public final class ShoulderCam {
         if (mc.player.isSleeping()) return false;
         Perspective per = mc.options.getPerspective();
         if (cfg.onLockOn && LockOn.locked() && per != Perspective.THIRD_PERSON_FRONT) return true;
-        if (aiming(mc)) return true;
+        if (aiming(mc) && per == Perspective.THIRD_PERSON_BACK) return true;
         return cfg.inThirdPerson && per == Perspective.THIRD_PERSON_BACK;
     }
 
@@ -211,34 +219,24 @@ public final class ShoulderCam {
         if (active() && Math.abs(roll) > 0.02f) m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(roll * weight));
     }
 
-    /** A crosshair when the view isn't first person (vanilla draws none then). */
+    /** Down the APG's sights: a tight red ring and a dot, in place of the crosshair. */
     public static void crosshair(net.minecraft.client.gui.DrawContext c, net.minecraft.client.render.RenderTickCounter tick) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (!active() || mc.options.hudHidden || mc.options.getPerspective().isFirstPerson() || mc.currentScreen != null) return;
+        if (aimNow <= 0.05f || mc.options.hudHidden || mc.currentScreen != null) return;
         int x = c.getScaledWindowWidth() / 2, y = c.getScaledWindowHeight() / 2;
-        if (aimNow > 0.05f) {
-            // Down the sights: a tight red ring and a dot.
-            int ra = (int) (230 * aimNow) << 24;
-            int r = Math.round(MathHelper.lerp(aimNow, 9, 5));
-            for (int i = 0; i < 16; i++) {
-                double an = i * Math.PI / 8;
-                int px = x + (int) Math.round(Math.cos(an) * r), py = y + (int) Math.round(Math.sin(an) * r);
-                c.fill(px, py, px + 1, py + 1, ra | 0xFF4A3A);
-            }
-            c.fill(x, y, x + 1, y + 1, ra | 0xFFFFFF);
-            return;
+        int ra = (int) (230 * aimNow) << 24;
+        int r = Math.round(MathHelper.lerp(aimNow, 9, 5));
+        for (int i = 0; i < 16; i++) {
+            double an = i * Math.PI / 8;
+            int px = x + (int) Math.round(Math.cos(an) * r), py = y + (int) Math.round(Math.sin(an) * r);
+            c.fill(px, py, px + 1, py + 1, ra | 0xFF4A3A);
         }
-        int a = (int) (220 * weight) << 24;
-        c.fill(x - 4, y, x - 1, y + 1, a | 0xFFFFFF);
-        c.fill(x + 2, y, x + 5, y + 1, a | 0xFFFFFF);
-        c.fill(x, y - 4, x + 1, y - 1, a | 0xFFFFFF);
-        c.fill(x, y + 2, x + 1, y + 5, a | 0xFFFFFF);
-        c.fill(x, y, x + 1, y + 1, a | 0xFFFFFF);
+        c.fill(x, y, x + 1, y + 1, ra | 0xFFFFFF);
     }
 
     /** Degrees to add to the field of view. */
     public static float fovKick() {
         // The lens widens with speed, and closes right in down the APG's sights.
-        return (active() ? fovNow * weight - 24f * aimNow * aimNow : 0) + AdrenalineClient.fov();
+        return (active() ? fovNow * weight : 0) - 24f * aimNow * aimNow + AdrenalineClient.fov();
     }
 }

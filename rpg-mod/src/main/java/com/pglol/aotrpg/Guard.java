@@ -126,7 +126,7 @@ public final class Guard {
         }
         if (any) {
             Vec3d at = p.getEyePos().add(p.getRotationVec(1f).multiply(0.5));
-            w.spawnParticles(net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK, at.x, at.y, at.z, 10, 0.3, 0.3, 0.3, 0.2);
+            AotParticles.burst(w, AotParticles.SPARK, 0xBFD8FF, 0.5f, at.x, at.y, at.z, 10, 0.3, 0.3);
             w.playSound(null, p.getX(), p.getY() + 1, p.getZ(), SoundEvents.ITEM_SHIELD_BLOCK, SoundCategory.PLAYERS, 0.9f, 1.6f);
             w.playSound(null, p.getX(), p.getY() + 1, p.getZ(), SoundEvents.BLOCK_CHAIN_BREAK, SoundCategory.PLAYERS, 0.9f, 1.2f);
         }
@@ -238,8 +238,11 @@ public final class Guard {
             if (raised != null && now - raised <= PARRY_MS) {
                 Vec3d at0 = def.getEyePos().add(def.getRotationVec(1f).multiply(0.7)).subtract(0, 0.3, 0);
                 fx(w, FX_CLASH, at0, def);
-                w.spawnParticles(net.minecraft.particle.ParticleTypes.FLASH, at0.x, at0.y, at0.z, 1, 0, 0, 0, 0);
-                w.spawnParticles(net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK, at0.x, at0.y, at0.z, 18, 0.2, 0.2, 0.2, 0.4);
+                AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFF4C8, 5f), at0.x, at0.y, at0.z, 0, 0, 0);
+                AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFD24A, 3.5f), at0.x, at0.y, at0.z, 0, 0, 0);
+                AotParticles.burst(w, AotParticles.SPARK, 0xFFE08A, 0.55f, at0.x, at0.y, at0.z, 18, 0.2, 0.5);
+                AotParticles.burst(w, AotParticles.SHARD, 0xE8E8F0, 0.4f, at0.x, at0.y, at0.z, 8, 0.15, 0.4);
+                Impact.frame(w, at0, 0.8f, def, src);
                 w.playSound(null, def.getX(), def.getY() + 1, def.getZ(), net.minecraft.sound.SoundEvents.BLOCK_ANVIL_LAND,
                     net.minecraft.sound.SoundCategory.PLAYERS, 0.9f, 2f);
                 w.playSound(null, def.getX(), def.getY() + 1, def.getZ(), net.minecraft.sound.SoundEvents.ITEM_TRIDENT_HIT,

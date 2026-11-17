@@ -130,6 +130,17 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(ThreatSense::render);
         HudRenderCallback.EVENT.register(AdrenalineClient::render);
         ClientTickEvents.END_CLIENT_TICK.register(AdrenalineClient::tick);
+        // Our own particles, the afterimages, the impact frames and the stances.
+        net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry.getInstance().register(com.pglol.aotrpg.AotParticles.FX, FxParticle.Factory::new);
+        WorldRenderEvents.AFTER_ENTITIES.register(Afterimages::render);
+        HudRenderCallback.EVENT.register(ImpactFrames::render);
+        ClientPlayNetworking.registerGlobalReceiver(Net.ImpactFx.ID, (payload, ctx) ->
+            ImpactFrames.hit(new net.minecraft.util.math.Vec3d(payload.x(), payload.y(), payload.z()), payload.strength()));
+        ClientPlayNetworking.registerGlobalReceiver(Net.AimSeen.ID, (payload, ctx) -> Poses.on(payload));
+        ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+            Poses.tickAim();
+            Poses.stillLegs(mc);
+        });
         ClientTickEvents.END_CLIENT_TICK.register(SwingClient::tick);
         ClientPlayNetworking.registerGlobalReceiver(Net.MentorView.ID, (payload, ctx) -> MentorScreen.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.Moments.ID, (payload, ctx) -> MomentsScreen.on(payload));

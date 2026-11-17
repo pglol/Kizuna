@@ -67,7 +67,7 @@ public final class DownedFx {
             pl.setPose(EntityPose.SWIMMING);
             if (pl == mc.player) pl.setSprinting(false);
             if (mc.world.random.nextFloat() < (d.pressing() ? 0.08f : 0.3f)) {
-                mc.world.addParticle(new DustParticleEffect(new Vector3f(0.5f, 0f, 0f), 0.9f),
+                mc.world.addParticle(Fxs.dot(new Vector3f(0.5f, 0f, 0f), 0.9f),
                     pl.getX() + (mc.world.random.nextDouble() - 0.5) * 0.6, pl.getY() + 0.25, pl.getZ() + (mc.world.random.nextDouble() - 0.5) * 0.6, 0, -0.05, 0);
             }
         }

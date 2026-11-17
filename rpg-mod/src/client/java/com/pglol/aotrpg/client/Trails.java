@@ -103,48 +103,48 @@ public final class Trails {
             switch (style) {
                 case "trail_troop" -> {
                     // A Marleyan round: a hot orange tracer, thinning to smoke behind.
-                    e = f > 0.7 ? new DustParticleEffect(rgb(0xFFB040), 0.5f) : new DustParticleEffect(rgb(0x8A8278), 0.35f);
+                    e = f > 0.7 ? Fxs.dot(0xFFB040, 0.5f) : Fxs.dot(0x8A8278, 0.35f);
                     if (i % 4 != 0 && f < 0.7) continue;
                 }
                 case "trail_ember" -> {
-                    e = i % 3 == 0 ? ParticleTypes.SMOKE : new DustParticleEffect(rgb(r.nextBoolean() ? 0xFF8A2A : 0xFFC04A), 0.7f);
-                    if (r.nextInt(12) == 0) w.addParticle(ParticleTypes.SMALL_FLAME, p.x, p.y, p.z, 0, 0.01, 0);
+                    e = i % 3 == 0 ? Fxs.WHITE_SMOKE : Fxs.dot(r.nextBoolean() ? 0xFF8A2A : 0xFFC04A, 0.7f);
+                    if (r.nextInt(12) == 0) w.addParticle(Fxs.SMALL_FLAME, p.x, p.y, p.z, 0, 0.01, 0);
                 }
                 case "trail_frost" -> {
-                    e = new DustParticleEffect(rgb(0x9FE2FF), 0.8f);
-                    if (r.nextInt(8) == 0) w.addParticle(ParticleTypes.SNOWFLAKE, p.x, p.y, p.z, jx, jy, jz);
+                    e = Fxs.dot(0x9FE2FF, 0.8f);
+                    if (r.nextInt(8) == 0) w.addParticle(Fxs.SNOWFLAKE, p.x, p.y, p.z, jx, jy, jz);
                 }
                 case "trail_lightning" -> {
                     // A zigzag bolt: offset sideways in a jagged pattern.
                     double zig = Math.sin(f * 40) * 0.12;
                     p = p.add(zig, Math.cos(f * 33) * 0.1, -zig);
-                    e = new DustParticleEffect(rgb(r.nextInt(3) == 0 ? 0xFFFFFF : 0xB9A8FF), 0.6f);
-                    if (r.nextInt(20) == 0) w.addParticle(ParticleTypes.ELECTRIC_SPARK, p.x, p.y, p.z, jx * 4, jy * 4, jz * 4);
+                    e = Fxs.dot(r.nextInt(3) == 0 ? 0xFFFFFF : 0xB9A8FF, 0.6f);
+                    if (r.nextInt(20) == 0) w.addParticle(Fxs.ELECTRIC_SPARK, p.x, p.y, p.z, jx * 4, jy * 4, jz * 4);
                 }
-                case "trail_rainbow" -> e = new DustParticleEffect(rgb(net.minecraft.util.math.MathHelper.hsvToRgb((float) (f * 2 % 1), 0.85f, 1f)), 0.9f);
+                case "trail_rainbow" -> e = Fxs.dot(net.minecraft.util.math.MathHelper.hsvToRgb((float) (f * 2 % 1), 0.85f, 1f), 0.9f);
                 case "trail_confetti" -> {
                     int[] cols = {0xF2C14E, 0x5BD35B, 0x55C8FF, 0xFF5A7A, 0xD070FF};
-                    e = new DustParticleEffect(rgb(cols[r.nextInt(cols.length)]), 1.0f);
+                    e = Fxs.dot(cols[r.nextInt(cols.length)], 1.0f);
                     if (i == steps) for (int k = 0; k < 12; k++) {
-                        w.addParticle(new DustParticleEffect(rgb(cols[r.nextInt(cols.length)]), 1.2f), p.x, p.y, p.z,
+                        w.addParticle(Fxs.dot(cols[r.nextInt(cols.length)], 1.2f), p.x, p.y, p.z,
                             (r.nextDouble() - 0.5) * 0.3, r.nextDouble() * 0.3, (r.nextDouble() - 0.5) * 0.3);
                     }
                 }
                 case "trail_hearts" -> {
-                    e = new DustParticleEffect(rgb(0xFF7A9A), 0.6f);
-                    if (i % 10 == 0) w.addParticle(ParticleTypes.HEART, p.x, p.y, p.z, 0, 0.02, 0);
+                    e = Fxs.dot(0xFF7A9A, 0.6f);
+                    if (i % 10 == 0) w.addParticle(Fxs.HEART, p.x, p.y, p.z, 0, 0.02, 0);
                 }
                 case "trail_void" -> {
-                    e = i % 2 == 0 ? ParticleTypes.PORTAL : new DustParticleEffect(rgb(0x2A0A40), 1.1f);
-                    if (r.nextInt(10) == 0) w.addParticle(ParticleTypes.SQUID_INK, p.x, p.y, p.z, 0, 0, 0);
+                    e = i % 2 == 0 ? Fxs.REVERSE_PORTAL : Fxs.dot(0x2A0A40, 1.1f);
+                    if (r.nextInt(10) == 0) w.addParticle(Fxs.dot(0x100818, 1.4f), p.x, p.y, p.z, 0, 0, 0);
                 }
-                default -> e = new DustParticleEffect(rgb(0xFFF2D0), 0.45f);
+                default -> e = Fxs.dot(0xFFF2D0, 0.45f);
             }
             w.addParticle(e, true, p.x, p.y, p.z, jx, jy, jz);
         }
         // Muzzle flash and impact puff for every style.
-        w.addParticle(ParticleTypes.FLASH, a.x, a.y, a.z, 0, 0, 0);
-        w.addParticle(ParticleTypes.CRIT, b.x, b.y, b.z, 0, 0.05, 0);
-        for (int k = 0; k < 4; k++) w.addParticle(ParticleTypes.POOF, b.x, b.y, b.z, (r.nextDouble() - 0.5) * 0.05, 0.02, (r.nextDouble() - 0.5) * 0.05);
+        w.addParticle(Fxs.FLASH, a.x, a.y, a.z, 0, 0, 0);
+        w.addParticle(Fxs.CRIT, b.x, b.y, b.z, 0, 0.05, 0);
+        for (int k = 0; k < 4; k++) w.addParticle(Fxs.POOF, b.x, b.y, b.z, (r.nextDouble() - 0.5) * 0.05, 0.02, (r.nextDouble() - 0.5) * 0.05);
     }
 }

@@ -35,7 +35,10 @@
     "PotionSwirlMixin",
     "PlayerArmsMixin",
     "ShoulderHandMixin",
-    "SwingTimeMixin"
+    "SwingTimeMixin",
+    "GasSwapMixin",
+    "VanishMixin",
+    "CrosshairMixin"
   ],
   "injectors": {
     "defaultRequire": 0
