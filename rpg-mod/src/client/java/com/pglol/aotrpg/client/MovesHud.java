@@ -68,7 +68,7 @@ public final class MovesHud {
         // Adrenaline: a thin bar over the hotbar while there's any; full, it burns.
         int am = AdrenalineClient.meter();
         if (am > 0) {
-            int bw = 120, bx = w / 2 - bw / 2, by = h - 64;
+            int bw = 120, bx = w / 2 - bw / 2, by = h - 82;
             boolean full = am >= 100;
             float pulse = full ? 0.6f + 0.4f * MathHelper.sin(now / 90f) : 1;
             c.fill(bx - 1, by - 1, bx + bw + 1, by + 3, 0x90000000);
@@ -87,7 +87,7 @@ public final class MovesHud {
         for (Pip p : pips) if (p.until() > now) any = true;
         if (!any) return;
         int pw = 34, gap = 4, total = pips.length * pw + (pips.length - 1) * gap;
-        int x0 = w / 2 - total / 2, y0 = h - 58;
+        int x0 = w / 2 - total / 2, y0 = h - 76;
         for (int i = 0; i < pips.length; i++) {
             Pip p = pips[i];
             int x = x0 + i * (pw + gap);
