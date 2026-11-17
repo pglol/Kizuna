@@ -1694,6 +1694,55 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** One PvP arena on the board: what it is, who's waiting and playing, its state ("open", "starting", "live"), and you in it. */
+    public record ArenaEntry(String id, String name, String blurb, int queued, int playing, String state, int secs, String you, boolean ready) { }
+
+    /** A match under way, for the board's watch list. */
+    public record ArenaLive(int id, String title, String who, String score) { }
+
+    /** Server -> client: the PvP board: modes, live matches, your rating. */
+    public record ArenaView(java.util.List<ArenaEntry> list, java.util.List<ArenaLive> live, int rating, String tier, int wins, int losses, boolean open)
+        implements CustomPayload {
+        public static final Id<ArenaView> ID = Net.id("arena_view");
+        public static final PacketCodec<RegistryByteBuf, ArenaView> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.list.size());
+            for (ArenaEntry e : v.list) {
+                b.writeString(e.id()); b.writeString(e.name()); b.writeString(e.blurb()); b.writeVarInt(e.queued()); b.writeVarInt(e.playing());
+                b.writeString(e.state()); b.writeVarInt(e.secs()); b.writeString(e.you()); b.writeBoolean(e.ready());
+            }
+            b.writeVarInt(v.live.size());
+            for (ArenaLive l : v.live) { b.writeVarInt(l.id()); b.writeString(l.title()); b.writeString(l.who()); b.writeString(l.score()); }
+            b.writeVarInt(v.rating); b.writeString(v.tier); b.writeVarInt(v.wins); b.writeVarInt(v.losses); b.writeBoolean(v.open);
+        }, b -> {
+            int n = Math.min(16, b.readVarInt());
+            java.util.List<ArenaEntry> l = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) l.add(new ArenaEntry(b.readString(), b.readString(), b.readString(), b.readVarInt(), b.readVarInt(),
+                b.readString(), b.readVarInt(), b.readString(), b.readBoolean()));
+            int m = Math.min(64, b.readVarInt());
+            java.util.List<ArenaLive> live = new java.util.ArrayList<>();
+            for (int i = 0; i < m; i++) live.add(new ArenaLive(b.readVarInt(), b.readString(), b.readString(), b.readString()));
+            return new ArenaView(l, live, b.readVarInt(), b.readString(), b.readVarInt(), b.readVarInt(), b.readBoolean());
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Client -> server: open the board, join or leave an arena. */
+    public record ArenaAction(String action, String arena) implements CustomPayload {
+        public static final Id<ArenaAction> ID = Net.id("arena_action");
+        public static final PacketCodec<RegistryByteBuf, ArenaAction> CODEC = PacketCodec.of((v, b) -> { b.writeString(v.action); b.writeString(v.arena); },
+            b -> new ArenaAction(b.readString(), b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Server -> client: the match in the corner: title, time (-1 takes it down, -2 the spawn shield), score, a line under it. */
+    public record ArenaHud(String title, int secs, String score, String sub) implements CustomPayload {
+        public static final Id<ArenaHud> ID = Net.id("arena_hud");
+        public static final PacketCodec<RegistryByteBuf, ArenaHud> CODEC = PacketCodec.of((v, b) -> {
+            b.writeString(v.title); b.writeInt(v.secs); b.writeString(v.score); b.writeString(v.sub);
+        }, b -> new ArenaHud(b.readString(), b.readInt(), b.readString(), b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: a duel's face-off: the two fighters side by side, VS, and the count to the fight. */
     public record DuelIntro(java.util.UUID a, String aName, int aLevel, String aRole, java.util.UUID b, String bName, int bLevel, String bRole,
                             String rules) implements CustomPayload {
@@ -2628,6 +2677,9 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(MentorView.ID, MentorView.CODEC);
         PayloadTypeRegistry.playS2C().register(Moments.ID, Moments.CODEC);
         PayloadTypeRegistry.playC2S().register(MomentAction.ID, MomentAction.CODEC);
+        PayloadTypeRegistry.playS2C().register(ArenaView.ID, ArenaView.CODEC);
+        PayloadTypeRegistry.playC2S().register(ArenaAction.ID, ArenaAction.CODEC);
+        PayloadTypeRegistry.playS2C().register(ArenaHud.ID, ArenaHud.CODEC);
         PayloadTypeRegistry.playC2S().register(MentorAction.ID, MentorAction.CODEC);
         PayloadTypeRegistry.playS2C().register(SwingSeen.ID, SwingSeen.CODEC);
         PayloadTypeRegistry.playS2C().register(SwingSpeeds.ID, SwingSpeeds.CODEC);

@@ -135,6 +135,8 @@ public final class AotRpg implements ModInitializer {
     @Override
     public void onInitialize() {
         Refueler.register();
+        GiantTrees.register();
+        Arenas.register();
         Net.register();
         SatchelHandler.register();
         Crafting.register();
@@ -271,7 +273,7 @@ public final class AotRpg implements ModInitializer {
             } catch (Exception e) {
                 t = null;
             }
-            if (t != null) DUELS.challenge(ctx.player(), t, new Duels.Rules(Math.max(0, Math.min(Duels.RINGS.length - 1, payload.ring())),
+            if (t != null) DUELS.challenge(ctx.player(), t, new Duels.Rules(Math.max(0, Math.min(Duels.RINGS.length - 1, payload.ring() % 10)) + 10 * Math.max(0, Math.min(2, payload.ring() / 10)),
                 payload.odm(), payload.abilities(), payload.food()));
         });
         // Downed: no fighting back and no patching yourself up (a squadmate has to).
@@ -762,6 +764,7 @@ public final class AotRpg implements ModInitializer {
         // No friendly fire inside a party (unless the two are dueling), and no duel hits before the count.
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
             if (!(entity instanceof ServerPlayerEntity victim && source.getAttacker() instanceof ServerPlayerEntity attacker)) return true;
+            if (Arenas.decides(victim, attacker)) return Arenas.allowHit(victim, attacker);
             if (DUELS.dueling(victim.getUuid(), attacker.getUuid())) return DUELS.allowHit(victim, attacker);
             return !PARTIES.same(attacker.getUuid(), victim.getUuid());
         });

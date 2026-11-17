@@ -71,22 +71,23 @@ public final class Extraction {
 
     /** The islands. */
     public enum Island {
-        VERDANT("verdant", "Verdant Reach", 8, 16, 3, 0xFF5BD35B),
-        ASHEN("ashen", "Ashen Crags", 16, 26, 4, 0xFFE0823A),
-        FROSTFELL("frostfell", "Frostfell", 26, 40, 4, 0xFF9AD0FF);
+        VERDANT("verdant", "verdant2", "Verdant Reach", 8, 16, 3, 0xFF5BD35B),
+        HIGHTREE("hightree", "hightree", "High Tree Forest", 12, 22, 5, 0xFF9CCB5E),
+        ASHEN("ashen", "ashen", "Ashen Crags", 16, 26, 4, 0xFFE0823A),
+        FROSTFELL("frostfell", "frostfell", "Frostfell", 26, 40, 4, 0xFF9AD0FF);
 
         public final String id, title;
         public final int min, max, titans, color;
         public final RegistryKey<World> world;
 
-        Island(String id, String title, int min, int max, int titans, int color) {
+        Island(String id, String dim, String title, int min, int max, int titans, int color) {
             this.id = id;
             this.title = title;
             this.min = min;
             this.max = max;
             this.titans = titans;
             this.color = color;
-            this.world = RegistryKey.of(RegistryKeys.WORLD, Identifier.of("aot_rpg", id));
+            this.world = RegistryKey.of(RegistryKeys.WORLD, Identifier.of("aot_rpg", dim));
         }
 
         int level() {
@@ -97,6 +98,7 @@ public final class Extraction {
         ParticleEffect aura() {
             return switch (this) {
                 case VERDANT -> new BlockStateParticleEffect(ParticleTypes.FALLING_DUST, Blocks.MOSS_BLOCK.getDefaultState());
+                case HIGHTREE -> new BlockStateParticleEffect(ParticleTypes.FALLING_DUST, Blocks.OAK_LEAVES.getDefaultState());
                 case ASHEN -> new BlockStateParticleEffect(ParticleTypes.FALLING_DUST, Blocks.RED_SAND.getDefaultState());
                 case FROSTFELL -> ParticleTypes.SNOWFLAKE;
             };
@@ -144,6 +146,7 @@ public final class Extraction {
     private static Condition[] cycle(Island i) {
         return switch (i) {
             case VERDANT -> new Condition[] {Condition.CLEAR, Condition.FOG, Condition.DUSK, Condition.NIGHT, Condition.CLEAR, Condition.STORM};
+            case HIGHTREE -> new Condition[] {Condition.CLEAR, Condition.DUSK, Condition.FOG, Condition.CLEAR, Condition.NIGHT, Condition.STORM};
             case ASHEN -> new Condition[] {Condition.DUSK, Condition.CLEAR, Condition.STORM, Condition.NIGHT, Condition.CLEAR};
             case FROSTFELL -> new Condition[] {Condition.CLEAR, Condition.NIGHT, Condition.FOG, Condition.DUSK, Condition.STORM, Condition.NIGHT};
         };
@@ -282,6 +285,8 @@ public final class Extraction {
         Map<String, List<Long>> leftover = new HashMap<>();
         /** How far each island's terrain has been generated ahead of time (chunks walked). */
         Map<String, Integer> pregen = new HashMap<>();
+        /** Bumped when an island's terrain changes (its instances are found and made again). */
+        int terrain;
     }
 
     /** Loads a chunk briefly so it generates off the main thread (then saves and unloads). */
@@ -332,7 +337,7 @@ public final class Extraction {
         }
     }
 
-    private static final int BALLOON_VERSION = 5;
+    private static final int BALLOON_VERSION = 5, TERRAIN_VERSION = 1;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private Data data = new Data();
     private Path file;
@@ -359,6 +364,12 @@ public final class Extraction {
         if (data.centres == null) data.centres = new HashMap<>();
         if (data.leftover == null) data.leftover = new HashMap<>();
         if (data.pregen == null) data.pregen = new HashMap<>();
+        if (data.terrain != TERRAIN_VERSION) {
+            // The rainforest is a new, gentler world with giant trees: its instances start over.
+            data.centres.keySet().removeIf(k -> k.startsWith(Island.VERDANT.id));
+            data.pregen.keySet().removeIf(k -> k.startsWith(Island.VERDANT.id));
+            data.terrain = TERRAIN_VERSION;
+        }
         lobbyWorld = server.getWorld(SKY) != null ? SKY : Homes.WORLD;
         if (data.balloonVersion != BALLOON_VERSION) data.built.clear();
         data.balloonVersion = BALLOON_VERSION;
@@ -432,14 +443,24 @@ public final class Extraction {
         for (int gx = -reach; gx <= reach; gx++) {
             for (int gz = -reach; gz <= reach; gz++) {
                 int cx = ox + gx * 480, cz = oz + gz * 480, land = 0;
+                int[] hs = new int[25];
+                int n = 0, sum = 0;
                 for (int sx = -2; sx <= 2; sx++) {
                     for (int sz = -2; sz <= 2; sz++) {
                         int h = gen.getHeight(cx + sx * 120, cz + sz * 120, Heightmap.Type.WORLD_SURFACE_WG, w, noise);
-                        if (h > sea + 2) land++;
+                        if (h > sea + 2) {
+                            land++;
+                            hs[n++] = h;
+                            sum += h;
+                        }
                     }
                 }
-                // Land, but not too far from the middle.
-                int score = land * 10 - Math.abs(gx) - Math.abs(gz);
+                // How rough the land is: titans need open, fairly level ground to roam.
+                int rough = 0;
+                for (int k = 0; k < n; k++) rough += Math.abs(hs[k] - (n == 0 ? 0 : sum / n));
+                if (n > 0) rough /= n;
+                // Land, level, and not too far from the middle.
+                int score = land * 10 - rough * 3 - Math.abs(gx) - Math.abs(gz);
                 if (score > best) {
                     best = score;
                     bx = cx;
@@ -464,7 +485,7 @@ public final class Extraction {
             w.getChunk(px >> 4, pz >> 4);
             int y = w.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, px, pz);
             BlockPos at = new BlockPos(px, y, pz);
-            if (w.getFluidState(at.down()).isEmpty() && y > w.getSeaLevel()) return at;
+            if (w.getFluidState(at.down()).isEmpty() && y > w.getSeaLevel() && !w.getBlockState(at.down()).isIn(net.minecraft.registry.tag.BlockTags.LOGS)) return at;
         }
         return null;
     }

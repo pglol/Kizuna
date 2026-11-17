@@ -90,6 +90,8 @@ public final class Profile {
     public java.util.Map<String, Integer> mentorCounts = new java.util.HashMap<>();
     public java.util.Set<String> techniques = new java.util.LinkedHashSet<>();
     public String technique = "";
+    /** PvP: ranked rating, and ranked wins and losses. */
+    public int pvpRating = 1000, pvpWins, pvpLosses;
     /** Map cells walked (Fog.CELL blocks square), packed x << 32 | z: the rest is fogged on the map. */
     public java.util.Set<Long> explored = new java.util.HashSet<>();
     /** Marks owed for crimes seen in town (a drawn weapon, theft). */

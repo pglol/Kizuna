@@ -58,6 +58,7 @@ public class AotPauseScreen extends Screen {
             new Tile("Events", "minecraft:firework_rocket", hasChar, () -> ClientPlayNetworking.send(new Net.EventAction("open", "")))};
         Tile[] community = {
             new Tile("Social", "minecraft:bell", hasChar, () -> ClientPlayNetworking.send(new Net.SocialAction("open", null))),
+            new Tile("Arenas", "minecraft:iron_sword", hasChar, () -> ClientPlayNetworking.send(new Net.ArenaAction("open", ""))),
             new Tile(war ? "Factions ⚔" : "Factions", "minecraft:shield", hasChar, () -> ClientPlayNetworking.send(new Net.FactionAction("open", ""))),
             new Tile("Regiment", "minecraft:white_banner", hasChar, () -> ClientPlayNetworking.send(new Net.RegimentAction("open", ""))),
             new Tile("Global Market", "minecraft:emerald", hasChar, () -> {

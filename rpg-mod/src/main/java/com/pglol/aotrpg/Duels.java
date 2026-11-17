@@ -35,8 +35,18 @@ public final class Duels {
     public record Rules(int ring, boolean odm, boolean abilities, boolean food) {
         static final Rules DEFAULT = new Rules(0, true, true, true);
 
+        /** The arena picked (0: right here, in a ring). */
+        public int arena() {
+            return ring / 10;
+        }
+
+        public String arenaId() {
+            return arena() == 1 ? "grove" : arena() == 2 ? "skyline" : "";
+        }
+
         String describe() {
-            return RING_NAMES[ring] + " ring · ODM " + (odm ? "on" : "off") + " · Abilities " + (abilities ? "on" : "off") + " · Food " + (food ? "on" : "off");
+            if (arena() > 0) return (arena() == 1 ? "High Tree Grove" : "Skyline") + " · first to 2 rounds";
+            return RING_NAMES[ring % 10] + " ring · ODM " + (odm ? "on" : "off") + " · Abilities " + (abilities ? "on" : "off") + " · Food " + (food ? "on" : "off");
         }
     }
 
@@ -47,7 +57,7 @@ public final class Duels {
         Vec3d center;
         Rules rules = Rules.DEFAULT;
         double ring() {
-            return RINGS[Math.max(0, Math.min(RINGS.length - 1, rules.ring()))];
+            return RINGS[Math.max(0, Math.min(RINGS.length - 1, rules.ring() % 10))];
         }
     }
 
@@ -95,7 +105,7 @@ public final class Duels {
             Notify.toast(p, Text.literal("Someone's already in a duel").formatted(Formatting.RED), null, 0xC0463A, null, null);
             return;
         }
-        if (p.getServerWorld() != t.getServerWorld() || p.squaredDistanceTo(t) > RANGE * RANGE) {
+        if (rules.arena() == 0 && (p.getServerWorld() != t.getServerWorld() || p.squaredDistanceTo(t) > RANGE * RANGE)) {
             Notify.toast(p, Text.literal("Get closer to " + t.getName().getString()).formatted(Formatting.RED), Text.literal("Within " + (int) RANGE + " blocks"), 0xC0463A, null, null);
             return;
         }
@@ -122,6 +132,11 @@ public final class Duels {
             Notify.toast(t, Text.literal("No challenge to accept").formatted(Formatting.GRAY), null, 0x8F8A7A, null, null);
             return;
         }
+        // In an arena: away from here, rounds, and anyone can watch from where you left.
+        if (rules != null && rules.arena() > 0 && of(p.getUuid()) == null && of(t.getUuid()) == null) {
+            Arenas.duel(p, t, rules.arenaId());
+            return;
+        }
         if (of(p.getUuid()) != null || of(t.getUuid()) != null || p.getServerWorld() != t.getServerWorld() || p.squaredDistanceTo(t) > RANGE * RANGE) {
             Notify.toast(t, Text.literal("The duel can't start").formatted(Formatting.RED), Text.literal("Too far apart, or someone's busy"), 0xC0463A, null, null);
             return;
@@ -141,7 +156,7 @@ public final class Duels {
         if (!viewers.contains(p)) viewers.add(0, p);
         if (!viewers.contains(t)) viewers.add(t);
         Profile ap = AotRpg.PROFILES.get(p.getUuid()), bp = AotRpg.PROFILES.get(t.getUuid());
-        String ruleLine = RINGS[d.rules.ring()] + "m ring" + (d.rules.odm() ? "" : "  ·  no gear") + (d.rules.abilities() ? "" : "  ·  no abilities")
+        String ruleLine = RINGS[d.rules.ring() % 10] + "m ring" + (d.rules.odm() ? "" : "  ·  no gear") + (d.rules.abilities() ? "" : "  ·  no abilities")
             + (d.rules.food() ? "" : "  ·  no food");
         Net.DuelIntro intro = new Net.DuelIntro(p.getUuid(), ap.name, ap.level, ap.role, t.getUuid(), bp.name, bp.level, bp.role, ruleLine);
         for (ServerPlayerEntity v : viewers) if (ServerPlayNetworking.canSend(v, Net.DuelIntro.ID)) ServerPlayNetworking.send(v, intro);
