@@ -1,0 +1,10 @@
+{
+  "hit": {
+    "subtitle": "subtitles.aot_rpg.hit",
+    "sounds": ["aot_rpg:hit1", "aot_rpg:hit2", "aot_rpg:hit3"]
+  },
+  "hit_heavy": {
+    "subtitle": "subtitles.aot_rpg.hit",
+    "sounds": ["aot_rpg:hit_heavy1", "aot_rpg:hit_heavy2"]
+  }
+}

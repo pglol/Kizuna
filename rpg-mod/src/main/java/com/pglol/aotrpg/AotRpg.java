@@ -137,6 +137,7 @@ public final class AotRpg implements ModInitializer {
         Refueler.register();
         GiantTrees.register();
         AotParticles.register();
+        HitSounds.register();
         Net.register();
         SatchelHandler.register();
         Crafting.register();
@@ -280,7 +281,8 @@ public final class AotRpg implements ModInitializer {
             } catch (Exception e) {
                 t = null;
             }
-            if (t != null) DUELS.challenge(ctx.player(), t, new Duels.Rules(Math.max(0, Math.min(Duels.RINGS.length - 1, payload.ring() % 10)) + 10 * Math.max(0, Math.min(2, payload.ring() / 10)),
+            if (t != null) DUELS.challenge(ctx.player(), t, new Duels.Rules(Math.max(0, Math.min(Duels.RINGS.length - 1, payload.ring() % 10)) + 10 * Math.max(0, Math.min(2, payload.ring() / 10 % 10))
+                + 100 * Math.max(0, Math.min(3, payload.ring() / 100)),
                 payload.odm(), payload.abilities(), payload.food()));
         });
         // Downed: no fighting back and no patching yourself up (a squadmate has to).

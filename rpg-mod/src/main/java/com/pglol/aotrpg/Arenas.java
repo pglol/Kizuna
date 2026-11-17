@@ -149,6 +149,9 @@ public final class Arenas {
         final Set<UUID> dead = new HashSet<>(), watchers = new HashSet<>();
         final int[] rounds = new int[2];
         final List<UUID> spots = new ArrayList<>();
+        /** A duel's own rules (null for everything else), and how many rounds it's to. */
+        Duels.Rules rules;
+        int firstTo;
         Phase phase = Phase.SHIELD;
         int timer, left;
 
@@ -493,7 +496,7 @@ public final class Arenas {
         boolean anyone = false;
         for (UUID o : s == 0 ? m.a : m.b) if (m.score.containsKey(o)) anyone = true;
         if (!anyone) {
-            m.rounds[1 - s] = m.mode.rounds();
+            m.rounds[1 - s] = roundsOf(m);
             end(m, 1 - s);
         } else checkRound(m);
     }
@@ -892,7 +895,7 @@ public final class Arenas {
             String t = winner < 0 ? "DRAW" : winner == s ? "ROUND WON" : "ROUND LOST";
             banner(o, t, m.rounds[s] + " — " + m.rounds[1 - s], winner == s ? 0xFFD24A : 0xC8C0B0, "minecraft:iron_sword");
         }
-        if (winner >= 0 && m.rounds[winner] >= m.mode.rounds()) {
+        if (winner >= 0 && m.rounds[winner] >= roundsOf(m)) {
             end(m, winner);
             return;
         }
@@ -1056,7 +1059,17 @@ public final class Arenas {
     // ------------------------------------------------------------------ duels
 
     /** A duel fought in an arena instead of where the two stand: first to two rounds. */
-    public static boolean duel(ServerPlayerEntity a, ServerPlayerEntity b, String mapId) {
+    /** The custom rules of the arena duel this player is in, or null. */
+    public static Duels.Rules duelRules(ServerPlayerEntity p) {
+        Match m = matchOf(p.getUuid());
+        return m == null || m.rules == null || !m.score.containsKey(p.getUuid()) ? null : m.rules;
+    }
+
+    private static int roundsOf(Match m) {
+        return m.firstTo > 0 ? m.firstTo : m.mode.rounds();
+    }
+
+    public static boolean duel(ServerPlayerEntity a, ServerPlayerEntity b, String mapId, Duels.Rules rules) {
         ArenaMap map = ArenaMap.of(mapId);
         if (map == null || server == null) return false;
         for (ServerPlayerEntity p : List.of(a, b)) {
@@ -1077,6 +1090,11 @@ public final class Arenas {
         }
         m.a.add(a.getUuid());
         m.b.add(b.getUuid());
+        // Custom rules: first to N, with gear, abilities and food as chosen. Regular: first to 2, all on.
+        if (rules != null && rules.rounds() > 0) {
+            m.rules = rules;
+            m.firstTo = rules.rounds();
+        }
         begin(m);
         return true;
     }
@@ -1104,7 +1122,7 @@ public final class Arenas {
         } else {
             int s = Math.max(0, m.side(p.getUuid()));
             score = m.rounds[s] + "  —  " + m.rounds[1 - s];
-            sub = alive(m, s) + " v " + alive(m, 1 - s) + " standing  ·  first to " + m.mode.rounds();
+            sub = alive(m, s) + " v " + alive(m, 1 - s) + " standing  ·  first to " + roundsOf(m);
             if (m.dead.contains(p.getUuid()) && m.score.containsKey(p.getUuid())) sub = "Out until the next round";
         }
         ServerPlayNetworking.send(p, new Net.ArenaHud(m.title(), secs, score, sub));

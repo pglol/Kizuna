@@ -37,7 +37,12 @@ public final class Duels {
 
         /** The arena picked (0: right here, in a ring). */
         public int arena() {
-            return ring / 10;
+            return ring / 10 % 10;
+        }
+
+        /** In an arena: 0 the regular rules (first to 2, everything allowed), else custom first-to-N. */
+        public int rounds() {
+            return ring / 100;
         }
 
         public String arenaId() {
@@ -45,7 +50,8 @@ public final class Duels {
         }
 
         String describe() {
-            if (arena() > 0) return (arena() == 1 ? "High Tree Grove" : "Skyline") + " · first to 2 rounds";
+            if (arena() > 0) return (arena() == 1 ? "High Tree Grove" : "Skyline") + (rounds() == 0 ? " · regular · first to 2"
+                : " · custom · first to " + rounds() + " · ODM " + (odm ? "on" : "off") + " · Abilities " + (abilities ? "on" : "off") + " · Food " + (food ? "on" : "off"));
             return RING_NAMES[ring % 10] + " ring · ODM " + (odm ? "on" : "off") + " · Abilities " + (abilities ? "on" : "off") + " · Food " + (food ? "on" : "off");
         }
     }
@@ -134,7 +140,7 @@ public final class Duels {
         }
         // In an arena: away from here, rounds, and anyone can watch from where you left.
         if (rules != null && rules.arena() > 0 && of(p.getUuid()) == null && of(t.getUuid()) == null) {
-            Arenas.duel(p, t, rules.arenaId());
+            Arenas.duel(p, t, rules.arenaId(), rules);
             return;
         }
         if (of(p.getUuid()) != null || of(t.getUuid()) != null || p.getServerWorld() != t.getServerWorld() || p.squaredDistanceTo(t) > RANGE * RANGE) {
@@ -299,6 +305,7 @@ public final class Duels {
     /** Abilities off in this player's duel: say so. */
     public boolean blocksAbilities(ServerPlayerEntity p) {
         Rules r = rules(p);
+        if (r == null) r = Arenas.duelRules(p);
         if (r == null || r.abilities()) return false;
         p.sendMessage(Text.literal("No abilities in this duel").formatted(Formatting.RED), true);
         return true;
@@ -307,6 +314,7 @@ public final class Duels {
     /** Food off in this player's duel: say so. */
     public boolean blocksFood(ServerPlayerEntity p) {
         Rules r = rules(p);
+        if (r == null) r = Arenas.duelRules(p);
         if (r == null || r.food()) return false;
         p.sendMessage(Text.literal("No food or potions in this duel").formatted(Formatting.RED), true);
         return true;
@@ -315,6 +323,7 @@ public final class Duels {
     /** ODM off in this player's duel. */
     public boolean blocksOdm(ServerPlayerEntity p) {
         Rules r = rules(p);
+        if (r == null) r = Arenas.duelRules(p);
         return r != null && !r.odm();
     }
 
