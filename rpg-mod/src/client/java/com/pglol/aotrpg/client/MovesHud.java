@@ -19,6 +19,15 @@ public final class MovesHud {
     private static int color;
     private static long at;
 
+    private static int chain;
+    private static long chainAt;
+
+    /** A chain link landed: the counter at the side punches up. */
+    public static void chain(int n) {
+        chain = n;
+        chainAt = Util.getMeasuringTimeMs();
+    }
+
     public static void popup(String t, int argb) {
         text = t;
         color = argb;
@@ -46,10 +55,21 @@ public final class MovesHud {
                 Ui.text(c, Ui.title(text), w / 2f, y, s, col, true);
             }
         }
+        if (chain >= 2 && now - chainAt < 1400) {
+            long t = now - chainAt;
+            float s = MathHelper.lerp(Math.min(1, t / 80f), 2.4f, 1.7f);
+            float a = t < 1000 ? 1 : 1 - (t - 1000) / 400f;
+            int col = chain >= 8 ? 0xFFFFD24A : chain >= 5 ? 0xFFFF9A4A : 0xFFFFFFFF;
+            float x = w * 0.72f, y = h * 0.42f;
+            Ui.text(c, Ui.title(chain + ""), x + 1.5f, y + 1.5f, s, ((int) (150 * a) << 24), true);
+            Ui.text(c, Ui.title(chain + ""), x, y, s, ((int) (255 * a) << 24) | (col & 0xFFFFFF), true);
+            Ui.text(c, Ui.heading("CHAIN"), x, y + 9 * s, 0.7f, ((int) (220 * a) << 24) | (col & 0xFFFFFF), true);
+        }
         Pip[] pips = {
             new Pip("SLAM", OdmMoves.slamReadyAt(), 10_000),
             new Pip("RISE", OdmMoves.riseReadyAt(), 8_000),
-            new Pip("BURST", AdrenalineClient.burstReadyAt(), 3_500)};
+            new Pip("BURST", AdrenalineClient.burstReadyAt(), 3_500),
+            new Pip("CRUSH", OdmMoves.crushReadyAt(), 9_000)};
         boolean any = false;
         for (Pip p : pips) if (p.until() > now) any = true;
         if (!any) return;

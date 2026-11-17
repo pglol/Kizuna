@@ -686,6 +686,7 @@ public final class Classes {
         }
         if (pr.has(Skill.INF_BERSERK) && att.getHealth() < att.getMaxHealth() / 2) m *= 1.25;
         if (pr.has(Skill.INF_LONE) && s.alone) m *= 1.08;
+        if (melee) m *= Chains.bonus(att);
         // A medic knows where to cut: cleaner hits, and every third on the same foe a pressure
         // point (a heavy, sure blow that stuns).
         if (c == PlayerClass.MEDIC && melee) {

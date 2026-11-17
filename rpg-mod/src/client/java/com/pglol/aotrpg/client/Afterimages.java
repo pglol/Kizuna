@@ -30,7 +30,7 @@ public final class Afterimages {
 
     /** Leaves an image of this body where it stands, in colour (rgb), for life ms. */
     public static void leave(Entity e, int rgb, long life) {
-        if (!(e instanceof AbstractClientPlayerEntity p)) return;
+        if (!(e instanceof net.minecraft.entity.LivingEntity p)) return;
         if (ghosts.size() > 40) ghosts.remove(0);
         ghosts.add(new Ghost(p.getId(), p.getPos(), p.bodyYaw, p.headYaw, p.getPitch(), p.limbAnimator.getPos(), p.limbAnimator.getSpeed(),
             rgb & 0xFFFFFF, Util.getMeasuringTimeMs(), life));
@@ -38,7 +38,7 @@ public final class Afterimages {
 
     /** A line of them from a spot to where the body is now (a blur across the gap). */
     public static void smear(Entity e, Vec3d from, int rgb, int count, long life) {
-        if (!(e instanceof AbstractClientPlayerEntity p)) return;
+        if (!(e instanceof net.minecraft.entity.LivingEntity p)) return;
         Vec3d to = p.getPos();
         for (int i = 0; i < count; i++) {
             double k = i / (double) Math.max(1, count);
@@ -61,9 +61,17 @@ public final class Afterimages {
         Vec3d cam = ctx.camera().getPos();
         for (Ghost g : ghosts) {
             Entity e = mc.world.getEntityById(g.entity());
-            if (!(e instanceof AbstractClientPlayerEntity p)) continue;
-            if (!(mc.getEntityRenderDispatcher().getRenderer(p) instanceof LivingEntityRenderer lr)) continue;
-            if (!(lr.getModel() instanceof PlayerEntityModel model)) continue;
+            if (!(e instanceof net.minecraft.entity.LivingEntity p)) continue;
+            var renderer = mc.getEntityRenderDispatcher().getRenderer(p);
+            PlayerEntityModel model;
+            net.minecraft.util.Identifier tex;
+            if (renderer instanceof com.pglol.aotrpg.client.story.ActorRenderer ar && p instanceof net.minecraft.entity.passive.VillagerEntity ve) {
+                model = ar.ghostModel();
+                tex = ar.getTexture(ve);
+            } else if (renderer instanceof LivingEntityRenderer lr && lr.getModel() instanceof PlayerEntityModel pm) {
+                model = pm;
+                tex = lr.getTexture(p);
+            } else continue;
             float f = (now - g.at()) / (float) g.life();
             if (f < 0) continue;
             int a = (int) (150 * (1 - f) * (1 - f));
@@ -78,7 +86,7 @@ public final class Afterimages {
             model.child = false;
             model.sneaking = false;
             model.setAngles(p, g.limbPos(), g.limbSpeed(), p.age, g.headYaw() - g.bodyYaw(), g.pitch());
-            var vc = ctx.consumers().getBuffer(RenderLayer.getEntityTranslucentEmissive(p.getSkinTextures().texture()));
+            var vc = ctx.consumers().getBuffer(RenderLayer.getEntityTranslucentEmissive(tex));
             model.render(ms, vc, 0xF000F0, OverlayTexture.DEFAULT_UV, (a << 24) | g.argb());
             ms.pop();
         }

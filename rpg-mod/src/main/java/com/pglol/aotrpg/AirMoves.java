@@ -42,7 +42,8 @@ import java.util.UUID;
 public final class AirMoves {
     private AirMoves() {}
 
-    public static final int CRESCENT = 3, SPIRAL = 4, PIERCE = 5, RISING = 9;
+    public static final int CRESCENT = 3, SPIRAL = 4, PIERCE = 5, RISING = 9, CRUSH = 10;
+    private static final Map<UUID, Long> lastCrush = new HashMap<>();
     /** Eight seconds between rising cuts. */
     public static final long RISING_TICKS = 160;
     private static final Map<UUID, Long> lastRise = new HashMap<>();
@@ -220,6 +221,55 @@ public final class AirMoves {
         p.velocityModified = true;
         Impact.frame(w, at, 0.6f, p, best);
         w.playSound(null, best.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.PLAYERS, 1f, 0.8f);
+    }
+
+    /**
+     * Crushing Blow (heavy builds: hold the strike on the ground): one huge cut. It breaks any guard,
+     * stuns, and sends them flying hard enough to put them through a wall.
+     */
+    public static void crush(ServerPlayerEntity p, float yaw) {
+        ServerWorld w = p.getServerWorld();
+        long now = w.getTime();
+        Profile pr = AotRpg.PROFILES.get(p.getUuid());
+        if (Builds.of(pr) != Builds.HEAVY || now - lastCrush.getOrDefault(p.getUuid(), -1000L) < 176) return;
+        if (p.hasVehicle() || AotRpg.DOWNED.isDowned(p) || Stuns.stunned(p) || !Guard.melee(p.getMainHandStack())) return;
+        Vec3d look = p.getRotationVec(1f).multiply(1, 0, 1).normalize();
+        LivingEntity best = null;
+        double bd = 4.5 * 4.5;
+        for (Entity en : w.getOtherEntities(p, p.getBoundingBox().expand(4.8, 2, 4.8), x -> x instanceof LivingEntity le && foe(p, le))) {
+            Vec3d to = en.getPos().subtract(p.getPos()).multiply(1, 0, 1);
+            double d = to.lengthSquared() - Math.pow(en.getWidth() / 2, 2);
+            if (d > bd || to.lengthSquared() > 1e-4 && to.normalize().dotProduct(look) < 0.4) continue;
+            bd = d;
+            best = (LivingEntity) en;
+        }
+        if (best == null || !AotRpg.STAMINA.spend(p, 22)) return;
+        lastCrush.put(p.getUuid(), now);
+        Vec3d at = best.getPos().add(0, best.getHeight() * 0.5, 0);
+        // Through the guard: it breaks.
+        if (best instanceof ServerPlayerEntity bp && AotRpg.GUARD_FIGHT.guarding(bp)) {
+            AotRpg.STAMINA.drain(bp);
+            bp.stopUsingItem();
+            bp.sendMessage(Text.literal("Guard crushed!").formatted(Formatting.RED, Formatting.BOLD), true);
+        }
+        float dmg = 10 + pr.level * 0.15f;
+        best.timeUntilRegen = 0;
+        best.damage(w.getDamageSources().playerAttack(p), AotRpg.isTitan(best) ? dmg * 0.6f : dmg);
+        if (!AotRpg.isTitan(best)) {
+            Stuns.stun(best, 20);
+            Impact.launch(best, p, 1.9);
+        }
+        AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFE8B0, 5f), at.x, at.y, at.z, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFFFFF, 6f), at.x, at.y, at.z, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xD8C8A8, 4f), p.getX(), p.getY() + 0.06, p.getZ(), 0, 0, 0);
+        AotParticles.burst(w, AotParticles.SHARD, 0x9A9080, 0.5f, at.x, at.y, at.z, 16, 0.3, 0.6);
+        AotParticles.burst(w, AotParticles.STREAK, 0xFFFFFF, 0.9f, at.x, at.y, at.z, 12, 0.2, 1.0);
+        Impact.frame(w, at, 1.2f, p, best);
+        w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.PLAYERS, 1.2f, 0.6f);
+        w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.PLAYERS, 0.5f, 1.4f);
+        for (ServerPlayerEntity o : PlayerLookup.around(w, at, 20)) {
+            if (ServerPlayNetworking.canSend(o, Net.Quake.ID)) ServerPlayNetworking.send(o, new Net.Quake(o == p ? 0.5f : 0.3f, 8));
+        }
     }
 
     /** A slam met with a raised guard: turned aside, the diver dazed and thrown back up. */

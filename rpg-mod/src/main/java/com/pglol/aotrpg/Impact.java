@@ -32,7 +32,8 @@ import java.util.UUID;
 public final class Impact {
     private Impact() {}
 
-    private record Flight(LivingEntity e, Vec3d dir, long until) { }
+    /** In the air from a blow; power: thrown hard enough to break the wall they hit. */
+    private record Flight(LivingEntity e, Vec3d dir, long until, boolean power) { }
 
     private record Pin(LivingEntity e, Vec3d at, long until) { }
 
@@ -63,7 +64,7 @@ public final class Impact {
         d = d.normalize();
         e.addVelocity(d.x * strength, 0.22 + strength * 0.08, d.z * strength);
         e.velocityModified = true;
-        if (strength >= 0.9) flying.put(e.getUuid(), new Flight(e, d, e.getWorld().getTime() + 12));
+        if (strength >= 0.9) flying.put(e.getUuid(), new Flight(e, d, e.getWorld().getTime() + 12, strength >= 1.5));
         // A big one cuts to an impact frame for the two of them.
         if (strength >= 1.1 && e.getWorld() instanceof ServerWorld w) {
             Vec3d at = e.getPos().add(from.getPos()).multiply(0.5).add(0, 1.2, 0);
@@ -98,6 +99,7 @@ public final class Impact {
                 BlockState ws = w.getBlockState(wall);
                 if (ws.isAir() || !ws.isSolidBlock(w, wall)) continue;
                 flying.remove(en.getKey());
+                if (f.power()) crater(w, wall, 1);
                 slam(w, e, ws, f.dir());
             }
         }
@@ -118,6 +120,35 @@ public final class Impact {
             }
             e.fallDistance = 0;
         }
+    }
+
+    /**
+     * Blocks knocked out where someone was thrown into them (a ball around the spot). Not for
+     * good: they grow back half a minute later. Nothing hard, nothing with contents, and never
+     * in a home, the lobby or the arenas.
+     */
+    public static void crater(ServerWorld w, BlockPos at, int r) {
+        if (w.getRegistryKey() == Homes.WORLD || w.getRegistryKey() == Arenas.WORLD || w.getRegistryKey() == Extraction.lobbyWorld()) return;
+        java.util.List<Object[]> gone = new java.util.ArrayList<>();
+        for (BlockPos b : BlockPos.iterate(at.add(-r, -r, -r), at.add(r, r, r))) {
+            if (b.getSquaredDistance(at) > r * r + 0.5) continue;
+            BlockState st = w.getBlockState(b);
+            if (st.isAir() || st.getHardness(w, b) < 0 || st.getHardness(w, b) > 6 || w.getBlockEntity(b) != null || !st.getFluidState().isEmpty()) continue;
+            BlockPos keep = b.toImmutable();
+            gone.add(new Object[] {keep, st});
+            w.spawnParticles(new BlockStateParticleEffect(ParticleTypes.BLOCK, st), keep.getX() + 0.5, keep.getY() + 0.5, keep.getZ() + 0.5, 10, 0.3, 0.3, 0.3, 0.2);
+            w.setBlockState(keep, net.minecraft.block.Blocks.AIR.getDefaultState(), 2);
+        }
+        if (gone.isEmpty()) return;
+        w.playSound(null, at, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.BLOCKS, 0.7f, 1.2f);
+        w.playSound(null, at, SoundEvents.BLOCK_STONE_BREAK, SoundCategory.BLOCKS, 1.2f, 0.6f);
+        AotRpg.SCHEDULER.later(600, () -> {
+            for (Object[] g : gone) {
+                BlockPos b = (BlockPos) g[0];
+                if (w.getBlockState(b).isAir() && w.getEntitiesByClass(LivingEntity.class, new net.minecraft.util.math.Box(b), x -> true).isEmpty())
+                    w.setBlockState(b, (BlockState) g[1], 3);
+            }
+        });
     }
 
     /** Slammed face first into the ground: flat on it, limp, for a moment. */

@@ -107,6 +107,13 @@ public final class AdrenalineClient {
                 if (e != null) FxParticle.spawn(com.pglol.aotrpg.AotParticles.RING, 0xD8C8A8, 3f, e.getX(), e.getY() + 0.05, e.getZ(), 0, 0, 0);
                 if (mc.player != null && f.entity() == mc.player.getId()) EffectFx.quake(0.8f, 12);
             }
+            case Adrenaline.FX_CHAIN -> MovesHud.chain(f.arg());
+            case Adrenaline.FX_AFTER -> {
+                if (e != null) {
+                    Afterimages.leave(e, f.arg(), 280);
+                    streaks(mc, e, e.getYaw(), 4, false);
+                }
+            }
             case Adrenaline.FX_STUNNED -> {
                 stunnedUntil.put(f.entity(), Util.getMeasuringTimeMs() + f.arg() * 50L);
                 if (mc.player != null && f.entity() == mc.player.getId()) {

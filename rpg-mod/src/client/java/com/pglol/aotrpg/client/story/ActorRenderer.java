@@ -47,6 +47,11 @@ public final class ActorRenderer extends EntityRenderer<VillagerEntity> {
         return person.getTexture(e);
     }
 
+    /** The body model (for afterimages of people). */
+    public PlayerEntityModel<VillagerEntity> ghostModel() {
+        return person.getModel();
+    }
+
     /** The skin for a villager that isn't in a story scene: by their job title if they have one, else a townsperson. */
     static String skinOf(VillagerEntity e) {
         String s = StoryClient.skin(e.getId());

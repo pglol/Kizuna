@@ -27,7 +27,7 @@ public final class WarParties {
     private static final List<Group> groups = new ArrayList<>();
     private static MinecraftServer server;
     private static int seq;
-    private static final int NEAR_EACH = 2, MAX = 12;
+    private static final int NEAR_EACH = 4, MAX = 32;
 
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(s -> {
@@ -35,7 +35,7 @@ public final class WarParties {
             groups.clear();
         });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
-            if (s.getTicks() % 100 == 13) tick();
+            if (s.getTicks() % 60 == 13) tick();
         });
     }
 
@@ -48,7 +48,6 @@ public final class WarParties {
         List<ServerPlayerEntity> out = new ArrayList<>();
         for (ServerPlayerEntity p : w.getPlayers()) {
             if (p.isSpectator() || !AotRpg.PROFILES.get(p.getUuid()).created) continue;
-            if (AotRpg.PLACES.nearest(p.getX(), p.getZ(), 90, "town", "village", "city", "capital") != null) continue;
             out.add(p);
         }
         // Wiped out, or left far behind: gone.
@@ -79,7 +78,7 @@ public final class WarParties {
         Random r = w.random;
         BlockPos at = null;
         for (int t = 0; t < 10 && at == null; t++) {
-            double a = r.nextDouble() * Math.PI * 2, d = 90 + r.nextInt(70);
+            double a = r.nextDouble() * Math.PI * 2, d = 60 + r.nextInt(110);
             int x = (int) (near.getX() + Math.cos(a) * d), z = (int) (near.getZ() + Math.sin(a) * d);
             if (AotRpg.PLACES.nearest(x, z, 90, "town", "village", "city", "capital", "camp") != null) continue;
             if (!w.isChunkLoaded(x >> 4, z >> 4)) continue;

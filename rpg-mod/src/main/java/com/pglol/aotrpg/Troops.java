@@ -83,6 +83,9 @@ public final class Troops {
         /** How well he's read your rhythm (quick hits raise it), and his footwork between cuts. */
         int read, stepT, stepCd;
         Vec3d stepDir;
+        /** A grab: who's held (ticks left before the throw), and when he may grab again. */
+        UUID holding;
+        int holdT, grabCd;
 
         Troop(UUID id, int squad, boolean officer, int role, int slot) {
             this.id = id;
@@ -564,7 +567,29 @@ public final class Troops {
                 }
             }
         }
-        if (people.isEmpty()) return;
+        if (people.isEmpty()) {
+            if (titan != null) return;
+            // Nobody else about: a rival group close by is fair game.
+            VillagerEntity foe = null;
+            double fd = 40 * 40;
+            for (Troop o : troops.values()) {
+                Squad os = squads.get(o.squad);
+                if (os == null || os == sq || !rivals(sq.arch, os.arch)) continue;
+                if (!(w.getEntity(o.id) instanceof VillagerEntity ov) || !ov.isAlive()) continue;
+                double d = ov.squaredDistanceTo(m);
+                if (d < fd) {
+                    fd = d;
+                    foe = ov;
+                }
+            }
+            if (foe == null) return;
+            sq.plan = 1;
+            for (Troop t : men) {
+                t.job = 3;
+                t.orders = foe.getUuid();
+            }
+            return;
+        }
         int k = 0;
         for (Troop t : men) {
             if (t.job != 0) continue;
@@ -870,6 +895,42 @@ public final class Troops {
     private static void melee(ServerWorld w, VillagerEntity v, Troop t, LivingEntity target, double dist, Squad sq) {
         face(v, target.getEyePos());
         Vec3d to = target.getPos().subtract(v.getPos()).multiply(1, 0, 1);
+        if (t.grabCd > 0) t.grabCd--;
+        // Held: lifted in front of him, then thrown (hard enough to break a wall).
+        if (t.holding != null) {
+            LivingEntity held = find(w, t.holding);
+            if (held == null || !held.isAlive()) {
+                t.holding = null;
+                return;
+            }
+            Vec3d look = v.getRotationVec(1f).multiply(1, 0, 1).normalize();
+            Vec3d at = v.getPos().add(look.multiply(1.1)).add(0, 0.5, 0);
+            if (held instanceof ServerPlayerEntity hp) hp.requestTeleport(at.x, at.y, at.z);
+            else held.refreshPositionAndAngles(at.x, at.y, at.z, held.getYaw(), held.getPitch());
+            held.setVelocity(Vec3d.ZERO);
+            held.fallDistance = 0;
+            if (--t.holdT > 0) return;
+            t.holding = null;
+            t.grabCd = 160;
+            anim(v, 5, 6, 0);
+            Impact.launch(held, v, 2.0);
+            held.damage(w.getDamageSources().mobAttack(v), 4 + sq.skill);
+            Impact.frame(w, at.add(0, 0.6, 0), 0.9f, held);
+            afterimage(w, v, 0xFFD24A);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.HOSTILE, 1.2f, 0.7f);
+            return;
+        }
+        // The strongest close in and grab instead of cutting.
+        if ((sq.skill >= 4 || t.officer && sq.skill >= 3) && t.grabCd <= 0 && t.swing == 0 && t.cool == 0 && dist < 2.4
+            && !AotRpg.isTitan(target) && !Stuns.stunned(v) && w.random.nextInt(5) == 0
+            && !(target instanceof ServerPlayerEntity gp && AotRpg.GUARD_FIGHT.guarding(gp))) {
+            t.holding = target.getUuid();
+            t.holdT = 14;
+            anim(v, 1, 14, 0);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.HOSTILE, 1f, 0.6f);
+            if (target instanceof ServerPlayerEntity gp) gp.sendMessage(Text.literal("Grabbed!").formatted(Formatting.RED, Formatting.BOLD), true);
+            return;
+        }
         if (t.guard > 0) {
             // Blades crossed in front: hits from the front glance off. Get round him, or wait it out.
             t.guard--;
@@ -901,6 +962,9 @@ public final class Troops {
             t.offhand = !t.offhand;
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.HOSTILE, 1f, 0.9f + t.combo * 0.12f);
             Vec3d look = v.getRotationVec(1f).multiply(1, 0, 1).normalize();
+            // The cut itself, seen from anywhere near: a crescent of steel.
+            Vec3d arc = v.getEyePos().add(look.multiply(1.2)).add(0, -0.4, 0);
+            AotParticles.one(w, AotParticles.fx(AotParticles.ARC, sq.skill >= 4 ? 0xFFE8B0 : 0xFFFFFF, 2.2f + 0.2f * sq.skill), arc.x, arc.y, arc.z, 0, 0, 0);
             boolean reach = dist < 3.7 && to.lengthSquared() > 1e-4 && look.dotProduct(to.normalize()) > 0.2;
             if (!reach) {
                 t.combo = 0;
@@ -957,8 +1021,10 @@ public final class Troops {
             return;
         }
         if (dist > 2.6) {
-            // A lunge to close the gap, winding up as he comes.
-            walk(w, v, to, 0.42);
+            // A lunge to close the gap, winding up as he comes (the good ones leave their shape behind).
+            walk(w, v, to, 0.42 + 0.04 * sq.skill);
+            if (sq.skill >= 3) afterimage(w, v, sq.skill >= 5 ? 0xFFD24A : 0xE8E8F0);
+            AotParticles.burst(w, AotParticles.STREAK, 0xEAF4FF, 0.6f, v.getX(), v.getY() + 1, v.getZ(), 4, 0.3, 0.3);
         }
         // The tell: a glint and a scrape, then the cut.
         // Better swordsmen give less warning (and now and then feint, holding the cut a beat longer).
@@ -998,6 +1064,7 @@ public final class Troops {
         float r = w.random.nextFloat();
         t.dodgeDir = r < 0.5f ? side.add(at.multiply(-0.3)) : r < 0.8f ? at.multiply(-1) : side.multiply(0.6).add(at);
         t.dodge = 4;
+        afterimage(w, v, 0xE8E8F0);
         t.hitsInRow = 0;
         t.knockT = 0;
         t.swingShown = false;
@@ -1023,6 +1090,21 @@ public final class Troops {
         if (lead != null) w.playSound(null, lead.getX(), lead.getY() + 1.6, lead.getZ(), SoundEvents.ENTITY_PILLAGER_AMBIENT, SoundCategory.HOSTILE, 1.6f, 0.8f);
         if (sq.arch != Arch.MARLEY) p.sendMessage(Text.literal(sq.arch.name + (sq.arch == Arch.SWORDSMAN || sq.arch == Arch.MASTER ? " draws on you" : "s turn on you"))
             .formatted(Formatting.RED), true);
+    }
+
+    /** Old grudges: who goes for whom when they meet out there. */
+    private static boolean rivals(Arch a, Arch b) {
+        if (a == b) return false;
+        if (a == Arch.MARLEY || b == Arch.MARLEY) return true;
+        if (a == Arch.BANDIT || b == Arch.BANDIT) return true;
+        return a == Arch.DESERTER && b == Arch.MERCENARY || a == Arch.MERCENARY && b == Arch.DESERTER;
+    }
+
+    /** Leaves an afterimage of him for everyone watching (speed you can see). */
+    private static void afterimage(ServerWorld w, VillagerEntity v, int rgb) {
+        Net.RushFx fx = new Net.RushFx(v.getId(), Adrenaline.FX_AFTER, v.getYaw(), rgb);
+        for (ServerPlayerEntity o : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(v))
+            if (ServerPlayNetworking.canSend(o, Net.RushFx.ID)) ServerPlayNetworking.send(o, fx);
     }
 
     /** How good this troop's group is (1-5). */

@@ -37,12 +37,36 @@ public final class OdmMoves {
         return riseUntil;
     }
 
-    /** Crouch and strike on the ground: Rising Cut, throwing whoever's in front of you up. */
+    private static long groundHeld, crushUntil;
+
+    public static long crushReadyAt() {
+        return crushUntil;
+    }
+
+    /** Heavy builds: hold the strike on the ground for a Crushing Blow. */
+    private static void crushTick(MinecraftClient mc, ClientPlayerEntity pl, long now, boolean onGround) {
+        boolean down = mc.options.attackKey.isPressed() && mc.currentScreen == null;
+        if (!down || !onGround || AdrenalineClient.build() != com.pglol.aotrpg.Builds.HEAVY) {
+            groundHeld = 0;
+            return;
+        }
+        if (groundHeld == 0) groundHeld = now;
+        if (now - groundHeld < 650 || now < crushUntil) return;
+        var held = pl.getMainHandStack();
+        if (!com.pglol.aotrpg.Guard.melee(held) || com.pglol.aotrpg.AotItems.isApgGun(held)) return;
+        groundHeld = Long.MAX_VALUE / 2;
+        crushUntil = now + 9_000;
+        ClientPlayNetworking.send(new Net.OdmJump(com.pglol.aotrpg.AirMoves.CRUSH, pl.getYaw()));
+        MovesHud.popup("CRUSHING BLOW", 0xFFFFD27A);
+        ImpactFrames.rush(0.8f, 220);
+    }
+
+    /** Look up and strike on the ground: Rising Cut, throwing whoever's in front of you up. */
     private static void riseTick(MinecraftClient mc, ClientPlayerEntity pl, long now, boolean onGround) {
         boolean down = mc.options.attackKey.isPressed() && mc.currentScreen == null;
         boolean press = down && !attackWas;
         attackWas = down;
-        if (!press || !onGround || !pl.isSneaking() || now < riseUntil) return;
+        if (!press || !onGround || pl.getPitch() > -30 || now < riseUntil) return;
         var held = pl.getMainHandStack();
         if (!com.pglol.aotrpg.Guard.melee(held) || com.pglol.aotrpg.AotItems.isApgGun(held)) return;
         // Someone there to cut.
@@ -96,6 +120,7 @@ public final class OdmMoves {
         boolean onGround = pl.isOnGround();
         slamTick(mc, pl, now, onGround);
         riseTick(mc, pl, now, onGround);
+        crushTick(mc, pl, now, onGround);
         if (onGround || pl.isTouchingWater() || pl.hasVehicle() || pl.isClimbing()) {
             airUsed = 0;
             releasedInAir = false;
