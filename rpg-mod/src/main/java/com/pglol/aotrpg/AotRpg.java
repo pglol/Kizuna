@@ -136,7 +136,6 @@ public final class AotRpg implements ModInitializer {
     public void onInitialize() {
         Refueler.register();
         GiantTrees.register();
-        Arenas.register();
         Net.register();
         SatchelHandler.register();
         Crafting.register();
@@ -146,6 +145,8 @@ public final class AotRpg implements ModInitializer {
         Adrenaline.register();
         Swings.register();
         Mentors.register();
+        // After the payloads exist, and ahead of the other death handlers (a fall in the arena is never a real death).
+        Arenas.register();
         // The Extraction lobby's board and stash, and a run's supply barrels (ahead of the land protection).
         UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
             if (world.isClient || !(player instanceof ServerPlayerEntity sp) || hand != net.minecraft.util.Hand.MAIN_HAND) return ActionResult.PASS;
