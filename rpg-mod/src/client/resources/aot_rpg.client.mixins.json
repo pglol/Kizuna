@@ -42,7 +42,8 @@
     "HiddenSlotMixin",
     "IslandTimeMixin",
     "DyeArmorMixin",
-    "ReverseGripMixin"
+    "ReverseGripMixin",
+    "MotionMixin"
   ],
   "injectors": {
     "defaultRequire": 0

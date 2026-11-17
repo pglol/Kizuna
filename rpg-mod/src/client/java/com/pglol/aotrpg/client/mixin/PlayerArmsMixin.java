@@ -16,6 +16,8 @@ public abstract class PlayerArmsMixin {
         PlayerEntityModel<?> m = (PlayerEntityModel<?>) (Object) this;
         // Run styles and air moves first, so the blades' effects follow the arms as drawn.
         com.pglol.aotrpg.client.Poses.apply(m, e, a, b, c);
+        // Hits, throws, jumps, falls, landings and death on top.
+        com.pglol.aotrpg.client.Motion.pose(m, e, c);
         InfusionFx.arms(e.getId(), m.rightArm, m.leftArm);
     }
 }
