@@ -37,7 +37,7 @@ public class AotPauseScreen extends Screen {
         gridW = 3 * TW + 2 * GAP;
         gridX = Math.max(12, Math.min(width / 2 - gridW + 40, width - gridW - 12));
         int bh = height >= 330 ? 22 : 18;
-        int total = (bh + 6) + 11 + 3 * (bh + GAP) + (bh + 8);
+        int total = (bh + 6) + 11 + 2 * (bh + GAP) + (bh + 8);
         int y = Math.max(48, (height - total) / 2 + 12);
         int x = gridX;
 
@@ -50,6 +50,8 @@ public class AotPauseScreen extends Screen {
             new Tile("Options", "minecraft:comparator", true, () -> client.setScreen(new OptionsScreen(this, client.options))),
             mods ? new Tile("Mods", "minecraft:command_block", true, this::openModMenu) : null};
         Tile[] progress = {
+            new Tile("Journal [J]", "minecraft:book", hasChar, () -> client.setScreen(new JournalScreen())),
+            new Tile("World Map [M]", "minecraft:filled_map", true, () -> client.setScreen(new WorldMapScreen())),
             new Tile("Tasks & Titles", "minecraft:target", hasChar, () -> ClientPlayNetworking.send(new Net.TaskAction("open", "")), "tasks"),
             new Tile("Battle Pass", "minecraft:nether_star", hasChar, () -> ClientPlayNetworking.send(new Net.PassAction("open", 0)), "pass"),
             new Tile("Events", "minecraft:firework_rocket", hasChar, () -> ClientPlayNetworking.send(new Net.EventAction("open", "")))};
@@ -78,11 +80,9 @@ public class AotPauseScreen extends Screen {
             y = section(y, bh, "", new Tile[] {
                 new Tile("Character [K]", "minecraft:writable_book", hasChar, () -> client.setScreen(new CharacterScreen(0)), "character"),
                 new Tile("Satchel [B]", "minecraft:bundle", hasChar, () -> ClientPlayNetworking.send(new Net.OpenSatchel())),
-                new Tile("Journal [J]", "minecraft:book", hasChar, () -> client.setScreen(new JournalScreen())),
-                new Tile("World Map [M]", "minecraft:filled_map", true, () -> client.setScreen(new WorldMapScreen())),
+                group("Home", "minecraft:oak_door", home),
                 group("Progress", "minecraft:nether_star", progress),
                 group(war ? "Community ⚔" : "Community", "minecraft:bell", community),
-                group("Home", "minecraft:oak_door", home),
                 group("Settings", "minecraft:comparator", character)});
         } else {
             add(x, y, gridW, bh, Text.literal("‹  Back"), () -> {

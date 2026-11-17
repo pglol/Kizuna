@@ -63,10 +63,12 @@ public class AotButton extends PressableWidget {
         int x = getX(), y = getY(), w = width, h = height;
         int mouseX = 0, mouseY = 0;
         boolean hov = isHovered() && active;
-        int bg = !active ? 0xB0101010 : selected ? 0xE8342A18 : hov ? 0xE8252C24 : 0xDC141914;
+        // Glass, lit gold from the left edge when hovered or chosen.
+        int bg = !active ? 0x90101214 : selected ? 0xD8221E14 : hov ? 0xD01A1E1E : 0xB80D1012;
         c.fill(x, y, x + w, y + h, bg);
-        c.drawBorder(x, y, w, h, !active ? 0xFF34322C : selected ? Ui.GOLD : hov ? Ui.TRIM : Ui.BORDER);
-        if (selected || hov) c.fill(x + 1, y + 1, x + 3, y + h - 1, accent);
+        if (hov || selected) c.fillGradient(x, y, x + w, y + h, 0x18E0B96A, 0x00000000);
+        c.drawBorder(x, y, w, h, !active ? 0x18FFFFFF : selected ? 0xC0E0B96A : hov ? 0x60E0B96A : 0x26FFFFFF);
+        if (selected || hov) c.fill(x, y + 1, x + 2, y + h - 1, accent);
         int col = !active ? Ui.DIM : (selected || hov) ? Ui.GOLD : Ui.CREAM;
         int tx = x + 8;
         if (icon != null) {

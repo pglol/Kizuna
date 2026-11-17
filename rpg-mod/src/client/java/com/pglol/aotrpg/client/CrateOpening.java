@@ -434,12 +434,18 @@ public final class CrateOpening {
                 c.fill(x, y, x + s, y + (rar == 5 ? 2 : 2 + (i % 2)), 0xFF000000 | pal[i % pal.length]);
             }
         }
-        // The prize, rising and growing.
+        // A soft glow it sits in, breathing.
+        float breath = 0.8f + 0.2f * (float) Math.sin(t / 260.0);
+        for (int gr = 8; gr < 46 + rar * 8; gr += 3) ring(c, cx, cy - 18, gr, col, 0.12f * breath * (1 - gr / (float) (46 + rar * 8)));
+        // The prize, rising and growing, turning slowly in the light.
         float k = (float) smooth(Math.min(1, t / 450f));
         float sc = 1.2f + 2.6f * k;
+        float sway = (float) Math.sin(t / 700.0) * 22f;
         c.getMatrices().push();
-        c.getMatrices().translate(cx - 8 * sc, cy - 18 - 8 * sc - (1 - k) * 20, 0);
+        c.getMatrices().translate(cx, cy - 18 - (1 - k) * 20 + (float) Math.sin(t / 500.0) * 2, 0);
+        c.getMatrices().multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Y.rotationDegrees(sway));
         c.getMatrices().scale(sc, sc, 1);
+        c.getMatrices().translate(-8, -8, 0);
         c.drawItem(icon(got.icon()), 0, 0);
         c.getMatrices().pop();
         // The name of it.
@@ -453,7 +459,6 @@ public final class CrateOpening {
         int ta = (int) (255 * tp);
         if (ta > 8) {
             Ui.text(c, Text.literal(got.got()), cx, cy + (rar == 5 ? 48 : 42), 1.25f, (ta << 24) | 0xEDE3C8, true);
-            Ui.text(c, Text.literal("from the " + got.crate()), cx, cy + (rar == 5 ? 64 : 58), 0.65f, (ta << 24) | 0x8F8A7A, true);
             // What it rolled: rarity and kind, item level, every stat and perk.
             if (!got.lines().isEmpty()) {
                 int ly = cy + (rar == 5 ? 80 : 74);
@@ -469,7 +474,6 @@ public final class CrateOpening {
                 }
             }
         }
-        if (p >= 1) Ui.text(c, Text.literal("click to continue"), cx, h - 16, 0.65f, 0xA0FFFFFF, true);
     }
 
     /** A jagged bolt from the top of the screen down to the prize. */

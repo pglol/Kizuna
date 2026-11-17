@@ -51,28 +51,24 @@ public final class Ui {
 
     /** Cloth texture fill (tiled in 512 px pieces). */
     public static void cloth(DrawContext c, int x, int y, int w, int h) {
-        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
-        for (int oy = 0; oy < h; oy += 512) {
-            for (int ox = 0; ox < w; ox += 512) {
-                int tw = Math.min(512, w - ox), th = Math.min(512, h - oy);
-                c.drawTexture(PANEL, x + ox, y + oy, (x * 3 + ox) & 255, (y * 5 + oy) & 255, tw, th, 512, 512);
-            }
-        }
-        com.mojang.blaze3d.systems.RenderSystem.disableBlend();
+        // Clean glass now: no woven texture, just a faint warm sheen from the top.
+        c.fillGradient(x, y, x + w, y + Math.max(1, h / 3), 0x10E0B96A, 0x00000000);
     }
 
     /** A framed panel with a gold outline and a faint top highlight. */
     public static void panel(DrawContext c, int x, int y, int w, int h) {
-        c.fill(x, y, x + w, y + h, 0xC0070907);
-        cloth(c, x, y, w, h);
-        c.drawBorder(x, y, w, h, BORDER);
-        c.fill(x + 1, y + 1, x + w - 1, y + 2, 0x22FFFFFF);
-        // corner studs
-        int s = 2;
-        c.fill(x - 1, y - 1, x + s, y + s, TRIM);
-        c.fill(x + w - s, y - 1, x + w + 1, y + s, TRIM);
-        c.fill(x - 1, y + h - s, x + s, y + h + 1, TRIM);
-        c.fill(x + w - s, y + h - s, x + w + 1, y + h + 1, TRIM);
+        glass(c, x, y, w, h);
+    }
+
+    /**
+     * The house style: dark smoked glass over the world, a hairline edge, and a thin gold rule
+     * across the top (the Survey Corps' trim, not a carnival).
+     */
+    public static void glass(DrawContext c, int x, int y, int w, int h) {
+        c.fill(x, y, x + w, y + h, 0xC80B0E10);
+        c.fillGradient(x, y, x + w, y + Math.max(1, h / 2), 0x14FFFFFF, 0x00000000);
+        c.drawBorder(x, y, w, h, 0x30FFFFFF);
+        c.fill(x + 1, y, x + w - 1, y + 1, 0xA0E0B96A);
     }
 
     // ------------------------------------------------------------------ leather, wood and iron
@@ -81,62 +77,34 @@ public final class Ui {
 
     /** Oiled leather: a dark hide, a hairline edge, and a stitched seam a few pixels in. */
     public static void leather(DrawContext c, int x, int y, int w, int h) {
-        c.fill(x, y, x + w, y + h, LEATHER);
-        c.fillGradient(x, y, x + w, y + h / 2, 0x10FFE8C0, 0x00000000);
-        c.drawBorder(x, y, w, h, 0xFF0A0706);
-        c.fill(x + 1, y + 1, x + w - 1, y + 2, 0x18FFFFFF);
-        stitch(c, x + 3, y + 3, w - 6, h - 6);
-        rivet(c, x + 2, y + 2);
-        rivet(c, x + w - 4, y + 2);
-        rivet(c, x + 2, y + h - 4);
-        rivet(c, x + w - 4, y + h - 4);
+        glass(c, x, y, w, h);
     }
 
     /** A dashed seam around a rectangle. */
     public static void stitch(DrawContext c, int x, int y, int w, int h) {
-        for (int i = 2; i < w - 2; i += 4) {
-            c.fill(x + i, y, x + Math.min(i + 2, w - 2), y + 1, STITCH);
-            c.fill(x + i, y + h - 1, x + Math.min(i + 2, w - 2), y + h, STITCH);
-        }
-        for (int i = 2; i < h - 2; i += 4) {
-            c.fill(x, y + i, x + 1, y + Math.min(i + 2, h - 2), STITCH);
-            c.fill(x + w - 1, y + i, x + w, y + Math.min(i + 2, h - 2), STITCH);
-        }
+        // (Seams are gone with the leather look.)
     }
 
     /** A small iron rivet. */
     public static void rivet(DrawContext c, int x, int y) {
-        c.fill(x, y, x + 2, y + 2, IRON);
-        c.fill(x + 1, y + 1, x + 2, y + 2, 0xFF4A4640);
+        // (No rivets in the glass look.)
     }
 
     /** A pressed-in area: darker, shadow on the top and left, light catching the bottom and right. */
     public static void well(DrawContext c, int x, int y, int w, int h) {
-        c.fill(x, y, x + w, y + h, 0x70000000);
-        c.fill(x, y, x + w, y + 1, 0x90000000);
-        c.fill(x, y, x + 1, y + h, 0x90000000);
-        c.fill(x, y + h - 1, x + w, y + h, 0x22FFE8C0);
-        c.fill(x + w - 1, y, x + w, y + h, 0x22FFE8C0);
+        c.fill(x, y, x + w, y + h, 0x58000000);
+        c.drawBorder(x, y, w, h, 0x1CFFFFFF);
     }
 
     /** An item socket (18x18 by default): a well with a faint rim. */
     public static void socket(DrawContext c, int x, int y, int size) {
-        c.fill(x, y, x + size, y + size, 0xFF120E0B);
-        c.fill(x, y, x + size, y + 1, 0xFF060403);
-        c.fill(x, y, x + 1, y + size, 0xFF060403);
-        c.fill(x, y + size - 1, x + size, y + size, 0xFF3A3028);
-        c.fill(x + size - 1, y, x + size, y + size, 0xFF3A3028);
+        c.fill(x, y, x + size, y + size, 0x60000000);
+        c.drawBorder(x, y, size, size, 0x24FFFFFF);
     }
 
     /** Dark planks behind a whole screen: long grain lines and a vignette. */
     public static void planks(DrawContext c, int w, int h) {
-        c.fillGradient(0, 0, w, h, 0xF4181310, 0xFA0B0806);
-        for (int y = 0; y < h; y += 3) {
-            int k = (y * 7919) % 11;
-            c.fill(0, y, w, y + 1, (k < 3 ? 0x0C : k < 6 ? 0x06 : 0x03) << 24 | 0xFFE0B0);
-        }
-        for (int y = 38; y < h; y += 38) c.fill(0, y, w, y + 1, 0x40000000);
-        c.fillGradient(0, h - 60, w, h, 0x00000000, 0x70000000);
+        backdrop(c, w, h);
     }
 
     /** Muted rarity colours, like enamel on steel rather than candy. */
@@ -227,9 +195,13 @@ public final class Ui {
 
     /** Full-screen backdrop: dark vignette with a warm glow at the top. */
     public static void backdrop(DrawContext c, int w, int h) {
-        c.fillGradient(0, 0, w, h, 0xF0141A15, 0xF8050605);
-        c.fillGradient(0, 0, w, h / 3, 0x30B8955A, 0x00000000);
-        c.fillGradient(0, h - 40, w, h, 0x00000000, 0x60000000);
+        // The world dimmed behind smoked glass, a warm light from above, darker at the edges.
+        c.fillGradient(0, 0, w, h, 0xD80A0D0C, 0xEC050606);
+        c.fillGradient(0, 0, w, h / 3, 0x22E0B96A, 0x00000000);
+        c.fillGradient(0, h - 50, w, h, 0x00000000, 0x70000000);
+        int side = Math.min(120, w / 6);
+        c.fillGradient(0, 0, side, h, 0x50000000, 0x50000000);
+        c.fillGradient(w - side, 0, w, h, 0x50000000, 0x50000000);
     }
 
     /** Title colour for an area theme (matches the entry titles). */
