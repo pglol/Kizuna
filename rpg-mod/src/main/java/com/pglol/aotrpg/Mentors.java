@@ -128,6 +128,10 @@ public final class Mentors {
             return net.minecraft.util.ActionResult.PASS;
         });
         ServerPlayNetworking.registerGlobalReceiver(Net.MentorAction.ID, (payload, ctx) -> action(ctx.player(), payload.action(), payload.mentor()));
+        ServerPlayNetworking.registerGlobalReceiver(Net.MomentAction.ID, (payload, ctx) -> {
+            if (payload.action().equals("play")) AotRpg.STORY.playMoment(ctx.player(), payload.id());
+            AotRpg.STORY.sendMoments(ctx.player(), payload.action().equals("open"));
+        });
     }
 
     private static UUID id(Net.Area t, String mentor) {

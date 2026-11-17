@@ -1667,6 +1667,33 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** One quest on the Story Moments board (state: 0 not reached, 1 ready, 2 lived). */
+    public record Moment(String id, String title, String chapter, int state, boolean memory) { }
+
+    /** Server -> client: the Story Moments board. */
+    public record Moments(java.util.List<Moment> list, boolean open) implements CustomPayload {
+        public static final Id<Moments> ID = Net.id("moments");
+        public static final PacketCodec<RegistryByteBuf, Moments> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.list.size());
+            for (Moment m : v.list) { b.writeString(m.id()); b.writeString(m.title()); b.writeString(m.chapter()); b.writeVarInt(m.state()); b.writeBoolean(m.memory()); }
+            b.writeBoolean(v.open);
+        }, b -> {
+            int n = Math.min(256, b.readVarInt());
+            java.util.List<Moment> l = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) l.add(new Moment(b.readString(), b.readString(), b.readString(), b.readVarInt(), b.readBoolean()));
+            return new Moments(l, b.readBoolean());
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Client -> server: "open" the board, or "play" a moment. */
+    public record MomentAction(String action, String id) implements CustomPayload {
+        public static final Id<MomentAction> ID = Net.id("moment_action");
+        public static final PacketCodec<RegistryByteBuf, MomentAction> CODEC = PacketCodec.of((v, b) -> { b.writeString(v.action); b.writeString(v.id); },
+            b -> new MomentAction(b.readString(), b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: a duel's face-off: the two fighters side by side, VS, and the count to the fight. */
     public record DuelIntro(java.util.UUID a, String aName, int aLevel, String aRole, java.util.UUID b, String bName, int bLevel, String bRole,
                             String rules) implements CustomPayload {
@@ -2599,6 +2626,8 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(Rush.ID, Rush.CODEC);
         PayloadTypeRegistry.playC2S().register(SwingDir.ID, SwingDir.CODEC);
         PayloadTypeRegistry.playS2C().register(MentorView.ID, MentorView.CODEC);
+        PayloadTypeRegistry.playS2C().register(Moments.ID, Moments.CODEC);
+        PayloadTypeRegistry.playC2S().register(MomentAction.ID, MomentAction.CODEC);
         PayloadTypeRegistry.playC2S().register(MentorAction.ID, MentorAction.CODEC);
         PayloadTypeRegistry.playS2C().register(SwingSeen.ID, SwingSeen.CODEC);
         PayloadTypeRegistry.playS2C().register(SwingSpeeds.ID, SwingSpeeds.CODEC);

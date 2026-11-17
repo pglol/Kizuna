@@ -1879,10 +1879,11 @@ public final class Story {
 
     private void completeMission(ServerPlayerEntity p, Profile pr, Scene sc, Mission m) {
         State s = pr.story;
-        s.done.add(m.id);
+        // A moment lived again (from the Story Moments board) pays a quarter.
+        boolean again = !s.done.add(m.id);
         pr.chapter = Math.max(pr.chapter, 1 + s.done.size());
         apply(p, sc, m, m.complete);
-        if (m.xp > 0) AotRpg.PROGRESSION.addXp(p, pr, m.xp);
+        if (m.xp > 0) AotRpg.PROGRESSION.addXp(p, pr, again ? m.xp / 4 : m.xp);
         // Guests share in the reward.
         for (UUID g : sc.guests) {
             ServerPlayerEntity gp = server.getPlayerManager().getPlayer(g);
@@ -2258,6 +2259,51 @@ public final class Story {
             }
             completeStep(p, pr, sc, m, st);
         }
+    }
+
+    // ------------------------------------------------------------------ story moments
+
+    /**
+     * Story Moments: every quest in the story you've reached, to live (or live again) as a side
+     * quest whenever you like. Memories take you there and bring you back when they end.
+     * State: 0 not reached yet, 1 waiting to be started, 2 lived (replayable).
+     */
+    public List<Net.Moment> moments(ServerPlayerEntity p) {
+        Profile pr = pr(p);
+        List<Net.Moment> out = new ArrayList<>();
+        for (Mission m : missions.values()) {
+            if (m.chain || m.id.equals(CREATION)) continue;
+            int st = pr.story.done.contains(m.id) ? 2 : pr.story.available.contains(m.id) || m.id.equals(pr.story.mission) ? 1 : 0;
+            out.add(new Net.Moment(m.id, st == 0 ? "???" : m.title, m.chapter, st, m.memory));
+        }
+        return out;
+    }
+
+    public void sendMoments(ServerPlayerEntity p, boolean open) {
+        if (ServerPlayNetworking.canSend(p, Net.Moments.ID)) ServerPlayNetworking.send(p, new Net.Moments(moments(p), open));
+    }
+
+    /** Starts (or replays) a story moment from the board. */
+    public void playMoment(ServerPlayerEntity p, String id) {
+        Profile pr = pr(p);
+        Mission m = missions.get(id);
+        if (m == null || m.chain || id.equals(CREATION)) return;
+        if (!pr.story.done.contains(id) && !pr.story.available.contains(id)) return;
+        Mission cur = current(pr);
+        if (cur != null) {
+            Notify.toast(p, Text.literal("You're already on a quest").formatted(Formatting.RED),
+                Text.literal("Finish or abandon \"" + cur.title + "\" first"), 0xC0463A, null, "story");
+            return;
+        }
+        if (Extraction.inRun(p.getUuid()) || p.getWorld() != server.getOverworld()) {
+            Notify.toast(p, Text.literal("Not from here").formatted(Formatting.RED), Text.literal("Story moments start from the open world"), 0xC0463A, null, "story");
+            return;
+        }
+        // A replay of anything takes you there and brings you back after.
+        pr.story.back = new double[] {p.getX(), p.getY(), p.getZ()};
+        startMission(p, pr, id);
+        if (!m.memory && m.startAt == null) pr.story.back = null;
+        if (ServerPlayNetworking.canSend(p, Net.StoryCard.ID)) ServerPlayNetworking.send(p, new Net.StoryCard("Story Moment", m.chapter));
     }
 
     /** Operators: restart a character's story (or jump to a mission). */

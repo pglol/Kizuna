@@ -52,6 +52,7 @@ public class AotPauseScreen extends Screen {
         Tile[] progress = {
             new Tile("Journal [J]", "minecraft:book", hasChar, () -> client.setScreen(new JournalScreen())),
             new Tile("World Map [M]", "minecraft:filled_map", true, () -> client.setScreen(new WorldMapScreen())),
+            new Tile("Story Moments", "minecraft:writable_book", hasChar, () -> ClientPlayNetworking.send(new Net.MomentAction("open", ""))),
             new Tile("Tasks & Titles", "minecraft:target", hasChar, () -> ClientPlayNetworking.send(new Net.TaskAction("open", "")), "tasks"),
             new Tile("Battle Pass", "minecraft:nether_star", hasChar, () -> ClientPlayNetworking.send(new Net.PassAction("open", 0)), "pass"),
             new Tile("Events", "minecraft:firework_rocket", hasChar, () -> ClientPlayNetworking.send(new Net.EventAction("open", "")))};
