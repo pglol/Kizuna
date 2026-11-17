@@ -24,7 +24,9 @@ public class ReverseGripMixin {
         if (k <= 0.01f) return;
         // Turned about the fist (a little up the handle), so the grip stays in the hand and the
         // blade swings round behind it.
-        float py = 0.14f, pz = 0.03125f;
+        var c = com.pglol.aotrpg.client.ShoulderCam.cfg;
+        float py = c.gripAlong, pz = c.gripDepth;
+        ms.translate(c.gripSide * k, 0, 0);
         ms.translate(0, py, pz);
         ms.multiply(RotationAxis.POSITIVE_X.rotationDegrees(180 * k));
         ms.translate(0, -py, -pz);

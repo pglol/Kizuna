@@ -45,6 +45,8 @@ public final class ShoulderCam {
         /** Slam slash: 3 Crescent, 4 Spiral, 5 Piercing Dive. */
         public int slam = 3;
         public boolean dashHoming = true;
+        /** Reverse Grip: where the blade turns in the fist (up the handle, out, across). */
+        public float gripAlong = 0.20f, gripDepth = 0.03125f, gripSide = 0f;
     }
 
     public static Settings cfg = new Settings();

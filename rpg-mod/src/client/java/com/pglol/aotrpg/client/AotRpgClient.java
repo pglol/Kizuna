@@ -135,6 +135,26 @@ public final class AotRpgClient implements ClientModInitializer {
         WorldRenderEvents.AFTER_ENTITIES.register(Afterimages::render);
         HudRenderCallback.EVENT.register(ImpactFrames::render);
         HudRenderCallback.EVENT.register(MovesHud::render);
+        // Fine-tuning where Reverse Grip blades sit in the fist: /reversegrip <along> <depth> <side>.
+        net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback.EVENT.register((d, reg) -> d.register(
+            net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal("reversegrip")
+                .executes(ctx -> {
+                    var c = ShoulderCam.cfg;
+                    ctx.getSource().sendFeedback(net.minecraft.text.Text.literal("Reverse grip: along " + c.gripAlong + "  depth " + c.gripDepth + "  side " + c.gripSide));
+                    return 1;
+                })
+                .then(net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument("along", com.mojang.brigadier.arguments.FloatArgumentType.floatArg(-1, 1))
+                    .then(net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument("depth", com.mojang.brigadier.arguments.FloatArgumentType.floatArg(-1, 1))
+                        .then(net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument("side", com.mojang.brigadier.arguments.FloatArgumentType.floatArg(-1, 1))
+                            .executes(ctx -> {
+                                var c = ShoulderCam.cfg;
+                                c.gripAlong = com.mojang.brigadier.arguments.FloatArgumentType.getFloat(ctx, "along");
+                                c.gripDepth = com.mojang.brigadier.arguments.FloatArgumentType.getFloat(ctx, "depth");
+                                c.gripSide = com.mojang.brigadier.arguments.FloatArgumentType.getFloat(ctx, "side");
+                                ShoulderCam.save();
+                                ctx.getSource().sendFeedback(net.minecraft.text.Text.literal("Reverse grip set"));
+                                return 1;
+                            }))))));
         ClientPlayNetworking.registerGlobalReceiver(Net.ImpactFx.ID, (payload, ctx) ->
             ImpactFrames.hit(new net.minecraft.util.math.Vec3d(payload.x(), payload.y(), payload.z()), payload.strength()));
         ClientPlayNetworking.registerGlobalReceiver(Net.AimSeen.ID, (payload, ctx) -> Poses.on(payload));
