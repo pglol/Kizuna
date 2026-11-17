@@ -932,8 +932,7 @@ public final class Troops {
                 t.swingShown = false;
                 t.guardHits = 0;
                 Vec3d push = toBy.lengthSquared() < 1e-4 ? look.multiply(-1) : toBy.normalize();
-                by.addVelocity(push.x * 0.9, 0.25, push.z * 0.9);
-                by.velocityModified = true;
+                Impact.launch(by, v, 1.1);
                 by.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SLOWNESS, 25, 3, false, false));
                 by.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.WEAKNESS, 25, 1, false, false));
                 by.playSoundToPlayer(SoundEvents.ITEM_SHIELD_BREAK, SoundCategory.HOSTILE, 1f, 1.4f);
@@ -967,8 +966,7 @@ public final class Troops {
             anim(v, 5, 6, 0);
             t.swingShown = false;
             Vec3d push = toBy.lengthSquared() < 1e-4 ? look.multiply(-1) : toBy.normalize();
-            by.addVelocity(push.x * 1.1, 0.3, push.z * 1.1);
-            by.velocityModified = true;
+            Impact.launch(by, v, 1.2);
             by.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SLOWNESS, 15, 2, false, false));
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.HOSTILE, 1.2f, 0.7f);
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PILLAGER_HURT, SoundCategory.HOSTILE, 1f, 0.8f);

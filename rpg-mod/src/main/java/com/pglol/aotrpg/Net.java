@@ -1591,6 +1591,23 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Client -> server: a charge at the lock-on target begins or ends, or a launch start (see Adrenaline). */
+    public record Rush(int kind, int target, float yaw) implements CustomPayload {
+        public static final Id<Rush> ID = id("rush");
+        public static final PacketCodec<RegistryByteBuf, Rush> CODEC = PacketCodec.of((v, b) -> { b.writeVarInt(v.kind); b.writeVarInt(v.target); b.writeFloat(v.yaw); },
+            b -> new Rush(b.readVarInt(), b.readVarInt(), b.readFloat()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Server -> client: someone's charge, vanish, heavy start or wall slam, to show (arg: target id or ticks). */
+    public record RushFx(int entity, int kind, float yaw, int arg) implements CustomPayload {
+        public static final Id<RushFx> ID = id("rush_fx");
+        public static final PacketCodec<RegistryByteBuf, RushFx> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.entity); b.writeVarInt(v.kind); b.writeFloat(v.yaw); b.writeVarInt(v.arg);
+        }, b -> new RushFx(b.readVarInt(), b.readVarInt(), b.readFloat(), b.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: a duel's face-off: the two fighters side by side, VS, and the count to the fight. */
     public record DuelIntro(java.util.UUID a, String aName, int aLevel, String aRole, java.util.UUID b, String bName, int bLevel, String bRole,
                             String rules) implements CustomPayload {
@@ -2520,6 +2537,8 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(CraftView.ID, CraftView.CODEC);
         PayloadTypeRegistry.playS2C().register(IslandSky.ID, IslandSky.CODEC);
         PayloadTypeRegistry.playS2C().register(RunStyle.ID, RunStyle.CODEC);
+        PayloadTypeRegistry.playC2S().register(Rush.ID, Rush.CODEC);
+        PayloadTypeRegistry.playS2C().register(RushFx.ID, RushFx.CODEC);
         PayloadTypeRegistry.playC2S().register(RunStyleSet.ID, RunStyleSet.CODEC);
         PayloadTypeRegistry.playC2S().register(CraftAction.ID, CraftAction.CODEC);
         PayloadTypeRegistry.playS2C().register(Quake.ID, Quake.CODEC);

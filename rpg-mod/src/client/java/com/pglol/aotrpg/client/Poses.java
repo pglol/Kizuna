@@ -56,6 +56,24 @@ public final class Poses {
     public static void apply(PlayerEntityModel<?> m, LivingEntity e, float limbAngle, float limbDistance, float age) {
         if (!(e instanceof PlayerEntity pl)) return;
         long now = Util.getMeasuringTimeMs();
+        // Slammed into a wall: limp, arms and legs thrown wide, head lolling.
+        if (AdrenalineClient.pinned(e.getId())) {
+            m.rightArm.pitch = -0.4f;
+            m.leftArm.pitch = -0.3f;
+            m.rightArm.roll = 1.9f;
+            m.leftArm.roll = -1.7f;
+            m.rightArm.yaw = 0;
+            m.leftArm.yaw = 0;
+            m.rightLeg.pitch = 0.15f;
+            m.leftLeg.pitch = -0.1f;
+            m.rightLeg.roll = 0.35f;
+            m.leftLeg.roll = -0.3f;
+            m.head.pitch = 0.45f;
+            m.head.roll = 0.3f;
+            m.body.pitch = -0.15f;
+            sync(m);
+            return;
+        }
         // The slam: blades high overhead coming down, then driven down at the end.
         OdmMoves.Anim a = OdmMoves.anim(e.getId());
         if (a != null && a.kind() >= OdmMoves.SLAM) {

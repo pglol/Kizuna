@@ -239,6 +239,6 @@ public final class ShoulderCam {
     /** Degrees to add to the field of view. */
     public static float fovKick() {
         // The lens widens with speed, and closes right in down the APG's sights.
-        return active() ? fovNow * weight - 24f * aimNow * aimNow : 0;
+        return (active() ? fovNow * weight - 24f * aimNow * aimNow : 0) + AdrenalineClient.fov();
     }
 }

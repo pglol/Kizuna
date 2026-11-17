@@ -128,6 +128,9 @@ public final class AotRpgClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(Net.CraftView.ID, (payload, ctx) -> CraftScreen.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.TroopAnim.ID, (payload, ctx) -> com.pglol.aotrpg.client.story.TroopPoses.on(payload));
         HudRenderCallback.EVENT.register(ThreatSense::render);
+        HudRenderCallback.EVENT.register(AdrenalineClient::render);
+        ClientTickEvents.END_CLIENT_TICK.register(AdrenalineClient::tick);
+        ClientPlayNetworking.registerGlobalReceiver(Net.RushFx.ID, (payload, ctx) -> AdrenalineClient.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.Quake.ID, (payload, ctx) -> EffectFx.quake(payload.strength(), payload.ticks()));
         ClientPlayNetworking.registerGlobalReceiver(Net.DuelIntro.ID, (payload, ctx) -> DuelIntro.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.StashView.ID, (payload, ctx) -> {

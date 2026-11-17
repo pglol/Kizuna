@@ -32,6 +32,8 @@ public final class Combat {
             // The riposte after a perfect parry.
             if (melee(source) && AotRpg.GUARD_FIGHT.takeCounter(attacker)) {
                 mult *= 1.5;
+                // The counter throws them back (into a wall, if there's one behind them).
+                if (!AotRpg.isTitan(entity)) Impact.launch(entity, attacker, 1.5);
                 attacker.playSoundToPlayer(net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, net.minecraft.sound.SoundCategory.PLAYERS, 1f, 0.8f);
             }
             // Gear power counts only when the character is high enough level for the weapon.

@@ -195,8 +195,21 @@ public final class Guard {
                     && att.getRandom().nextFloat() < CLASH_CHANCE) {
                     swings.remove(def.getUuid());
                     swings.remove(att.getUuid());
-                    push(att, def, 0.9);
-                    push(def, att, 0.9);
+                    // Usually an even clash, both thrown apart. Now and then one side overpowers the
+                    // other (strength and stamina behind the blow) and sends them flying.
+                    Profile ap = AotRpg.PROFILES.get(att.getUuid()), dp0 = AotRpg.PROFILES.get(def.getUuid());
+                    float force = ap.total(Stat.STRENGTH) * 2 + ap.level * 0.2f + AotRpg.STAMINA.fraction(att.getUuid()) * 5f + att.getRandom().nextFloat() * 6;
+                    float resist = dp0.total(Stat.STRENGTH) * 2 + dp0.level * 0.2f + AotRpg.STAMINA.fraction(def.getUuid()) * 5f + att.getRandom().nextFloat() * 6;
+                    if (Math.abs(force - resist) > 4) {
+                        ServerPlayerEntity win = force > resist ? att : def, lose = win == att ? def : att;
+                        Impact.launch(lose, win, 1.6);
+                        push(win, lose, 0.2);
+                        lose.sendMessage(Text.literal("OVERPOWERED").formatted(Formatting.RED, Formatting.BOLD), true);
+                        win.sendMessage(Text.literal("OVERPOWER").formatted(Formatting.GOLD, Formatting.BOLD), true);
+                    } else {
+                        Impact.launch(att, def, 0.9);
+                        Impact.launch(def, att, 0.9);
+                    }
                     AotRpg.STAMINA.spend(att, 5);
                     AotRpg.STAMINA.spend(def, 5);
                     Vec3d mid = att.getEyePos().add(def.getEyePos()).multiply(0.5).subtract(0, 0.3, 0);
@@ -238,7 +251,7 @@ public final class Guard {
                     // Nothing stops a titan: you turn the blow and are thrown clear of it.
                     push(def, src, 1.1);
                 } else if (src instanceof ServerPlayerEntity att) {
-                    push(att, def, 1.1);
+                    Impact.launch(att, def, 1.4);
                     att.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 30, 2, false, false, false));
                     att.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 30, 1, false, false, false));
                     att.sendMessage(Text.literal("Parried!").formatted(Formatting.RED, Formatting.BOLD), true);
