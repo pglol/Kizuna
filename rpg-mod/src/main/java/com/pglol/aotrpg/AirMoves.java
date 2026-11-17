@@ -16,6 +16,8 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -40,8 +42,14 @@ import java.util.UUID;
 public final class AirMoves {
     private AirMoves() {}
 
-    public static final int CRESCENT = 3, SPIRAL = 4, PIERCE = 5;
-    private static final long COOLDOWN_TICKS = 60;
+    public static final int CRESCENT = 3, SPIRAL = 4, PIERCE = 5, RISING = 9;
+    /** Eight seconds between rising cuts. */
+    public static final long RISING_TICKS = 160;
+    private static final Map<UUID, Long> lastRise = new HashMap<>();
+    /** Thrown up by a rising cut: who launched them and until when (a slam on them now takes them for sure). */
+    private static final Map<UUID, Object[]> juggled = new HashMap<>();
+    /** Ten seconds between slams: a big move, not a spam. */
+    public static final long COOLDOWN_TICKS = 200;
 
     /** A dive: the move, when it began, how high it started, and who it's dragging down with it. */
     private record Dive(int kind, long at, double from, List<LivingEntity> caught) { }
@@ -92,7 +100,18 @@ public final class AirMoves {
         if (p.hasVehicle() || AotRpg.DOWNED.isDowned(p) || !Guard.melee(p.getMainHandStack()) || height(p) < 1.6) return;
         if (!AotRpg.STAMINA.spend(p, 18)) return;
         lastSlam.put(p.getUuid(), now);
-        diving.put(p.getUuid(), new Dive(kind, now, height(p, 80), new ArrayList<>()));
+        Dive dive = new Dive(kind, now, height(p, 80), new ArrayList<>());
+        // The follow-up: anyone you threw up with a rising cut is taken down with you.
+        for (var j : new ArrayList<>(juggled.entrySet())) {
+            Object[] v = j.getValue();
+            if (!p.getUuid().equals(v[0]) || now > (long) v[1]) continue;
+            if (p.getServerWorld().getEntity(j.getKey()) instanceof LivingEntity le && le.isAlive() && le.squaredDistanceTo(p) < 10 * 10) {
+                dive.caught().add(le);
+                juggled.remove(j.getKey());
+                p.sendMessage(Text.literal("AIR COMBO").formatted(Formatting.GOLD, Formatting.BOLD), true);
+            }
+        }
+        diving.put(p.getUuid(), dive);
         ServerWorld w = p.getServerWorld();
         w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_BREEZE_WIND_BURST.value(), SoundCategory.PLAYERS, 0.8f, 0.7f);
         w.playSound(null, p.getBlockPos(), SoundEvents.ITEM_TRIDENT_RIPTIDE_1.value(), SoundCategory.PLAYERS, 0.7f, 1.4f);
@@ -121,33 +140,102 @@ public final class AirMoves {
                     p.getZ() + Math.sin(a) * r, -v.x * 0.6, -v.y * 0.6 + 0.2, -v.z * 0.6);
             }
             if (d.kind() == SPIRAL) AotParticles.one(w, AotParticles.fx(AotParticles.ARC, 0xFFFFFF, 2f), p.getX(), p.getY() + 1, p.getZ(), 0, 0, 0);
-            // Anyone in the way is caught and carried down in front of the blades.
+            // Anyone in the way is caught and carried down under the blades: a wide reach along the
+            // dive, so it takes whoever you come down on, not only those you touch.
+            Vec3d ahead = v.lengthSquared() > 1e-4 ? v.normalize() : new Vec3d(0, -1, 0);
             if (d.caught().size() < 3) {
-                Vec3d ahead = v.lengthSquared() > 1e-4 ? v.normalize() : new Vec3d(0, -1, 0);
-                var box = p.getBoundingBox().stretch(ahead.multiply(1.5)).expand(1.1);
+                var box = p.getBoundingBox().stretch(ahead.multiply(4.5)).expand(1.9);
                 for (Entity en : w.getOtherEntities(p, box, x -> x instanceof LivingEntity le && foe(p, le) && !AotRpg.isTitan(x) && le.getHeight() < 3)) {
                     LivingEntity le = (LivingEntity) en;
                     if (d.caught().contains(le) || d.caught().size() >= 3) continue;
+                    // Guard up as it hits you: the slam is turned aside and the diver thrown off.
+                    if (le instanceof ServerPlayerEntity vp && AotRpg.GUARD_FIGHT.guarding(vp)) {
+                        countered(w, p, vp);
+                        diving.remove(e.getKey());
+                        break;
+                    }
                     d.caught().add(le);
                     w.playSound(null, le.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.PLAYERS, 1f, 0.6f);
                     Impact.frame(w, le.getPos().add(0, 1, 0), 0.7f, p, le);
                 }
+                if (!diving.containsKey(e.getKey())) continue;
             }
+            // Held right in front of you, under your blades, all the way down.
+            float yaw = p.getYaw() * net.minecraft.util.math.MathHelper.RADIANS_PER_DEGREE;
+            Vec3d front = new Vec3d(-net.minecraft.util.math.MathHelper.sin(yaw), 0, net.minecraft.util.math.MathHelper.cos(yaw));
+            int slot = 0;
             for (LivingEntity le : d.caught()) {
                 if (!le.isAlive()) continue;
-                Vec3d ahead = v.lengthSquared() > 1e-4 ? v.normalize() : new Vec3d(0, -1, 0);
-                Vec3d target = p.getPos().add(ahead.multiply(1.3)).add(0, -0.5, 0);
-                Vec3d pull = target.subtract(le.getPos());
-                le.setVelocity(v.add(pull.multiply(0.5)));
+                Vec3d side = new Vec3d(-front.z, 0, front.x).multiply(slot == 0 ? 0 : slot == 1 ? 0.9 : -0.9);
+                Vec3d target = p.getPos().add(front.multiply(1.1)).add(side).add(ahead.multiply(0.6)).add(0, -0.3, 0);
+                le.setVelocity(v);
                 le.velocityModified = true;
                 le.fallDistance = 0;
-                if (le instanceof ServerPlayerEntity sp && pull.lengthSquared() > 6) sp.requestTeleport(target.x, target.y, target.z);
+                if (le instanceof ServerPlayerEntity sp) sp.requestTeleport(target.x, target.y, target.z);
+                else le.refreshPositionAndAngles(target.x, target.y, target.z, le.getYaw(), le.getPitch());
+                slot++;
             }
             boolean landed = p.isOnGround() || p.isTouchingWater() || age > 4 && height(p) < 0.4;
             if (!landed && age < 120) continue;
             diving.remove(e.getKey());
             if (landed) impact(w, p, d);
         }
+    }
+
+    /**
+     * Rising Cut (crouch and strike on the ground): an upward slash that throws whoever is in
+     * front of you into the air. Slam them within two seconds and they come down with you.
+     */
+    public static void rising(ServerPlayerEntity p, float yaw) {
+        ServerWorld w = p.getServerWorld();
+        long now = w.getTime();
+        if (now - lastRise.getOrDefault(p.getUuid(), -1000L) < RISING_TICKS - 4) return;
+        if (p.hasVehicle() || AotRpg.DOWNED.isDowned(p) || Stuns.stunned(p) || !Guard.melee(p.getMainHandStack()) || !p.isOnGround()) return;
+        Vec3d look = p.getRotationVec(1f).multiply(1, 0, 1).normalize();
+        LivingEntity best = null;
+        double bd = 4.2 * 4.2;
+        for (Entity en : w.getOtherEntities(p, p.getBoundingBox().expand(4.5, 2, 4.5), x -> x instanceof LivingEntity le && foe(p, le) && !AotRpg.isTitan(x))) {
+            Vec3d to = en.getPos().subtract(p.getPos()).multiply(1, 0, 1);
+            double d = to.lengthSquared();
+            if (d > bd || d > 1e-4 && to.normalize().dotProduct(look) < 0.5) continue;
+            bd = d;
+            best = (LivingEntity) en;
+        }
+        if (best == null || !AotRpg.STAMINA.spend(p, 16)) return;
+        lastRise.put(p.getUuid(), now);
+        // Guard up and facing it: blocked like any blow (the guard takes it).
+        float dmg = 5 + AotRpg.PROFILES.get(p.getUuid()).level * 0.1f;
+        best.timeUntilRegen = 0;
+        boolean landed = best.damage(w.getDamageSources().playerAttack(p), dmg);
+        Vec3d at = best.getPos().add(0, 1, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.ARC, 0xFFFFFF, 3f), at.x, at.y, at.z, 0, 0.3, 0);
+        AotParticles.burst(w, AotParticles.STREAK, 0xEAF4FF, 0.7f, best.getX(), best.getY() + 0.3, best.getZ(), 10, 0.3, 0.4);
+        w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.PLAYERS, 1f, 1.3f);
+        if (!landed) return;
+        best.setVelocity(best.getVelocity().multiply(0.2).add(look.x * 0.15, 1.05, look.z * 0.15));
+        best.velocityModified = true;
+        juggled.put(best.getUuid(), new Object[] {p.getUuid(), now + 40});
+        // You go up after them a little: ready to follow up.
+        p.addVelocity(0, 0.55, 0);
+        p.velocityModified = true;
+        Impact.frame(w, at, 0.6f, p, best);
+        w.playSound(null, best.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.PLAYERS, 1f, 0.8f);
+    }
+
+    /** A slam met with a raised guard: turned aside, the diver dazed and thrown back up. */
+    private static void countered(ServerWorld w, ServerPlayerEntity diver, ServerPlayerEntity by) {
+        diver.setVelocity(diver.getVelocity().multiply(-0.3).add(0, 0.6, 0));
+        diver.velocityModified = true;
+        diver.fallDistance = 0;
+        Stuns.stun(diver, 30);
+        Vec3d at = by.getEyePos();
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFE8A0, 6f), at.x, at.y, at.z, 0, 0, 0);
+        AotParticles.burst(w, AotParticles.SPARK, 0xFFD24A, 0.6f, at.x, at.y, at.z, 20, 0.3, 0.6);
+        Impact.frame(w, at, 1f, diver, by);
+        w.playSound(null, by.getBlockPos(), SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.PLAYERS, 1f, 1.6f);
+        by.sendMessage(Text.literal("SLAM COUNTERED").formatted(Formatting.GOLD, Formatting.BOLD), true);
+        diver.sendMessage(Text.literal("Countered!").formatted(Formatting.RED, Formatting.BOLD), true);
+        AotRpg.STAMINA.spend(by, -20);
     }
 
     private static boolean foe(ServerPlayerEntity p, LivingEntity e) {
@@ -183,7 +271,15 @@ public final class AirMoves {
             le.damage(w.getDamageSources().playerAttack(p), carried ? dmg * 1.4f : dmg);
             // Driven into the ground: pinned there a moment, limp.
             if (carried) {
-                Impact.pinDown(w, le, 24);
+                // Face down in the dirt in front of you (on the ground, never in it).
+                float yw = p.getYaw() * net.minecraft.util.math.MathHelper.RADIANS_PER_DEGREE;
+                double fx = at.x - net.minecraft.util.math.MathHelper.sin(yw) * 1.3, fz = at.z + net.minecraft.util.math.MathHelper.cos(yw) * 1.3;
+                BlockPos col = BlockPos.ofFloored(fx, at.y + 2, fz);
+                int top = w.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, col.getX(), col.getZ());
+                double fy = Math.abs(top - at.y) < 4 ? top : at.y;
+                if (le instanceof ServerPlayerEntity sp) sp.requestTeleport(fx, fy, fz);
+                else le.refreshPositionAndAngles(fx, fy, fz, p.getYaw() + 180, 0);
+                Impact.faceplant(w, le, 30);
                 continue;
             }
             // A blow from above: down and out a little, never launched.

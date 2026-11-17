@@ -120,8 +120,17 @@ public final class Impact {
         }
     }
 
+    /** Slammed face first into the ground: flat on it, limp, for a moment. */
+    public static void faceplant(ServerWorld w, LivingEntity e, int ticks) {
+        pin(w, e, ticks, Adrenaline.FX_FACEPLANT);
+    }
+
     /** Driven into the ground from above: held there, limp, for a moment. */
     public static void pinDown(ServerWorld w, LivingEntity e, int ticks) {
+        pin(w, e, ticks, Adrenaline.FX_PINNED);
+    }
+
+    private static void pin(ServerWorld w, LivingEntity e, int ticks, int kind) {
         flying.remove(e.getUuid());
         e.setVelocity(Vec3d.ZERO);
         e.velocityModified = true;
@@ -129,7 +138,7 @@ public final class Impact {
         pinned.put(e.getUuid(), new Pin(e, e.getPos(), w.getTime() + ticks));
         e.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, ticks, 6, false, false, false));
         if (Troops.is(e)) Troops.stagger(e, ticks);
-        Net.RushFx fx = new Net.RushFx(e.getId(), Adrenaline.FX_PINNED, e.getYaw(), ticks);
+        Net.RushFx fx = new Net.RushFx(e.getId(), kind, e.getYaw(), ticks);
         for (ServerPlayerEntity o : PlayerLookup.around(w, e.getPos(), 64)) if (ServerPlayNetworking.canSend(o, Net.RushFx.ID)) ServerPlayNetworking.send(o, fx);
     }
 

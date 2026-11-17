@@ -134,6 +134,7 @@ public final class AotRpgClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry.getInstance().register(com.pglol.aotrpg.AotParticles.FX, FxParticle.Factory::new);
         WorldRenderEvents.AFTER_ENTITIES.register(Afterimages::render);
         HudRenderCallback.EVENT.register(ImpactFrames::render);
+        HudRenderCallback.EVENT.register(MovesHud::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.ImpactFx.ID, (payload, ctx) ->
             ImpactFrames.hit(new net.minecraft.util.math.Vec3d(payload.x(), payload.y(), payload.z()), payload.strength()));
         ClientPlayNetworking.registerGlobalReceiver(Net.AimSeen.ID, (payload, ctx) -> Poses.on(payload));

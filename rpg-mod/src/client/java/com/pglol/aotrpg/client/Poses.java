@@ -96,6 +96,24 @@ public final class Poses {
         if (!(e instanceof PlayerEntity pl)) return;
         long now = Util.getMeasuringTimeMs();
         // Slammed into a wall: limp, arms and legs thrown wide, head lolling.
+        // Face down in the dirt: limbs flung out flat, cheek to the ground.
+        if (AdrenalineClient.faceplant(e.getId()) > 0) {
+            m.rightArm.pitch = -0.15f;
+            m.leftArm.pitch = 0.1f;
+            m.rightArm.roll = 0.9f;
+            m.leftArm.roll = -0.75f;
+            m.rightArm.yaw = 0;
+            m.leftArm.yaw = 0;
+            m.rightLeg.pitch = 0.05f;
+            m.leftLeg.pitch = -0.05f;
+            m.rightLeg.roll = 0.22f;
+            m.leftLeg.roll = -0.18f;
+            m.head.pitch = -0.2f;
+            m.head.yaw = 1.1f;
+            m.body.pitch = 0;
+            sync(m);
+            return;
+        }
         if (AdrenalineClient.pinned(e.getId())) {
             m.rightArm.pitch = -0.4f;
             m.leftArm.pitch = -0.3f;

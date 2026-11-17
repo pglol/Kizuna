@@ -57,6 +57,10 @@ public final class AdrenalineClient {
         return v != null && Util.getMeasuringTimeMs() < v[0];
     }
 
+    public static long burstReadyAt() {
+        return startCdUntil;
+    }
+
     /** A kick to the lens (negative snaps it in). */
     public static void punch(float deg) {
         punchFov = deg;
@@ -65,6 +69,19 @@ public final class AdrenalineClient {
     private static void vanish(Entity e, long ms) {
         vanishing.put(e.getId(), new double[] {Util.getMeasuringTimeMs() + ms, e.getX(), e.getY(), e.getZ(), 0});
         Afterimages.leave(e, 0xCFE4FF, 320);
+    }
+
+    /** Face down in the ground: entity -> {from ms, until ms}. */
+    private static final Map<Integer, long[]> faceplants = new HashMap<>();
+
+    /** How flat on the ground a body is (0 .. 1): slams in fast, eases back up at the end. */
+    public static float faceplant(int entity) {
+        long[] f = faceplants.get(entity);
+        if (f == null) return 0;
+        long now = Util.getMeasuringTimeMs();
+        if (now > f[1]) return 0;
+        float in = Math.min(1, (now - f[0]) / 90f), out = Math.min(1, (f[1] - now) / 250f);
+        return Math.min(in, out);
     }
 
     public static boolean pinned(int entity) {
@@ -82,6 +99,20 @@ public final class AdrenalineClient {
             case Adrenaline.FX_HUNTED -> {
                 huntedUntil = Util.getMeasuringTimeMs() + 2200;
                 EffectFx.quake(0.12f, 6);
+            }
+            case Adrenaline.FX_FACEPLANT -> {
+                long now = Util.getMeasuringTimeMs();
+                faceplants.put(f.entity(), new long[] {now, now + f.arg() * 50L});
+                pinned.put(f.entity(), now + f.arg() * 50L);
+                if (e != null) FxParticle.spawn(com.pglol.aotrpg.AotParticles.RING, 0xD8C8A8, 3f, e.getX(), e.getY() + 0.05, e.getZ(), 0, 0, 0);
+                if (mc.player != null && f.entity() == mc.player.getId()) EffectFx.quake(0.8f, 12);
+            }
+            case Adrenaline.FX_STUNNED -> {
+                stunnedUntil.put(f.entity(), Util.getMeasuringTimeMs() + f.arg() * 50L);
+                if (mc.player != null && f.entity() == mc.player.getId()) {
+                    EffectFx.quake(0.3f, 6);
+                    MovesHud.popup("STUNNED", 0xFFE04A3A);
+                }
             }
             case Adrenaline.FX_PINNED -> {
                 pinned.put(f.entity(), Util.getMeasuringTimeMs() + f.arg() * 50L);
@@ -116,6 +147,14 @@ public final class AdrenalineClient {
         FxParticle.spawn(com.pglol.aotrpg.AotParticles.RING, red ? 0xFF5A4A : 0xFFFFFF, 2.2f, e.getX(), e.getY() + 0.05, e.getZ(), 0, 0, 0);
     }
 
+    /** Dazed bodies: entity -> until (ms). Stars circle their heads. */
+    private static final Map<Integer, Long> stunnedUntil = new HashMap<>();
+
+    public static boolean stunned(int entity) {
+        Long u = stunnedUntil.get(entity);
+        return u != null && Util.getMeasuringTimeMs() < u;
+    }
+
     public static void tick(MinecraftClient mc) {
         ClientPlayerEntity pl = mc.player;
         chargeFov += ((charging ? 14f : 0f) - chargeFov) * 0.15f;
@@ -131,6 +170,18 @@ public final class AdrenalineClient {
             if (mc.world.getTime() % 2 == 0) Afterimages.leave(e, 0xC01A1A, 260);
         }
         pinned.values().removeIf(u -> Util.getMeasuringTimeMs() > u + 500);
+        faceplants.values().removeIf(u -> Util.getMeasuringTimeMs() > u[1] + 500);
+        stunnedUntil.values().removeIf(u -> Util.getMeasuringTimeMs() > u);
+        if (mc.world.getTime() % 2 == 0) for (int id : stunnedUntil.keySet()) {
+            Entity e = mc.world.getEntityById(id);
+            if (e == null) continue;
+            double a = (mc.world.getTime() % 20) / 20.0 * Math.PI * 2;
+            for (int k = 0; k < 3; k++) {
+                double b = a + k * Math.PI * 2 / 3;
+                FxParticle.spawn(com.pglol.aotrpg.AotParticles.SPARK, 0xFFE08A, 0.35f, e.getX() + Math.cos(b) * 0.45, e.getY() + e.getHeight() + 0.25,
+                    e.getZ() + Math.sin(b) * 0.45, 0, 0, 0);
+            }
+        }
         // Back into sight: a blur of images across the gap the vanish crossed.
         long nowMs = Util.getMeasuringTimeMs();
         for (var it = vanishing.entrySet().iterator(); it.hasNext(); ) {
@@ -252,6 +303,7 @@ public final class AdrenalineClient {
         pl.setVelocity(wish.x * push, v.y + (b == Builds.HEAVY ? 0.05 : 0.02), wish.z * push);
         punchFov = vanish ? 18 : b == Builds.HEAVY ? 4 : 8;
         if (vanish) {
+            MovesHud.popup("VANISH", 0xFFCFE4FF);
             vanish(pl, Math.min(320, 90 + agility() * 14L));
             ImpactFrames.rush(0.9f, 240);
         } else if (b == Builds.HEAVY) {

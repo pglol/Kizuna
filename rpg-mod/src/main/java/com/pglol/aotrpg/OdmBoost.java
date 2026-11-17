@@ -232,6 +232,10 @@ public final class OdmBoost {
 
     public void boost(ServerPlayerEntity p, Net.OdmJump j) {
         // Slam slashes ride the same message, but cost stamina rather than gas.
+        if (j.kind() == AirMoves.RISING) {
+            AirMoves.rising(p, j.yaw());
+            return;
+        }
         if (j.kind() >= AirMoves.CRESCENT) {
             AirMoves.slam(p, j.kind(), j.yaw());
             return;

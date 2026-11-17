@@ -35,7 +35,7 @@ import java.util.UUID;
 public final class Adrenaline {
     private Adrenaline() {}
 
-    public static final int FX_CHARGE = 0, FX_CHARGE_END = 1, FX_VANISH = 2, FX_HEAVY = 3, FX_KICK = 4, FX_PINNED = 5, FX_HUNTED = 6;
+    public static final int FX_CHARGE = 0, FX_CHARGE_END = 1, FX_VANISH = 2, FX_HEAVY = 3, FX_KICK = 4, FX_PINNED = 5, FX_HUNTED = 6, FX_STUNNED = 7, FX_FACEPLANT = 8;
     /** Client -> server kinds. */
     public static final int RUSH_START = 0, RUSH_STOP = 1, START_VANISH = 2, START_PLAIN = 3;
 

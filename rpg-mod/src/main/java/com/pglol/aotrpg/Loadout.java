@@ -60,7 +60,7 @@ public final class Loadout {
         HEAL("Heal", "Food, meals and potions. [H] uses it instantly"),
         MOUNT("Mount", "Saddle, lead, horse armor, horse treats"),
         SIGNAL("Signal", "Flare gun and flares, torches, spyglass, maps"),
-        FREE("Free", "Anything");
+        FREE("Free", "Anything but armour and food");
 
         public final String title, hint;
 
@@ -124,7 +124,9 @@ public final class Loadout {
     }
 
     public static boolean fits(Kind k, ItemStack s) {
-        if (s.isEmpty() || k == Kind.FREE) return true;
+        if (s.isEmpty()) return true;
+        // Free slots take anything but armour (worn, not held) and food (that's the Heal slot's).
+        if (k == Kind.FREE) return !wearable(s) && !isHeal(s) && !s.contains(net.minecraft.component.DataComponentTypes.FOOD);
         Item i = s.getItem();
         String p = aot(s);
         return switch (k) {
@@ -140,8 +142,14 @@ public final class Loadout {
             case SIGNAL -> !Horses.isWhistle(s) && (i instanceof SpyglassItem || i instanceof CompassItem
                 || i instanceof FilledMapItem || i instanceof GoatHornItem || SIGNAL_ITEMS.contains(i)
                 || (p != null && (p.equals("flare_gun") || p.endsWith("_flare_cartridge"))));
-            case FREE -> true;
+            case FREE -> !wearable(s) && !isHeal(s);
         };
+    }
+
+    /** Armour and other things you wear (helmets, chest pieces, boots, Danny's uniforms...). */
+    public static boolean wearable(ItemStack s) {
+        if (s.getItem() instanceof net.minecraft.item.ArmorItem) return true;
+        return s.getItem() instanceof net.minecraft.item.Equipment eq && eq.getSlotType().isArmorSlot();
     }
 
     public static boolean allows(int hotbarSlot, ItemStack s) {

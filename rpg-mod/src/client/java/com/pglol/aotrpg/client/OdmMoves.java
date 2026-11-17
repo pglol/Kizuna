@@ -25,8 +25,41 @@ public final class OdmMoves {
     private OdmMoves() {}
 
     public static final int DASH = 0, UP = 1, FLIP = 2, SLAM = 3;
-    private static final long COOLDOWN_MS = 1000, EARLY_MS = 350, FLIP_MS = 560, LEAN_MS = 460, SLAM_MS = 650, SLAM_COOLDOWN_MS = 3000, HOLD_MS = 260;
-    private static long attackHeldSince, slamUntil;
+    private static final long COOLDOWN_MS = 1000, EARLY_MS = 350, FLIP_MS = 560, LEAN_MS = 460, SLAM_MS = 650, SLAM_COOLDOWN_MS = 10_000, HOLD_MS = 260;
+    private static long attackHeldSince, slamUntil, riseUntil;
+    private static boolean attackWas;
+
+    public static long slamReadyAt() {
+        return slamUntil;
+    }
+
+    public static long riseReadyAt() {
+        return riseUntil;
+    }
+
+    /** Crouch and strike on the ground: Rising Cut, throwing whoever's in front of you up. */
+    private static void riseTick(MinecraftClient mc, ClientPlayerEntity pl, long now, boolean onGround) {
+        boolean down = mc.options.attackKey.isPressed() && mc.currentScreen == null;
+        boolean press = down && !attackWas;
+        attackWas = down;
+        if (!press || !onGround || !pl.isSneaking() || now < riseUntil) return;
+        var held = pl.getMainHandStack();
+        if (!com.pglol.aotrpg.Guard.melee(held) || com.pglol.aotrpg.AotItems.isApgGun(held)) return;
+        // Someone there to cut.
+        boolean target = false;
+        Vec3d look = pl.getRotationVec(1f).multiply(1, 0, 1).normalize();
+        for (net.minecraft.entity.Entity e : mc.world.getOtherEntities(pl, pl.getBoundingBox().expand(4.5, 2, 4.5))) {
+            if (!(e instanceof net.minecraft.entity.LivingEntity) || !e.isAlive()) continue;
+            Vec3d to = e.getPos().subtract(pl.getPos()).multiply(1, 0, 1);
+            if (to.lengthSquared() < 4.2 * 4.2 && (to.lengthSquared() < 1e-4 || to.normalize().dotProduct(look) > 0.5)) target = true;
+        }
+        if (!target) return;
+        riseUntil = now + 8_000;
+        ClientPlayNetworking.send(new Net.OdmJump(com.pglol.aotrpg.AirMoves.RISING, pl.getYaw()));
+        pl.addVelocity(0, 0.55, 0);
+        MovesHud.popup("RISING CUT", 0xFFFFFFFF);
+        ImpactFrames.rush(0.6f, 180);
+    }
     private static boolean slamming;
     /** The dive under way: its line, speed now, and how high it began. */
     private static Vec3d diveDir;
@@ -62,6 +95,7 @@ public final class OdmMoves {
         anims.values().removeIf(a -> now - a.at() > 1000);
         boolean onGround = pl.isOnGround();
         slamTick(mc, pl, now, onGround);
+        riseTick(mc, pl, now, onGround);
         if (onGround || pl.isTouchingWater() || pl.hasVehicle() || pl.isClimbing()) {
             airUsed = 0;
             releasedInAir = false;
@@ -215,6 +249,8 @@ public final class OdmMoves {
         diveDir = dir;
         pl.setVelocity(dir.multiply(diveSpeed));
         ImpactFrames.rush(0.7f, 200);
+        int k = MathHelper.clamp(ShoulderCam.cfg.slam, 3, 5);
+        MovesHud.popup(k == 4 ? "SPIRAL SLAM" : k == 5 ? "PIERCING DIVE" : "CRESCENT SLAM", 0xFFFFE8B0);
         int kind = MathHelper.clamp(ShoulderCam.cfg.slam, 3, 5);
         float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
         slamming = true;

@@ -110,6 +110,11 @@ public final class Troops {
         int plan;
         /** Out looking for a fight: goes after the nearest player (or a titan) rather than wandering. */
         boolean hunter;
+        /** Who they are: how good (1-5), whether they mind their own business until disturbed (and how
+         * close is too close), blades only, and who has picked a fight with them. */
+        Arch arch = Arch.MARLEY;
+        int skill = 2;
+        final java.util.Set<UUID> provoked = new java.util.HashSet<>();
         final Map<UUID, Integer> volleys = new HashMap<>();
 
         Squad(int id, String session, BlockPos centre, int radius, int level) {
@@ -146,6 +151,38 @@ public final class Troops {
         }
         return id;
     }
+    /**
+     * The kinds of people out there with blades. Marleyans hunt; the rest go about their business
+     * and only fight when disturbed (some don't like you coming close, some only if you strike).
+     */
+    public enum Arch {
+        MARLEY("Marleyan Rifleman", "Marleyan Officer", false, false, 0, 45, 90),
+        BANDIT("Bandit", "Bandit Chief", true, true, 9, 40, 70),
+        MERCENARY("Mercenary", "Mercenary Captain", false, true, 0, 55, 90),
+        DESERTER("Garrison Deserter", "Deserter Sergeant", true, true, 12, 50, 80),
+        SWORDSMAN("Wandering Swordsman", "Wandering Swordsman", true, true, 5, 90, 90),
+        MASTER("Blade Master", "Blade Master", true, true, 0, 160, 160);
+
+        public final String name, leaderName;
+        public final boolean swords, neutral;
+        public final double touchy;
+        public final int hp, leaderHp;
+
+        Arch(String name, String leaderName, boolean swords, boolean neutral, double touchy, int hp, int leaderHp) {
+            this.name = name;
+            this.leaderName = leaderName;
+            this.swords = swords;
+            this.neutral = neutral;
+            this.touchy = touchy;
+            this.hp = hp;
+            this.leaderHp = leaderHp;
+        }
+    }
+
+    private static String stars(int skill) {
+        return "★".repeat(Math.max(1, Math.min(5, skill))) + "☆".repeat(5 - Math.max(1, Math.min(5, skill)));
+    }
+
     private static final Map<Integer, Squad> squads = new HashMap<>();
     /** A spot a match's squads converge on (a supply drop), by session. */
     private static final Map<String, BlockPos> lures = new HashMap<>();
@@ -195,11 +232,18 @@ public final class Troops {
 
     /** Drops a squad of n at a spot (an officer leads bigger ones). Returns how many came. */
     public static int squad(ServerWorld w, BlockPos at, int n, int level, String session, BlockPos centre, int radius, Random r) {
+        return group(w, at, n, level, session, centre, radius, r, Arch.MARLEY, 2);
+    }
+
+    /** A group of some kind and skill (1-5) out in the world. Returns how many came. */
+    public static int group(ServerWorld w, BlockPos at, int n, int level, String session, BlockPos centre, int radius, Random r, Arch arch, int skill) {
         Squad sq = new Squad(nextSquad++, session, centre, radius, level);
+        sq.arch = arch;
+        sq.skill = Math.max(1, Math.min(5, skill));
         squads.put(sq.id, sq);
         int made = 0;
         for (int i = 0; i < n; i++) {
-            boolean officer = i == 0 && n >= 3 && r.nextFloat() < 0.6f;
+            boolean officer = arch == Arch.SWORDSMAN || arch == Arch.MASTER || i == 0 && n >= 3 && r.nextFloat() < 0.6f;
             int x = at.getX() + r.nextInt(7) - 3, z = at.getZ() + r.nextInt(7) - 3;
             int y = w.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z);
             VillagerEntity v = EntityType.VILLAGER.create(w);
@@ -214,11 +258,13 @@ public final class Troops {
             v.addCommandTag(TAG);
             v.addCommandTag("aot_ses:" + session);
             if (officer) v.addCommandTag(OFFICER);
-            v.setCustomName(Text.literal("Lv " + level + " ").formatted(Formatting.GRAY)
-                .append(Text.literal(officer ? "Marleyan Officer" : "Marleyan Rifleman").formatted(officer ? Formatting.GOLD : Formatting.RED)));
+            var title = Text.literal("Lv " + level + " ").formatted(Formatting.GRAY)
+                .append(Text.literal(officer ? arch.leaderName : arch.name).formatted(officer ? Formatting.GOLD : arch.neutral ? Formatting.YELLOW : Formatting.RED));
+            if (arch != Arch.MARLEY) title.append(Text.literal(" " + stars(sq.skill)).formatted(Formatting.GOLD));
+            v.setCustomName(title);
             v.setCustomNameVisible(true);
             var hp = v.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
-            if (hp != null) hp.setBaseValue((officer ? 90 : 45) + level * (officer ? 3.5 : 2.2));
+            if (hp != null) hp.setBaseValue((officer ? arch.leaderHp : arch.hp) * (0.8 + 0.1 * sq.skill) + level * (officer ? 3.5 : 2.2));
             v.setHealth(v.getMaxHealth());
             Item gun = AotItems.exact("apg_gun");
             if (gun != null) v.equipStack(net.minecraft.entity.EquipmentSlot.MAINHAND, new ItemStack(gun));
@@ -229,6 +275,14 @@ public final class Troops {
             if (w.spawnEntity(v)) {
                 if (made == 0) sq.leader = v.getUuid();
                 made++;
+                // Swordsmen carry their blades, not a gun.
+                if (arch.swords) {
+                    Troop tt = troops.get(v.getUuid());
+                    if (tt != null) {
+                        tt.swapCool = 0;
+                        blade(v, tt);
+                    }
+                }
             } else {
                 troops.remove(v.getUuid());
             }
@@ -454,7 +508,13 @@ public final class Troops {
         List<ServerPlayerEntity> people = new ArrayList<>();
         for (ServerPlayerEntity p : players) {
             if (p.isSpectator() || p.isCreative() || AotRpg.DOWNED.isDowned(p)) continue;
-            if (p.squaredDistanceTo(m) < (sq.hunter ? 64 * 64 : 42 * 42)) people.add(p);
+            if (p.squaredDistanceTo(m) >= (sq.hunter ? 64 * 64 : 42 * 42)) continue;
+            // Minding their own business: only those who started something (or came too close).
+            if (sq.arch.neutral && !sq.provoked.contains(p.getUuid())) {
+                if (sq.arch.touchy <= 0 || p.squaredDistanceTo(m) > sq.arch.touchy * sq.arch.touchy || p.isSneaking()) continue;
+                provoke(w, sq, p);
+            }
+            people.add(p);
         }
         people.sort((a, b) -> Double.compare(a.squaredDistanceTo(m), b.squaredDistanceTo(m)));
         LivingEntity titan = null;
@@ -466,6 +526,8 @@ public final class Troops {
                 titan = (LivingEntity) e;
             }
         }
+        // Those minding their own business only fight a titan that comes right at them.
+        if (sq.arch.neutral && titan != null && td > 18 * 18) titan = null;
         int plan = titan != null && !people.isEmpty() ? 3 : titan != null ? 2 : !people.isEmpty() ? 1 : 0;
         if (plan != sq.plan && plan >= 2 && men.size() > 1) {
             // The call to split up: a shout down the line.
@@ -771,6 +833,8 @@ public final class Troops {
 
     private static void gun(VillagerEntity v, Troop t) {
         if (!t.blade || t.swapCool > 0) return;
+        Squad gsq = squads.get(t.squad);
+        if (gsq != null && gsq.arch.swords) return;
         t.swapCool = 30;
         t.blade = false;
         t.swing = 0;
@@ -789,7 +853,8 @@ public final class Troops {
         t.burst = 0;
         t.cool = 4;
         Squad sq0 = squads.get(t.squad);
-        ItemStack grip = t.officer ? officerGrip(v.getRandom(), sq0 == null ? 1 : sq0.level) : loadedGrip();
+        boolean fine = t.officer || sq0 != null && sq0.skill >= 3;
+        ItemStack grip = fine ? officerGrip(v.getRandom(), sq0 == null ? 1 : sq0.level + sq0.skill * 2) : loadedGrip();
         v.equipStack(net.minecraft.entity.EquipmentSlot.MAINHAND, grip.copy());
         v.equipStack(net.minecraft.entity.EquipmentSlot.OFFHAND, grip.copy());
         v.setEquipmentDropChance(net.minecraft.entity.EquipmentSlot.OFFHAND, 0);
@@ -843,7 +908,7 @@ public final class Troops {
                 return;
             }
             // (A guard raised in time turns it: a well-timed one throws them off balance, see Guard.)
-            float dmg = 6 + sq.level * 0.22f + (t.officer ? 2.5f : 0) + t.combo * 1.5f;
+            float dmg = 6 + sq.level * 0.22f + (t.officer ? 2.5f : 0) + t.combo * 1.5f + sq.skill * 0.8f;
             target.damage(w.getDamageSources().mobAttack(v), dmg);
             target.addVelocity(look.x * 0.35, 0.15, look.z * 0.35);
             target.velocityModified = true;
@@ -852,7 +917,7 @@ public final class Troops {
                 t.combo = 0;
                 return;
             }
-            if (t.combo < (t.officer ? 3 : 2) && w.random.nextFloat() < 0.6f) {
+            if (t.combo < Math.min(4, (t.officer ? 3 : 2) + (sq.skill >= 4 ? 1 : 0)) && w.random.nextFloat() < 0.5f + 0.06f * sq.skill) {
                 // Straight into the next cut, from the other hand.
                 t.combo++;
                 t.swing = 4;
@@ -866,7 +931,7 @@ public final class Troops {
         if (t.cool > 0) {
             t.cool--;
             // Now and then the guard comes up on its own when you're in close.
-            if (dist < 3.2 && w.random.nextInt(t.officer ? 30 : 45) == 0) {
+            if (dist < 3.2 && w.random.nextInt(Math.max(10, (t.officer ? 34 : 48) - sq.skill * 6)) == 0) {
                 raise(w, v, t);
                 return;
             }
@@ -896,7 +961,8 @@ public final class Troops {
             walk(w, v, to, 0.42);
         }
         // The tell: a glint and a scrape, then the cut.
-        t.swing = t.officer ? 5 : 7;
+        // Better swordsmen give less warning (and now and then feint, holding the cut a beat longer).
+        t.swing = Math.max(3, (t.officer ? 6 : 8) - sq.skill) + (sq.skill >= 4 && w.random.nextInt(4) == 0 ? 4 : 0);
         w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ITEM_TRIDENT_RETURN, SoundCategory.HOSTILE, 1f, 1.6f);
     }
 
@@ -950,9 +1016,27 @@ public final class Troops {
         t.knockT = 4;
     }
 
+    /** Someone picked a fight: the whole group turns on them. */
+    private static void provoke(ServerWorld w, Squad sq, ServerPlayerEntity p) {
+        if (!sq.provoked.add(p.getUuid())) return;
+        Entity lead = sq.leader == null ? null : w.getEntity(sq.leader);
+        if (lead != null) w.playSound(null, lead.getX(), lead.getY() + 1.6, lead.getZ(), SoundEvents.ENTITY_PILLAGER_AMBIENT, SoundCategory.HOSTILE, 1.6f, 0.8f);
+        if (sq.arch != Arch.MARLEY) p.sendMessage(Text.literal(sq.arch.name + (sq.arch == Arch.SWORDSMAN || sq.arch == Arch.MASTER ? " draws on you" : "s turn on you"))
+            .formatted(Formatting.RED), true);
+    }
+
+    /** How good this troop's group is (1-5). */
+    private static int skill(Troop t) {
+        Squad sq = squads.get(t.squad);
+        return sq == null ? 2 : sq.skill;
+    }
+
     public static double struck(Entity e, ServerPlayerEntity by) {
         Troop t = troops.get(e.getUuid());
         if (t == null || !(e instanceof VillagerEntity v) || !(v.getWorld() instanceof ServerWorld w) || t.grabbed >= 0) return 1;
+        Squad hsq = squads.get(t.squad);
+        if (hsq != null) provoke(w, hsq, by);
+        int sk = skill(t);
         if (t.stun > 0) {
             // Reeling: every hit lands, and sends him staggering back.
             Vec3d away = v.getPos().subtract(by.getPos()).multiply(1, 0, 1);
@@ -982,6 +1066,7 @@ public final class Troops {
                 t.guardHits = 0;
                 Vec3d push = toBy.lengthSquared() < 1e-4 ? look.multiply(-1) : toBy.normalize();
                 Impact.launch(by, v, 1.1);
+                if (sk >= 3) Stuns.stun(by, 8 + sk * 3);
                 by.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SLOWNESS, 25, 3, false, false));
                 by.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.WEAKNESS, 25, 1, false, false));
                 by.playSoundToPlayer(SoundEvents.ITEM_SHIELD_BREAK, SoundCategory.HOSTILE, 1f, 1.4f);
@@ -997,10 +1082,24 @@ public final class Troops {
             t.knockT = 3;
             return 0.15;
         }
+        // The best of them read a cut coming and turn it clean: you're left reeling.
+        if (t.blade && front && t.swing == 0 && sk >= 3 && w.random.nextFloat() < 0.07f * (sk - 2) + 0.03f * t.read) {
+            Vec3d g = v.getEyePos().add(look.multiply(0.6));
+            AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFE8A0, 5f), g.x, g.y - 0.3, g.z, 0, 0, 0);
+            AotParticles.burst(w, AotParticles.SPARK, 0xFFD24A, 0.5f, g.x, g.y - 0.3, g.z, 14, 0.2, 0.5);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.HOSTILE, 0.8f, 1.9f);
+            Stuns.stun(by, 12 + sk * 3);
+            Impact.frame(w, g, 0.7f, by);
+            by.sendMessage(Text.literal("Parried!").formatted(Formatting.RED, Formatting.BOLD), true);
+            t.swing = 2;
+            t.combo = 1;
+            t.cool = 0;
+            return 0;
+        }
         t.hitsInRow = quick ? t.hitsInRow + 1 : 1;
         t.read = quick ? Math.min(4, t.read + 1) : Math.max(0, t.read - 1);
         // Reading you: the faster and more often you swing, the likelier he's already gone.
-        float evade = Math.min(0.75f, (t.officer ? 0.18f : 0.1f) + 0.18f * t.read);
+        float evade = Math.min(0.8f, (t.officer ? 0.18f : 0.1f) + 0.18f * t.read + 0.05f * (sk - 2));
         if (t.blade && t.swing == 0 && w.random.nextFloat() < evade) {
             evade(w, v, t, toBy);
             return 0;

@@ -78,6 +78,7 @@ public final class ShoulderCam {
     private static Vec3d offset, offsetVel = Vec3d.ZERO;
     private static float roll, fovNow, lastYaw;
     private static double aimDist;
+    private static Vec3d velNow;
     /** Aiming down the APG (0 .. 1, eased). */
     private static float aimNow;
 
@@ -156,7 +157,9 @@ public final class ShoulderCam {
         Vec3d want = up.multiply(height).add(right.multiply(side * sideNow)).subtract(fwd.multiply(dist));
         // Trailing your speed: flying on your gear pulls the camera back a little.
         Vec3d vel = p.getVelocity();
-        Vec3d trail = vel.multiply(-cfg.lag * 2.2 * (1 - ak * 0.8));
+        // Smoothed: a sudden kick (a boost, a knockback, a pin) shouldn't snap the view.
+        velNow = velNow == null ? vel : velNow.lerp(vel, 1 - Math.exp(-dt * 8));
+        Vec3d trail = velNow.multiply(-cfg.lag * 2.2 * (1 - ak * 0.8));
         if (trail.length() > 1.6) trail = trail.normalize().multiply(1.6);
         want = want.add(trail);
         // A critically damped spring toward where it wants to be (relative to your eyes, so it
@@ -166,10 +169,27 @@ public final class ShoulderCam {
             offsetVel = Vec3d.ZERO;
         }
         float omega = MathHelper.lerp(cfg.smoothing, 28f, 7f);
-        Vec3d diff = offset.subtract(want);
-        Vec3d acc = diff.multiply(-omega * omega).subtract(offsetVel.multiply(2 * omega));
-        offsetVel = offsetVel.add(acc.multiply(dt));
-        offset = offset.add(offsetVel.multiply(dt));
+        // In small steps: one big step on a slow frame made the spring blow up (the shaking and the
+        // camera flying off).
+        int steps = Math.max(1, (int) Math.ceil(dt * omega / 0.25f));
+        float h = dt / steps;
+        for (int i = 0; i < steps; i++) {
+            Vec3d diff = offset.subtract(want);
+            Vec3d acc = diff.multiply(-omega * omega).subtract(offsetVel.multiply(2 * omega));
+            offsetVel = offsetVel.add(acc.multiply(h));
+            offset = offset.add(offsetVel.multiply(h));
+        }
+        // Never further from where it should be than a couple of blocks, nor flung away.
+        Vec3d off = offset.subtract(want);
+        if (off.lengthSquared() > 4) {
+            offset = want.add(off.normalize().multiply(2));
+            offsetVel = offsetVel.multiply(0.3);
+        }
+        if (offsetVel.lengthSquared() > 400) offsetVel = offsetVel.normalize().multiply(20);
+        if (!Double.isFinite(offset.x) || !Double.isFinite(offset.y) || !Double.isFinite(offset.z)) {
+            offset = want;
+            offsetVel = Vec3d.ZERO;
+        }
         // Off walls: pull in along the line from your head to the camera.
         Vec3d pivot = eye.add(up.multiply(Math.max(0, cfg.height) * 0.5));
         Vec3d target = eye.add(offset);

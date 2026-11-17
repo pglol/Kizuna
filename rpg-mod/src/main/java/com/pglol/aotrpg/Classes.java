@@ -54,6 +54,10 @@ public final class Classes {
         int rhythm;
         long lastCombat;
         long rhythmAt, buffUntil, reportUntil, bashUntil, smokeAt, rushAt, lifelineReady;
+        /** Medic pressure points: who's being cut, how many times running, since when. */
+        UUID anatomyOn;
+        int anatomyHits;
+        long anatomyAt;
         boolean ambushUsed, alone = true;
         UUID wall;
         long wallUntil;
@@ -682,6 +686,20 @@ public final class Classes {
         }
         if (pr.has(Skill.INF_BERSERK) && att.getHealth() < att.getMaxHealth() / 2) m *= 1.25;
         if (pr.has(Skill.INF_LONE) && s.alone) m *= 1.08;
+        // A medic knows where to cut: cleaner hits, and every third on the same foe a pressure
+        // point (a heavy, sure blow that stuns).
+        if (c == PlayerClass.MEDIC && melee) {
+            m *= 1.15;
+            if (target.getUuid().equals(s.anatomyOn) && now - s.anatomyAt < 4000) s.anatomyHits++;
+            else s.anatomyHits = 1;
+            s.anatomyOn = target.getUuid();
+            s.anatomyAt = now;
+            if (s.anatomyHits >= 3 && !titan) {
+                s.anatomyHits = 0;
+                m *= 1.6;
+                if (Stuns.stun(target, 22)) callout(att, "PRESSURE POINT", Formatting.GREEN);
+            }
+        }
         if (pr.has(Skill.RCN_LONE) && s.alone && titan) m *= 1.15;
         if (ult) m *= c == PlayerClass.INFANTRY ? 1.6 : c == PlayerClass.RECON ? 1.3 : c == PlayerClass.TANK ? 1.25 : 1;
         if (now < s.buffUntil) m *= 1.2;

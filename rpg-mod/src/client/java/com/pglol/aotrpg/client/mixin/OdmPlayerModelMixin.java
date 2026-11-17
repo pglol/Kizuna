@@ -30,4 +30,13 @@ public abstract class OdmPlayerModelMixin {
         ms.multiply(new Quaternionf().rotationAxis((float) Math.toRadians(angle), ax, 0, az));
         ms.translate(0, -mid, 0);
     }
+
+    /** Slammed face first into the ground: laid flat on it, face down. */
+    @Inject(method = "setupTransforms(Lnet/minecraft/client/network/AbstractClientPlayerEntity;Lnet/minecraft/client/util/math/MatrixStack;FFFF)V", at = @At("TAIL"))
+    private void aotrpg$faceplant(AbstractClientPlayerEntity player, MatrixStack ms, float anim, float bodyYaw, float tickDelta, float scale, CallbackInfo ci) {
+        float f = com.pglol.aotrpg.client.AdrenalineClient.faceplant(player.getId());
+        if (f <= 0) return;
+        ms.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_X.rotationDegrees(-90 * f));
+        ms.translate(0, -0.95f * f, 0.2f * f);
+    }
 }

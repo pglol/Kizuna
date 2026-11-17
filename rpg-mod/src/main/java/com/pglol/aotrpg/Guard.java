@@ -256,11 +256,11 @@ public final class Guard {
                     push(def, src, 1.1);
                 } else if (src instanceof ServerPlayerEntity att) {
                     Impact.launch(att, def, 1.4);
-                    att.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 30, 2, false, false, false));
-                    att.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 30, 1, false, false, false));
+                    // Turned clean: dazed for a beat, wide open to the riposte.
+                    Stuns.stun(att, 18);
                     att.sendMessage(Text.literal("Parried!").formatted(Formatting.RED, Formatting.BOLD), true);
                 } else if (Troops.is(src)) {
-                    Troops.stagger(src, 22);
+                    Stuns.stun((LivingEntity) src, 26);
                 } else {
                     push(src, def, 0.9);
                 }
@@ -289,6 +289,8 @@ public final class Guard {
             def.stopUsingItem();
             brokenUntil.put(def.getUuid(), now + 2500);
             def.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 50, 2, false, false, false));
+            // A broken guard leaves you reeling.
+            Stuns.stun(def, 24);
             def.sendMessage(Text.literal("Guard broken!").formatted(Formatting.RED, Formatting.BOLD), true);
             fx(w, FX_BREAK, at, def);
             def.damage(w.getDamageSources().generic(), amount * 0.5f);

@@ -149,6 +149,7 @@ public final class AotRpg implements ModInitializer {
         // After the payloads exist, and ahead of the other death handlers (a fall in the arena is never a real death).
         Arenas.register();
         WarParties.register();
+        Stuns.register();
         // The Extraction lobby's board and stash, and a run's supply barrels (ahead of the land protection).
         UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
             if (world.isClient || !(player instanceof ServerPlayerEntity sp) || hand != net.minecraft.util.Hand.MAIN_HAND) return ActionResult.PASS;
