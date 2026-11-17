@@ -433,7 +433,8 @@ public final class CosmeticFx {
                 // ODM flight: a trail behind the flier once they are really moving.
                 String style = worn(p.getUuid(), "odm");
                 // While they boost the gear's own gas is drawn in the style already: no second trail.
-                if (!style.isEmpty() && !(me && speed < 0.8) && !GasSwap.boosting(p.getId())) {
+                // Gas only ever comes from a boost (drawn by GasSwap): nothing just for being up or fast.
+                if (false && !style.isEmpty() && !(me && speed < 0.8) && !GasSwap.boosting(p.getId())) {
                     int n = speed > 1.2 ? 3 : 2;
                     for (int i = 0; i < n; i++) {
                         double k = i / (double) n;

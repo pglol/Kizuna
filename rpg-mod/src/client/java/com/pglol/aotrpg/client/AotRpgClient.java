@@ -139,6 +139,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(BladeLock::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.ClashLock.ID, (payload, ctx) -> BladeLock.on(payload));
         ClientTickEvents.END_CLIENT_TICK.register(BladeLock::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(FallFx::tick);
         // Fine-tuning where Reverse Grip blades sit in the fist: /reversegrip <along> <depth> <side>.
         net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback.EVENT.register((d, reg) -> d.register(
             net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal("reversegrip")

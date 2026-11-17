@@ -43,7 +43,8 @@
     "IslandTimeMixin",
     "DyeArmorMixin",
     "ReverseGripMixin",
-    "MotionMixin"
+    "MotionMixin",
+    "FallCameraMixin"
   ],
   "injectors": {
     "defaultRequire": 0

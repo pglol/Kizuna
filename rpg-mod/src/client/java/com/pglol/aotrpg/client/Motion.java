@@ -23,7 +23,8 @@ public final class Motion {
     private Motion() {}
 
     private static final class St {
-        float lean, bank, vy, lastVy, land, tumble;
+        float lean, bank, vy, lastVy, land, tumble, dive, diveAngle;
+        int fallTicks;
         long at;
         boolean ground = true;
         int hurtWas;
@@ -74,6 +75,15 @@ public final class Motion {
         if (e.hurtTime > s.hurtWas && Math.sqrt(dx * dx + dz * dz) > 0.45) s.thrownUntil = now + 700;
         s.hurtWas = e.hurtTime;
         boolean thrown = now < s.thrownUntil && air;
+        // A long fall, or flying fast: the body turns into a dive, head first along the way it's going.
+        double hs = Math.sqrt(dx * dx + dz * dz), sp = Math.sqrt(hs * hs + dy * dy);
+        if (air && dy < -0.35) s.fallTicks++;
+        else if (!air || dy > 0) s.fallTicks = 0;
+        boolean diving = air && !thrown && (s.fallTicks > 14 && dy < -0.6 || sp > 1.15);
+        s.dive += ((diving ? 1 : 0) - s.dive) * (1 - (float) Math.exp(-dt * 5));
+        // How far below level the motion points (0 flat out, 90 straight down).
+        float below = (float) Math.toDegrees(Math.atan2(-dy, Math.max(0.05, Math.max(0, fwd) + hs * 0.3)));
+        s.diveAngle += (MathHelper.clamp(below, -20, 90) - s.diveAngle) * (1 - (float) Math.exp(-dt * 6));
         s.tumble += ((thrown ? 1 : 0) - s.tumble) * (1 - (float) Math.exp(-dt * 10));
     }
 
@@ -95,9 +105,11 @@ public final class Motion {
         if (posed(e) || e.hasVehicle() || e.isSwimming() || e.isFallFlying() || e.isSleeping()) return;
         track(e, s, td);
         float h = e.getHeight() * 0.5f;
-        if (Math.abs(s.lean) > 0.2f || Math.abs(s.bank) > 0.2f || s.tumble > 0.01f) {
+        if (Math.abs(s.lean) > 0.2f || Math.abs(s.bank) > 0.2f || s.tumble > 0.01f || s.dive > 0.01f) {
             ms.translate(0, h, 0);
-            ms.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-s.lean + 38 * s.tumble));
+            // In a dive the body lies along its motion: flat out at speed, head down in a plunge.
+            float lean = MathHelper.lerp(s.dive, s.lean, 90 + s.diveAngle);
+            ms.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-lean + 38 * s.tumble));
             ms.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(s.bank));
             ms.translate(0, -h, 0);
         }
@@ -136,6 +148,20 @@ public final class Motion {
             m.rightArm.roll += 0.5f * k;
             m.leftArm.roll -= 0.5f * k;
         }
+        // Diving: arms swept ahead (or back along the sides), legs straight and together.
+        if (s.dive > 0.01f && s.tumble < 0.5f) {
+            float d = s.dive, f = MathHelper.sin(age * 0.6f) * 0.04f;
+            boolean plunge = s.diveAngle > 55;
+            m.rightArm.pitch = MathHelper.lerp(d, m.rightArm.pitch, plunge ? -3.0f : 0.15f);
+            m.leftArm.pitch = MathHelper.lerp(d, m.leftArm.pitch, plunge ? -3.0f : 0.15f);
+            m.rightArm.roll = MathHelper.lerp(d, m.rightArm.roll, plunge ? -0.15f : 0.25f);
+            m.leftArm.roll = MathHelper.lerp(d, m.leftArm.roll, plunge ? 0.15f : -0.25f);
+            m.rightLeg.pitch = MathHelper.lerp(d, m.rightLeg.pitch, f);
+            m.leftLeg.pitch = MathHelper.lerp(d, m.leftLeg.pitch, -f);
+            m.rightLeg.roll = MathHelper.lerp(d, m.rightLeg.roll, 0.03f);
+            m.leftLeg.roll = MathHelper.lerp(d, m.leftLeg.roll, -0.03f);
+            m.head.pitch = MathHelper.lerp(d, m.head.pitch, -0.9f);
+        }
         // Thrown: limbs flailing in the air.
         if (s.tumble > 0.01f) {
             float t = s.tumble, f = MathHelper.sin(age * 0.9f);
@@ -145,7 +171,7 @@ public final class Motion {
             m.leftArm.roll = MathHelper.lerp(t, m.leftArm.roll, -0.6f);
             m.rightLeg.pitch = MathHelper.lerp(t, m.rightLeg.pitch, -0.7f + f * 0.3f);
             m.leftLeg.pitch = MathHelper.lerp(t, m.leftLeg.pitch, 0.4f - f * 0.3f);
-        } else if (!e.isOnGround() && !e.hasVehicle() && !e.isSwimming() && !(e instanceof PlayerEntity p && Poses.airborne(p))) {
+        } else if (s.dive < 0.3f && !e.isOnGround() && !e.hasVehicle() && !e.isSwimming() && !(e instanceof PlayerEntity p && Poses.airborne(p))) {
             // A jump (knees tucked, arms up on the way) or a short drop (arms out for balance).
             if (s.vy > 0.05f) {
                 float k = MathHelper.clamp(s.vy * 3, 0, 1);

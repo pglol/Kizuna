@@ -155,7 +155,7 @@ public final class ShoulderCam {
         // Shoulders swap with a smooth slide across.
         sideNow += (sideWant - sideNow) * (1 - (float) Math.exp(-dt * 10));
         float ak = aimNow * aimNow * (3 - 2 * aimNow);
-        float dist = MathHelper.lerp(ak, cfg.distance, 1.45f), side = MathHelper.lerp(ak, cfg.side, 0.62f), height = MathHelper.lerp(ak, cfg.height, 0.12f);
+        float dist = MathHelper.lerp(ak, cfg.distance, 1.45f) + 3f * FallFx.amount(), side = MathHelper.lerp(ak, cfg.side, 0.62f), height = MathHelper.lerp(ak, cfg.height, 0.12f);
         Vec3d want = up.multiply(height).add(right.multiply(side * sideNow)).subtract(fwd.multiply(dist));
         // Trailing your speed: flying on your gear pulls the camera back a little.
         Vec3d vel = p.getVelocity();
