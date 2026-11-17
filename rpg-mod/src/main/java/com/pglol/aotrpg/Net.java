@@ -1642,7 +1642,7 @@ public final class Net {
     public record MentorView(String id, String name, String title, String quote, String tech, String techDesc, int cooldown,
                              java.util.List<String> steps, java.util.List<Integer> have, java.util.List<Integer> need, int state, boolean equipped,
                              boolean open) implements CustomPayload {
-        public static final Id<MentorView> ID = id("mentor_view");
+        public static final Id<MentorView> ID = Net.id("mentor_view");
         public static final PacketCodec<RegistryByteBuf, MentorView> CODEC = PacketCodec.of((v, b) -> {
             b.writeString(v.id); b.writeString(v.name); b.writeString(v.title); b.writeString(v.quote); b.writeString(v.tech); b.writeString(v.techDesc);
             b.writeVarInt(v.cooldown); b.writeVarInt(v.steps.size());

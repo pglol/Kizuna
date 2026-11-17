@@ -317,7 +317,7 @@ public final class Mentors {
                     && (AotRpg.isTitan(e) || Troops.is(e) || e instanceof net.minecraft.entity.mob.HostileEntity || e instanceof ServerPlayerEntity o && !AotRpg.PARTIES.same(o.getUuid(), p.getUuid())))) {
                     ((LivingEntity) e).addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 160, 0, false, false));
                 }
-                w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_WOLF_SNIFF, SoundCategory.PLAYERS, 1f, 0.8f);
+                w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_FOX_SNIFF, SoundCategory.PLAYERS, 1f, 0.8f);
                 for (ServerPlayerEntity a : Classes.squad(p, 80)) a.sendMessage(Text.literal("Hunter's Instinct · every foe lit").formatted(Formatting.GOLD), true);
                 return true;
             }
