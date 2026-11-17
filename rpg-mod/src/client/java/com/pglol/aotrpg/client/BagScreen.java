@@ -60,7 +60,7 @@ public final class BagScreen extends Screen {
             case 102 -> "Chest";
             case 101 -> "Legs";
             case 100 -> "Feet";
-            case Satchel.OFF -> "Off hand";
+            case Satchel.OFF -> "Left hand";
             default -> Loadout.SLOTS[t].title + " (" + (t + 1) + ")";
         };
     }

@@ -703,11 +703,10 @@ public final class Extraction {
     public void toLobby(ServerPlayerEntity p, boolean returning) {
         ServerWorld w = sky();
         if (w == null) return;
-        // Nobody arrives aboard still bleeding on the ground, nor with anything in their pockets:
-        // it all goes to the stash, and the loadout is picked from there.
+        // Nobody arrives aboard still bleeding on the ground. What you carry stays with you:
+        // stash it yourself if you want it kept safe.
         AotRpg.DOWNED.release(p);
         LootBox.forget(p.getUuid());
-        Stash.bankAll(p);
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         if (p.getWorld().getRegistryKey() == World.OVERWORLD && !pr.inRun) pr.openWorldPos = new double[] {p.getX(), p.getY(), p.getZ(), p.getYaw()};
         pr.inRun = false;
@@ -1433,6 +1432,8 @@ public final class Extraction {
                 if (g.isEmpty()) continue;
                 net.minecraft.entity.ItemEntity ie = new net.minecraft.entity.ItemEntity(w, dead.getX(), dead.getY() + 2, dead.getZ(), g,
                     (w.random.nextDouble() - 0.5) * 0.6, 0.6, (w.random.nextDouble() - 0.5) * 0.6);
+                // The killer's: nobody else can pick it up.
+                if (killer != null) ie.setOwner(killer.getUuid());
                 w.spawnEntity(ie);
             }
             w.spawnParticles(ParticleTypes.TOTEM_OF_UNDYING, dead.getX(), dead.getY() + 3, dead.getZ(), 120, 2, 3, 2, 0.6);
@@ -1730,7 +1731,7 @@ public final class Extraction {
             w.spawnParticles(new net.minecraft.particle.DustParticleEffect(new org.joml.Vector3f(0.95f, 0.2f, 0.15f), 2f),
                 ses.dropAt.getX() + 0.5, ses.dropAt.getY() + 2 + w.random.nextDouble() * 6, ses.dropAt.getZ() + 0.5, 2, 0.15, 0.6, 0.15, 0);
         }
-        if (!(w.getBlockEntity(ses.dropAt) instanceof BarrelBlockEntity b) || b.isEmpty()) {
+        if (!(w.getBlockEntity(ses.dropAt) instanceof BarrelBlockEntity) || LootBox.touched(ses.dropAt)) {
             ses.dropOpened = true;
             Troops.lure(ses.id, null);
         }
@@ -1884,7 +1885,7 @@ public final class Extraction {
             }
             if (!poi.done) {
                 boolean empty = true;
-                for (BlockPos bp : poi.caches) if (w.getBlockEntity(bp) instanceof BarrelBlockEntity b && !b.isEmpty()) empty = false;
+                for (BlockPos bp : poi.caches) if (!LootBox.touched(bp)) empty = false;
                 poi.done = empty;
             }
         }
@@ -2056,6 +2057,7 @@ public final class Extraction {
             }
         }
         for (BlockPos bp : r.barrels) {
+            LootBox.reset(bp);
             if (w != null && w.getBlockState(bp).isOf(Blocks.BARREL)) {
                 if (w.getBlockEntity(bp) instanceof BarrelBlockEntity b) b.clear();
                 w.setBlockState(bp, Blocks.AIR.getDefaultState());

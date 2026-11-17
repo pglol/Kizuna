@@ -158,6 +158,14 @@ public final class FxParticle extends SpriteBillboardParticle {
 
         @Override
         public Particle createParticle(AotParticles.Fx fx, ClientWorld w, double x, double y, double z, double vx, double vy, double vz) {
+            // Kept light: little ones far away aren't made at all, and fewer on lower particle settings.
+            var mc = net.minecraft.client.MinecraftClient.getInstance();
+            double d2 = mc.gameRenderer.getCamera().getPos().squaredDistanceTo(x, y, z);
+            boolean big = fx.kind() == AotParticles.RING || fx.kind() == AotParticles.BURST || fx.kind() == AotParticles.FLASH;
+            if (!big && d2 > 56 * 56) return null;
+            var setting = mc.options.getParticles().getValue();
+            if (!big && setting == net.minecraft.client.option.ParticlesMode.DECREASED && w.random.nextInt(2) == 0) return null;
+            if (!big && setting == net.minecraft.client.option.ParticlesMode.MINIMAL && w.random.nextInt(4) != 0) return null;
             return new FxParticle(w, x, y, z, vx, vy, vz, fx, sprites);
         }
     }

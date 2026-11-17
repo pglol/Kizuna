@@ -52,7 +52,9 @@ public final class ExtractionHud {
         long t = Util.getMeasuringTimeMs();
         int R = 46, cx = 14 + R, cy = 40 + R;
         double range = 220;
-        double px = mc.player.getX(), pz = mc.player.getZ();
+        // Where you are this frame (not this tick): the radar glides with you however fast you fly.
+        var lp = mc.player.getLerpedPos(tick.getTickDelta(true));
+        double px = lp.x, pz = lp.z;
         // The radar: a dark disc, rings, north up.
         disc(c, cx, cy, R, 0xB0080A08);
         ring(c, cx, cy, R, 0xFF7A6139);
@@ -83,7 +85,7 @@ public final class ExtractionHud {
             c.fill(x - s + 1, y - s + 1, x + s, y + s, col);
         }
         // You: an arrow pointing where you face.
-        double yaw = Math.toRadians(mc.player.getYaw());
+        double yaw = Math.toRadians(mc.player.getYaw(tick.getTickDelta(true)));
         double fx = -Math.sin(yaw), fz = Math.cos(yaw);
         for (int i = 0; i < 6; i++) c.fill(cx + (int) (fx * i), cy + (int) (fz * i), cx + (int) (fx * i) + 2, cy + (int) (fz * i) + 2, 0xFFFFFFFF);
         c.fill(cx - 1, cy - 1, cx + 2, cy + 2, 0xFFFFFFFF);

@@ -30,153 +30,238 @@ import net.minecraft.world.Heightmap;
 public final class Minimap {
     private Minimap() {}
 
-    private static final int TEX = 128, VIEW = 96, R = VIEW / 2, ROWS_PER_TICK = 16;
+    /**
+     * The map is a 256-block square that wraps around (each world column always lands on the same
+     * texel), filled in nearest-first as you move and refreshed in the background. It's drawn as a
+     * smooth, filtered disc that slides under you a fraction of a pixel at a time, so it keeps up
+     * however fast you fly.
+     */
+    private static final int TEX = 256, VIEW = 96, R = VIEW / 2, RAD = 72, NEW_PER_TICK = 1400, REFRESH_PER_TICK = 260;
     private static final Identifier ID = Identifier.of("aot_rpg", "minimap");
+    private static final int NONE = Integer.MIN_VALUE;
 
-    /** The survey being drawn (raw colour ARGB, height, water depth) and the last finished one (ABGR). */
     private static final int[] raw = new int[TEX * TEX], hgt = new int[TEX * TEX], wet = new int[TEX * TEX];
-    private static final int[] done = new int[TEX * TEX];
+    private static final int[] stampX = new int[TEX * TEX], stampZ = new int[TEX * TEX];
+    private static final boolean[] dirty = new boolean[TEX * TEX];
+    private static final it.unimi.dsi.fastutil.ints.IntArrayList dirtyList = new it.unimi.dsi.fastutil.ints.IntArrayList();
     private static NativeImage view;
     private static NativeImageBackedTexture texture;
-    private static int row, centerX, centerZ, nextCenterX, nextCenterZ, frame, shownFrame = -1, shownU = -1, shownV = -1;
-    private static boolean ready;
+    private static int refresh;
+    private static boolean ready, changed;
+    private static net.minecraft.registry.RegistryKey<net.minecraft.world.World> worldKey;
     /** Screen y just below the minimap and objective, for the party frames. */
     public static int bottom = 4;
+
+    static {
+        java.util.Arrays.fill(stampX, NONE);
+    }
+
+    private static int idx(int x, int z) {
+        return Math.floorMod(z, TEX) * TEX + Math.floorMod(x, TEX);
+    }
+
+    private static boolean has(int x, int z) {
+        int i = idx(x, z);
+        return stampX[i] == x && stampZ[i] == z;
+    }
 
     public static void tick(MinecraftClient mc) {
         ClientPlayerEntity pl = mc.player;
         ClientWorld w = mc.world;
         if (pl == null || w == null || !ClientState.minimap) return;
         if (view == null) {
-            view = new NativeImage(VIEW, VIEW, true);
+            view = new NativeImage(TEX, TEX, true);
+            view.fillRect(0, 0, TEX, TEX, abgr(UNKNOWN));
             texture = new NativeImageBackedTexture(view);
             mc.getTextureManager().registerTexture(ID, texture);
-            centerX = nextCenterX = pl.getBlockX();
-            centerZ = nextCenterZ = pl.getBlockZ();
         }
-        if (row == 0) {
-            nextCenterX = pl.getBlockX();
-            nextCenterZ = pl.getBlockZ();
+        if (w.getRegistryKey() != worldKey) {
+            // A new world: forget the old one.
+            worldKey = w.getRegistryKey();
+            java.util.Arrays.fill(stampX, NONE);
+            view.fillRect(0, 0, TEX, TEX, abgr(UNKNOWN));
+            changed = true;
         }
+        int cx = pl.getBlockX(), cz = pl.getBlockZ();
         BlockPos.Mutable pos = new BlockPos.Mutable();
-        for (int i = 0; i < ROWS_PER_TICK; i++) {
-            int z = nextCenterZ - TEX / 2 + row;
-            for (int px = 0; px < TEX; px++) {
-                int x = nextCenterX - TEX / 2 + px;
-                sample(w, x, z, pos, row * TEX + px);
-            }
-            row++;
-            if (row >= TEX) {
-                row = 0;
-                // Finished survey: ink it (drawing never sees half-written rows).
-                ink();
-                centerX = nextCenterX;
-                centerZ = nextCenterZ;
-                frame++;
-                ready = true;
-                break;
+        // New ground first, nearest first: square rings out from where you are.
+        int budget = NEW_PER_TICK;
+        for (int r = 0; r <= RAD && budget > 0; r++) {
+            for (int k = -r; k <= r && budget > 0; k++) {
+                budget -= fresh(w, cx + k, cz - r, pos);
+                if (r > 0) budget -= fresh(w, cx + k, cz + r, pos);
+                if (k > -r && k < r) {
+                    budget -= fresh(w, cx - r, cz + k, pos);
+                    budget -= fresh(w, cx + r, cz + k, pos);
+                }
             }
         }
+        // And the rest re-surveyed bit by bit (blocks change, chunks load in).
+        int side = RAD * 2 + 1;
+        for (int n = 0; n < REFRESH_PER_TICK; n++) {
+            refresh = (refresh + 1) % (side * side);
+            int x = cx - RAD + refresh % side, z = cz - RAD + refresh / side;
+            sample(w, x, z, pos);
+        }
+        // Ink whatever changed (and its neighbours, whose shading depends on it).
+        if (!dirtyList.isEmpty()) {
+            for (int j = 0; j < dirtyList.size(); j++) {
+                int i = dirtyList.getInt(j);
+                dirty[i] = false;
+                view.setColor(i % TEX, i / TEX, abgr(ink(i)));
+            }
+            dirtyList.clear();
+            changed = true;
+        }
+        ready = true;
+    }
+
+    /** Surveys a column if it's not on the map yet (1 spent, 0 if it was). */
+    private static int fresh(ClientWorld w, int x, int z, BlockPos.Mutable pos) {
+        if (has(x, z)) return 0;
+        sample(w, x, z, pos);
+        return 1;
     }
 
     private static final int UNKNOWN = 0xFF2A261F;
 
     /** One column of the world: its surface colour, height and how deep any water is. */
-    private static void sample(ClientWorld w, int x, int z, BlockPos.Mutable pos, int i) {
-        wet[i] = 0;
-        hgt[i] = Integer.MIN_VALUE;
-        raw[i] = UNKNOWN;
-        if (!w.getChunkManager().isChunkLoaded(x >> 4, z >> 4)) return;
-        int y = height(w, x, z);
-        if (y <= w.getBottomY()) return;
-        hgt[i] = y;
-        pos.set(x, y, z);
-        BlockState st = w.getBlockState(pos);
-        if (st.getFluidState().isOf(Fluids.WATER) || st.getFluidState().isOf(Fluids.FLOWING_WATER)) {
-            int depth = 1;
-            while (depth < 12) {
-                pos.setY(y - depth);
-                if (w.getFluidState(pos).isEmpty()) break;
-                depth++;
+    private static void sample(ClientWorld w, int x, int z, BlockPos.Mutable pos) {
+        int i = idx(x, z);
+        boolean was = stampX[i] == x && stampZ[i] == z;
+        int oh = hgt[i], ow = wet[i], or = raw[i];
+        if (!w.getChunkManager().isChunkLoaded(x >> 4, z >> 4)) {
+            if (!was) {
+                stampX[i] = NONE;
+                return;
             }
-            wet[i] = depth;
             return;
         }
-        MapColor mc = st.getMapColor(w, pos);
-        if (mc == MapColor.CLEAR) {
-            hgt[i] = Integer.MIN_VALUE;
-            return;
+        stampX[i] = x;
+        stampZ[i] = z;
+        wet[i] = 0;
+        hgt[i] = NONE;
+        raw[i] = UNKNOWN;
+        int y = height(w, x, z);
+        if (y > w.getBottomY()) {
+            hgt[i] = y;
+            pos.set(x, y, z);
+            BlockState st = w.getBlockState(pos);
+            if (st.getFluidState().isOf(Fluids.WATER) || st.getFluidState().isOf(Fluids.FLOWING_WATER)) {
+                int depth = 1;
+                while (depth < 12) {
+                    pos.setY(y - depth);
+                    if (w.getFluidState(pos).isEmpty()) break;
+                    depth++;
+                }
+                wet[i] = depth;
+            } else {
+                MapColor mc = st.getMapColor(w, pos);
+                if (mc == MapColor.CLEAR) hgt[i] = NONE;
+                else raw[i] = 0xFF000000 | mc.color;
+            }
         }
-        raw[i] = 0xFF000000 | mc.color;
+        if (was && oh == hgt[i] && ow == wet[i] && or == raw[i]) return;
+        // This one and the neighbours it shades.
+        mark(x, z);
+        mark(x + 1, z);
+        mark(x - 1, z);
+        mark(x, z + 1);
+        mark(x, z - 1);
+    }
+
+    private static void mark(int x, int z) {
+        int i = idx(x, z);
+        if (!dirty[i]) {
+            dirty[i] = true;
+            dirtyList.add(i);
+        }
     }
 
     /**
-     * Turns the survey into a drawn map: colours softened into each other and washed towards
-     * parchment, hills shaded from the north-west, and a contour line every ten blocks of height.
+     * A texel as drawn: colours softened into each other and washed towards parchment, hills
+     * shaded from the north-west, a contour line every ten blocks of height, pale shorelines.
      */
-    private static void ink() {
-        for (int z = 0; z < TEX; z++) {
-            for (int x = 0; x < TEX; x++) {
-                int i = z * TEX + x;
-                int out;
-                if (hgt[i] == Integer.MIN_VALUE) {
-                    out = UNKNOWN;
-                } else if (wet[i] > 0) {
-                    float d = Math.min(1, wet[i] / 10f);
-                    int r = (int) (112 - 40 * d), g = (int) (140 - 38 * d), b = (int) (148 - 26 * d);
-                    // A pale shoreline where water meets land.
-                    if (land(x - 1, z) || land(x + 1, z) || land(x, z - 1) || land(x, z + 1)) {
-                        r += 34; g += 34; b += 26;
-                    }
-                    out = rgb(r, g, b);
-                } else {
-                    // Soften: this column weighted with its four land neighbours.
-                    int r = 0, g = 0, b = 0, n = 0;
-                    int[][] around = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-                    for (int[] o : around) {
-                        int xx = x + o[0], zz = z + o[1];
-                        if (xx < 0 || zz < 0 || xx >= TEX || zz >= TEX) continue;
-                        int j = zz * TEX + xx;
-                        if (wet[j] > 0 || hgt[j] == Integer.MIN_VALUE) continue;
-                        r += raw[j] >> 16 & 255; g += raw[j] >> 8 & 255; b += raw[j] & 255; n++;
-                    }
-                    r /= n; g /= n; b /= n;
-                    // Wash towards parchment of the same lightness.
-                    float l = (r * 0.3f + g * 0.59f + b * 0.11f) / 255f;
-                    float pr = 92 + (226 - 92) * l, pg = 74 + (211 - 74) * l, pb = 52 + (176 - 52) * l;
-                    float keep = 0.42f;
-                    float fr = pr + (r - pr) * keep, fg = pg + (g - pg) * keep, fb = pb + (b - pb) * keep;
-                    // Hill shading, lit from the north-west.
-                    int h = hgt[i];
-                    int slope = (h(x + 1, z, h) - h(x - 1, z, h)) + (h(x, z + 1, h) - h(x, z - 1, h));
-                    float shade = Math.max(0.72f, Math.min(1.18f, 1 + slope * 0.035f));
-                    // Contours every ten blocks.
-                    if (Math.floorDiv(h, 10) != Math.floorDiv(h(x - 1, z, h), 10) || Math.floorDiv(h, 10) != Math.floorDiv(h(x, z - 1, h), 10)) shade *= 0.8f;
-                    out = rgb((int) (fr * shade), (int) (fg * shade), (int) (fb * shade));
-                }
-                done[i] = out;
+    private static int ink(int i) {
+        if (stampX[i] == NONE || hgt[i] == NONE) return UNKNOWN;
+        int x = stampX[i], z = stampZ[i];
+        if (wet[i] > 0) {
+            float d = Math.min(1, wet[i] / 10f);
+            int r = (int) (112 - 40 * d), g = (int) (140 - 38 * d), b = (int) (148 - 26 * d);
+            if (land(x - 1, z) || land(x + 1, z) || land(x, z - 1) || land(x, z + 1)) {
+                r += 34; g += 34; b += 26;
             }
+            return argb(r, g, b);
         }
+        int r = 0, g = 0, b = 0, n = 0;
+        int[][] around = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+        for (int[] o : around) {
+            int xx = x + o[0], zz = z + o[1];
+            if (!land(xx, zz)) continue;
+            int j = idx(xx, zz);
+            r += raw[j] >> 16 & 255; g += raw[j] >> 8 & 255; b += raw[j] & 255; n++;
+        }
+        if (n == 0) return UNKNOWN;
+        r /= n; g /= n; b /= n;
+        float l = (r * 0.3f + g * 0.59f + b * 0.11f) / 255f;
+        float pr = 92 + (226 - 92) * l, pg = 74 + (211 - 74) * l, pb = 52 + (176 - 52) * l;
+        float keep = 0.42f;
+        float fr = pr + (r - pr) * keep, fg = pg + (g - pg) * keep, fb = pb + (b - pb) * keep;
+        int h = hgt[i];
+        int slope = (h(x + 1, z, h) - h(x - 1, z, h)) + (h(x, z + 1, h) - h(x, z - 1, h));
+        float shade = Math.max(0.72f, Math.min(1.18f, 1 + slope * 0.035f));
+        if (Math.floorDiv(h, 10) != Math.floorDiv(h(x - 1, z, h), 10) || Math.floorDiv(h, 10) != Math.floorDiv(h(x, z - 1, h), 10)) shade *= 0.82f;
+        return argb((int) (fr * shade), (int) (fg * shade), (int) (fb * shade));
     }
 
     private static boolean land(int x, int z) {
-        if (x < 0 || z < 0 || x >= TEX || z >= TEX) return false;
-        int j = z * TEX + x;
-        return wet[j] == 0 && hgt[j] != Integer.MIN_VALUE;
+        if (!has(x, z)) return false;
+        int j = idx(x, z);
+        return wet[j] == 0 && hgt[j] != NONE;
     }
 
     private static int h(int x, int z, int fallback) {
-        if (x < 0 || z < 0 || x >= TEX || z >= TEX) return fallback;
-        int v = hgt[z * TEX + x];
-        return v == Integer.MIN_VALUE ? fallback : v;
+        if (!has(x, z)) return fallback;
+        int v = hgt[idx(x, z)];
+        return v == NONE ? fallback : v;
     }
 
-    /** Opaque ABGR for NativeImage. */
-    private static int rgb(int r, int g, int b) {
+    private static int argb(int r, int g, int b) {
         r = Math.max(0, Math.min(255, r));
         g = Math.max(0, Math.min(255, g));
         b = Math.max(0, Math.min(255, b));
-        return 0xFF000000 | b << 16 | g << 8 | r;
+        return 0xFF000000 | r << 16 | g << 8 | b;
+    }
+
+    /** ARGB to the ABGR NativeImage wants. */
+    private static int abgr(int c) {
+        return (c & 0xFF00FF00) | (c & 0xFF) << 16 | (c >> 16 & 0xFF);
+    }
+
+    /** The map as a smooth disc centred on (px, pz), sliding a fraction of a pixel at a time. */
+    private static void disc(DrawContext c, int cx, int cy, double px, double pz) {
+        if (changed) {
+            // Filtered and wrapping (the map is a torus of world columns).
+            texture.bindTexture();
+            view.upload(0, 0, 0, 0, 0, TEX, TEX, true, false, false, false);
+            changed = false;
+        }
+        com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(0, ID);
+        com.mojang.blaze3d.systems.RenderSystem.setShader(net.minecraft.client.render.GameRenderer::getPositionTexProgram);
+        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+        org.joml.Matrix4f m = c.getMatrices().peek().getPositionMatrix();
+        var buf = net.minecraft.client.render.Tessellator.getInstance().begin(net.minecraft.client.render.VertexFormat.DrawMode.TRIANGLES,
+            net.minecraft.client.render.VertexFormats.POSITION_TEXTURE);
+        float u = (float) (px / TEX), v = (float) (pz / TEX), du = R / (float) TEX;
+        int seg = 72;
+        for (int i = 0; i < seg; i++) {
+            double a0 = i * Math.PI * 2 / seg, a1 = (i + 1) * Math.PI * 2 / seg;
+            float c0 = (float) Math.cos(a0), s0 = (float) Math.sin(a0), c1 = (float) Math.cos(a1), s1 = (float) Math.sin(a1);
+            buf.vertex(m, cx, cy, 0).texture(u, v);
+            buf.vertex(m, cx + c1 * R, cy + s1 * R, 0).texture(u + c1 * du, v + s1 * du);
+            buf.vertex(m, cx + c0 * R, cy + s0 * R, 0).texture(u + c0 * du, v + s0 * du);
+        }
+        net.minecraft.client.render.BufferRenderer.drawWithGlobalProgram(buf.end());
     }
 
     /** True when a point (relative to the map's top-left) lies inside the round map, with a margin. */
@@ -212,34 +297,13 @@ public final class Minimap {
 
         // Low enough to clear an FPS counter in the corner.
         int s = VIEW, x = 10, y = 34;
-        int u = (int) Math.round(px - centerX) + (TEX - VIEW) / 2;
-        int v = (int) Math.round(pz - centerZ) + (TEX - VIEW) / 2;
-        u = Math.max(0, Math.min(TEX - VIEW, u));
-        v = Math.max(0, Math.min(TEX - VIEW, v));
-        if (frame != shownFrame || u != shownU || v != shownV) {
-            // Cut the round view out of the survey, the last pixel of the rim feathered.
-            for (int zz = 0; zz < VIEW; zz++) {
-                for (int xx = 0; xx < VIEW; xx++) {
-                    double dx = xx + 0.5 - R, dz = zz + 0.5 - R;
-                    double d = Math.sqrt(dx * dx + dz * dz);
-                    int col = done[(zz + v) * TEX + xx + u];
-                    if (d > R) col = 0;
-                    else if (d > R - 1) col = (int) (255 * (R - d)) << 24 | col & 0xFFFFFF;
-                    view.setColor(xx, zz, col);
-                }
-            }
-            texture.upload();
-            shownFrame = frame;
-            shownU = u;
-            shownV = v;
-        }
         int cx = x + R, cy = y + R;
         ring(c, cx, cy, R + 4, R + 3, 0x50000000);
         ring(c, cx, cy, R + 3, R + 2, 0xFF8C7248);
         ring(c, cx, cy, R + 2, R, 0xFF16140F);
-        c.drawTexture(ID, x, y, s, s, 0, 0, s, s, VIEW, VIEW);
-        // map-space origin (block at the top-left pixel of the view)
-        double ox = centerX - TEX / 2.0 + u, oz = centerZ - TEX / 2.0 + v;
+        disc(c, cx, cy, px, pz);
+        // map-space origin (the world point at the top-left of the view)
+        double ox = px - R, oz = pz - R;
 
         // Cooking fires
         int[] fires = ClientState.campfires;

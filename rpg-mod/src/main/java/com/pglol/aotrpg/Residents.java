@@ -156,7 +156,23 @@ public final class Residents {
         return 2;
     }
 
+    /**
+     * Families in the houses are off: nobody lives inside the homes any more (players buy and live
+     * in them, and a house full of strangers was also the heaviest thing in a town to draw). The
+     * streets keep their townsfolk. Any resident still about is cleared away.
+     */
+    public static final boolean ENABLED = false;
+
     public void tick(ServerWorld w, int ticks) {
+        if (!ENABLED) {
+            if (ticks % 100 == 9) {
+                List<VillagerEntity> ours = new ArrayList<>();
+                for (Entity e : w.iterateEntities()) if (e instanceof VillagerEntity v && v.getCommandTags().contains(TAG)) ours.add(v);
+                for (VillagerEntity v : ours) v.discard();
+                settled.clear();
+            }
+            return;
+        }
         if (ticks % 20 != 9 || AotRpg.PLACES.homes.isEmpty()) return;
         int phase = phase(w);
         List<ServerPlayerEntity> players = new ArrayList<>(w.getPlayers());

@@ -31,7 +31,7 @@ public final class Afterimages {
     /** Leaves an image of this body where it stands, in colour (rgb), for life ms. */
     public static void leave(Entity e, int rgb, long life) {
         if (!(e instanceof AbstractClientPlayerEntity p)) return;
-        if (ghosts.size() > 96) ghosts.remove(0);
+        if (ghosts.size() > 40) ghosts.remove(0);
         ghosts.add(new Ghost(p.getId(), p.getPos(), p.bodyYaw, p.headYaw, p.getPitch(), p.limbAnimator.getPos(), p.limbAnimator.getSpeed(),
             rgb & 0xFFFFFF, Util.getMeasuringTimeMs(), life));
     }
@@ -46,7 +46,7 @@ public final class Afterimages {
             ghosts.add(new Ghost(p.getId(), at, p.bodyYaw, p.headYaw, p.getPitch(), p.limbAnimator.getPos(), p.limbAnimator.getSpeed(),
                 rgb & 0xFFFFFF, Util.getMeasuringTimeMs() - (long) ((1 - k) * life * 0.5), life));
         }
-        while (ghosts.size() > 96) ghosts.remove(0);
+        while (ghosts.size() > 40) ghosts.remove(0);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

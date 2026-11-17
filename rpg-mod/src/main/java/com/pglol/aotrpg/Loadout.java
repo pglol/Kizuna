@@ -53,7 +53,7 @@ import java.util.UUID;
  */
 public final class Loadout {
     public enum Kind {
-        MELEE("Melee", "ODM grips, blades, swords, axes"),
+        MELEE("Right hand", "Your blade: ODM grips, swords, axes"),
         RANGED("Ranged", "APG gun, bows, crossbows, muskets"),
         GAS("Gas", "Gas canisters: your ODM gear's refills, always to hand"),
         TOOL("Tool", "Gas canisters, pickaxes, fishing rods, shears"),

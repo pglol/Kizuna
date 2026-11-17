@@ -17,19 +17,29 @@ import net.minecraft.util.Identifier;
  */
 public final class ActorRenderer extends EntityRenderer<VillagerEntity> {
     private final VillagerEntityRenderer villager;
-    private final Person person;
+    private final Person person, lite;
 
     public ActorRenderer(EntityRendererFactory.Context ctx) {
         super(ctx);
         this.villager = new VillagerEntityRenderer(ctx);
-        this.person = new Person(ctx);
+        this.person = new Person(ctx, true);
+        this.lite = new Person(ctx, false);
     }
 
     @Override
     public void render(VillagerEntity e, float yaw, float tickDelta, MatrixStack ms, VertexConsumerProvider vc, int light) {
         // Everyone is a person now: story characters in their own skins, everyone else one of the
         // townsfolk (the same look for the same person, every time).
-        person.render(e, yaw, tickDelta, ms, vc, light);
+        // Past arm's length the uniform, harness and blades aren't drawn (the body and skin still are):
+        // a street full of people costs a fraction of what it did.
+        var cam = net.minecraft.client.MinecraftClient.getInstance().gameRenderer.getCamera().getPos();
+        (e.squaredDistanceTo(cam) > 34 * 34 ? lite : person).render(e, yaw, tickDelta, ms, vc, light);
+    }
+
+    @Override
+    public boolean shouldRender(VillagerEntity e, net.minecraft.client.render.Frustum frustum, double x, double y, double z) {
+        // Far off, a person is a few pixels: not drawn at all.
+        return super.shouldRender(e, frustum, x, y, z) && e.squaredDistanceTo(x, y, z) < 96 * 96;
     }
 
     @Override
@@ -69,7 +79,7 @@ public final class ActorRenderer extends EntityRenderer<VillagerEntity> {
 
     /** A story character: the player model in a skin from assets/aot_rpg/textures/entity/actor. */
     static final class Person extends LivingEntityRenderer<VillagerEntity, PlayerEntityModel<VillagerEntity>> {
-        Person(EntityRendererFactory.Context ctx) {
+        Person(EntityRendererFactory.Context ctx, boolean dressed) {
             super(ctx, new PlayerEntityModel<>(ctx.getPart(EntityModelLayers.PLAYER), false) {
                 @Override
                 public void setAngles(VillagerEntity e, float limbAngle, float limbDistance, float age, float headYaw, float headPitch) {
@@ -79,6 +89,7 @@ public final class ActorRenderer extends EntityRenderer<VillagerEntity> {
                 }
             }, 0.5f);
             // What they wear and hold, drawn like a player's: uniform, harness, boots and blades.
+            if (!dressed) return;
             addFeature(new net.minecraft.client.render.entity.feature.ArmorFeatureRenderer<>(this,
                 new net.minecraft.client.render.entity.model.ArmorEntityModel<>(ctx.getPart(EntityModelLayers.PLAYER_INNER_ARMOR)),
                 new net.minecraft.client.render.entity.model.ArmorEntityModel<>(ctx.getPart(EntityModelLayers.PLAYER_OUTER_ARMOR)),

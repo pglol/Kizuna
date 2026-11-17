@@ -16,7 +16,7 @@ import java.util.Map;
 
 /**
  * Clothes over the uniform: a jacket, a greatcoat, a scarf, a hooded cape... drawn as a layer
- * just outside the body (so they move with every limb), in the colour they're dyed.
+ * just outside the body and the uniform over it (so they move with every limb), in the colour they're dyed.
  */
 public final class OutfitLayer extends FeatureRenderer<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> {
     private final PlayerEntityModel<AbstractClientPlayerEntity> wide, slim;
@@ -34,7 +34,7 @@ public final class OutfitLayer extends FeatureRenderer<AbstractClientPlayerEntit
     }
 
     private static PlayerEntityModel<AbstractClientPlayerEntity> make(boolean thin) {
-        var data = TexturedModelData.of(PlayerEntityModel.getTexturedModelData(new Dilation(0.3f), thin), 64, 64);
+        var data = TexturedModelData.of(PlayerEntityModel.getTexturedModelData(new Dilation(1.12f), thin), 64, 64);
         PlayerEntityModel<AbstractClientPlayerEntity> m = new PlayerEntityModel<>(data.createModel(), thin);
         m.hat.visible = m.jacket.visible = m.leftSleeve.visible = m.rightSleeve.visible = m.leftPants.visible = m.rightPants.visible = false;
         return m;

@@ -40,9 +40,9 @@ public final class PlaceTile extends PressableWidget {
             case 102 -> "CHEST";
             case 101 -> "LEGS";
             case 100 -> "FEET";
-            case Satchel.OFF -> "OFF";
+            case Satchel.OFF -> "LEFT";
             default -> switch (Loadout.SLOTS[t]) {
-                case MELEE -> "MELEE";
+                case MELEE -> "RIGHT";
                 case RANGED -> "RANGED";
                 case GAS -> "GAS";
                 case TOOL -> "TOOL";

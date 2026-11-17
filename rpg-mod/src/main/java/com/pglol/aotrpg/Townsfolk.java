@@ -27,7 +27,7 @@ import java.util.UUID;
  */
 public final class Townsfolk {
     public static final String TAG = "aot_folk";
-    private static final int PER_TOWN = 26, RADIUS = 48;
+    private static final int PER_TOWN = 14, RADIUS = 48;
     private final Random rng = new Random();
 
     private static final String[] FIRST_M = {"Hans", "Karl", "Otto", "Emil", "Franz", "Jurgen", "Dieter", "Ernst", "Walter", "Anton",
@@ -345,6 +345,13 @@ public final class Townsfolk {
         v.removeCommandTag(ROADS);
     }
 
+    /** Inside one of the town's houses (a home a player could own). */
+    static boolean inHouse(Entity v) {
+        BlockPos at = v.getBlockPos();
+        for (int[] h : AotRpg.PLACES.homes) if (h.length >= 6 && Residents.inside(h, at)) return true;
+        return false;
+    }
+
     /** Sends a resident walking home to their door. */
     public void sendHome(VillagerEntity v, BlockPos door) {
         adopt(v);
@@ -468,7 +475,8 @@ public final class Townsfolk {
             }
             // Passers-by go home for the night too (out of sight), bar a few.
             if (night && !seen && ++stragglers > 4) near = false;
-            if (!near) v.discard();
+            // Nobody lives in the houses: anyone who wandered indoors is gone.
+            if (!near || inHouse(v)) v.discard();
         }
         for (ServerPlayerEntity p : players) {
             Net.Area town = AotRpg.PLACES.nearest(p.getX(), p.getZ(), 110, "town", "village", "city", "capital");

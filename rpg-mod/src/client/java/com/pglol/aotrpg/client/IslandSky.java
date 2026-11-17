@@ -17,6 +17,13 @@ public final class IslandSky {
         now = s;
     }
 
+    /** The hour this world should show, if it's the island we're on (null otherwise). */
+    public static Long hour(net.minecraft.client.world.ClientWorld w) {
+        Net.IslandSky n = now;
+        if (n == null || !w.getRegistryKey().getValue().toString().equals(n.world())) return null;
+        return n.time();
+    }
+
     public static void tick(MinecraftClient mc) {
         if (now == null || mc.world == null) return;
         if (!mc.world.getRegistryKey().getValue().toString().equals(now.world())) {

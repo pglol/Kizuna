@@ -110,7 +110,7 @@ public class RpgInventoryScreen extends InventoryScreen {
         if (f != null && playerSlot(f) && !f.hasStack() && handler.getCursorStack().isEmpty()) {
             java.util.List<Text> tip;
             if (f.getIndex() == OFFHAND) {
-                tip = java.util.List.of(Text.literal("Off hand").withColor(Ui.GOLD),
+                tip = java.util.List.of(Text.literal("Left hand").withColor(Ui.GOLD),
                     Text.literal("Your twin ODM grip when drawn [" + AotRpgClient.sheathKey().getBoundKeyLocalizedText().getString() + "]").withColor(Ui.MUTED));
             } else {
                 com.pglol.aotrpg.Loadout.Kind k = com.pglol.aotrpg.Loadout.SLOTS[f.getIndex()];
@@ -172,7 +172,8 @@ public class RpgInventoryScreen extends InventoryScreen {
         c.fill(x + 158, y + 28, x + 159, y + 164, 0x14FFE8C0);
 
         // Right: the loadout, named above each group.
-        centre(c, Ui.heading("Melee"), x + 191, y + 27, LoadoutUi.color(com.pglol.aotrpg.Loadout.Kind.MELEE));
+        Ui.text(c, Ui.heading("Right"), x + 181, y + 28, 0.6f, LoadoutUi.color(com.pglol.aotrpg.Loadout.Kind.MELEE), true);
+        Ui.text(c, Ui.heading("Left"), x + 201, y + 28, 0.6f, LoadoutUi.color(com.pglol.aotrpg.Loadout.Kind.MELEE), true);
         centre(c, Ui.heading("Ranged"), x + 275, y + 27, LoadoutUi.color(com.pglol.aotrpg.Loadout.Kind.RANGED));
         Net.SheathState sh = ClientState.sheaths.get(pl.getUuid());
         for (Slot s : handler.slots) {

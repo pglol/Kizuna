@@ -38,7 +38,10 @@
     "SwingTimeMixin",
     "GasSwapMixin",
     "VanishMixin",
-    "CrosshairMixin"
+    "CrosshairMixin",
+    "HiddenSlotMixin",
+    "IslandTimeMixin",
+    "DyeArmorMixin"
   ],
   "injectors": {
     "defaultRequire": 0

@@ -29,7 +29,26 @@ import java.util.UUID;
 public final class LootBox {
     private LootBox() {}
 
-    private record Open(ServerWorld world, BlockPos pos, String title) { }
+    private record Open(ServerWorld world, BlockPos pos, String title, UUID who) { }
+
+    /**
+     * Out on the islands every player has their own share of each container: the same finds,
+     * but what you take is gone only for you. Nobody can clean out a barrel before you get there.
+     */
+    private static final Map<String, net.minecraft.inventory.SimpleInventory> personal = new HashMap<>();
+    /** Containers somebody has looked into (for objectives that used to wait on them emptying). */
+    private static final Set<Long> touched = new HashSet<>();
+
+    /** A container cleared away (its match is over): fresh for whoever finds one there next. */
+    public static void reset(BlockPos pos) {
+        touched.remove(pos.asLong());
+        String suf = "@" + pos.asLong();
+        personal.keySet().removeIf(k -> k.endsWith(suf));
+    }
+
+    public static boolean touched(BlockPos pos) {
+        return touched.contains(pos.asLong());
+    }
 
     private static final Map<UUID, Open> open = new HashMap<>();
     /** What each player has already turned up, per container ("uuid@pos" -> slots). */
@@ -42,13 +61,20 @@ public final class LootBox {
     }
 
     private static Inventory inv(Open o) {
-        return o.world().getBlockEntity(o.pos()) instanceof Inventory i ? i : null;
+        if (!(o.world().getBlockEntity(o.pos()) instanceof Inventory i)) return null;
+        if (Extraction.Island.of(o.world()) == null || o.who() == null) return i;
+        return personal.computeIfAbsent(o.who() + "@" + o.pos().asLong(), k -> {
+            touched.add(o.pos().asLong());
+            var copy = new net.minecraft.inventory.SimpleInventory(i.size());
+            for (int s = 0; s < i.size(); s++) copy.setStack(s, i.getStack(s).copy());
+            return copy;
+        });
     }
 
     /** Opens (or re-opens) a container for searching. */
     public static void show(ServerPlayerEntity p, BlockPos pos, String title) {
         if (!ServerPlayNetworking.canSend(p, Net.LootView.ID)) return;
-        Open o = new Open(p.getServerWorld(), pos.toImmutable(), title);
+        Open o = new Open(p.getServerWorld(), pos.toImmutable(), title, p.getUuid());
         if (inv(o) == null) return;
         open.put(p.getUuid(), o);
         search.remove(p.getUuid());
@@ -108,6 +134,7 @@ public final class LootBox {
         search.remove(id);
         String pre = id + "@";
         found.keySet().removeIf(k -> k.startsWith(pre));
+        personal.keySet().removeIf(k -> k.startsWith(pre));
     }
 
     /** How long a piece takes to turn up: quick for supplies, longer the better it is. */
