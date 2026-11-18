@@ -14,11 +14,37 @@ import net.minecraft.util.Formatting;
  * Empty slots are reserved for future actions.
  */
 public final class SocialWheel extends Screen {
-    private record Option(String name, String hint, ItemStack icon, boolean ready, Runnable run) { }
+    record Option(String name, String hint, ItemStack icon, boolean ready, Runnable run) { }
 
     private final Option[] options;
     private int hovered = -1;
     private final long opened = System.currentTimeMillis();
+
+    /** A wheel of these options instead (the emotes). */
+    SocialWheel(Option[] opts) {
+        super(Text.literal("Emotes"));
+        options = opts;
+        clickOnly = true;
+    }
+
+    /** A sub-wheel (opened after the key is let go): pick with a click. */
+    private boolean clickOnly;
+
+    static Option[] emotes() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        ItemStack[] icons = {ItemStack.EMPTY, new ItemStack(Items.WHITE_BANNER), new ItemStack(Items.IRON_SWORD), new ItemStack(Items.FEATHER),
+            new ItemStack(Items.FIREWORK_ROCKET), new ItemStack(Items.SPYGLASS), new ItemStack(Items.OAK_STAIRS)};
+        String[] hints = {"", "A friendly wave", "Fist to the heart: shinzou wo sasageyo", "A respectful bow", "Arms up!", "Look over there", "Take a seat"};
+        Option[] out = new Option[Emotes.NAMES.length - 1];
+        for (int k = 1; k < Emotes.NAMES.length; k++) {
+            int kind = k;
+            out[k - 1] = new Option(Emotes.NAMES[k], hints[k], icons[k], true, () -> {
+                mc.setScreen(null);
+                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.Emote(0, kind));
+            });
+        }
+        return out;
+    }
 
     public SocialWheel() {
         super(Text.literal("Social"));
@@ -26,6 +52,8 @@ public final class SocialWheel extends Screen {
         options = new Option[] {
             new Option("Party", "Invite, leave, see your squad", new ItemStack(Items.WHITE_BANNER), true,
                 () -> mc.setScreen(new PartyScreen())),
+            new Option("Emote", "Wave, salute, bow, cheer, sit", new ItemStack(Items.ARMOR_STAND), true,
+                () -> mc.setScreen(new SocialWheel(emotes()))),
             new Option("People", "Friends and everyone online", new ItemStack(Items.PLAYER_HEAD), true, () -> {
                 mc.setScreen(new SocialScreen());
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.SocialAction("open", null));
@@ -73,6 +101,7 @@ public final class SocialWheel extends Screen {
     @Override
     public void tick() {
         // Released the key: pick what the cursor points at.
+        if (clickOnly) return;
         InputUtil.Key key = InputUtil.fromTranslationKey(AotRpgClient.socialKey().getBoundKeyTranslationKey());
         if (key.getCategory() == InputUtil.Type.KEYSYM
             && !InputUtil.isKeyPressed(client.getWindow().getHandle(), key.getCode())
@@ -168,6 +197,6 @@ public final class SocialWheel extends Screen {
         } else {
             Ui.crest(c, (int) cx - 14, (int) cy - 14, 28, 0.85f * in);
         }
-        Ui.text(c, Text.literal("Point and release"), cx, cy + r1 + 18, 0.65f, (Math.min(alpha, 0xA0) << 24) | 0xB8B0A0, true);
+        Ui.text(c, Text.literal(clickOnly ? "Click to choose" : "Point and release"), cx, cy + r1 + 18, 0.65f, (Math.min(alpha, 0xA0) << 24) | 0xB8B0A0, true);
     }
 }

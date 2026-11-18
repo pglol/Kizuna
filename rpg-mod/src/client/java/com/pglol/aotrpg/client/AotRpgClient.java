@@ -235,6 +235,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(Toasts::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.GuardFx.ID, (payload, ctx) -> CombatUi.onGuardFx(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.TradeView.ID, (payload, ctx) -> TradeScreen.on(payload));
+        ClientPlayNetworking.registerGlobalReceiver(Net.Emote.ID, (payload, ctx) -> Emotes.on(payload));
         Property.key = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.property",
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_Y, "category.aot_rpg"));
         WorldRenderEvents.AFTER_ENTITIES.register(Property::render);

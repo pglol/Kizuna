@@ -1427,24 +1427,27 @@ public final class Troops {
      */
     private static void physics(VillagerEntity v) {
         Vec3d vel = v.getVelocity();
-        if (v.isOnGround() && vel.lengthSquared() < 0.0025) {
+        // Standing (or walking: walk() places them itself) with nothing pushing: nothing to do.
+        if (v.isOnGround() && vel.horizontalLengthSquared() < 0.0025 && Math.abs(vel.y) < 0.01) {
             if (vel.lengthSquared() > 0) v.setVelocity(Vec3d.ZERO);
             return;
         }
-        v.move(net.minecraft.entity.MovementType.SELF, vel);
+        // Gravity first, as vanilla does, so a grounded body keeps finding the ground under it.
+        double vy = vel.y - 0.08;
+        v.move(net.minecraft.entity.MovementType.SELF, new Vec3d(vel.x, vy, vel.z));
         boolean ground = v.isOnGround();
-        double vy = ground && vel.y <= 0 ? 0 : (vel.y - 0.08) * 0.98;
+        vy = ground ? 0 : vy * 0.98;
         double f = ground ? 0.6 : 0.93;
         Vec3d nv = new Vec3d(vel.x * f, vy, vel.z * f);
-        if (ground && nv.horizontalLengthSquared() < 0.003) nv = new Vec3d(0, nv.y, 0);
+        if (ground && nv.horizontalLengthSquared() < 0.003) nv = Vec3d.ZERO;
         v.setVelocity(nv);
         v.fallDistance = Math.min(v.fallDistance, 4);
     }
 
     private static void walk(ServerWorld w, VillagerEntity v, Vec3d dir, double speed) {
         if (dir.lengthSquared() < 1e-4) return;
-        // In the air (thrown, leaping, falling): no footing to walk on.
-        if (!v.isOnGround()) return;
+        // Really in the air (thrown, leaping, falling): no footing to walk on.
+        if (!v.isOnGround() && Math.abs(v.getVelocity().y) > 0.1) return;
         Vec3d d = dir.normalize();
         for (int k = 0; k < 5; k++) {
             double ang = new double[] {0, 0.6, -0.6, 1.2, -1.2}[k];

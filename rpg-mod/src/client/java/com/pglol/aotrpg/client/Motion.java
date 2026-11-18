@@ -90,6 +90,7 @@ public final class Motion {
     /** The whole body: lean, bank, squash, tumble, and the death fall. */
     public static void transforms(LivingEntity e, MatrixStack ms, float bodyYaw, float td) {
         if (e.deathTime <= 0 && FinishScene.transforms(e, ms, bodyYaw, td)) return;
+        Emotes.transforms(e, ms);
         if (!ours(e)) return;
         St s = st(e);
         if (e.deathTime > 0) {
@@ -124,6 +125,7 @@ public final class Motion {
     /** The limbs: flinch, tumble, jump and fall, landing, and going limp in death. */
     public static void pose(BipedEntityModel<?> m, LivingEntity e, float age) {
         if (FinishScene.pose(m, e)) return;
+        if (Emotes.pose(m, e, age)) return;
         if (!ours(e)) return;
         St s = st(e);
         if (e.deathTime > 0) {

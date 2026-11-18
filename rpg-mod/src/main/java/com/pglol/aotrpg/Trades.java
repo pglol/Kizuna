@@ -64,6 +64,13 @@ public final class Trades {
             }
         });
         ServerPlayNetworking.registerGlobalReceiver(Net.TradeAction.ID, (payload, ctx) -> action(ctx.player(), payload.action(), payload.target(), payload.data()));
+        // Emotes: shown to everyone who can see you (and you).
+        ServerPlayNetworking.registerGlobalReceiver(Net.Emote.ID, (payload, ctx) -> {
+            ServerPlayerEntity p = ctx.player();
+            Net.Emote out = new Net.Emote(p.getId(), Math.max(0, Math.min(16, payload.kind())));
+            for (ServerPlayerEntity o : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(p)) if (ServerPlayNetworking.canSend(o, Net.Emote.ID)) ServerPlayNetworking.send(o, out);
+            if (ServerPlayNetworking.canSend(p, Net.Emote.ID)) ServerPlayNetworking.send(p, out);
+        });
     }
 
     private static ServerPlayerEntity player(UUID id) {

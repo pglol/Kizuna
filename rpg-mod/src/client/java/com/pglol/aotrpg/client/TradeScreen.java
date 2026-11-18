@@ -165,7 +165,7 @@ public final class TradeScreen extends Screen {
             c.drawBorder(cx, cy, cell - 2, cell - 2, on ? Sleek.GOLD : Sleek.LINE);
             if (!st.isEmpty()) {
                 c.drawItem(st, cx + 1, cy + 1);
-                c.drawStackOverlay(Ui.font(), st, cx + 1, cy + 1);
+                c.drawItemInSlot(Ui.font(), st, cx + 1, cy + 1);
                 if (hov) hover = st;
                 hits.add(cx, cy, cell - 2, cell - 2, () -> {
                     if (offered.contains(slot)) offered.remove((Integer) slot);
@@ -189,7 +189,7 @@ public final class TradeScreen extends Screen {
             c.fill(cx, cy, cx + cell - 2, cy + cell - 2, 0x18FFFFFF);
             if (i < items.size()) {
                 c.drawItem(items.get(i), cx + 1, cy + 1);
-                c.drawStackOverlay(Ui.font(), items.get(i), cx + 1, cy + 1);
+                c.drawItemInSlot(Ui.font(), items.get(i), cx + 1, cy + 1);
                 if (Sleek.over(cx, cy, cell - 2, cell - 2)) c.drawItemTooltip(Ui.font(), items.get(i), Sleek.mx, Sleek.my);
             }
         }

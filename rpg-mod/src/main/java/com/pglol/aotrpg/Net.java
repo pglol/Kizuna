@@ -1981,6 +1981,14 @@ public final class Net {
     }
 
     /** Client -> server: open, friend_add, friend_remove, invite. */
+    /** Both ways: an emote (client -> server: entity ignored; server -> clients: who's doing it). kind 0 stops. */
+    public record Emote(int entity, int kind) implements CustomPayload {
+        public static final Id<Emote> ID = id("emote");
+        public static final PacketCodec<RegistryByteBuf, Emote> CODEC = PacketCodec.of((v, b) -> { b.writeVarInt(v.entity); b.writeVarInt(v.kind); },
+            b -> new Emote(b.readVarInt(), b.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Client -> server: trading (request, accept, decline, offer "slot:count,...;marks", ready, cancel, open). */
     public record TradeAction(String action, java.util.UUID target, String data) implements CustomPayload {
         public static final Id<TradeAction> ID = id("trade_action");
@@ -2720,6 +2728,8 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(SocialAction.ID, SocialAction.CODEC);
         PayloadTypeRegistry.playC2S().register(TradeAction.ID, TradeAction.CODEC);
         PayloadTypeRegistry.playS2C().register(TradeView.ID, TradeView.CODEC);
+        PayloadTypeRegistry.playC2S().register(Emote.ID, Emote.CODEC);
+        PayloadTypeRegistry.playS2C().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(ForgeView.ID, ForgeView.CODEC);
         PayloadTypeRegistry.playC2S().register(ForgeAction.ID, ForgeAction.CODEC);
         PayloadTypeRegistry.playS2C().register(HomeView.ID, HomeView.CODEC);
