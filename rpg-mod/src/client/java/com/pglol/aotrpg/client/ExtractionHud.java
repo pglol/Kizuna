@@ -19,7 +19,11 @@ public final class ExtractionHud {
     static Net.RunView view;
     private static long viewAt;
 
+    /** When this client was last in a run (to tell a death out there from one anywhere else). */
+    static long lastRunAt;
+
     public static void on(Net.RunView v) {
+        if (view != null || !v.island().isEmpty()) lastRunAt = Util.getMeasuringTimeMs();
         view = v.island().isEmpty() ? null : v;
         viewAt = Util.getMeasuringTimeMs();
         if (view == null && MinecraftClient.getInstance().currentScreen instanceof IslandMapScreen) MinecraftClient.getInstance().setScreen(null);

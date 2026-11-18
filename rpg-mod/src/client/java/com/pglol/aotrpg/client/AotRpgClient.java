@@ -252,6 +252,7 @@ public final class AotRpgClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(Net.TradeView.ID, (payload, ctx) -> TradeScreen.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.Emote.ID, (payload, ctx) -> Emotes.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.Pop.ID, (payload, ctx) -> HudPops.on(payload));
+        ClientPlayNetworking.registerGlobalReceiver(Net.RunSummary.ID, (payload, ctx) -> RunSummaryScreen.on(payload));
         Property.key = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.property",
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_Y, "category.aot_rpg"));
         WorldRenderEvents.AFTER_ENTITIES.register(Property::render);

@@ -39,6 +39,12 @@ public class AotDeathScreen extends Screen {
 
     @Override
     protected void init() {
+        // Fallen on a run: no death screen, straight up and into watching your squad.
+        if (Util.getMeasuringTimeMs() - ExtractionHud.lastRunAt < 8000 && client.player != null) {
+            client.player.requestRespawn();
+            client.setScreen(null);
+            return;
+        }
         int bw = 150;
         respawn = new AotButton(width / 2 - bw - 5, height - 50, bw, 24, Ui.title("RISE AGAIN"), () -> {
             if (client.player != null) client.player.requestRespawn();

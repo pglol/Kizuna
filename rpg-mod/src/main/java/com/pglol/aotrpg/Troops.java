@@ -1592,6 +1592,7 @@ public final class Troops {
             if (arch == Arch.MASTER) base = 90;
             else if (arch == Arch.SWORDSMAN || arch == Arch.MERCENARY) base += 10;
             AotRpg.PROGRESSION.award(killer, Progression.forLevel(level, AotRpg.PROFILES.get(killer.getUuid()).level, base), officer ? "Officer down" : "Enemy down");
+            Extraction.count(killer, 2);
         }
         List<ItemStack> drops = new ArrayList<>();
         Item ammo = AotItems.exact("apg_cartridge"), gas = AotItems.exact("gas_canister"), blades = AotItems.exact("blade_component");

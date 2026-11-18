@@ -225,6 +225,19 @@ public final class Extraction {
         final Map<UUID, Set<BlockPos>> opened = new HashMap<>();
         /** Map marks: one per diver, seen by the whole squad. */
         final Map<UUID, BlockPos> marks = new HashMap<>();
+        /** Everyone who dropped with the squad, and how each did: titans, players, soldiers felled. */
+        final LinkedHashSet<UUID> all = new LinkedHashSet<>();
+        final Map<UUID, int[]> stats = new HashMap<>();
+        final Set<UUID> out = new HashSet<>();
+        final long dropped = System.currentTimeMillis();
+        boolean over;
+    }
+
+    /** A kill to count on someone's run (0 titan, 1 player, 2 soldier). */
+    public static void count(ServerPlayerEntity killer, int kind) {
+        if (self == null || killer == null) return;
+        Run r = self.runOf(killer.getUuid());
+        if (r != null) r.stats.computeIfAbsent(killer.getUuid(), k -> new int[3])[kind]++;
     }
 
     /** A run task: paid out only if you get out alive with it done. */
@@ -1379,6 +1392,7 @@ public final class Extraction {
         runs.add(run);
         for (ServerPlayerEntity m : squad) {
             run.members.add(m.getUuid());
+            run.all.add(m.getUuid());
             run.tasks.put(m.getUuid(), rollTasks(rnd));
             Profile mp = AotRpg.PROFILES.get(m.getUuid());
             mp.inRun = true;
@@ -1441,6 +1455,7 @@ public final class Extraction {
 
     /** A titan fell to someone out on a run. */
     public void onTitanKill(ServerPlayerEntity killer, Entity dead) {
+        if (killer != null) count(killer, 0);
         for (Session ses : sessions) RunObjectives.titanDied(this, ses, dead);
         if (dead.getCommandTags().contains(ABNORMAL) && dead.getWorld() instanceof ServerWorld w) {
             // The abnormal's hoard: gear bursting out where it fell.
@@ -2014,7 +2029,10 @@ public final class Extraction {
 
     private void extracted(Run r, ServerPlayerEntity p) {
         Mentors.count(p, "extracts", 1);
+        r.out.add(p.getUuid());
         r.members.remove(p.getUuid());
+        // The last one standing got out: those who fell see how it went.
+        if (r.members.isEmpty()) AotRpg.SCHEDULER.later(20, () -> squadOver(r));
         r.extracting.remove(p.getUuid());
         int gear = 0;
         var inv = p.getInventory();
@@ -2121,6 +2139,8 @@ public final class Extraction {
         Run squad;
         UUID watching;
         net.minecraft.world.GameMode before;
+        /** The squad is down and this one is looking at the summary (no watching). */
+        boolean done;
     }
 
     private final Map<UUID, Spec> specs = new HashMap<>();
@@ -2145,6 +2165,7 @@ public final class Extraction {
         if (r == null || p.isSpectator()) return true;
         p.setHealth(p.getMaxHealth());
         Run killers = source.getAttacker() instanceof ServerPlayerEntity k ? runOf(k.getUuid()) : null;
+        if (source.getAttacker() instanceof ServerPlayerEntity k && killers != null) count(k, 1);
         UUID id = p.getUuid();
         // Done a tick later: this may be the end of a bleed-out, in the middle of the downed list.
         AotRpg.SCHEDULER.later(1, () -> {
@@ -2182,7 +2203,72 @@ public final class Extraction {
             if (mate != null) Notify.toast(mate, Text.literal(AotRpg.PROFILES.get(p.getUuid()).name + " has fallen").formatted(Formatting.RED),
                 Text.literal("They're watching you now"), 0xC0463A, "minecraft:skeleton_skull", null);
         }
-        retarget(p, sp, 1);
+        if (r.members.isEmpty()) squadOver(r);
+        else retarget(p, sp, 1);
+    }
+
+    /**
+     * The whole squad is down (or out): every one of them who fell stops watching and gets the
+     * run's summary at once, with the way home: aboard, or back to the open world. The squad
+     * leader's choice takes the whole fallen squad with them.
+     */
+    private void squadOver(Run r) {
+        if (r.over) return;
+        r.over = true;
+        List<String> lines = new ArrayList<>();
+        UUID leader = r.all.isEmpty() ? null : r.all.iterator().next();
+        for (UUID id : r.all) {
+            int[] st = r.stats.getOrDefault(id, new int[3]);
+            String state = r.out.contains(id) ? "Extracted" : "Killed in action";
+            int opened = r.opened.getOrDefault(id, Set.of()).size();
+            lines.add(AotRpg.PROFILES.get(id).name + "|" + state + "|" + st[0] + "|" + st[1] + "|" + st[2] + "|" + opened + "|" + (id.equals(leader) ? 1 : 0));
+        }
+        long secs = (System.currentTimeMillis() - r.dropped) / 1000;
+        for (UUID id : r.all) {
+            Spec sp = specs.get(id);
+            ServerPlayerEntity p = server.getPlayerManager().getPlayer(id);
+            if (p == null || sp == null) continue;
+            sp.done = true;
+            sp.watching = null;
+            p.setCameraEntity(p);
+            if (ServerPlayNetworking.canSend(p, Net.SpecView.ID)) ServerPlayNetworking.send(p, new Net.SpecView(false, "", ""));
+            if (ServerPlayNetworking.canSend(p, Net.RunSummary.ID)) {
+                ServerPlayNetworking.send(p, new Net.RunSummary(r.island.title, r.island.color, secs, lines, id.equals(leader)));
+            } else stopWatching(p);
+        }
+    }
+
+    /** The summary's buttons: "lobby", "world", or "watch" (keep watching whoever's still out there). */
+    public void summary(ServerPlayerEntity p, String choice) {
+        Spec sp = specs.get(p.getUuid());
+        if (sp == null || !sp.done) return;
+        Run r = sp.squad;
+        if (choice.equals("watch")) {
+            sp.done = false;
+            retarget(p, sp, 1);
+            return;
+        }
+        // The leader takes the whole fallen squad along; anyone else goes alone.
+        List<ServerPlayerEntity> going = new ArrayList<>();
+        going.add(p);
+        if (!r.all.isEmpty() && r.all.iterator().next().equals(p.getUuid())) {
+            for (UUID id : r.all) {
+                Spec o = specs.get(id);
+                ServerPlayerEntity m = server.getPlayerManager().getPlayer(id);
+                if (m != null && m != p && o != null && o.squad == r && o.done) going.add(m);
+            }
+        }
+        for (ServerPlayerEntity m : going) {
+            if (ServerPlayNetworking.canSend(m, Net.RunSummary.ID)) ServerPlayNetworking.send(m, new Net.RunSummary("", 0, 0, List.of(), false));
+            stopWatching(m);
+            if (choice.equals("world")) {
+                UUID id = m.getUuid();
+                AotRpg.SCHEDULER.later(10, () -> {
+                    ServerPlayerEntity x = server.getPlayerManager().getPlayer(id);
+                    if (x != null) AotRpg.MODES.choose(x, DeathCare.STORY);
+                });
+            }
+        }
     }
 
     /** Who this spectator can watch, in order: their squad, then whoever wiped it out, then anyone left. */
@@ -2233,7 +2319,7 @@ public final class Extraction {
     /** Everyone in the match has fallen (or got out): the watchers go back aboard. */
     private void matchOver(Session s) {
         for (var e : new ArrayList<>(specs.entrySet())) {
-            if (e.getValue().session != s) continue;
+            if (e.getValue().session != s || e.getValue().done) continue;
             ServerPlayerEntity p = server.getPlayerManager().getPlayer(e.getKey());
             if (p != null) {
                 stopWatching(p);
@@ -2261,7 +2347,7 @@ public final class Extraction {
         for (var e : new ArrayList<>(specs.entrySet())) {
             ServerPlayerEntity p = server.getPlayerManager().getPlayer(e.getKey());
             Spec sp = e.getValue();
-            if (p == null) continue;
+            if (p == null || sp.done) continue;
             ServerPlayerEntity t = sp.watching == null ? null : server.getPlayerManager().getPlayer(sp.watching);
             boolean ok = t != null && t.isAlive() && !t.isSpectator() && t.getWorld() == p.getWorld() && runOf(t.getUuid()) != null;
             if (!ok) retarget(p, sp, 1);
@@ -2296,7 +2382,7 @@ public final class Extraction {
         clearView(p);
         r.members.remove(p.getUuid());
         r.extracting.remove(p.getUuid());
-        fallen.put(p.getUuid(), new Object[] {p.getServerWorld().getRegistryKey(), p.getPos()});
+        fallen.put(p.getUuid(), new Object[] {p.getServerWorld().getRegistryKey(), p.getPos(), r});
     }
 
     /**
@@ -2326,6 +2412,19 @@ public final class Extraction {
             Vec3d spot = (Vec3d) at[1];
             if (w == null) {
                 toLobby(pl, true);
+                return;
+            }
+            // Straight into watching the squad (or, if they're all down, the summary).
+            if (at.length > 2 && at[2] instanceof Run run) {
+                pl.teleport(w, spot.x, spot.y + 3, spot.z, pl.getYaw(), 60);
+                Spec sp = new Spec();
+                sp.session = run.session;
+                sp.squad = run;
+                sp.before = net.minecraft.world.GameMode.SURVIVAL;
+                specs.put(id, sp);
+                pl.changeGameMode(net.minecraft.world.GameMode.SPECTATOR);
+                if (run.members.isEmpty()) squadOver(run);
+                else retarget(pl, sp, 1);
                 return;
             }
             watching.put(id, pl.interactionManager.getGameMode());
@@ -2486,6 +2585,10 @@ public final class Extraction {
     public void action(ServerPlayerEntity p, String action, String arg) {
         if (action.startsWith("spec_")) {
             specAction(p, action);
+            return;
+        }
+        if (action.startsWith("sum_")) {
+            summary(p, action.substring(4));
             return;
         }
         if (action.equals("rejoin_yes") || action.equals("rejoin_no")) {

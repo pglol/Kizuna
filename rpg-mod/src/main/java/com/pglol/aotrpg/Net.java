@@ -1981,6 +1981,28 @@ public final class Net {
     }
 
     /** Client -> server: open, friend_add, friend_remove, invite. */
+    /**
+     * Server -> client: the squad is down; the run's summary (island empty: close it). Each line is
+     * "name|state|titans|players|soldiers|caches|leader". leader: your choice takes the fallen squad along.
+     */
+    public record RunSummary(String island, int color, long seconds, java.util.List<String> lines, boolean leader) implements CustomPayload {
+        public static final Id<RunSummary> ID = id("run_summary");
+        public static final PacketCodec<RegistryByteBuf, RunSummary> CODEC = PacketCodec.of((v, b) -> {
+            b.writeString(v.island); b.writeInt(v.color); b.writeVarLong(v.seconds);
+            b.writeVarInt(v.lines.size()); for (String l : v.lines) b.writeString(l);
+            b.writeBoolean(v.leader);
+        }, b -> {
+            String is = b.readString();
+            int col = b.readInt();
+            long secs = b.readVarLong();
+            int n = Math.min(8, b.readVarInt());
+            java.util.List<String> l = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) l.add(b.readString());
+            return new RunSummary(is, col, secs, l, b.readBoolean());
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: a small gain to note (kind "xp", "marks", "kill"), shown as a quiet pop by the crosshair. */
     public record Pop(String kind, long amount, String label) implements CustomPayload {
         public static final Id<Pop> ID = id("pop");
@@ -2738,6 +2760,7 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(TradeView.ID, TradeView.CODEC);
         PayloadTypeRegistry.playC2S().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(Pop.ID, Pop.CODEC);
+        PayloadTypeRegistry.playS2C().register(RunSummary.ID, RunSummary.CODEC);
         PayloadTypeRegistry.playS2C().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(ForgeView.ID, ForgeView.CODEC);
         PayloadTypeRegistry.playC2S().register(ForgeAction.ID, ForgeAction.CODEC);
