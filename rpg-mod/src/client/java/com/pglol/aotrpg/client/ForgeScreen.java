@@ -65,46 +65,55 @@ public final class ForgeScreen extends Screen {
         }));
     }
 
+    private final Sleek.Hits hits = new Sleek.Hits();
+
     @Override
     protected void init() {
-        w = Math.min(520, width - 20);
+        w = Math.min(540, width - 20);
         h = Math.min(300, height - 70);
         left = (width - w) / 2;
         top = Math.max(50, (height - h) / 2 + 12);
-        addDrawableChild(new AotButton(left, top - 24, 120, 20, Ui.heading("Temper"), () -> {
-            tab = 0;
+        Net.ForgeGear g = current();
+        if (seenLevel < 0 && g != null) seenLevel = g.level();
+    }
+
+    /** Tabs, close and the action buttons, drawn flat and registered for clicks. */
+    private void controls(DrawContext c) {
+        Sleek.tabs(c, hits, left, top - 22, new String[] {"Temper", "Forge new"}, tab, k -> {
+            tab = k;
             clearAndInit();
-        })).selected(tab == 0);
-        addDrawableChild(new AotButton(left + 124, top - 24, 120, 20, Ui.heading("Forge new"), () -> {
-            tab = 1;
-            clearAndInit();
-        })).selected(tab == 1);
-        addDrawableChild(new AotButton(left + w - 20, top - 24, 20, 20, Text.literal("✕"), this::close));
+        });
+        Sleek.button(c, hits, left + w - 20, top - 22, 20, 18, "\u2715", false, true, this::close);
         Net.ForgeView v = ClientState.forge;
         if (v == null) return;
         if (tab == 0) {
             Net.ForgeGear g = current();
-            if (seenLevel < 0 && g != null) seenLevel = g.level();
             if (g != null) {
                 int px = left + listW() + 16, pw = w - listW() - 26;
                 boolean capped = g.level() >= g.cap();
-                AotButton t = addDrawableChild(new AotButton(px + 10, top + h - 40, pw - 20, 28,
-                    Ui.heading(capped ? "At your limit" : "TEMPER  ·  " + String.format(Locale.ROOT, "%,d", g.marks()) + " M"),
-                    () -> strike("Temper", Math.min(0.9f, g.level() / 60f), q -> ClientPlayNetworking.send(new Net.ForgeAction("upgrade", g.slot(), "", q)))));
-                t.selected(!capped);
-                t.accent = 0xFFFF8A3A;
-                t.active = !capped && ClientState.marks >= g.marks();
+                boolean can = !capped && ClientState.marks >= g.marks();
+                Sleek.button(c, hits, px + 10, top + h - 38, pw - 20, 26,
+                    capped ? "At your limit" : "Temper  \u00B7  " + String.format(Locale.ROOT, "%,d", g.marks()) + " Marks", true, can,
+                    () -> strike("Temper", Math.min(0.9f, g.level() / 60f), q -> ClientPlayNetworking.send(new Net.ForgeAction("upgrade", g.slot(), "", q))));
             }
         } else {
             int y = top + 34;
             for (Net.ForgeRecipe r : v.recipes()) {
                 if (y > top + h - 34) break;
-                AotButton b = addDrawableChild(new AotButton(left + w - 110, y + 5, 96, 20, Ui.heading("Forge"),
-                    () -> strike("Forge " + r.title(), 0.4f, q -> ClientPlayNetworking.send(new Net.ForgeAction("craft", 0, r.id(), q)))));
-                b.active = r.ready();
+                Sleek.button(c, hits, left + w - 104, y + 7, 90, 18, "Forge", true, r.ready(),
+                    () -> strike("Forge " + r.title(), 0.4f, q -> ClientPlayNetworking.send(new Net.ForgeAction("craft", 0, r.id(), q))));
                 y += 36;
             }
         }
+    }
+
+    @Override
+    public void render(DrawContext c, int mouseX, int mouseY, float delta) {
+        Sleek.mx = mouseX;
+        Sleek.my = mouseY;
+        hits.clear();
+        renderBackground(c, mouseX, mouseY, delta);
+        controls(c);
     }
 
     private int listW() {
@@ -113,6 +122,7 @@ public final class ForgeScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (button == 0 && hits.click(mx, my)) return true;
         Net.ForgeView v = ClientState.forge;
         if (tab == 0 && v != null && mx >= left + 8 && mx < left + 8 + listW() && my >= top + 34 && my < top + h - 8) {
             int i = (int) ((my - top - 34) / ROW) + scroll;
@@ -138,13 +148,14 @@ public final class ForgeScreen extends Screen {
 
     @Override
     public void renderBackground(DrawContext c, int mouseX, int mouseY, float delta) {
-        Ui.backdrop(c, width, height);
+        c.fillGradient(0, 0, width, height, 0xE0080605, 0xF0050303);
         long t = Util.getMeasuringTimeMs();
         // The forge's glow from below, breathing.
         int glow = (int) (70 + 30 * Math.sin(t * 0.003));
         c.fillGradient(0, height / 2, width, height, 0, (glow << 24) | 0xC0501A);
-        Ui.text(c, Ui.title("FORGE"), width / 2f, top - 46, 1.4f, 0xFFFFB060, true);
-        Ui.panel(c, left, top, w, h);
+        Ui.text(c, Ui.title("FORGE"), left, top - 46, 1.3f, 0xFFFFB060, false);
+        Sleek.panel(c, left, top, w, h);
+        c.fill(left, top, left + w, top + 2, 0xFFFF8A3A);
         Net.ForgeView v = ClientState.forge;
         if (v == null || client.player == null) return;
         String money = String.format(Locale.ROOT, "%,d Marks", ClientState.marks);
@@ -156,7 +167,8 @@ public final class ForgeScreen extends Screen {
 
     private void temper(DrawContext c, Net.ForgeView v, int mouseX, int mouseY, long t) {
         int lx = left + 8, ly = top + 34, lw = listW();
-        Ui.well(c, lx, ly - 2, lw, h - 40);
+        c.fill(lx, ly - 2, lx + lw, ly - 2 + h - 40, 0x30000000);
+        c.drawBorder(lx, ly - 2, lw, h - 40, Sleek.LINE);
         if (v.gear().isEmpty()) Ui.text(c, Text.literal("No gear to temper"), lx + lw / 2f, ly + 20, 0.85f, Ui.MUTED, true);
         int rows = (h - 42) / ROW;
         for (int i = 0; i < rows && i + scroll < v.gear().size(); i++) {
@@ -165,7 +177,7 @@ public final class ForgeScreen extends Screen {
             int y = ly + i * ROW;
             boolean sel = g.slot() == selected, hov = mouseX >= lx && mouseX < lx + lw && mouseY >= y && mouseY < y + ROW - 2;
             int tone = Ui.rarityTone(g.rarity());
-            c.fill(lx + 2, y, lx + lw - 2, y + ROW - 2, sel ? 0xE0302012 : hov ? 0xC0201A14 : 0x90100C0A);
+            c.fill(lx + 2, y, lx + lw - 2, y + ROW - 2, sel ? 0x30FF8A3A : hov ? 0x18FFFFFF : 0x00000000);
             c.fill(lx + 2, y, lx + 4, y + ROW - 2, tone);
             GearUi.backing(c, s, lx + 8, y + 4);
             c.drawItem(s, lx + 8, y + 4);
@@ -184,10 +196,8 @@ public final class ForgeScreen extends Screen {
         int px = left + lw + 16, pw = w - lw - 26, cx = px + pw / 2, cy = top + 96;
         int tone = Ui.rarityTone(g.rarity());
         float pulse = 0.6f + 0.4f * (float) Math.sin(t * 0.004);
-        for (int r = 44; r > 0; r -= 4) {
-            int a = (int) (26 * pulse * (1 - r / 48f) * 3);
-            c.fill(cx - r, cy - r, cx + r, cy + r, (Math.min(255, a) << 24) | (tone & 0xFFFFFF));
-        }
+        Smooth.glow(c, cx, cy, 52, ((int) (110 * pulse) << 24) | (tone & 0xFFFFFF));
+        Smooth.glow(c, cx, cy + 40, 60, ((int) (70 * pulse) << 24) | 0xFF6A20);
         // The anvil itself under it.
         c.fill(cx - 34, cy + 34, cx + 34, cy + 42, 0xFF2A2724);
         c.fill(cx - 22, cy + 42, cx + 22, cy + 48, 0xFF1C1A18);
@@ -228,8 +238,7 @@ public final class ForgeScreen extends Screen {
         int y = top + 34;
         for (Net.ForgeRecipe r : v.recipes()) {
             if (y > top + h - 34) break;
-            c.fill(left + 8, y, left + w - 8, y + 32, r.ready() ? 0xC0201A14 : 0x90100C0A);
-            c.fill(left + 8, y, left + 10, y + 32, r.ready() ? 0xFFFF8A3A : 0xFF34322C);
+            Sleek.tile(c, left + 8, y, w - 16, 32, r.ready() ? 0xFFFF8A3A : 0xFF55524A, Sleek.over(left + 8, y, w - 16, 32), false, !r.ready());
             Ui.text(c, Ui.heading(r.title()), left + 16, y + 6, 0.95f, r.ready() ? Ui.CREAM : Ui.DIM, false);
             Ui.text(c, Text.literal(String.format(Locale.ROOT, "%,d M", r.marks()) + "  ·  " + r.materials()), left + 16, y + 19, 0.62f, r.ready() ? Ui.GOLD : Ui.RED, false);
             y += 36;
