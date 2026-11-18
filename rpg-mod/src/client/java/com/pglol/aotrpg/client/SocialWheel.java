@@ -26,31 +26,29 @@ public final class SocialWheel extends Screen {
         options = new Option[] {
             new Option("Party", "Invite, leave, see your squad", new ItemStack(Items.WHITE_BANNER), true,
                 () -> mc.setScreen(new PartyScreen())),
-            new Option("Emote", "Coming soon", new ItemStack(Items.ARMOR_STAND), false,
-                () -> soon(mc, "Emotes")),
-            new Option("Trade", "Coming soon", new ItemStack(Items.EMERALD), false,
-                () -> soon(mc, "Trading")),
-            new Option("Cosmetics", "Trails and looks", new ItemStack(Items.AMETHYST_SHARD), true,
-                () -> mc.setScreen(new CosmeticsScreen())),
-            new Option("Roleplay", rpOn() ? "On: earning rank (click to stop)" : "Off: join roleplay ranks", new ItemStack(Items.NAME_TAG), true, () -> {
-                mc.setScreen(null);
-                if (mc.player != null) mc.player.networkHandler.sendChatCommand(rpOn() ? "rp off" : "rp on");
+            new Option("People", "Friends and everyone online", new ItemStack(Items.PLAYER_HEAD), true, () -> {
+                mc.setScreen(new SocialScreen());
+                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.SocialAction("open", null));
             }),
-            new Option("Market", "Trade at the town market", new ItemStack(Items.GOLD_NUGGET), true, () -> {
+            new Option("Trade", "Swap items and Marks with a player", new ItemStack(Items.EMERALD), true, () -> {
+                mc.setScreen(new TradeScreen());
+                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.TradeAction("open", null, ""));
+            }),
+            new Option("Market", "Buy and sell (by courier away from town)", new ItemStack(Items.GOLD_NUGGET), true, () -> {
                 mc.setScreen(null);
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.MarketAction("open", "", 0, 0));
             }),
-            new Option("Factions", "Sectors and work orders", new ItemStack(Items.WHITE_BANNER), true, () -> {
-                mc.setScreen(null);
-                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.FactionAction("open", ""));
-            }),
-            new Option("Social", "Friends and everyone online", new ItemStack(Items.PLAYER_HEAD), true, () -> {
-                mc.setScreen(null);
-                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.SocialAction("open", null));
-            }),
+            new Option("Store", "Cosmetics, titles, crates", new ItemStack(Items.DIAMOND), true,
+                () -> mc.setScreen(new StoreScreen(null))),
+            new Option("Cosmetics", "Your looks and effects", new ItemStack(Items.AMETHYST_SHARD), true,
+                () -> mc.setScreen(new CosmeticsScreen())),
             new Option("Battle Pass", "Season rewards", new ItemStack(Items.NETHER_STAR), true, () -> {
                 mc.setScreen(null);
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.PassAction("open", 0));
+            }),
+            new Option("Factions", "Sectors and work orders", new ItemStack(Items.SHIELD), true, () -> {
+                mc.setScreen(null);
+                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.FactionAction("open", ""));
             }),
         };
     }

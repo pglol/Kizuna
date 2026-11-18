@@ -23,6 +23,8 @@ import java.util.List;
 public final class StoreScreen extends Screen {
     /** The last store view from the server. */
     public static Net.StoreView view;
+    /** Opened to send someone a gift (from People): their name goes in the gift box. */
+    public static String giftFor;
     private static final int[] RARITY = {0xFFB0B0B0, 0xFF5BD35B, 0xFF5A9AE0, 0xFFB06AE0, 0xFFF2C14E, 0xFFE02A2A};
     private static final String[] RARITY_NAME = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic"};
     private static final String[] TABS = {"Featured", "Cosmetics", "Titles", "Crates"};
@@ -74,6 +76,10 @@ public final class StoreScreen extends Screen {
         giftTo.setMaxLength(32);
         giftTo.setPlaceholder(Text.literal("Player name").withColor(0xFF7A766C));
         addSelectableChild(giftTo);
+        if (giftFor != null) {
+            giftTo.setText(giftFor);
+            if (tab == 3) tab = 0;
+        }
     }
 
     public void refresh() { }
@@ -115,6 +121,7 @@ public final class StoreScreen extends Screen {
 
     @Override
     public void close() {
+        giftFor = null;
         client.setScreen(parent);
     }
 
@@ -269,7 +276,7 @@ public final class StoreScreen extends Screen {
             card(c, o, tx, ty, tw, th);
             hits.add(tx, ty, tw, th, () -> {
                 selected = o.id();
-                gifting = false;
+                gifting = giftFor != null && !giftFor.isBlank();
             });
         }
     }

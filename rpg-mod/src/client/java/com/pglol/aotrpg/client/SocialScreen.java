@@ -5,18 +5,23 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The social hub: everyone online and your friends, with invite, friend, whisper and pay, plus
- * shortcuts to the party, battle pass, event shop, market and factions.
+ * People: everyone online and your friends, searchable. Pick someone to see who they are (level,
+ * title, faction, where they are) and do something with them: party up, trade, duel, message,
+ * send a gift or some Marks, or add them as a friend. Nothing else lives here.
  */
 public final class SocialScreen extends Screen {
     private static final int ROW = 26;
-    private int left, top, w, h, tab, scroll;
+    private final Sleek.Hits hits = new Sleek.Hits();
+    private int tab, scroll;
+    private java.util.UUID picked;
+    private TextFieldWidget search;
 
     public SocialScreen() {
         super(Text.literal("Social"));
@@ -27,135 +32,150 @@ public final class SocialScreen extends Screen {
         return false;
     }
 
-    public void refresh() {
-        clearAndInit();
+    public void refresh() { }
+
+    @Override
+    protected void init() {
+        search = new TextFieldWidget(Ui.font(), 0, 0, 140, 16, Text.literal("Search"));
+        search.setPlaceholder(Text.literal("Search players").withColor(0xFF7A766C));
+        addSelectableChild(search);
     }
 
     private List<Net.SocialPlayer> rows() {
         List<Net.SocialPlayer> out = new ArrayList<>();
         Net.SocialView v = ClientState.social;
         if (v == null) return out;
+        String q = search == null ? "" : search.getText().trim().toLowerCase(java.util.Locale.ROOT);
         for (Net.SocialPlayer p : v.players()) {
-            if (tab == 0 && p.online()) out.add(p);
-            if (tab == 1 && p.friend()) out.add(p);
+            if (tab == 0 && !p.online() || tab == 1 && !p.friend()) continue;
+            if (!q.isEmpty() && !p.name().toLowerCase(java.util.Locale.ROOT).contains(q) && !p.account().toLowerCase(java.util.Locale.ROOT).contains(q)) continue;
+            out.add(p);
         }
-        out.sort((a, b) -> a.online() != b.online() ? (a.online() ? -1 : 1) : a.name().compareToIgnoreCase(b.name()));
+        out.sort((a, b) -> a.online() != b.online() ? (a.online() ? -1 : 1) : a.friend() != b.friend() ? (a.friend() ? -1 : 1) : a.name().compareToIgnoreCase(b.name()));
         return out;
     }
 
-    private int visible() {
-        return Math.max(1, (h - 70) / ROW);
+    @Override
+    public boolean mouseClicked(double mx, double my, int button) {
+        if (search.isMouseOver(mx, my)) {
+            search.setFocused(true);
+            setFocused(search);
+            return search.mouseClicked(mx, my, button);
+        }
+        search.setFocused(false);
+        if (button == 0 && hits.click(mx, my)) return true;
+        return super.mouseClicked(mx, my, button);
     }
 
     @Override
-    protected void init() {
-        w = Math.min(560, width - 20);
-        h = Math.min(320, height - 70);
-        left = (width - w) / 2;
-        top = Math.max(50, (height - h) / 2);
-        addDrawableChild(new AotButton(left + w - 20, top - 22, 20, 20, Text.literal("✕"), this::close));
-        String[] tabs = {"Online", "Friends"};
-        for (int i = 0; i < tabs.length; i++) {
-            int t = i;
-            addDrawableChild(new AotButton(left + i * 104, top - 22, 100, 20, Ui.heading(tabs[i]), () -> {
-                tab = t;
-                scroll = 0;
-                clearAndInit();
-            })).selected(tab == i);
-        }
-        // Shortcuts along the bottom.
-        String[] names = {"Party", "Tasks", "Battle Pass", "Event Shop", "Global Market", "Factions", "Regiment"};
-        Runnable[] runs = {
-            () -> client.setScreen(new PartyScreen()),
-            () -> ClientPlayNetworking.send(new Net.TaskAction("open", "")),
-            () -> ClientPlayNetworking.send(new Net.PassAction("open", 0)),
-            () -> ClientPlayNetworking.send(new Net.EventAction("open", "")),
-            () -> {
-                client.setScreen(new MarketScreen(true));
-                ClientPlayNetworking.send(new Net.MarketAction("exchange", "", 0, 0));
-            },
-            () -> ClientPlayNetworking.send(new Net.FactionAction("open", "")),
-            () -> ClientPlayNetworking.send(new Net.RegimentAction("open", ""))};
-        int bw = (w - 20 - 4 * (names.length - 1)) / names.length;
-        for (int i = 0; i < names.length; i++) {
-            addDrawableChild(new AotButton(left + 10 + i * (bw + 4), top + h - 28, bw, 20, Ui.heading(names[i]), runs[i]));
-        }
-        List<Net.SocialPlayer> rows = rows();
-        scroll = Math.max(0, Math.min(scroll, rows.size() - visible()));
-        int y = top + 34;
-        for (int i = scroll; i < rows.size() && i < scroll + visible(); i++) {
-            Net.SocialPlayer p = rows.get(i);
-            int x = left + w - 10;
-            if (p.online() && !p.account().isEmpty()) {
-                x -= 44;
-                addDrawableChild(new AotButton(x, y + 3, 42, 18, Text.literal("Pay"), () -> chat("/pay " + p.account() + " ")));
-                x -= 50;
-                addDrawableChild(new AotButton(x, y + 3, 48, 18, Text.literal("Whisper"), () -> chat("/msg " + p.account() + " ")));
-                x -= 50;
-                addDrawableChild(new AotButton(x, y + 3, 48, 18, Text.literal(p.party() ? "In party" : "Invite"),
-                    () -> ClientPlayNetworking.send(new Net.SocialAction("invite", p.uuid())))).active = !p.party();
-                if (client.player != null && !p.account().equals(client.player.getGameProfile().getName())) {
-                    x -= 44;
-                    addDrawableChild(new AotButton(x, y + 3, 42, 18, Text.literal("Duel"), () -> {
-                        client.player.networkHandler.sendChatCommand("duel " + p.account());
-                        close();
-                    }));
-                }
-            }
-            x -= 58;
-            addDrawableChild(new AotButton(x, y + 3, 56, 18, Text.literal(p.friend() ? "Unfriend" : "+ Friend"),
-                () -> ClientPlayNetworking.send(new Net.SocialAction(p.friend() ? "friend_remove" : "friend_add", p.uuid()))));
-            y += ROW;
-        }
-    }
-
-    private void chat(String text) {
-        client.setScreen(new ChatScreen(text));
+    public boolean keyPressed(int key, int scan, int mods) {
+        if (search.isFocused() && key != 256) return search.keyPressed(key, scan, mods);
+        return super.keyPressed(key, scan, mods);
     }
 
     @Override
-    public boolean mouseScrolled(double mx, double my, double hAmount, double vAmount) {
-        scroll -= (int) Math.signum(vAmount);
-        clearAndInit();
+    public boolean charTyped(char ch, int mods) {
+        if (search.isFocused()) return search.charTyped(ch, mods);
+        return super.charTyped(ch, mods);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double h, double v) {
+        scroll = Math.max(0, scroll - (int) Math.signum(v));
         return true;
     }
 
     @Override
     public void renderBackground(DrawContext c, int mouseX, int mouseY, float delta) {
-        Ui.backdrop(c, width, height);
-        Ui.text(c, Ui.title("SOCIAL"), width / 2f, top - 44, 1.4f, Ui.GOLD, true);
-        Ui.panel(c, left, top, w, h);
+        c.fillGradient(0, 0, width, height, 0xE0060807, 0xF0030404);
+    }
+
+    @Override
+    public void render(DrawContext c, int mouseX, int mouseY, float delta) {
+        Sleek.mx = mouseX;
+        Sleek.my = mouseY;
+        hits.clear();
+        renderBackground(c, mouseX, mouseY, delta);
+        int w = Math.min(620, width - 24), h = Math.min(340, height - 40), x = (width - w) / 2, y = (height - h) / 2;
+        Ui.text(c, Ui.title("PEOPLE"), x, y - 2, 1.2f, Sleek.GOLD, false);
+        Sleek.tabs(c, hits, x + 96, y - 2, new String[] {"Online", "Friends"}, tab, k -> {
+            tab = k;
+            scroll = 0;
+        });
+        Sleek.button(c, hits, x + w - 20, y - 4, 20, 18, "✕", false, true, this::close);
+        search.setX(x + w - 170);
+        search.setY(y - 3);
+        search.setWidth(144);
+        search.render(c, mouseX, mouseY, delta);
+        int ly = y + 20, listW = (int) (w * 0.56f), lh = h - 20;
+        Sleek.panel(c, x, ly, listW, lh);
         List<Net.SocialPlayer> rows = rows();
-        long online = ClientState.social == null ? 0 : ClientState.social.players().stream().filter(Net.SocialPlayer::online).count();
-        Ui.text(c, Text.literal(tab == 0 ? online + " others online" : rows.size() + " friends"), left + 10, top + 12, 0.8f, Ui.MUTED, false);
-        if (rows.isEmpty()) {
-            Ui.text(c, Text.literal(tab == 0 ? "Nobody else is online." : "No friends yet: add someone from the Online tab."),
-                left + w / 2f, top + 70, 0.8f, Ui.DIM, true);
-        }
-        int y = top + 34;
-        for (int i = scroll; i < rows.size() && i < scroll + visible(); i++) {
+        int vis = Math.max(1, (lh - 8) / ROW);
+        scroll = Math.max(0, Math.min(scroll, rows.size() - vis));
+        if (rows.isEmpty()) Ui.text(c, Text.literal(tab == 1 ? "No friends yet: add people from Online" : ClientState.social == null ? "Loading…" : "Nobody here"),
+            x + listW / 2f, ly + lh / 2f, 0.75f, 0xFF7A766C, true);
+        Net.SocialPlayer sel = null;
+        for (int i = scroll; i < rows.size() && i < scroll + vis; i++) {
             Net.SocialPlayer p = rows.get(i);
-            c.fill(left + 6, y, left + w - 6, y + ROW - 2, p.party() ? 0x303F8F4A : 0x28000000);
-            c.fill(left + 10, y + 9, left + 16, y + 15, p.online() ? 0xFF6FCF5A : 0xFF55524A);
-            float x = left + 22;
-            if (!p.tag().isEmpty()) {
-                Text tag = Text.literal("[" + p.tag() + "]");
-                Ui.text(c, tag, x, y + 4, 0.75f, 0xFF000000 | p.tagColor(), false);
-                x += Ui.font().getWidth(tag) * 0.75f + 4;
-            }
-            Ui.text(c, Ui.heading(p.name()), x, y + 3, 0.9f, p.online() ? Ui.CREAM : Ui.DIM, false);
-            // The title they wear, after their name.
-            if (!p.title().isEmpty() && !p.title().equals(p.tag())) {
-                float nx = x + Ui.font().getWidth(Ui.heading(p.name())) * 0.9f + 6;
-                Ui.text(c, TitleFx.styled(p.title(), p.titleColor()), nx, y + 4, 0.7f, 0xFF000000 | p.titleColor(), false);
-            }
-            String sub = p.online() ? "Lv " + p.level() + "  ·  " + p.where() : p.where();
-            Ui.text(c, Text.literal(sub), left + 22, y + 14, 0.6f, Ui.MUTED, false);
-            if (!p.faction().isEmpty()) {
-                float fx = left + 22 + Ui.font().getWidth(sub) * 0.6f + 8;
-                Ui.text(c, Text.literal(p.faction()), fx, y + 14, 0.6f, 0xFF000000 | p.factionColor(), false);
-            }
-            y += ROW;
+            int ry = ly + 4 + (i - scroll) * ROW;
+            boolean on = p.uuid().equals(picked), hov = Sleek.over(x + 2, ry, listW - 4, ROW - 2);
+            if (on) sel = p;
+            c.fill(x + 2, ry, x + listW - 2, ry + ROW - 2, on ? 0x26E8C36F : hov ? 0x16FFFFFF : 0x00000000);
+            if (on) c.fill(x + 2, ry, x + 4, ry + ROW - 2, Sleek.GOLD);
+            Smooth.disc(c, x + 12, ry + ROW / 2f - 1, 2.5f, p.online() ? 0xFF5BD35B : 0xFF55524A);
+            Ui.text(c, Text.literal(p.name()), x + 20, ry + 4, 0.8f, p.online() ? Ui.CREAM : 0xFF8A857A, false);
+            String sub = (p.level() > 0 ? "Lv " + p.level() + "  ·  " : "") + p.where();
+            Ui.text(c, Text.literal(sub), x + 20, ry + 14, 0.56f, 0xFF8A857A, false);
+            float bx = x + listW - 8;
+            if (p.party()) bx -= Sleek.chip(c, bx - (Ui.font().getWidth("PARTY") * 0.55f + 8), ry + 8, "PARTY", 0xFF5BD35B) + 4;
+            if (p.friend()) Sleek.chip(c, bx - (Ui.font().getWidth("FRIEND") * 0.55f + 8), ry + 8, "FRIEND", Sleek.GOLD);
+            java.util.UUID id = p.uuid();
+            hits.add(x + 2, ry, listW - 4, ROW - 2, () -> picked = id);
         }
+        // The one picked, and what you can do.
+        int dx = x + listW + 8, dw = w - listW - 8;
+        Sleek.panel(c, dx, ly, dw, lh);
+        if (sel == null) {
+            Ui.text(c, Text.literal("Pick someone"), dx + dw / 2f, ly + lh / 2f, 0.75f, 0xFF7A766C, true);
+            return;
+        }
+        Net.SocialPlayer p = sel;
+        c.fill(dx, ly, dx + dw, ly + 2, p.online() ? 0xFF5BD35B : 0xFF55524A);
+        Ui.text(c, Ui.heading(p.name()), dx + 10, ly + 10, 1.05f, Ui.CREAM, false);
+        int iy = ly + 24;
+        if (!p.title().isEmpty()) {
+            Ui.text(c, Text.literal(p.title()), dx + 10, iy, 0.66f, 0xFF000000 | p.titleColor(), false);
+            iy += 10;
+        }
+        String info = (p.level() > 0 ? "Level " + p.level() : "") + (p.faction().isEmpty() ? "" : "  ·  " + p.faction());
+        if (!info.isBlank()) Ui.text(c, Text.literal(info.replaceFirst("^  ·  ", "")), dx + 10, iy, 0.62f, 0xFFB8B0A0, false);
+        iy += 10;
+        Ui.text(c, Text.literal(p.online() ? p.where() : "Offline"), dx + 10, iy, 0.62f, 0xFF8A857A, false);
+        iy += 18;
+        int bw = (dw - 24) / 2;
+        boolean me = client.player != null && p.account().equals(client.player.getGameProfile().getName());
+        if (p.online() && !me) {
+            Sleek.button(c, hits, dx + 8, iy, bw, 18, p.party() ? "In your party" : "Invite to party", !p.party(), !p.party(),
+                () -> ClientPlayNetworking.send(new Net.SocialAction("invite", p.uuid())));
+            Sleek.button(c, hits, dx + 16 + bw, iy, bw, 18, "Trade", true, true, () -> {
+                ClientPlayNetworking.send(new Net.TradeAction("request", p.uuid(), ""));
+                client.setScreen(new TradeScreen());
+            });
+            iy += 22;
+            Sleek.button(c, hits, dx + 8, iy, bw, 18, "Duel", false, true, () -> {
+                client.player.networkHandler.sendChatCommand("duel " + p.account());
+                close();
+            });
+            Sleek.button(c, hits, dx + 16 + bw, iy, bw, 18, "Message", false, true, () -> client.setScreen(new ChatScreen("/msg " + p.account() + " ")));
+            iy += 22;
+            Sleek.button(c, hits, dx + 8, iy, bw, 18, "Send a gift", false, true, () -> {
+                StoreScreen.giftFor = p.account();
+                client.setScreen(new StoreScreen(this));
+            });
+            Sleek.button(c, hits, dx + 16 + bw, iy, bw, 18, "Send Marks", false, true, () -> client.setScreen(new ChatScreen("/pay " + p.account() + " ")));
+            iy += 22;
+        }
+        if (!me) Sleek.button(c, hits, dx + 8, iy, dw - 16, 18, p.friend() ? "Remove friend" : "Add friend", false, true,
+            () -> ClientPlayNetworking.send(new Net.SocialAction(p.friend() ? "friend_remove" : "friend_add", p.uuid())));
     }
 }

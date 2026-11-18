@@ -137,6 +137,17 @@ public final class Market {
         return AotRpg.PLACES.nearest(p.getX(), p.getZ(), config.radius, "town", "safe", "marley", "camp");
     }
 
+    /**
+     * The market you deal with: the one you're standing in, or (from anywhere in the open world)
+     * the nearest town's, by courier. Out on the islands or in the sky, none.
+     */
+    public Net.Area marketTown(ServerPlayerEntity p) {
+        Net.Area here = town(p);
+        if (here != null) return here;
+        if (p.getWorld().getRegistryKey() != net.minecraft.world.World.OVERWORLD && !p.getWorld().getRegistryKey().equals(Homes.WORLD)) return null;
+        return AotRpg.PLACES.nearest(p.getX(), p.getZ(), 1_000_000, "town");
+    }
+
     private double regionFactor(Net.Area town, Good g) {
         String name = (town.name() + " " + town.id()).toLowerCase(java.util.Locale.ROOT);
         double f = 1;
@@ -195,7 +206,7 @@ public final class Market {
     // ------------------------------------------------------------------ trading
 
     public void buy(ServerPlayerEntity p, String itemId, int qty) {
-        Net.Area town = town(p);
+        Net.Area town = marketTown(p);
         Good g = find(itemId);
         if (town == null || g == null || qty <= 0) return;
         Item it = item(g);
@@ -226,7 +237,7 @@ public final class Market {
     }
 
     public void sell(ServerPlayerEntity p, String itemId, int qty) {
-        Net.Area town = town(p);
+        Net.Area town = marketTown(p);
         Good g = find(itemId);
         if (town == null || g == null || qty <= 0) return;
         Item it = item(g);
@@ -249,7 +260,7 @@ public final class Market {
 
     /** Gear sells to any market for its scrap value (rarity and item level). */
     public void sellGear(ServerPlayerEntity p, int slot) {
-        Net.Area town = town(p);
+        Net.Area town = marketTown(p);
         if (town == null) return;
         ItemStack s = AotRpg.SATCHEL.at(p, slot);
         if (!Gear.isGear(s)) return;
@@ -305,10 +316,12 @@ public final class Market {
     // ------------------------------------------------------------------ view
 
     public void open(ServerPlayerEntity p) {
-        if (town(p) == null) {
-            p.sendMessage(Text.literal("There is no market here. Visit a town, camp or port.").formatted(Formatting.GRAY), true);
+        Net.Area m = marketTown(p);
+        if (m == null) {
+            p.sendMessage(Text.literal("No couriers reach out here. Trade when you're back on Paradis.").formatted(Formatting.GRAY), true);
             return;
         }
+        if (town(p) == null) p.sendMessage(Text.literal("Trading with " + m.name() + " by courier").formatted(Formatting.GRAY), true);
         AotRpg.EXCHANGE.deliver(p);
         send(p, true);
     }
@@ -318,7 +331,7 @@ public final class Market {
     }
 
     private void send(ServerPlayerEntity p, boolean open) {
-        Net.Area town = town(p);
+        Net.Area town = marketTown(p);
         if (town == null || !ServerPlayNetworking.canSend(p, Net.MarketView.ID)) return;
         AotRpg.SATCHEL.send(p, false);
         double disc = discount(p, town);

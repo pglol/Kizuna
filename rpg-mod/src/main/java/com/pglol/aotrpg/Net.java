@@ -1981,6 +1981,61 @@ public final class Net {
     }
 
     /** Client -> server: open, friend_add, friend_remove, invite. */
+    /** Client -> server: trading (request, accept, decline, offer "slot:count,...;marks", ready, cancel, open). */
+    public record TradeAction(String action, java.util.UUID target, String data) implements CustomPayload {
+        public static final Id<TradeAction> ID = id("trade_action");
+        public static final PacketCodec<RegistryByteBuf, TradeAction> CODEC = PacketCodec.of((v, b) -> {
+            b.writeString(v.action);
+            b.writeBoolean(v.target != null);
+            if (v.target != null) b.writeUuid(v.target);
+            b.writeString(v.data);
+        }, b -> new TradeAction(b.readString(), b.readBoolean() ? b.readUuid() : null, b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /**
+     * Server -> client: a trade. state 0 none (closed), 1 they asked you, 2 you asked them, 3 under
+     * way, 4 done. mySlots: the inventory slots you've put up (with counts in mine).
+     */
+    public record TradeView(int state, String partner, java.util.UUID partnerId, java.util.List<net.minecraft.item.ItemStack> mine, java.util.List<Integer> mySlots,
+                            long myMarks, boolean myReady, java.util.List<net.minecraft.item.ItemStack> theirs, long theirMarks, boolean theirReady, boolean open) implements CustomPayload {
+        public static final Id<TradeView> ID = id("trade_view");
+        public static final PacketCodec<RegistryByteBuf, TradeView> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.state);
+            b.writeString(v.partner);
+            b.writeBoolean(v.partnerId != null);
+            if (v.partnerId != null) b.writeUuid(v.partnerId);
+            b.writeVarInt(v.mine.size());
+            for (var st : v.mine) net.minecraft.item.ItemStack.OPTIONAL_PACKET_CODEC.encode(b, st);
+            b.writeVarInt(v.mySlots.size());
+            for (int sl : v.mySlots) b.writeVarInt(sl);
+            b.writeVarLong(v.myMarks);
+            b.writeBoolean(v.myReady);
+            b.writeVarInt(v.theirs.size());
+            for (var st : v.theirs) net.minecraft.item.ItemStack.OPTIONAL_PACKET_CODEC.encode(b, st);
+            b.writeVarLong(v.theirMarks);
+            b.writeBoolean(v.theirReady);
+            b.writeBoolean(v.open);
+        }, b -> {
+            int state = b.readVarInt();
+            String partner = b.readString();
+            java.util.UUID pid = b.readBoolean() ? b.readUuid() : null;
+            java.util.List<net.minecraft.item.ItemStack> mine = new java.util.ArrayList<>();
+            int n = Math.min(12, b.readVarInt());
+            for (int i = 0; i < n; i++) mine.add(net.minecraft.item.ItemStack.OPTIONAL_PACKET_CODEC.decode(b));
+            java.util.List<Integer> slots = new java.util.ArrayList<>();
+            int m = Math.min(12, b.readVarInt());
+            for (int i = 0; i < m; i++) slots.add(b.readVarInt());
+            long mm = b.readVarLong();
+            boolean mr = b.readBoolean();
+            java.util.List<net.minecraft.item.ItemStack> theirs = new java.util.ArrayList<>();
+            int k = Math.min(12, b.readVarInt());
+            for (int i = 0; i < k; i++) theirs.add(net.minecraft.item.ItemStack.OPTIONAL_PACKET_CODEC.decode(b));
+            return new TradeView(state, partner, pid, mine, slots, mm, mr, theirs, b.readVarLong(), b.readBoolean(), b.readBoolean());
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     public record SocialAction(String action, java.util.UUID target) implements CustomPayload {
         public static final Id<SocialAction> ID = id("social_action");
         public static final PacketCodec<RegistryByteBuf, SocialAction> CODEC = PacketCodec.of((v, b) -> {
@@ -2663,6 +2718,8 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(EventAction.ID, EventAction.CODEC);
         PayloadTypeRegistry.playS2C().register(SocialView.ID, SocialView.CODEC);
         PayloadTypeRegistry.playC2S().register(SocialAction.ID, SocialAction.CODEC);
+        PayloadTypeRegistry.playC2S().register(TradeAction.ID, TradeAction.CODEC);
+        PayloadTypeRegistry.playS2C().register(TradeView.ID, TradeView.CODEC);
         PayloadTypeRegistry.playS2C().register(ForgeView.ID, ForgeView.CODEC);
         PayloadTypeRegistry.playC2S().register(ForgeAction.ID, ForgeAction.CODEC);
         PayloadTypeRegistry.playS2C().register(HomeView.ID, HomeView.CODEC);
