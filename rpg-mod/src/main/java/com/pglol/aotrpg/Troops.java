@@ -76,8 +76,10 @@ public final class Troops {
         Vec3d dodgeDir;
         long lastHit;
         /** Knocked back by a hit (direction and strength, ticks left), and a pause between weapon swaps. */
-        Vec3d knock;
+        Vec3d knock, knockDone;
         int knockT, swapCool;
+        /** A leap up at someone in the air: not again until this runs out. */
+        int leapCd;
         /** The current cut's wind-up has been shown to onlookers. */
         boolean swingShown;
         /** How well he's read your rhythm (quick hits raise it), and his footwork between cuts. */
@@ -429,6 +431,8 @@ public final class Troops {
                 eaten(w, v, t);
                 continue;
             }
+            // Their own physics (vanilla's is off for them): knocked back, thrown, jumping, falling.
+            physics(v);
             // Thrown: limp through the air until they land.
             if (Impact.thrown(v)) continue;
             think(w, v, t, sq, players, ticks);
@@ -640,8 +644,12 @@ public final class Troops {
     private static void think(ServerWorld w, VillagerEntity v, Troop t, Squad sq, List<ServerPlayerEntity> players, int ticks) {
         if (t.swapCool > 0) t.swapCool--;
         if (t.knockT > 0 && t.knock != null) {
-            // Rocked back by a hit, sliding to a stop.
-            walk(w, v, t.knock, t.knock.length() * t.knockT / 6.0);
+            // Rocked back by a hit: a real shove, off their feet if it's a big one.
+            if (t.knock != t.knockDone) {
+                t.knockDone = t.knock;
+                double k = t.knock.length();
+                v.setVelocity(v.getVelocity().add(t.knock.x * 1.3, 0.22 + k * 0.2, t.knock.z * 1.3));
+            }
             t.knockT--;
             if (t.knockT >= 2) return;
         }
@@ -654,7 +662,7 @@ public final class Troops {
         if (t.dodge > 0) {
             // A quick sidestep out of a flurry...
             t.dodge--;
-            if (t.dodgeDir != null) walk(w, v, t.dodgeDir, 0.5);
+            if (t.dodgeDir != null && v.isOnGround()) walk(w, v, t.dodgeDir, 0.5);
             if (t.dodge == 0 && t.blade) {
                 // ...and straight back in with a cut.
                 t.swing = 3;
@@ -703,6 +711,25 @@ public final class Troops {
         if (target instanceof ServerPlayerEntity sp && !t.spotted) {
             t.spotted = true;
             sp.playSoundToPlayer(SoundEvents.ENTITY_PILLAGER_CELEBRATE, SoundCategory.HOSTILE, 1f, 0.8f);
+        }
+        // Someone up in the air above them (a double jump, a flier close in): they go up after them.
+        if (t.leapCd > 0) t.leapCd--;
+        if (target != null && t.blade && t.leapCd == 0 && v.isOnGround() && t.stun <= 0) {
+            double dy = target.getY() - v.getY();
+            Vec3d to = target.getPos().subtract(v.getPos()).multiply(1, 0, 1);
+            double hd = to.length();
+            if (dy > 2 && dy < 9 && hd < 7.5) {
+                double up = Math.min(1.3, 0.6 + dy * 0.09);
+                Vec3d hz = hd < 1e-3 ? Vec3d.ZERO : to.normalize().multiply(Math.min(0.95, 0.2 + hd * 0.12));
+                v.setVelocity(hz.x, up, hz.z);
+                Squad lsq = squads.get(t.squad);
+                t.leapCd = Math.max(25, 70 - (lsq == null ? 0 : lsq.skill * 8)) + w.random.nextInt(30);
+                t.swing = 6;
+                t.cool = 0;
+                afterimage(w, v, 0xE8E8F0);
+                w.playSound(null, v.getX(), v.getY(), v.getZ(), SoundEvents.ENTITY_GOAT_LONG_JUMP, SoundCategory.HOSTILE, 1f, 1.2f);
+                AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xD8C8A8, 2.5f), v.getX(), v.getY() + 0.05, v.getZ(), 0, 0, 0);
+            }
         }
         if (target == null || !target.getUuid().equals(t.target)) t.windup = 0;
         t.target = target == null ? null : target.getUuid();
@@ -1096,6 +1123,12 @@ public final class Troops {
         float r = w.random.nextFloat();
         t.dodgeDir = r < 0.5f ? side.add(at.multiply(-0.3)) : r < 0.8f ? at.multiply(-1) : side.multiply(0.6).add(at);
         t.dodge = 4;
+        // The better ones hop it: a jump back or aside instead of a step.
+        Squad hsq = squads.get(t.squad);
+        if (v.isOnGround() && (r >= 0.5f && r < 0.8f || hsq != null && hsq.skill >= 3 && w.random.nextBoolean())) {
+            Vec3d hop = t.dodgeDir.normalize();
+            v.setVelocity(hop.x * 0.6, 0.42, hop.z * 0.6);
+        }
         afterimage(w, v, 0xE8E8F0);
         t.hitsInRow = 0;
         t.knockT = 0;
@@ -1387,8 +1420,31 @@ public final class Troops {
     }
 
     /** A step over the ground (never up more than a block, never into water). */
+    /**
+     * Gravity, knockback and momentum for troops (their vanilla AI, and with it vanilla movement,
+     * is off, which left them glued to the ground): whatever velocity a hit, a throw or a jump
+     * gave them carries them, with collisions, until they settle.
+     */
+    private static void physics(VillagerEntity v) {
+        Vec3d vel = v.getVelocity();
+        if (v.isOnGround() && vel.lengthSquared() < 0.0025) {
+            if (vel.lengthSquared() > 0) v.setVelocity(Vec3d.ZERO);
+            return;
+        }
+        v.move(net.minecraft.entity.MovementType.SELF, vel);
+        boolean ground = v.isOnGround();
+        double vy = ground && vel.y <= 0 ? 0 : (vel.y - 0.08) * 0.98;
+        double f = ground ? 0.6 : 0.93;
+        Vec3d nv = new Vec3d(vel.x * f, vy, vel.z * f);
+        if (ground && nv.horizontalLengthSquared() < 0.003) nv = new Vec3d(0, nv.y, 0);
+        v.setVelocity(nv);
+        v.fallDistance = Math.min(v.fallDistance, 4);
+    }
+
     private static void walk(ServerWorld w, VillagerEntity v, Vec3d dir, double speed) {
         if (dir.lengthSquared() < 1e-4) return;
+        // In the air (thrown, leaping, falling): no footing to walk on.
+        if (!v.isOnGround()) return;
         Vec3d d = dir.normalize();
         for (int k = 0; k < 5; k++) {
             double ang = new double[] {0, 0.6, -0.6, 1.2, -1.2}[k];
