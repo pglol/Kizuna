@@ -266,13 +266,14 @@ public final class CombatUi {
         float ps = 0.55f;
         int pw = Math.round(mc.textRenderer.getWidth(prog) * ps);
         int px = (x0 + x1) / 2;
-        c.fill(px - pw / 2 - 3, y - 6, px + pw / 2 + 3, y, 0xB0101410);
-        Ui.text(c, Text.literal(prog), px, y - 5, ps, 0xFFE8D9A8, true);
-        if (now - gainAt < 2200 && gained > 0) {
-            float f = (now - gainAt) / 2200f;
-            int a = (int) (255 * (f < 0.7f ? 1 : (1 - f) / 0.3f));
-            Ui.text(c, Text.literal("+" + gained + " XP"), x1 + 4, h - 22 - f * 8, 0.75f, (Math.max(8, a) << 24) | 0xE8C24A, false);
+        // The numbers only show for a moment after you gain some: the thin bar is enough the rest of the time.
+        float showK = now - gainAt < 2600 ? Math.min(1, (2600 - (now - gainAt)) / 500f) : 0;
+        if (showK > 0.02f) {
+            int ba = (int) (0xB0 * showK), ta = (int) (255 * showK);
+            c.fill(px - pw / 2 - 3, y - 6, px + pw / 2 + 3, y, (ba << 24) | 0x101410);
+            Ui.text(c, Text.literal(prog), px, y - 5, ps, (ta << 24) | 0xE8D9A8, true);
         }
+        // (Gains show as a quiet pop by the crosshair: see HudPops.)
         if (guarding()) {
             int cx = w / 2, cy = h / 2;
             Ui.text(c, Text.literal("GUARD"), cx, cy + 10, 0.6f, 0xC0E0B96A, true);

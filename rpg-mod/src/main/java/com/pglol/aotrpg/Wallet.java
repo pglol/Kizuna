@@ -29,6 +29,7 @@ public final class Wallet {
         pr.marks = Math.max(0, pr.marks + n);
         AotRpg.PROFILES.save(p.getUuid());
         sync(p);
+        if (why != null && n > 0 && Pops.send(p, "marks", n, why)) return;
         if (why != null && n != 0) {
             Notify.toast(p, Text.literal(n > 0 ? "+ " : "- ").formatted(n > 0 ? Formatting.GREEN : Formatting.RED).append(marks(Math.abs(n))),
                 Text.literal(why), 0xE0B96A, "minecraft:gold_nugget", null);

@@ -933,7 +933,7 @@ public final class AotRpg implements ModInitializer {
         if (!pr.created) return;
         if (killer) pr.titanKills++;
         xp = Math.round(xp * (1 + REGIMENTS.bonus(p.getUuid())));
-        p.sendMessage(Text.literal("+" + xp + " XP  ").formatted(Formatting.GOLD, Formatting.BOLD)
+        if (!Pops.send(p, "xp", xp, label)) p.sendMessage(Text.literal("+" + xp + " XP  ").formatted(Formatting.GOLD, Formatting.BOLD)
             .append(Text.literal(label).formatted(Formatting.RED)), true);
         if (killer) p.playSoundToPlayer(SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 0.5f, 1.4f);
         PROGRESSION.addXp(p, pr, xp);

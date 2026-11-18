@@ -1981,6 +1981,14 @@ public final class Net {
     }
 
     /** Client -> server: open, friend_add, friend_remove, invite. */
+    /** Server -> client: a small gain to note (kind "xp", "marks", "kill"), shown as a quiet pop by the crosshair. */
+    public record Pop(String kind, long amount, String label) implements CustomPayload {
+        public static final Id<Pop> ID = id("pop");
+        public static final PacketCodec<RegistryByteBuf, Pop> CODEC = PacketCodec.of((v, b) -> { b.writeString(v.kind); b.writeVarLong(v.amount); b.writeString(v.label); },
+            b -> new Pop(b.readString(), b.readVarLong(), b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Both ways: an emote (client -> server: entity ignored; server -> clients: who's doing it). kind 0 stops. */
     public record Emote(int entity, int kind) implements CustomPayload {
         public static final Id<Emote> ID = id("emote");
@@ -2729,6 +2737,7 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(TradeAction.ID, TradeAction.CODEC);
         PayloadTypeRegistry.playS2C().register(TradeView.ID, TradeView.CODEC);
         PayloadTypeRegistry.playC2S().register(Emote.ID, Emote.CODEC);
+        PayloadTypeRegistry.playS2C().register(Pop.ID, Pop.CODEC);
         PayloadTypeRegistry.playS2C().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(ForgeView.ID, ForgeView.CODEC);
         PayloadTypeRegistry.playC2S().register(ForgeAction.ID, ForgeAction.CODEC);

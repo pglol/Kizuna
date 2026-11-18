@@ -105,7 +105,7 @@ public final class Progression {
     public void award(ServerPlayerEntity p, long xp, String label) {
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         if (!pr.created || xp <= 0) return;
-        p.sendMessage(Text.literal("+" + xp + " XP  ").formatted(Formatting.GOLD, Formatting.BOLD).append(Text.literal(label).formatted(Formatting.GRAY)), true);
+        if (!Pops.send(p, "xp", xp, label)) p.sendMessage(Text.literal("+" + xp + " XP  ").formatted(Formatting.GOLD, Formatting.BOLD).append(Text.literal(label).formatted(Formatting.GRAY)), true);
         addXp(p, pr, xp);
     }
 

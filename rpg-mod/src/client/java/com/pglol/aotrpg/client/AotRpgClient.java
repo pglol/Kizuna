@@ -136,6 +136,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(ImpactFrames::render);
         HudRenderCallback.EVENT.register(MovesHud::render);
         HudRenderCallback.EVENT.register(Finish::render);
+        HudRenderCallback.EVENT.register(HudPops::render);
         HudRenderCallback.EVENT.register(BladeLock::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.ClashLock.ID, (payload, ctx) -> BladeLock.on(payload));
         ClientTickEvents.END_CLIENT_TICK.register(BladeLock::tick);
@@ -236,6 +237,7 @@ public final class AotRpgClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(Net.GuardFx.ID, (payload, ctx) -> CombatUi.onGuardFx(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.TradeView.ID, (payload, ctx) -> TradeScreen.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.Emote.ID, (payload, ctx) -> Emotes.on(payload));
+        ClientPlayNetworking.registerGlobalReceiver(Net.Pop.ID, (payload, ctx) -> HudPops.on(payload));
         Property.key = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.property",
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_Y, "category.aot_rpg"));
         WorldRenderEvents.AFTER_ENTITIES.register(Property::render);
