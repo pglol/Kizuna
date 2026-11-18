@@ -66,7 +66,7 @@ public final class OutfitLayer extends FeatureRenderer<AbstractClientPlayerEntit
         Identifier tex = Identifier.of("aot_rpg", "textures/entity/outfit/" + outfit + ".png");
         m.render(ms, vc.getBuffer(RenderLayer.getEntityTranslucent(tex)), light, OverlayTexture.DEFAULT_UV, col);
         // The robe's trim glows its owner's colour, breathing slowly.
-        if (outfit.equals("outfit_sp_robe")) {
+        if (outfit.equals("outfit_sp_robe") && !ShaderCompat.shadowPass()) {
             float k = 0.75f + 0.25f * net.minecraft.util.math.MathHelper.sin((p.age + tickDelta) / 9f);
             int g = 0xFF000000 | Showcase.mix(0, dyeTint, k);
             Identifier glow = Identifier.of("aot_rpg", "textures/entity/outfit/outfit_sp_robe_glow.png");

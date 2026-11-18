@@ -565,7 +565,7 @@ public final class CosmeticFx {
         if (mc.world == null) return;
         MatrixStack ms = ctx.matrixStack();
         VertexConsumerProvider vc = ctx.consumers();
-        if (ms == null || vc == null) return;
+        if (ms == null || vc == null || ShaderCompat.shadowPass()) return;
         Vec3d cam = ctx.camera().getPos();
         float td = ctx.tickCounter().getTickDelta(true);
         float time = (mc.world.getTime() + td) / 20f;

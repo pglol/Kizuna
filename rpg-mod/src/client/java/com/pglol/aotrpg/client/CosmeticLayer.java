@@ -20,7 +20,7 @@ public final class CosmeticLayer extends FeatureRenderer<AbstractClientPlayerEnt
     @Override
     public void render(MatrixStack ms, VertexConsumerProvider vc, int light, AbstractClientPlayerEntity p, float limbAngle, float limbDistance,
                        float tickDelta, float animationProgress, float headYaw, float headPitch) {
-        if (p.isInvisible()) return;
+        if (p.isInvisible() || ShaderCompat.shadowPass()) return;
         float time = (p.age + tickDelta) / 20f;
         String back = CosmeticFx.worn(p.getUuid(), "back");
         if (back.equals("back_uch")) {
