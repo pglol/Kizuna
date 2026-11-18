@@ -63,7 +63,7 @@ public final class Arenas {
     private Arenas() { }
 
     public static final RegistryKey<World> WORLD = RegistryKey.of(RegistryKeys.WORLD, Identifier.of("aot_rpg", "arena"));
-    private static final int GROUND = 64, BUILD_VERSION = 2, SLOTS = 3, SLOT_SPACING = 1500;
+    private static final int GROUND = 64, BUILD_VERSION = 3, SLOTS = 3, SLOT_SPACING = 1500;
     private static final int DM_TO_WIN = 12, DM_SECS = 360, DM_MAX = 12, ROUND_SECS = 150, BETWEEN_TICKS = 80, SHIELD_TICKS = 60;
     public static final int RANKED_LEVEL = 15;
     private static final String SPOT = "aot_arena_spot";
@@ -307,16 +307,31 @@ public final class Arenas {
         }
     }
 
-    /** The map is really there in this copy: solid ground under its first spawn. */
+    /** The map is really there in this copy: solid ground near its spawns (looked for over a wide band of heights). */
     private static boolean intact(ArenaMap map, int slot) {
         ServerWorld w = aw();
         List<int[]> sp = spawns(map);
         if (w == null || sp.isEmpty()) return false;
-        int[] s = sp.get(0);
-        int x = map.ox(slot) + s[0], z = map.oz(slot) + s[2];
-        w.getChunk(x >> 4, z >> 4);
-        for (int y = s[1] + 1; y >= s[1] - 6; y--) if (!w.getBlockState(new BlockPos(x, y, z)).isAir()) return true;
-        return false;
+        int found = 0, n = Math.min(3, sp.size());
+        for (int i = 0; i < n; i++) {
+            int[] s = sp.get(i * sp.size() / n);
+            int x = map.ox(slot) + s[0], z = map.oz(slot) + s[2];
+            w.getChunk(x >> 4, z >> 4);
+            for (int y = GROUND + 48; y >= GROUND - 48; y--) {
+                if (!w.getBlockState(new BlockPos(x, y, z)).isAir()) {
+                    found++;
+                    break;
+                }
+            }
+        }
+        // A spawn saved before the fix (at the bottom of the world): put it back on the ground.
+        for (int[] s : sp) {
+            if (s[1] < GROUND - 48) {
+                int y = top(w, Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, map.ox(0) + s[0], map.oz(0) + s[2]);
+                if (y > GROUND - 48) s[1] = y;
+            }
+        }
+        return found >= Math.max(1, n - 1);
     }
 
     private static void save() {
@@ -744,7 +759,7 @@ public final class Arenas {
         if (w == null || at == null) {
             w = server.getOverworld();
             BlockPos sp = w.getSpawnPos();
-            at = new double[] {sp.getX() + 0.5, w.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, sp.getX(), sp.getZ()), sp.getZ() + 0.5};
+            at = new double[] {sp.getX() + 0.5, top(w, Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, sp.getX(), sp.getZ()), sp.getZ() + 0.5};
         }
         if (gm == GameMode.SPECTATOR) gm = GameMode.SURVIVAL;
         p.changeGameMode(gm);
@@ -1212,6 +1227,12 @@ public final class Arenas {
         });
     }
 
+    /** The ground height at a column, loading its chunk first (an unloaded one reads as the bottom of the world). */
+    private static int top(ServerWorld w, Heightmap.Type type, int x, int z) {
+        w.getChunk(x >> 4, z >> 4);
+        return w.getTopY(type, x, z);
+    }
+
     private static ServerWorld aw() {
         return server.getWorld(WORLD);
     }
@@ -1254,7 +1275,7 @@ public final class Arenas {
             BUILD.add(() -> {
                 ServerWorld w = aw();
                 if (w == null) return;
-                int y = w.getTopY(Heightmap.Type.OCEAN_FLOOR, ox + t[0], oz + t[1]);
+                int y = top(w, Heightmap.Type.OCEAN_FLOOR, ox + t[0], oz + t[1]);
                 GiantTrees.grow(w, new BlockPos(ox + t[0], y, oz + t[1]), Random.create(t[0] * 31L + t[1]), GiantTrees.Wood.FOREST, 62, 88, 15);
             });
         }
@@ -1268,7 +1289,7 @@ public final class Arenas {
                 BlockState log = Blocks.SPRUCE_LOG.getDefaultState().with(PillarBlock.AXIS, ax);
                 for (int s = 0; s < len; s++) {
                     int x = x0 + (int) Math.round(Math.cos(dir) * s), z = z0 + (int) Math.round(Math.sin(dir) * s);
-                    int y = w.getTopY(Heightmap.Type.OCEAN_FLOOR, x, z);
+                    int y = top(w, Heightmap.Type.OCEAN_FLOOR, x, z);
                     for (int k = -1; k <= 1; k++) for (int h = 0; h < 2; h++) {
                         int px = ax == Direction.Axis.Z ? x + k : x, pz = ax == Direction.Axis.X ? z + k : z;
                         BlockState at = w.getBlockState(new BlockPos(px, y + h, pz));
@@ -1287,7 +1308,7 @@ public final class Arenas {
         BUILD.add(() -> {
             ServerWorld w = aw();
             if (w == null) return;
-            for (int[] s : spawns) s[1] = w.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, ox + s[0], oz + s[2]);
+            for (int[] s : spawns) s[1] = top(w, Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, ox + s[0], oz + s[2]);
         });
     }
 
