@@ -144,13 +144,22 @@ public final class CombatUi {
         struck.entrySet().removeIf(en -> now - en.getValue() > 6000);
         ids.addAll(struck.keySet());
         if (mc.targetedEntity != null) ids.add(mc.targetedEntity.getId());
+        // And any wounded foe close by, or one you're looking at further out.
+        if (mc.player != null) {
+            for (var en : mc.world.getOtherEntities(mc.player, mc.player.getBoundingBox().expand(20, 8, 20),
+                x -> x instanceof net.minecraft.entity.LivingEntity le && le.isAlive() && le.getHealth() < le.getMaxHealth() - 0.01f)) ids.add(en.getId());
+            Vec3d eye = mc.player.getEyePos(), look = mc.player.getRotationVec(1f);
+            var hit = net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, eye.add(look.multiply(32)),
+                mc.player.getBoundingBox().stretch(look.multiply(32)).expand(1), x -> x instanceof net.minecraft.entity.LivingEntity && !x.isSpectator(), 32 * 32);
+            if (hit != null) ids.add(hit.getEntity().getId());
+        }
         shown.keySet().retainAll(ids);
         for (int id : ids) {
             if (!(mc.world.getEntityById(id) instanceof net.minecraft.entity.LivingEntity e) || !e.isAlive() || e == mc.player) continue;
             String type = net.minecraft.registry.Registries.ENTITY_TYPE.getId(e.getType()).getPath();
             if (type.contains("titan") || e instanceof net.minecraft.entity.decoration.ArmorStandEntity) continue;
             boolean fighter = e instanceof net.minecraft.entity.player.PlayerEntity || e instanceof net.minecraft.entity.mob.Monster
-                || e instanceof net.minecraft.entity.passive.VillagerEntity && e.hasCustomName();
+                || e instanceof net.minecraft.entity.passive.VillagerEntity || e instanceof net.minecraft.entity.mob.HostileEntity;
             if (!fighter) continue;
             boolean mate = false;
             for (Net.PartyMember pm : ClientState.party) if (pm.id().equals(e.getUuid())) mate = true;
@@ -167,7 +176,8 @@ public final class CombatUi {
             ms.push();
             ms.translate(pos.x - cam.x, pos.y + e.getHeight() + 0.32 - cam.y, pos.z - cam.z);
             ms.multiply(mc.getEntityRenderDispatcher().getRotation());
-            ms.scale(-1, -1, 1);
+            // As a nametag is drawn (only y flipped), so the quads face the camera and aren't culled.
+            ms.scale(1, -1, 1);
             var m = ms.peek().getPositionMatrix();
             var buf = vc.getBuffer(net.minecraft.client.render.RenderLayer.getTextBackgroundSeeThrough());
             float w = 0.42f, h = 0.035f;
