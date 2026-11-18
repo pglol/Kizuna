@@ -245,11 +245,11 @@ public final class AirMoves {
         if (p.hasVehicle() || AotRpg.DOWNED.isDowned(p) || Stuns.stunned(p) || !Guard.melee(p.getMainHandStack())) return;
         Vec3d look = p.getRotationVec(1f).multiply(1, 0, 1).normalize();
         LivingEntity best = null;
-        double bd = 4.5 * 4.5;
-        for (Entity en : w.getOtherEntities(p, p.getBoundingBox().expand(4.8, 2, 4.8), x -> x instanceof LivingEntity le && foe(p, le))) {
+        double bd = 5.5 * 5.5;
+        for (Entity en : w.getOtherEntities(p, p.getBoundingBox().expand(6, 2.5, 6), x -> x instanceof LivingEntity le && foe(p, le))) {
             Vec3d to = en.getPos().subtract(p.getPos()).multiply(1, 0, 1);
             double d = to.lengthSquared() - Math.pow(en.getWidth() / 2, 2);
-            if (d > bd || to.lengthSquared() > 1e-4 && to.normalize().dotProduct(look) < 0.4) continue;
+            if (d > bd || to.lengthSquared() > 1e-4 && to.normalize().dotProduct(look) < 0.2) continue;
             bd = d;
             best = (LivingEntity) en;
         }
@@ -267,7 +267,7 @@ public final class AirMoves {
         best.damage(w.getDamageSources().playerAttack(p), AotRpg.isTitan(best) ? dmg * 0.6f : dmg);
         if (!AotRpg.isTitan(best)) {
             Stuns.stun(best, 20);
-            Impact.launch(best, p, 1.9);
+            Impact.launch(best, p, 2.3);
         }
         AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFE8B0, 5f), at.x, at.y, at.z, 0, 0, 0);
         AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFFFFF, 6f), at.x, at.y, at.z, 0, 0, 0);

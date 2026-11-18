@@ -429,6 +429,8 @@ public final class Troops {
                 eaten(w, v, t);
                 continue;
             }
+            // Thrown: limp through the air until they land.
+            if (Impact.thrown(v)) continue;
             think(w, v, t, sq, players, ticks);
         }
         if (ticks % 2 == 0) sense(w, players);

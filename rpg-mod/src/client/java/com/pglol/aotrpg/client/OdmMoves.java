@@ -54,11 +54,26 @@ public final class OdmMoves {
         if (now - groundHeld < 650 || now < crushUntil) return;
         var held = pl.getMainHandStack();
         if (!com.pglol.aotrpg.Guard.melee(held) || com.pglol.aotrpg.AotItems.isApgGun(held)) return;
+        // Only with someone there to take it (held, it goes the moment someone's in reach).
+        if (!crushTarget(mc, pl)) return;
         groundHeld = Long.MAX_VALUE / 2;
         crushUntil = now + 9_000;
         ClientPlayNetworking.send(new Net.OdmJump(com.pglol.aotrpg.AirMoves.CRUSH, pl.getYaw()));
         MovesHud.popup("CRUSHING BLOW", 0xFFFFD27A);
         ImpactFrames.rush(0.8f, 220);
+    }
+
+    /** Someone in front, close enough for a Crushing Blow (matches the server's reach). */
+    private static boolean crushTarget(MinecraftClient mc, ClientPlayerEntity pl) {
+        Vec3d look = pl.getRotationVec(1f).multiply(1, 0, 1).normalize();
+        for (var e : mc.world.getOtherEntities(pl, pl.getBoundingBox().expand(6, 2.5, 6))) {
+            if (!(e instanceof net.minecraft.entity.LivingEntity le) || !le.isAlive() || e instanceof net.minecraft.entity.decoration.ArmorStandEntity) continue;
+            Vec3d to = e.getPos().subtract(pl.getPos()).multiply(1, 0, 1);
+            if (to.lengthSquared() - Math.pow(e.getWidth() / 2, 2) > 5.5 * 5.5) continue;
+            if (to.lengthSquared() > 1e-4 && to.normalize().dotProduct(look) < 0.2) continue;
+            return true;
+        }
+        return false;
     }
 
     /** Strike at someone down and nearly done: a finisher. */

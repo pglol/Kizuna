@@ -33,22 +33,39 @@ public final class Impact {
     private Impact() {}
 
     /** In the air from a blow; power: thrown hard enough to break the wall they hit. */
-    private record Flight(LivingEntity e, Vec3d dir, long until, boolean power) { }
+    private record Flight(LivingEntity e, Vec3d dir, long at, long until, boolean power) { }
 
     private record Pin(LivingEntity e, Vec3d at, long until) { }
 
     private static final Map<UUID, Flight> flying = new HashMap<>();
     private static final Map<UUID, Pin> pinned = new HashMap<>();
+    private static final Map<UUID, Long> knocked = new HashMap<>();
     public static final int PIN_TICKS = 30;
 
     public static void register() {
         // Pinned to a wall: no swinging back until you peel off it.
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
             !world.isClient && pinned.containsKey(player.getUuid()) ? ActionResult.FAIL : ActionResult.PASS);
+        // A hard cut sends them flying: the harder the hit, the further (once a second at most each).
+        ServerLivingEntityEvents.AFTER_DAMAGE.register((e, src, base, taken, blocked) -> {
+            if (blocked || taken < 6 || !(src.getAttacker() instanceof net.minecraft.server.network.ServerPlayerEntity att) || att == e) return;
+            if (AotRpg.isTitan(e) || !Combat.melee(src) || pinned(e) || thrown(e) || Finishers.inScene(e) || Throws.holding(e)) return;
+            long now = e.getWorld().getTime();
+            Long last = knocked.get(e.getUuid());
+            if (last != null && now - last < 24) return;
+            knocked.put(e.getUuid(), now);
+            if (knocked.size() > 512) knocked.values().removeIf(t -> now - t > 200);
+            launch(e, att, 0.75 + Math.min(0.95, (taken - 6) * 0.07));
+        });
         ServerLivingEntityEvents.AFTER_DEATH.register((e, src) -> {
             flying.remove(e.getUuid());
             pinned.remove(e.getUuid());
         });
+    }
+
+    /** In the air from a throw (their own legs don't move them until they land). */
+    public static boolean thrown(net.minecraft.entity.Entity e) {
+        return flying.containsKey(e.getUuid());
     }
 
     public static boolean pinned(LivingEntity e) {
@@ -62,9 +79,13 @@ public final class Impact {
         if (d.lengthSquared() < 1e-4) d = from.getRotationVec(1f).multiply(1, 0, 1);
         if (d.lengthSquared() < 1e-4) return;
         d = d.normalize();
-        e.addVelocity(d.x * strength, 0.22 + strength * 0.08, d.z * strength);
+        // Off their feet: a real arc, so the throw carries (on the ground friction eats it in a step).
+        Vec3d v = e.getVelocity();
+        e.setVelocity(v.x * 0.3 + d.x * strength, Math.max(v.y, 0) + 0.34 + strength * 0.13, v.z * 0.3 + d.z * strength);
         e.velocityModified = true;
-        if (strength >= 0.9) flying.put(e.getUuid(), new Flight(e, d, e.getWorld().getTime() + 12, strength >= 1.5));
+        e.setOnGround(false);
+        long now = e.getWorld().getTime();
+        if (strength >= 0.7) flying.put(e.getUuid(), new Flight(e, d, now, now + 40, strength >= 1.5));
         // A big one cuts to an impact frame for the two of them.
         if (strength >= 1.1 && e.getWorld() instanceof ServerWorld w) {
             Vec3d at = e.getPos().add(from.getPos()).multiply(0.5).add(0, 1.2, 0);
@@ -89,10 +110,13 @@ public final class Impact {
             for (var en : new ArrayList<>(flying.entrySet())) {
                 Flight f = en.getValue();
                 LivingEntity e = f.e();
-                if (e.isRemoved() || !e.isAlive() || e.getWorld().getTime() > f.until()) {
+                long t = e.getWorld().getTime();
+                // Down again (after the first moment of the throw), or long enough: landed.
+                if (e.isRemoved() || !e.isAlive() || t > f.until() || t - f.at() > 4 && e.isOnGround()) {
                     flying.remove(en.getKey());
                     continue;
                 }
+                e.fallDistance = Math.min(e.fallDistance, 3);
                 // Into a wall in the direction they were thrown.
                 if (!e.horizontalCollision || !(e.getWorld() instanceof ServerWorld w)) continue;
                 BlockPos wall = BlockPos.ofFloored(e.getPos().add(f.dir().multiply(e.getWidth() * 0.5 + 0.4)).add(0, 1, 0));
