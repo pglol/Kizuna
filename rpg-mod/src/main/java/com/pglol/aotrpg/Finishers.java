@@ -56,6 +56,11 @@ public final class Finishers {
             !world.isClient && inScene(pl) ? net.minecraft.util.ActionResult.FAIL : net.minecraft.util.ActionResult.PASS);
     }
 
+    /** Our own killing blow is landing right now. */
+    public static boolean striking() {
+        return striking;
+    }
+
     /** In a finisher (either side) right now. */
     public static boolean inScene(Entity e) {
         for (Scene q : pending) if (q.by == e || q.on == e && q.t < KILL) return true;

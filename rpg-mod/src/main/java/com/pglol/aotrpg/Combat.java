@@ -30,14 +30,12 @@ public final class Combat {
      * little of the attacker's back, and armor counts for half.
      */
     static double pvp(ServerPlayerEntity def, double hit) {
-        double pool = Math.pow(Math.max(1, def.getMaxHealth() / 20.0), 0.7);
-        double lv = Math.sqrt(power(AotRpg.PROFILES.get(def.getUuid()).level));
-        double armor = def.getArmor(), tough = def.getAttributeValue(net.minecraft.entity.attribute.EntityAttributes.GENERIC_ARMOR_TOUGHNESS);
-        double d = hit * pool / lv;
-        double cut = Math.min(20, Math.max(armor / 5, armor - d / (2 + tough / 4))) / 25;
-        double half = cut < 0.99 ? (1 - cut / 2) / (1 - cut) : 1;
-        return pool / lv * half;
+        // Between players only the level gap counts (an even fight stays even), not raw level.
+        return 1 / power(AotRpg.PROFILES.get(def.getUuid()).level);
     }
+
+    /** No one cut takes more than this share of a player's health in PvP (a finisher aside). */
+    public static final float PVP_HIT_CAP = 0.2f;
 
     public static float scale(LivingEntity entity, net.minecraft.entity.damage.DamageSource source, float amount) {
         if (amount <= 0 || entity.getWorld().isClient) return amount;
@@ -84,6 +82,10 @@ public final class Combat {
             }
         }
         float out = Math.abs(mult - 1) < 1e-4 ? amount : (float) (amount * mult);
+        // Player against player: never one- or two-shot. At least five clean hits for anyone.
+        if (entity instanceof ServerPlayerEntity def && source.getAttacker() instanceof ServerPlayerEntity att && att != def && !Finishers.striking()) {
+            out = Math.min(out, def.getMaxHealth() * PVP_HIT_CAP);
+        }
         // Face, eyes, arms, legs: a player's cut always lands (so the titan flinches, staggers,
         // is blinded) but never kills. Only the nape does that: a hit that would finish a titan
         // anywhere else leaves it at 1 health instead of being swallowed as a nape strike.
