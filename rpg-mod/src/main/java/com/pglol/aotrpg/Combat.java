@@ -96,8 +96,13 @@ public final class Combat {
         return out;
     }
 
+    private final java.util.Map<java.util.UUID, Float> before = new java.util.HashMap<>();
+
     public void register() {
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
+            // Health (and absorption) just before the hit, so the number shown is what it really took.
+            if (before.size() > 512) before.clear();
+            if (source.getAttacker() instanceof ServerPlayerEntity) before.put(entity.getUuid(), entity.getHealth() + entity.getAbsorptionAmount());
             if (amount <= 0) return true;
             ServerPlayerEntity def = entity instanceof ServerPlayerEntity sp ? sp : null;
             if (def != null && AotRpg.ABILITIES.dodge(def, source)) return false;
@@ -130,7 +135,9 @@ public final class Combat {
             if (!ServerPlayNetworking.canSend(attacker, Net.HitMarker.ID)) return;
             boolean kill = entity.isDead() || entity.getHealth() <= 0;
             int kind = (ranged ? 1 : 0) | (kill ? 2 : 0) | (entity instanceof PlayerEntity ? 4 : 0) | (AotRpg.isTitan(entity) ? 8 : 0);
-            ServerPlayNetworking.send(attacker, new Net.HitMarker(entity.getId(), taken, kind));
+            Float was = before.remove(entity.getUuid());
+            float lost = was == null ? taken : Math.max(0, was - (Math.max(0, entity.getHealth()) + entity.getAbsorptionAmount()));
+            ServerPlayNetworking.send(attacker, new Net.HitMarker(entity.getId(), lost > 0 ? lost : taken, kind));
         });
     }
 
