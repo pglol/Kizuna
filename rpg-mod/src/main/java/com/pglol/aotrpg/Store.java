@@ -88,13 +88,39 @@ public final class Store {
         return pool.subList(0, Math.min(6, pool.size()));
     }
 
-    private static long price(String spec) {
+    /** Everything for sale any time: every cosmetic that isn't free, Mythic or uniform, and every title short of Mythic. */
+    public static List<String> catalog() {
+        List<String> out = new ArrayList<>();
+        for (Cosmetics.Def d : Cosmetics.ALL) {
+            if (!d.free() && !MYTHIC_COSMETICS.contains(d.id()) && !notSold(d) && CosmeticTiers.price(d.id()) > 0) out.add("cosmetic:" + d.id());
+        }
+        for (Title t : TITLES) if (t.rarity() < 5) out.add("title:" + t.id());
+        return out;
+    }
+
+    /** The full price, before this week's discount. */
+    static long fullPrice(String spec) {
         String[] a = spec.split(":", 2);
         if (a[0].equals("title")) {
             Title t = title(a[1]);
             return t == null ? 0 : TITLE_PRICE[t.rarity()];
         }
-        return COSMETIC_PRICE;
+        long p = CosmeticTiers.price(a.length > 1 ? a[1] : "");
+        return p > 0 ? p : COSMETIC_PRICE;
+    }
+
+    /** This week's featured offers are a quarter off. */
+    public static long price(String spec) {
+        long full = fullPrice(spec);
+        return offers().contains(spec) ? Math.round(full * 0.75) : full;
+    }
+
+    /** Someone online by name (case doesn't matter). */
+    private static ServerPlayerEntity online(ServerPlayerEntity from, String name) {
+        for (ServerPlayerEntity o : from.getServer().getPlayerManager().getPlayerList()) {
+            if (o.getGameProfile().getName().equalsIgnoreCase(name) || AotRpg.PROFILES.get(o.getUuid()).name.equalsIgnoreCase(name)) return o;
+        }
+        return null;
     }
 
     private static boolean owns(ServerPlayerEntity p, String spec) {
@@ -245,8 +271,35 @@ public final class Store {
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         if (!pr.created) return;
         switch (action) {
+            case "gift" -> {
+                // "spec|player": bought for someone else, delivered to them with your name on it.
+                String[] g = id.split("\\|", 2);
+                if (g.length < 2 || !catalog().contains(g[0])) return;
+                ServerPlayerEntity to = online(p, g[1]);
+                if (to == null || to == p) {
+                    Notify.toast(p, Text.literal("Can't send that gift").formatted(Formatting.RED), Text.literal(g[1] + " isn't online"), 0xC0463A);
+                    return;
+                }
+                if (owns(to, g[0])) {
+                    Notify.toast(p, Text.literal("They already have it").formatted(Formatting.RED), Text.literal(Rewards.describe(g[0])), 0xC0463A);
+                    return;
+                }
+                long cost = price(g[0]);
+                if (!AotRpg.WALLET.spendGold(p, cost)) {
+                    Notify.toast(p, Text.literal("Not enough Gold").formatted(Formatting.RED), Text.literal("That costs " + cost + " Gold"), 0xC0463A);
+                    return;
+                }
+                grant(to, g[0]);
+                Notify.toast(p, Text.literal("Gift sent to " + AotRpg.PROFILES.get(to.getUuid()).name).formatted(Formatting.GOLD),
+                    Text.literal(Rewards.describe(g[0]) + "  ·  -" + cost + " Gold"), 0xE0B96A);
+                Notify.toast(to, Text.literal("A gift from " + AotRpg.PROFILES.get(p.getUuid()).name).formatted(Formatting.GOLD),
+                    Text.literal(Rewards.describe(g[0])), 0xE0B96A, "minecraft:cake", "gift");
+                to.playSoundToPlayer(net.minecraft.sound.SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, net.minecraft.sound.SoundCategory.MASTER, 0.8f, 1.2f);
+                AotRpg.PROFILES.save(to.getUuid());
+                send(to, false);
+            }
             case "buy" -> {
-                if (!offers().contains(id) || owns(p, id)) return;
+                if (!catalog().contains(id) || owns(p, id)) return;
                 long cost = price(id);
                 if (!AotRpg.WALLET.spendGold(p, cost)) {
                     Notify.toast(p, Text.literal("Not enough Gold").formatted(Formatting.RED), Text.literal("That costs " + cost + " Gold"), 0xC0463A);
@@ -375,13 +428,19 @@ public final class Store {
     public void send(ServerPlayerEntity p, boolean open) {
         if (!ServerPlayNetworking.canSend(p, Net.StoreView.ID)) return;
         List<Net.StoreOffer> list = new ArrayList<>();
-        for (String o : offers()) {
+        List<String> featured = offers();
+        List<String> all = new ArrayList<>(featured);
+        for (String o : catalog()) if (!all.contains(o)) all.add(o);
+        for (String o : all) {
             String[] a = o.split(":", 2);
             Title t = a[0].equals("title") ? title(a[1]) : null;
             String name = t != null ? t.text() : Rewards.describe(o);
             int color = t != null ? t.color() : 0xB08CD8;
-            String kind = t != null ? RARITY_NAMES[t.rarity()] + " title" : "Cosmetic";
-            list.add(new Net.StoreOffer(o, name, kind, color, price(o), owns(p, o)));
+            // kind: "title:<rarity>" or "cosmetic:<slot>:<tier>"
+            Cosmetics.Def d = t == null ? Cosmetics.def(a[1]) : null;
+            String kind = t != null ? "title:" + t.rarity() : "cosmetic:" + (d == null ? "" : d.slot()) + ":" + CosmeticTiers.of(a[1]);
+            boolean feat = featured.contains(o);
+            list.add(new Net.StoreOffer(o, name, kind, color, price(o), owns(p, o), feat ? fullPrice(o) : 0, feat));
         }
         List<Net.StoreCrate> crates = new ArrayList<>();
         for (Crate c : CRATES) {

@@ -22,6 +22,7 @@ public abstract class CameraMixin {
     @Inject(method = "update", at = @At("TAIL"))
     private void aotrpg$cutscene(BlockView area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickDelta, CallbackInfo ci) {
         CutscenePlayer.Cam cam = CutscenePlayer.camera(tickDelta);
+        if (cam == null && net.minecraft.client.MinecraftClient.getInstance().currentScreen instanceof com.pglol.aotrpg.client.CosmeticsScreen cs) cam = cs.camera(tickDelta);
         if (cam == null) {
             net.minecraft.client.render.Camera self = (net.minecraft.client.render.Camera) (Object) this;
             cam = com.pglol.aotrpg.client.FinishScene.camera(tickDelta, self.getPos(), self.getYaw(), self.getPitch());

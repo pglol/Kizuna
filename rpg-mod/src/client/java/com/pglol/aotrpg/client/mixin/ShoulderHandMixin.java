@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ShoulderHandMixin {
     @Inject(method = "renderHand", at = @At("HEAD"), cancellable = true, require = 0)
     private void aotrpg$noHands(Camera camera, float tickDelta, Matrix4f matrix, CallbackInfo ci) {
-        if (ShoulderCam.active() || com.pglol.aotrpg.client.FinishScene.mine()) ci.cancel();
+        if (ShoulderCam.active() || com.pglol.aotrpg.client.FinishScene.mine()
+            || net.minecraft.client.MinecraftClient.getInstance().currentScreen instanceof com.pglol.aotrpg.client.CosmeticsScreen) ci.cancel();
     }
 }

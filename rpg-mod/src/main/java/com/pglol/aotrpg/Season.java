@@ -146,9 +146,28 @@ public final class Season {
         p.sendMessage(Text.literal("Daily bonus: +" + XP_DAILY + " pass XP").formatted(Formatting.GOLD), false);
     }
 
+    /** Gold to jump one tier ahead. */
+    public static final long SKIP_GOLD = 120;
+
     public void action(ServerPlayerEntity p, String action, int tier) {
         ProfileStore.Account a = account(p);
+        if (action.startsWith("gift:")) {
+            gift(p, action.substring(5));
+            send(p, false);
+            return;
+        }
         switch (action) {
+            case "skip" -> {
+                // Jump ahead a tier (or several) for Gold.
+                int n = Math.max(1, Math.min(10, tier));
+                if (ended() || tier(a) >= data.tiers.size()) break;
+                if (!AotRpg.WALLET.spendGold(p, SKIP_GOLD * n)) {
+                    p.sendMessage(Text.literal("You need ").formatted(Formatting.RED).append(Wallet.gold(SKIP_GOLD * n)), true);
+                    break;
+                }
+                xp(p, data.xpPerTier * n);
+                p.playSoundToPlayer(SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.MASTER, 0.7f, 1.3f);
+            }
             case "claim" -> claim(p, a, tier, true);
             case "claimall" -> {
                 for (int t = 0; t < tier(a); t++) claim(p, a, t, false);
@@ -170,6 +189,37 @@ public final class Season {
             default -> { }
         }
         send(p, action.equals("open"));
+    }
+
+    /** The premium pass bought for someone else (only by someone who has it themselves). */
+    private void gift(ServerPlayerEntity p, String name) {
+        if (!account(p).passPremium || ended()) {
+            p.sendMessage(Text.literal("Get the premium pass yourself first to gift it").formatted(Formatting.RED), true);
+            return;
+        }
+        ServerPlayerEntity to = null;
+        for (ServerPlayerEntity o : p.getServer().getPlayerManager().getPlayerList()) {
+            if (o != p && (o.getGameProfile().getName().equalsIgnoreCase(name) || AotRpg.PROFILES.get(o.getUuid()).name.equalsIgnoreCase(name))) to = o;
+        }
+        if (to == null) {
+            p.sendMessage(Text.literal(name + " isn't online").formatted(Formatting.RED), true);
+            return;
+        }
+        ProfileStore.Account ta = account(to);
+        if (ta.passPremium) {
+            p.sendMessage(Text.literal("They already have the premium pass").formatted(Formatting.RED), true);
+            return;
+        }
+        if (!AotRpg.WALLET.spendGold(p, data.premiumGold)) {
+            p.sendMessage(Text.literal("You need ").formatted(Formatting.RED).append(Wallet.gold(data.premiumGold)), true);
+            return;
+        }
+        ta.passPremium = true;
+        AotRpg.PROFILES.saveAccount(to.getUuid());
+        String from = AotRpg.PROFILES.get(p.getUuid()).name;
+        Reveal.show(to, "PREMIUM PASS", "A gift from " + from + "  ·  " + data.name, "minecraft:nether_star", 4);
+        Notify.toast(p, Text.literal("Premium pass gifted").formatted(Formatting.GOLD), Text.literal("to " + AotRpg.PROFILES.get(to.getUuid()).name), 0xE0B96A);
+        send(to, false);
     }
 
     /** Any reached tier with a reward not yet claimed (for the pause menu's alert). */

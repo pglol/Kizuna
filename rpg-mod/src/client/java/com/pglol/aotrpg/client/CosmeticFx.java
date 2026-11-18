@@ -251,6 +251,18 @@ public final class CosmeticFx {
         return set[(int) (Math.random() * set.length)];
     }
 
+    /** The cosmetics showroom is open (your own effects show even in first person). */
+    static boolean showroom() {
+        return MinecraftClient.getInstance().currentScreen instanceof CosmeticsScreen;
+    }
+
+    /** Hoof dust in a horse-trail style at a spot (the showroom plays it without a horse). */
+    public static void horseTrail(String style, double x, double y, double z, double vx, double vz) {
+        var mc = MinecraftClient.getInstance();
+        if (mc.world == null || style.isEmpty()) return;
+        mc.world.addParticle(pick(particles(style)), x, y, z, vx, 0.03, vz);
+    }
+
     /** A blade slash in a style: an arc of particles across the target. */
     public static void slash(Net.SlashFx fx) {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -416,7 +428,7 @@ public final class CosmeticFx {
         long t = mc.world.getTime();
         for (PlayerEntity p : mc.world.getPlayers()) {
             if (p.isInvisible() || p.isSpectator() || p.squaredDistanceTo(mc.player) > 64 * 64) continue;
-            boolean me = p == mc.player && mc.options.getPerspective().isFirstPerson();
+            boolean me = p == mc.player && mc.options.getPerspective().isFirstPerson() && !showroom();
             String body = worn(p.getUuid(), "body");
             if (!body.isEmpty() && !body.equals("body_none") && t % 3 == 0 && !me) {
                 ParticleEffect[] set = particles(body);
@@ -495,7 +507,7 @@ public final class CosmeticFx {
         float td = ctx.tickCounter().getTickDelta(true);
         float time = (mc.world.getTime() + td) / 20f;
         for (PlayerEntity p : mc.world.getPlayers()) {
-            if (p.isInvisible() || p == mc.player && mc.options.getPerspective().isFirstPerson()) continue;
+            if (p.isInvisible() || p == mc.player && mc.options.getPerspective().isFirstPerson() && !showroom()) continue;
             if (p.squaredDistanceTo(cam) > 48 * 48) continue;
             // Back pieces and head pieces are worn on the model (CosmeticLayer); only what orbits is drawn here.
             String head = worn(p.getUuid(), "head");

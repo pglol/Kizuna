@@ -1083,7 +1083,8 @@ public final class Net {
 
     // ---- the store (test run)
 
-    public record StoreOffer(String id, String title, String kind, int color, long price, boolean owned) { }
+    /** A thing for sale: was = its full price when discounted (else 0), featured = in this week's spotlight. */
+    public record StoreOffer(String id, String title, String kind, int color, long price, boolean owned, long was, boolean featured) { }
     public record StoreCrate(String id, String title, String desc, long marks, long gold, java.util.List<String> loot) { }
 
     /** Server -> client: an animated reward reveal (rarity 0..5 sets how big it plays). */
@@ -1157,15 +1158,17 @@ public final class Net {
         public static final Id<StoreView> ID = id("store");
         public static final PacketCodec<RegistryByteBuf, StoreView> CODEC = PacketCodec.of((v, b) -> {
             b.writeVarInt(v.offers.size());
-            for (StoreOffer o : v.offers) { b.writeString(o.id()); b.writeString(o.title()); b.writeString(o.kind()); b.writeInt(o.color()); b.writeVarLong(o.price()); b.writeBoolean(o.owned()); }
+            for (StoreOffer o : v.offers) { b.writeString(o.id()); b.writeString(o.title()); b.writeString(o.kind()); b.writeInt(o.color()); b.writeVarLong(o.price()); b.writeBoolean(o.owned());
+                b.writeVarLong(o.was()); b.writeBoolean(o.featured()); }
             b.writeVarInt(v.crates.size());
             for (StoreCrate c : v.crates) { b.writeString(c.id()); b.writeString(c.title()); b.writeString(c.desc()); b.writeVarLong(c.marks()); b.writeVarLong(c.gold());
                 b.writeVarInt(c.loot().size()); for (String l : c.loot()) b.writeString(l); }
             b.writeVarLong(v.secondsLeft); b.writeBoolean(v.open);
         }, b -> {
-            int n = Math.min(b.readVarInt(), 64);
+            int n = Math.min(b.readVarInt(), 1024);
             java.util.List<StoreOffer> o = new java.util.ArrayList<>();
-            for (int i = 0; i < n; i++) o.add(new StoreOffer(b.readString(), b.readString(), b.readString(), b.readInt(), b.readVarLong(), b.readBoolean()));
+            for (int i = 0; i < n; i++) o.add(new StoreOffer(b.readString(), b.readString(), b.readString(), b.readInt(), b.readVarLong(), b.readBoolean(),
+                b.readVarLong(), b.readBoolean()));
             int m = Math.min(b.readVarInt(), 16);
             java.util.List<StoreCrate> c = new java.util.ArrayList<>();
             for (int i = 0; i < m; i++) {
