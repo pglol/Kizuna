@@ -76,6 +76,9 @@ public final class LobbyScreen extends Screen {
             boolean vanillaMove = cat.equals("key.categories.movement") || cat.equals("key.categories.multiplayer") || cat.equals("key.categories.misc")
                 || cat.equals("key.categories.ui");
             if (keep.contains(k) || vanillaMove || k == mc.options.inventoryKey) continue;
+            // Right-click still works on blocks and people (the workbench, the forge, the benches),
+            // just not on thin air (where an item would be used: a bite, a flare, a spear).
+            if (k == mc.options.useKey && mc.crosshairTarget != null && mc.crosshairTarget.getType() != net.minecraft.util.hit.HitResult.Type.MISS) continue;
             // Attack, use, pick, swap hands, hotbar keys, and every mod's own (abilities, ODM gear).
             while (k.wasPressed()) { }
             k.setPressed(false);

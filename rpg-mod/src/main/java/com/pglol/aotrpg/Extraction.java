@@ -233,6 +233,25 @@ public final class Extraction {
         boolean over;
     }
 
+    /**
+     * The balloon is no place for a fight: no item uses (a shifter's bite, a flare, a spear),
+     * no attacks, and any titan that appears aboard (a transformation) is gone at once.
+     */
+    public static void registerGuards() {
+        net.fabricmc.fabric.api.event.player.UseItemCallback.EVENT.register((player, world, hand) ->
+            !world.isClient && player instanceof ServerPlayerEntity sp && inLobby(sp) && !player.isCreative()
+                ? net.minecraft.util.TypedActionResult.fail(player.getStackInHand(hand)) : net.minecraft.util.TypedActionResult.pass(player.getStackInHand(hand)));
+        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
+            !world.isClient && player instanceof ServerPlayerEntity sp && inLobby(sp) && !player.isCreative() ? net.minecraft.util.ActionResult.FAIL : net.minecraft.util.ActionResult.PASS);
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register((e, w) -> {
+            if (!AotRpg.isTitan(e) || w.getRegistryKey() != lobbyWorld || !inLobby(e.getBlockPos())) return;
+            AotRpg.SCHEDULER.later(1, () -> {
+                for (var pass : e.getPassengerList()) pass.stopRiding();
+                e.discard();
+            });
+        });
+    }
+
     /** A kill to count on someone's run (0 titan, 1 player, 2 soldier). */
     public static void count(ServerPlayerEntity killer, int kind) {
         if (self == null || killer == null) return;

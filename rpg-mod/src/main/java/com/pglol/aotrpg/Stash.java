@@ -172,7 +172,8 @@ public final class Stash {
             open.remove(p.getUuid());
             return;
         }
-        if (!open.contains(p.getUuid()) || !usable(p)) return;
+        // Aboard the balloon the stash is always to hand (the lobby shows it); at home, once opened.
+        if (!usable(p) || !Extraction.inLobby(p) && !open.contains(p.getUuid())) return;
         List<Cell> cells = layout(p, null);
         SimpleInventory bag = AotRpg.SATCHEL.get(p.getUuid());
         switch (action) {
