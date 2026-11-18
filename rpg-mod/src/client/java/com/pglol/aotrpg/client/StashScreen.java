@@ -145,9 +145,9 @@ public final class StashScreen extends Screen {
         sc.accent = Ui.RED;
         if (view != null && view.rowCost() >= 0) {
             AotButton ex = addDrawableChild(new AotButton(leftX() + panelW - 200, 56, 126, 16,
-                Text.literal("+9 slots · " + String.format(Locale.ROOT, "%,d", view.rowCost()) + " Salvage"), () -> act("expand", 0)));
+                Text.literal("+9 slots · " + String.format(Locale.ROOT, "%,d", view.rowCost()) + " Gold"), () -> act("expand", 0)));
             ex.textScale = 0.7f;
-            ex.active = view.salvage() >= view.rowCost();
+            ex.active = ClientState.gold >= view.rowCost();
         }
     }
 

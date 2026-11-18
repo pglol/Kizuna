@@ -56,14 +56,18 @@ public final class Stash {
     }
 
     /** What the next row of stash costs in Salvage. */
+    /** Everyone's stash starts with this many rows of its own, home or not. */
+    public static final int BASE_ROWS = 6;
+
+    /** What the next extra row of stash costs, in Gold (more stash is a store purchase). */
     public static long rowCost(Profile pr) {
-        return 80 + 40L * pr.stashRows;
+        return 40 + 10L * pr.stashRows;
     }
 
     private static SimpleInventory locker(ServerPlayerEntity p) {
         String stem = AotRpg.PROFILES.activeStem(p.getUuid());
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
-        int size = Math.max(0, Math.min(MAX_ROWS, pr.stashRows)) * ROW;
+        int size = (BASE_ROWS + Math.max(0, Math.min(MAX_ROWS, pr.stashRows))) * ROW;
         SimpleInventory inv = lockers.get(stem);
         if (inv == null || inv.size() != size) {
             SimpleInventory n = new SimpleInventory(size);
@@ -403,11 +407,11 @@ public final class Stash {
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         if (pr.stashRows >= MAX_ROWS) return;
         long cost = rowCost(pr);
-        if (pr.salvage < cost) {
-            Notify.toast(p, Text.literal("Not enough Salvage").formatted(net.minecraft.util.Formatting.RED), null, 0xC0463A, "aot_rpg:gas_refueler", null);
+        if (!AotRpg.WALLET.spendGold(p, cost)) {
+            Notify.toast(p, Text.literal("Not enough Gold").formatted(net.minecraft.util.Formatting.RED), Text.literal("+9 stash slots cost " + cost + " Gold"),
+                0xC0463A, "minecraft:barrel", null);
             return;
         }
-        pr.salvage -= cost;
         pr.stashRows++;
         AotRpg.PROFILES.save(p.getUuid());
         Reveal.show(p, "STASH EXPANDED", "+" + ROW + " slots", "minecraft:barrel", Math.min(4, 1 + pr.stashRows / 6));

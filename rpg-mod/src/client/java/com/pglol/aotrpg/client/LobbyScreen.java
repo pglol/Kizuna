@@ -69,7 +69,7 @@ public final class LobbyScreen extends Screen {
             else HudHide.show("lobby_walk");
         }
         if (!on) return;
-        var keep = java.util.Set.of(AotRpgClient.socialKey(), AotRpgClient.readyKey(), AotRpgClient.mapKey(), mc.options.chatKey, mc.options.commandKey,
+        var keep = java.util.Set.of(AotRpgClient.socialKey(), AotRpgClient.readyKey(), AotRpgClient.lobbyKey(), AotRpgClient.mapKey(), mc.options.chatKey, mc.options.commandKey,
             mc.options.inventoryKey, mc.options.playerListKey, mc.options.screenshotKey, mc.options.togglePerspectiveKey, mc.options.fullscreenKey);
         for (var k : mc.options.allKeys) {
             String cat = k.getCategory();
@@ -84,6 +84,8 @@ public final class LobbyScreen extends Screen {
             k.setPressed(false);
         }
         if (mc.currentScreen == null) while (AotRpgClient.readyKey().wasPressed()) ClientPlayNetworking.send(new Net.ExtractionAction("ready", ""));
+        // The lobby from anywhere on deck, no bench needed.
+        while (AotRpgClient.lobbyKey().wasPressed()) if (mc.currentScreen == null) mc.setScreen(new LobbyScreen());
     }
 
     /** Seated in the balloon with nothing else open: the lobby comes back up. */
@@ -158,7 +160,7 @@ public final class LobbyScreen extends Screen {
         boolean me = false;
         for (Net.LobbyMember m : view.squad()) if (m.you()) me = m.ready();
         String[][] keys = {{AotRpgClient.readyKey().getBoundKeyLocalizedText().getString(), me ? "Stand down" : "Ready up"},
-            {"Sit", "Open the lobby"}, {AotRpgClient.socialKey().getBoundKeyLocalizedText().getString(), "Menu"}};
+            {AotRpgClient.lobbyKey().getBoundKeyLocalizedText().getString(), "Open the lobby"}, {AotRpgClient.socialKey().getBoundKeyLocalizedText().getString(), "Menu"}};
         float kx = w / 2f - 150;
         for (String[] k : keys) {
             float kw = Ui.font().getWidth(k[0]) * 0.65f + 10;
@@ -438,7 +440,7 @@ public final class LobbyScreen extends Screen {
         Ui.text(c, Ui.heading("Stash"), mx0 + 8, top + 7, 0.8f, Ui.CREAM, false);
         Ui.text(c, Text.literal(used + " / " + cap), mx0 + 52, top + 9, 0.6f, used >= cap ? 0xFFE8433A : 0xFF9A958A, false);
         Sleek.button(c, hits, mx1 - 46, top + 5, 40, 14, "Sort", false, stash != null, () -> ClientPlayNetworking.send(new Net.StashAction("sort", 0)));
-        if (view.rowCost() >= 0) Sleek.button(c, hits, mx1 - 150, top + 5, 100, 14, "+9 slots \u00B7 " + view.rowCost(), false, view.salvage() >= view.rowCost(),
+        if (view.rowCost() >= 0) Sleek.button(c, hits, mx1 - 160, top + 5, 110, 14, "+9 slots \u00B7 " + view.rowCost() + " Gold", false, ClientState.gold >= view.rowCost(),
             () -> act("expand", ""));
         int cell = 20, cols = Math.max(1, (mw - 16) / cell);
         int satRows = 2, gridTop = top + 24, gridBottom = bottom - 16 - satRows * cell - 22;

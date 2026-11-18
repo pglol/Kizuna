@@ -37,7 +37,12 @@ public final class AotRpgClient implements ClientModInitializer {
         return socialKey;
     }
 
-    private static KeyBinding readyKey;
+    private static KeyBinding readyKey, lobbyKey;
+
+    /** Opens the extraction lobby from anywhere on the balloon's deck. */
+    public static KeyBinding lobbyKey() {
+        return lobbyKey;
+    }
 
     /** Ready up (or stand down) aboard the balloon, from anywhere on deck. */
     public static KeyBinding readyKey() {
@@ -80,6 +85,8 @@ public final class AotRpgClient implements ClientModInitializer {
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, "category.aot_rpg"));
         readyKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.ready",
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.aot_rpg"));
+        lobbyKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.lobby",
+            InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_L, "category.aot_rpg"));
         // Aboard the balloon: no fighting keys (ready, the menu and the map still work), and the
         // rest of the HUD steps aside for the lobby's own.
         ClientTickEvents.START_CLIENT_TICK.register(LobbyScreen::guardKeys);
