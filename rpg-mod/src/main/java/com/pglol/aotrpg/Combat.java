@@ -142,6 +142,8 @@ public final class Combat {
         net.minecraft.entity.Entity direct = source.getSource();
         if (direct == att) return !(att instanceof PlayerEntity p) || !AotItems.isApgGun(p.getMainHandStack());
         if (direct instanceof net.minecraft.entity.projectile.ProjectileEntity) return false;
+        // A hook, a wire, anything that isn't the body holding the blade: not a cut.
+        if (direct != null && !(direct instanceof LivingEntity)) return false;
         return att.getMainHandStack() != null && Guard.melee(att.getMainHandStack()) && !AotItems.isApgGun(att.getMainHandStack());
     }
 

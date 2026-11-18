@@ -268,23 +268,16 @@ public class WorldMapScreen extends Screen {
         if (v == null || v.walls().length < 3) return;
         int[] w = v.walls();
         double[] inner = {0, w[0], w[1], w[2]}, outer = {w[0], w[1], w[2], w[2] * 1.45};
-        int step = 2;
-        for (int y = mapT; y < mapB; y += step) {
-            double dz = wz(y + step / 2.0);
-            for (int s = 0; s < 4 && s < v.sectors().size(); s++) {
-                int ctl = v.sectors().get(s).controller();
-                if (ctl < 0 || ctl >= FactionScreen.COLORS.length) continue;
-                double ro = outer[s], ri = inner[s];
-                if (Math.abs(dz) >= ro) continue;
-                int col = (FactionScreen.COLORS[ctl] & 0xFFFFFF) | (s == 3 ? 0x2C000000 : 0x40000000);
-                double xo = Math.sqrt(ro * ro - dz * dz);
-                double xi = Math.abs(dz) < ri ? Math.sqrt(ri * ri - dz * dz) : 0;
-                if (xi <= 0) fillRow(c, -xo, xo, y, step, col);
-                else {
-                    fillRow(c, -xo, -xi, y, step, col);
-                    fillRow(c, xi, xo, y, step, col);
-                }
-            }
+        // Smooth bands round the walls, one per sector, in the colour of whoever holds it.
+        float ox = (float) sx(0), oy = (float) sy(0);
+        for (int s = 0; s < 4 && s < v.sectors().size(); s++) {
+            int ctl = v.sectors().get(s).controller();
+            if (ctl < 0 || ctl >= FactionScreen.COLORS.length) continue;
+            int col = (FactionScreen.COLORS[ctl] & 0xFFFFFF) | (s == 3 ? 0x2C000000 : 0x40000000);
+            float ri = (float) (inner[s] * zoom), ro = (float) (outer[s] * zoom);
+            if (ri <= 0) Smooth.disc(c, ox, oy, ro, col);
+            else Smooth.annulus(c, ox, oy, ri, ro, col);
+            Smooth.ring(c, ox, oy, ro, 1, (col & 0xFFFFFF) | 0x70000000);
         }
         // Legend
         int lx = mapL + 6, ly = mapB - 16 - 4 * 11;
@@ -295,7 +288,7 @@ public class WorldMapScreen extends Screen {
             int ctl = si.controller();
             int col = ctl < 0 ? Ui.MUTED : FactionScreen.COLORS[ctl];
             int yy = ly + 11 + s * 11;
-            c.fill(lx, yy + 1, lx + 7, yy + 8, col);
+            Smooth.dot(c, lx + 3.5f, yy + 4.5f, 3, col);
             String who = ctl < 0 ? "contested" : FactionScreen.NAMES[ctl] + (v.leader() == ctl ? " ♛" : "");
             c.drawTextWithShadow(textRenderer, Text.literal(si.title() + ": " + who), lx + 11, yy, Ui.CREAM);
         }
@@ -326,8 +319,7 @@ public class WorldMapScreen extends Screen {
         for (int i = 0; i + 2 < f.length; i += 3) {
             int x = (int) sx(f[i] + 0.5), y = (int) sy(f[i + 2] + 0.5);
             if (!inMap(x, y)) continue;
-            c.fill(x - 2, y - 2, x + 2, y + 2, 0xFF2A1406);
-            c.fill(x - 1, y - 1, x + 1, y + 1, 0xFFFF9A2E);
+            Smooth.dot(c, (float) sx(f[i] + 0.5), (float) sy(f[i + 2] + 0.5), 1.8f, 0xFFFF9A2E);
         }
     }
 
@@ -393,10 +385,7 @@ public class WorldMapScreen extends Screen {
             // The icon always shows; the label only where it fits.
             if (a.look().equals("cave")) c.drawCenteredTextWithShadow(textRenderer, Text.literal("\u2620"), x, y - 4, col);
             else if (a.look().equals("camp")) c.drawCenteredTextWithShadow(textRenderer, Text.literal("\u25b2"), x, y - 4, col);
-            else if (!big) {
-                c.fill(x - 3, y - 3, x + 4, y + 4, 0xFF1A140A);
-                c.fill(x - 2, y - 2, x + 3, y + 3, col);
-            }
+            else if (!big) Smooth.dot(c, (float) sx(a.x()), (float) sy(a.z()), 2.6f, col);
             if (clash) continue;
             placed.add(r);
             Ui.inked(c, lv, x, ty, 1f, 0xFFF4EAD2, true);
@@ -438,11 +427,7 @@ public class WorldMapScreen extends Screen {
             }
             x = MathHelper.clamp(x, mapL + 4, mapR - 4);
             y = MathHelper.clamp(y, mapT + 4, mapB - 4);
-            c.fill(x - 1, y - 4, x + 2, y + 5, 0xFF101010);
-            c.fill(x - 4, y - 1, x + 5, y + 2, 0xFF101010);
-            c.fill(x, y - 3, x + 1, y + 4, col);
-            c.fill(x - 3, y, x + 4, y + 1, col);
-            c.fill(x - 1, y - 1, x + 2, y + 2, col);
+            Smooth.pin(c, x, y + 4, col);
             if (Math.abs(mouseX - x) < 6 && Math.abs(mouseY - y) < 6) {
                 c.drawTooltip(textRenderer, List.of(Text.literal(m.label()).withColor(col),
                     Text.literal(distance(m.x(), m.z())).formatted(Formatting.GRAY)), mouseX, mouseY);
@@ -462,8 +447,7 @@ public class WorldMapScreen extends Screen {
             int x = (int) sx(m.x()), y = (int) sy(m.z());
             if (!inMap(x, y)) continue;
             int col = m.leader() ? 0xFFF2C14E : 0xFF5BD35B;
-            c.fill(x - 3, y - 3, x + 3, y + 3, 0xFF0B0F0C);
-            c.fill(x - 2, y - 2, x + 2, y + 2, col);
+            Smooth.dot(c, (float) sx(m.x()), (float) sy(m.z()), 2.6f, col);
             c.drawCenteredTextWithShadow(textRenderer, Text.literal(m.name()), x, y + 5, col);
         }
     }
@@ -471,13 +455,8 @@ public class WorldMapScreen extends Screen {
     private void drawPlayer(DrawContext c, float delta) {
         ClientPlayerEntity pl = client.player;
         if (pl == null) return;
-        MatrixStack ms = c.getMatrices();
-        ms.push();
-        ms.translate((float) sx(pl.getX()), (float) sy(pl.getZ()), 0);
-        ms.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pl.getYaw(delta) + 180));
-        ms.scale(1.3f, 1.3f, 1);
-        Text arrow = Text.literal("▲");
-        c.drawText(textRenderer, arrow, -textRenderer.getWidth(arrow) / 2, -4, 0xFFFFFFFF, true);
-        ms.pop();
+        float x = (float) sx(pl.getLerpedPos(delta).x), y = (float) sy(pl.getLerpedPos(delta).z), yaw = pl.getYaw(delta);
+        Smooth.cone(c, x, y, yaw, 30, 1.0f, 0x50FFFFFF);
+        Smooth.arrow(c, x, y, yaw, 6.5f, 0xFFFFFFFF);
     }
 }

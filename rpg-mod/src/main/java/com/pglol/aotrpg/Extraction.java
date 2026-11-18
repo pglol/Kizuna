@@ -66,21 +66,30 @@ public final class Extraction {
     static final BlockPos LOBBY = new BlockPos(-400_000, 170, 0);
     private static final int SLOT = 512;
     private static final long RUN_MS = 20 * 60_000L;
-    private static final int EXTRACT_TICKS = 160, EXIT_RADIUS = 4, BARRELS = 12, ISLAND = 480;
+    private static final int EXTRACT_TICKS = 160, EXIT_RADIUS = 4, BARRELS = 12;
     private static final String SEAT = "aot_seat", TITAN = "aot_ex";
 
     /** The islands. */
     public enum Island {
-        VERDANT("verdant", "verdant2", "Verdant Reach", 8, 16, 3, 0xFF5BD35B),
-        HIGHTREE("hightree", "hightree", "High Tree Forest", 12, 22, 5, 0xFF9CCB5E),
-        ASHEN("ashen", "ashen", "Ashen Crags", 16, 26, 4, 0xFFE0823A),
-        FROSTFELL("frostfell", "frostfell", "Frostfell", 26, 40, 4, 0xFF9AD0FF);
+        VERDANT("verdant", "verdant2", "Verdant Reach", 8, 16, 3, 0xFF5BD35B, 480, false),
+        // Half again as wide and picked for its hills: ridges and hollows under the giant trees.
+        HIGHTREE("hightree", "hightree", "High Tree Forest", 12, 22, 6, 0xFF9CCB5E, 720, true),
+        ASHEN("ashen", "ashen", "Ashen Crags", 16, 26, 4, 0xFFE0823A, 480, false),
+        FROSTFELL("frostfell", "frostfell", "Frostfell", 26, 40, 4, 0xFF9AD0FF, 480, false);
 
         public final String id, title;
-        public final int min, max, titans, color;
+        public final int min, max, titans, color, radius;
+        public final boolean hills;
         public final RegistryKey<World> world;
 
-        Island(String id, String dim, String title, int min, int max, int titans, int color) {
+        /** How much bigger than the standard island (distances and counts scale by it). */
+        double k() {
+            return radius / 480.0;
+        }
+
+        Island(String id, String dim, String title, int min, int max, int titans, int color, int radius, boolean hills) {
+            this.radius = radius;
+            this.hills = hills;
             this.id = id;
             this.title = title;
             this.min = min;
@@ -241,6 +250,7 @@ public final class Extraction {
 
     private static final String[][] POI_NAMES = {
         {"Overgrown Supply Depot", "Titan Nest", "Sunken Chapel", "Vine-Choked Watchtower"},
+        {"Hollow Giant", "Canopy Lookout", "Rope Bridge Camp", "Survey Corps Waystation", "Titan Nest", "Root Cellar Ruins"},
         {"Collapsed Mine", "Scout Outpost Ruins", "Titan Nest", "Burnt Waystation"},
         {"Frozen Garrison", "Ice Cave", "Titan Nest", "Buried Supply Sled"}};
 
@@ -301,10 +311,10 @@ public final class Extraction {
     private void pregen(int ticks) {
         // Only on a quiet server, and never more than a chunk a tick.
         if (server.getAverageTickTime() > 25) return;
-        int r = ISLAND / 16 + 3, side = r * 2 + 1;
         for (int shard = 0; shard < PREGEN_SHARDS; shard++) for (Island i : Island.values()) {
             ServerWorld w = server.getWorld(i.world);
             if (w == null) continue;
+            int r = i.radius / 16 + 3, side = r * 2 + 1;
             String key = shardKey(i, shard);
             int idx = data.pregen.getOrDefault(key, 0);
             if (idx >= side * side) continue;
@@ -313,7 +323,7 @@ public final class Extraction {
                 var f = finding.get(key);
                 if (f == null) {
                     int sh = shard;
-                    finding.put(key, java.util.concurrent.CompletableFuture.supplyAsync(() -> findCentre(w, sh), net.minecraft.util.Util.getMainWorkerExecutor()));
+                    finding.put(key, java.util.concurrent.CompletableFuture.supplyAsync(() -> findCentre(w, sh, i), net.minecraft.util.Util.getMainWorkerExecutor()));
                     continue;
                 }
                 if (!f.isDone()) continue;
@@ -402,7 +412,9 @@ public final class Extraction {
     // ------------------------------------------------------------------ the islands
 
     private static String shardKey(Island i, int shard) {
-        return shard == 0 ? i.id : i.id + ":" + shard;
+        // (High Tree was made bigger and hillier: its instances are found afresh.)
+        String id = i == Island.HIGHTREE ? "hightree2" : i.id;
+        return shard == 0 ? id : id + ":" + shard;
     }
 
     /**
@@ -415,7 +427,7 @@ public final class Extraction {
         if (c == null) {
             // Needed right now (a squad is dropping): worked out here, unless it's already on its way.
             var pending = finding.remove(key);
-            c = pending != null ? pending.join() : findCentre(w, shard);
+            c = pending != null ? pending.join() : findCentre(w, shard, i);
             keepCentre(i, shard, c);
         }
         return new BlockPos(c[0], 0, c[1]);
@@ -434,7 +446,8 @@ public final class Extraction {
      * The land-richest spot near an instance's origin, from the terrain noise alone (no chunks
      * made). Safe off the main thread; a coarse grid first, so it's quick.
      */
-    private static int[] findCentre(ServerWorld w, int shard) {
+    private static int[] findCentre(ServerWorld w, int shard, Island isl) {
+        int step = (int) (120 * isl.k());
         int ox = (shard % 16) * SHARD_SPACING, oz = (shard / 16) * SHARD_SPACING;
         var gen = w.getChunkManager().getChunkGenerator();
         var noise = w.getChunkManager().getNoiseConfig();
@@ -447,7 +460,7 @@ public final class Extraction {
                 int n = 0, sum = 0;
                 for (int sx = -2; sx <= 2; sx++) {
                     for (int sz = -2; sz <= 2; sz++) {
-                        int h = gen.getHeight(cx + sx * 120, cz + sz * 120, Heightmap.Type.WORLD_SURFACE_WG, w, noise);
+                        int h = gen.getHeight(cx + sx * step, cz + sz * step, Heightmap.Type.WORLD_SURFACE_WG, w, noise);
                         if (h > sea + 2) {
                             land++;
                             hs[n++] = h;
@@ -460,7 +473,9 @@ public final class Extraction {
                 for (int k = 0; k < n; k++) rough += Math.abs(hs[k] - (n == 0 ? 0 : sum / n));
                 if (n > 0) rough /= n;
                 // Land, level, and not too far from the middle.
-                int score = land * 10 - rough * 3 - Math.abs(gx) - Math.abs(gz);
+                // (A hill island wants rolling ground instead: ridges, not cliffs, not a flat.)
+                int shape = isl.hills ? Math.abs(rough - 10) * 3 : rough * 3;
+                int score = land * 10 - shape - Math.abs(gx) - Math.abs(gz);
                 if (score > best) {
                     best = score;
                     bx = cx;
@@ -1290,8 +1305,8 @@ public final class Extraction {
         Run run = new Run();
         run.island = island;
         run.endsAt = System.currentTimeMillis() + RUN_MS + 15_000;
-        double base = rnd.nextDouble() * Math.PI * 2;
-        BlockPos drop = land(iw, c.getX() + (int) (Math.cos(base) * 260), c.getZ() + (int) (Math.sin(base) * 260), rnd, 60);
+        double base = rnd.nextDouble() * Math.PI * 2, sc = island.k();
+        BlockPos drop = land(iw, c.getX() + (int) (Math.cos(base) * 260 * sc), c.getZ() + (int) (Math.sin(base) * 260 * sc), rnd, 60);
         if (drop == null) drop = land(iw, c.getX(), c.getZ(), rnd, 120);
         if (drop == null) drop = new BlockPos(c.getX(), iw.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, c.getX(), c.getZ()), c.getZ());
         if (fresh) {
@@ -1300,16 +1315,17 @@ public final class Extraction {
             // The exits, spread round the island.
             for (int i = 0; i < 3; i++) {
                 double a = base + Math.PI + (i - 1) * 1.6 + (rnd.nextDouble() - 0.5) * 0.4;
-                double d = 230 + rnd.nextInt(170);
+                double d = (230 + rnd.nextInt(170)) * sc;
                 BlockPos e = land(iw, c.getX() + (int) (Math.cos(a) * d), c.getZ() + (int) (Math.sin(a) * d), rnd, 40);
                 if (e != null) ses.exits.add(e);
             }
             if (ses.exits.isEmpty()) ses.exits.add(drop);
             // Two hot zones: three rich caches each, and titans that wake when someone comes near.
             List<String> names = new ArrayList<>(List.of(POI_NAMES[island.ordinal()]));
-            for (int i = 0; i < 2; i++) {
-                double a = base + i * Math.PI + (rnd.nextDouble() - 0.5);
-                double d = 110 + rnd.nextInt(170);
+            int zones = island.radius > 480 ? 3 : 2;
+            for (int i = 0; i < zones && !names.isEmpty(); i++) {
+                double a = base + i * Math.PI * 2 / zones + (rnd.nextDouble() - 0.5);
+                double d = (110 + rnd.nextInt(170)) * sc;
                 BlockPos at = land(iw, c.getX() + (int) (Math.cos(a) * d), c.getZ() + (int) (Math.sin(a) * d), rnd, 30);
                 if (at == null) continue;
                 Poi poi = new Poi();
@@ -1332,12 +1348,12 @@ public final class Extraction {
             RunObjectives.create(this, iw, ses, c, rnd);
             // Marleyans are already out here and looking for trouble: hunting parties that go after
             // whoever (or whatever) is nearest, a couple of patrols, and one sitting on a hot zone.
-            for (int i = 0; i < 4; i++) {
-                double a = rnd.nextDouble() * Math.PI * 2, d = 120 + rnd.nextInt(220);
+            for (int i = 0; i < (int) Math.round(4 * sc); i++) {
+                double a = rnd.nextDouble() * Math.PI * 2, d = (120 + rnd.nextInt(220)) * sc;
                 BlockPos at = land(iw, c.getX() + (int) (Math.cos(a) * d), c.getZ() + (int) (Math.sin(a) * d), rnd, 30);
                 if (at == null) continue;
-                if (i < 2) Troops.hunters(iw, at, 3 + rnd.nextInt(2), island.level(), ses.id, c, ISLAND, rnd);
-                else Troops.squad(iw, at, 3 + rnd.nextInt(2), island.level(), ses.id, c, ISLAND, rnd);
+                if (i < 2) Troops.hunters(iw, at, 3 + rnd.nextInt(2), island.level(), ses.id, c, island.radius, rnd);
+                else Troops.squad(iw, at, 3 + rnd.nextInt(2), island.level(), ses.id, c, island.radius, rnd);
             }
             if (!ses.pois.isEmpty()) {
                 Poi guard = ses.pois.get(rnd.nextInt(ses.pois.size()));
@@ -1350,8 +1366,8 @@ public final class Extraction {
         run.barrels = ses.barrels;
         // Supply barrels through the jungle (or the crags, or the snow); a few fresh ones when joining late.
         List<Long> left = data.leftover.computeIfAbsent(island.id, k -> new ArrayList<>());
-        for (int i = 0; i < (fresh ? BARRELS : 4); i++) {
-            double a = rnd.nextDouble() * Math.PI * 2, d = 20 + rnd.nextInt(420);
+        for (int i = 0; i < (fresh ? (int) Math.round(BARRELS * sc * sc) : 4); i++) {
+            double a = rnd.nextDouble() * Math.PI * 2, d = 20 + rnd.nextInt((int) (420 * sc));
             BlockPos bp = land(iw, c.getX() + (int) (Math.cos(a) * d), c.getZ() + (int) (Math.sin(a) * d), rnd, 20);
             if (bp == null || !iw.getBlockState(bp).isReplaceable() && !iw.getBlockState(bp).isAir()) continue;
             iw.setBlockState(bp, Blocks.BARREL.getDefaultState().with(net.minecraft.block.BarrelBlock.FACING, Direction.UP));
@@ -1671,7 +1687,7 @@ public final class Extraction {
                 if (!sessions.contains(ses)) return;
                 w.spawnParticles(ParticleTypes.CLOUD, land.getX() + 0.5, land.getY() + 0.5, land.getZ() + 0.5, 60, 3, 0.3, 3, 0.1);
                 w.playSound(null, land, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.HOSTILE, 1.5f, 0.7f);
-                Troops.hunters(w, land, 4 + w.random.nextInt(2), lvl, sid, ses.centre, ISLAND, w.random);
+                Troops.hunters(w, land, 4 + w.random.nextInt(2), lvl, sid, ses.centre, ses.island.radius, w.random);
                 quake(w, land, 40, 0.4f, 14);
             });
         } else {
@@ -1776,7 +1792,7 @@ public final class Extraction {
     private void shore(Run r, ServerPlayerEntity p, ServerWorld iw) {
         BlockPos c = r.session.centre;
         double dx = p.getX() - c.getX(), dz = p.getZ() - c.getZ(), d = Math.sqrt(dx * dx + dz * dz);
-        if (d < ISLAND) return;
+        if (d < r.island.radius) return;
         p.setVelocity(-dx / d * 1.2, 0.4, -dz / d * 1.2);
         p.velocityModified = true;
         p.sendMessage(Text.literal("The sea mist turns you back").formatted(Formatting.AQUA), true);
@@ -1815,7 +1831,7 @@ public final class Extraction {
             // Each match (instance) keeps its own titan count.
             Session here = sessionAt(w, p.getX(), p.getZ());
             if (here == null) continue;
-            double reach = ISLAND + 200;
+            double reach = here.island.radius + 200;
             int mine = 0, theirs = 0;
             for (ServerPlayerEntity d : divers) if (sessionAt(w, d.getX(), d.getZ()) == here) mine++;
             for (Entity t : titans) {
@@ -1918,7 +1934,7 @@ public final class Extraction {
         ts.addAll(RunObjectives.lines(r.session, p));
         int left = (int) Math.max(0, (r.endsAt - now) / 1000);
         int mins = (int) ((now - r.session.startedAt) / 60_000);
-        ServerPlayNetworking.send(p, new Net.RunView(r.island.id, r.island.title, r.island.color, c.getX(), c.getZ(), ISLAND, left, mins, pts, ts));
+        ServerPlayNetworking.send(p, new Net.RunView(r.island.id, r.island.title, r.island.color, c.getX(), c.getZ(), r.island.radius, left, mins, pts, ts));
     }
 
     private static void clearView(ServerPlayerEntity p) {
@@ -2047,7 +2063,7 @@ public final class Extraction {
         // everything left lying about (gear from the fallen, dropped loot) and its titans.
         List<Long> left = data.leftover.getOrDefault(r.island.id, new ArrayList<>());
         BlockPos c = r.session.centre;
-        double reach = ISLAND + 200;
+        double reach = r.island.radius + 200;
         for (var it = left.iterator(); it.hasNext(); ) {
             BlockPos bp = BlockPos.fromLong(it.next());
             if (c != null && bp.getSquaredDistance(c.getX(), bp.getY(), c.getZ()) > reach * reach && !r.barrels.contains(bp)) continue;
@@ -2079,7 +2095,7 @@ public final class Extraction {
     private Session sessionAt(World w, double x, double z) {
         Island i = Island.of(w);
         if (i == null) return null;
-        double reach = ISLAND + 200;
+        double reach = i.radius + 200;
         for (Session s : sessions) {
             if (s.island != i || s.centre == null) continue;
             double dx = x - s.centre.getX(), dz = z - s.centre.getZ();

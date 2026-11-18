@@ -519,6 +519,7 @@ public final class AotRpgClient implements ClientModInitializer {
             Trails.tickShooting(client);
             TitanState.tick(client);
             Minimap.tick(client);
+            IslandChart.tick(client);
             // Exhausted: no sprinting until stamina recovers.
             if (ClientState.exhausted && client.player != null && client.player.isSprinting()) client.player.setSprinting(false);
         });

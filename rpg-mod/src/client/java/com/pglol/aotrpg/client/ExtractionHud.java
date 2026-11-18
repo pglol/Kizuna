@@ -50,46 +50,56 @@ public final class ExtractionHud {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (!active() || mc.player == null || mc.options.hudHidden || mc.currentScreen != null) return;
         long t = Util.getMeasuringTimeMs();
-        int R = 46, cx = 14 + R, cy = 40 + R;
-        double range = 220;
+        int R = 50, cx = 14 + R, cy = 40 + R;
+        float bpp = 1.7f;
+        double range = R * bpp;
+        float td = tick.getTickDelta(true);
         // Where you are this frame (not this tick): the radar glides with you however fast you fly.
-        var lp = mc.player.getLerpedPos(tick.getTickDelta(true));
+        var lp = mc.player.getLerpedPos(td);
         double px = lp.x, pz = lp.z;
-        // The radar: a dark disc, rings, north up.
-        disc(c, cx, cy, R, 0xB0080A08);
-        ring(c, cx, cy, R, 0xFF7A6139);
-        ring(c, cx, cy, R * 2 / 3, 0x40FFFFFF);
-        ring(c, cx, cy, R / 3, 0x30FFFFFF);
-        // The island's edge, when it's in range.
+        // The ground itself under a soft rim, north up.
+        Smooth.ring(c, cx, cy, R + 4.5f, 3, 0x50000000);
+        Smooth.disc(c, cx, cy, R + 1, 0xFF0C1418);
+        Minimap.disc(c, cx, cy, R, px, pz, bpp);
+        Smooth.ring(c, cx, cy, R * 0.5f, 1, 0x26FFFFFF);
+        Smooth.ring(c, cx, cy, R + 1.6f, 2.2f, 0xFF7A6139);
+        // The island's edge, when it's in range: arcs of the mist line inside the radar.
         double ex = (view.cx() - px) / range * R, ez = (view.cz() - pz) / range * R, er = view.radius() / range * R;
-        for (int i = 0; i < 90; i++) {
-            double a = i * Math.PI * 2 / 90;
-            double x = ex + Math.cos(a) * er, z = ez + Math.sin(a) * er;
-            if (x * x + z * z < R * R) c.fill(cx + (int) x, cy + (int) z, cx + (int) x + 1, cy + (int) z + 1, 0x90A0D8FF);
+        double centreD = Math.sqrt(ex * ex + ez * ez);
+        if (centreD + R > er) {
+            for (int i = 0; i < 240; i++) {
+                double a = i * Math.PI * 2 / 240;
+                double x = ex + Math.cos(a) * er, z = ez + Math.sin(a) * er;
+                if (x * x + z * z < (R - 2) * (R - 2)) Smooth.disc(c, cx + (float) x, cy + (float) z, 0.9f, 0xB0A0D8FF);
+            }
         }
         for (Net.RunPoint pt : view.points()) {
             double dx = (pt.x() - px) / range * R, dz = (pt.z() - pz) / range * R;
             double d = Math.sqrt(dx * dx + dz * dz);
-            boolean rim = d > R - 4;
+            boolean rim = d > R - 5;
             if (rim) {
-                dx = dx / d * (R - 4);
-                dz = dz / d * (R - 4);
+                dx = dx / d * (R - 5);
+                dz = dz / d * (R - 5);
             }
             int col = pt.done() ? 0xFF55524A : color(pt.kind());
-            int x = cx + (int) dx, y = cy + (int) dz, s = pt.kind().equals("mate") ? 2 : 3;
-            if (pt.kind().equals("exit") && !rim) {
-                float pulse = 0.5f + 0.5f * MathHelper.sin(t * 0.008f);
-                c.fill(x - s - 1, y - s - 1, x + s + 2, y + s + 2, ((int) (120 * pulse) << 24) | (col & 0xFFFFFF));
+            float x = cx + (float) dx, y = cy + (float) dz;
+            switch (pt.kind()) {
+                case "exit" -> {
+                    float pulse = (t % 1600) / 1600f;
+                    if (!rim) Smooth.ring(c, x, y, 3 + pulse * 6, 1.2f, ((int) (200 * (1 - pulse)) << 24) | (col & 0xFFFFFF));
+                    Smooth.dot(c, x, y, 2.6f, col);
+                }
+                case "obj" -> Smooth.diamond(c, x, y, 3, col);
+                case "mark", "mymark" -> Smooth.pin(c, x, y + 3, col);
+                case "mate" -> Smooth.dot(c, x, y, 2, col);
+                default -> Smooth.dot(c, x, y, 2.4f, col);
             }
-            c.fill(x - s, y - s, x + s + 1, y + s + 1, 0xFF000000);
-            c.fill(x - s + 1, y - s + 1, x + s, y + s, col);
         }
-        // You: an arrow pointing where you face.
-        double yaw = Math.toRadians(mc.player.getYaw(tick.getTickDelta(true)));
-        double fx = -Math.sin(yaw), fz = Math.cos(yaw);
-        for (int i = 0; i < 6; i++) c.fill(cx + (int) (fx * i), cy + (int) (fz * i), cx + (int) (fx * i) + 2, cy + (int) (fz * i) + 2, 0xFFFFFFFF);
-        c.fill(cx - 1, cy - 1, cx + 2, cy + 2, 0xFFFFFFFF);
-        Ui.text(c, Text.literal("N"), cx, cy - R - 9, 0.7f, Ui.GOLD, true);
+        // You.
+        float yaw = mc.player.getYaw(td);
+        Smooth.cone(c, cx, cy, yaw, 24, 1.1f, 0x40FFFFFF);
+        Smooth.arrow(c, cx, cy, yaw, 5.5f, 0xFFFFFFFF);
+        Ui.text(c, Text.literal("N"), cx, cy - R - 10, 0.7f, Ui.GOLD, true);
         // The island, the clock, the match.
         int y = cy + R + 6;
         Ui.text(c, Ui.heading(view.name()), 14, y, 0.9f, view.color(), false);

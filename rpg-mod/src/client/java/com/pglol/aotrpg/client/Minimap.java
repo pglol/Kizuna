@@ -36,7 +36,7 @@ public final class Minimap {
      * smooth, filtered disc that slides under you a fraction of a pixel at a time, so it keeps up
      * however fast you fly.
      */
-    private static final int TEX = 256, VIEW = 96, R = VIEW / 2, RAD = 72, NEW_PER_TICK = 1400, REFRESH_PER_TICK = 260;
+    private static final int TEX = 256, VIEW = 96, R = VIEW / 2, RAD = 100, NEW_PER_TICK = 1400, REFRESH_PER_TICK = 260;
     private static final Identifier ID = Identifier.of("aot_rpg", "minimap");
     private static final int NONE = Integer.MIN_VALUE;
 
@@ -68,7 +68,7 @@ public final class Minimap {
     public static void tick(MinecraftClient mc) {
         ClientPlayerEntity pl = mc.player;
         ClientWorld w = mc.world;
-        if (pl == null || w == null || !ClientState.minimap) return;
+        if (pl == null || w == null || !ClientState.minimap && !ExtractionHud.active()) return;
         if (view == null) {
             view = new NativeImage(TEX, TEX, true);
             view.fillRect(0, 0, TEX, TEX, abgr(UNKNOWN));
@@ -240,6 +240,12 @@ public final class Minimap {
 
     /** The map as a smooth disc centred on (px, pz), sliding a fraction of a pixel at a time. */
     private static void disc(DrawContext c, int cx, int cy, double px, double pz) {
+        disc(c, cx, cy, R, px, pz, 1);
+    }
+
+    /** The terrain as a disc of radius r (GUI pixels) at this many blocks per pixel. */
+    static void disc(DrawContext c, float cx, float cy, float R, double px, double pz, float bpp) {
+        if (texture == null || !ready) return;
         if (changed) {
             // Filtered and wrapping (the map is a torus of world columns).
             texture.bindTexture();
@@ -252,8 +258,8 @@ public final class Minimap {
         org.joml.Matrix4f m = c.getMatrices().peek().getPositionMatrix();
         var buf = net.minecraft.client.render.Tessellator.getInstance().begin(net.minecraft.client.render.VertexFormat.DrawMode.TRIANGLES,
             net.minecraft.client.render.VertexFormats.POSITION_TEXTURE);
-        float u = (float) (px / TEX), v = (float) (pz / TEX), du = R / (float) TEX;
-        int seg = 72;
+        float u = (float) (px / TEX), v = (float) (pz / TEX), du = R * bpp / TEX;
+        int seg = 96;
         for (int i = 0; i < seg; i++) {
             double a0 = i * Math.PI * 2 / seg, a1 = (i + 1) * Math.PI * 2 / seg;
             float c0 = (float) Math.cos(a0), s0 = (float) Math.sin(a0), c1 = (float) Math.cos(a1), s1 = (float) Math.sin(a1);
@@ -298,10 +304,10 @@ public final class Minimap {
         // Low enough to clear an FPS counter in the corner.
         int s = VIEW, x = 10, y = 34;
         int cx = x + R, cy = y + R;
-        ring(c, cx, cy, R + 4, R + 3, 0x50000000);
-        ring(c, cx, cy, R + 3, R + 2, 0xFF8C7248);
-        ring(c, cx, cy, R + 2, R, 0xFF16140F);
+        Smooth.ring(c, cx, cy, R + 4.5f, 3, 0x50000000);
+        Smooth.disc(c, cx, cy, R + 1, 0xFF16140F);
         disc(c, cx, cy, px, pz);
+        Smooth.ring(c, cx, cy, R + 1.6f, 2.2f, 0xFF8C7248);
         // map-space origin (the world point at the top-left of the view)
         double ox = px - R, oz = pz - R;
 
@@ -311,8 +317,7 @@ public final class Minimap {
             double sx = fires[i] + 0.5 - ox, sz = fires[i + 2] + 0.5 - oz;
             if (!onMap(sx, sz, 3)) continue;
             int fx = x + (int) sx, fy = y + (int) sz;
-            c.fill(fx - 2, fy - 2, fx + 2, fy + 2, 0xFF2A1406);
-            c.fill(fx - 1, fy - 1, fx + 1, fy + 1, 0xFFFF9A2E);
+            Smooth.dot(c, x + (float) sx, y + (float) sz, 1.6f, 0xFFFF9A2E);
         }
         WitnessFx.minimap(c, x, y, s, ox, oz);
         // Entities: one marker per creature (titan hitbox parts are not mobs), diamonds so they never look like roofs.
@@ -329,16 +334,15 @@ public final class Minimap {
             for (int[] p : placed) if (Math.abs(p[0] - ex) <= 3 && Math.abs(p[1] - ey) <= 3) dup = true;
             if (dup) continue;
             placed.add(new int[] {ex, ey});
-            if (titan) diamond(c, ex, ey, 4, 0xFF1A0C0A, 0xFFC8402F);
-            else diamond(c, ex, ey, 2, 0xFF1A0C0A, 0xFFB86050);
+            if (titan) Smooth.diamond(c, x + (float) sx, y + (float) sz, 3.6f, 0xFFC8402F);
+            else Smooth.dot(c, x + (float) sx, y + (float) sz, 1.6f, 0xFFB86050);
         }
         // Party members (also far away: pinned to the rim)
         for (Net.PartyMember m : ClientState.party) {
             if (!m.online() || !m.sameWorld()) continue;
             int[] p = clamp(m.x() - ox, m.z() - oz, s);
             int col = m.leader() ? 0xFFF2C14E : 0xFF8FC07A;
-            c.fill(x + p[0] - 2, y + p[1] - 2, x + p[0] + 3, y + p[1] + 3, 0xFF0B0F0C);
-            c.fill(x + p[0] - 1, y + p[1] - 1, x + p[0] + 2, y + p[1] + 2, col);
+            Smooth.dot(c, x + p[0], y + p[1], 2.2f, col);
         }
         // Quest targets, map marks and party highlights (pinned to the rim when far away).
         boolean open = MinecraftClient.getInstance().world != null && MinecraftClient.getInstance().world.getRegistryKey() == net.minecraft.world.World.OVERWORLD;
@@ -358,29 +362,14 @@ public final class Minimap {
                 continue;
             }
             int[] p = clamp(m.x() + 0.5 - ox, m.z() + 0.5 - oz, s);
-            diamond(c, x + p[0], y + p[1], 3, 0xFF101010, 0xFF000000 | m.color());
+            Smooth.pin(c, x + p[0], y + p[1] + 4, 0xFF000000 | m.color());
         }
         Net.Objective obj = ClientState.objective;
         if (obj != null && obj.chapter().isEmpty() && obj.text().isEmpty()) obj = null;
-        // You: a slim pointer.
-        MatrixStack ms = c.getMatrices();
-        ms.push();
-        ms.translate(x + (float) (px - ox), y + (float) (pz - oz), 0);
-        ms.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pl.getYaw(td) + 180));
-        for (int r = -6; r <= 3; r++) {
-            int hw = (r + 6) / 2 + 1;
-            c.fill(-hw, r, hw + 1, r + 1, 0xFF14120E);
-        }
-        for (int r = -5; r <= 2; r++) {
-            int hw = (r + 5) / 2;
-            if (r == 2) {
-                c.fill(-hw, r, 0, r + 1, 0xFFF4ECD8);
-                c.fill(1, r, hw + 1, r + 1, 0xFFF4ECD8);
-            } else {
-                c.fill(-hw, r, hw + 1, r + 1, 0xFFF4ECD8);
-            }
-        }
-        ms.pop();
+        // You: a smooth pointer with a soft cone of view.
+        float mx = x + (float) (px - ox), my = y + (float) (pz - oz);
+        Smooth.cone(c, mx, my, pl.getYaw(td), 22, 1.1f, 0x40F4ECD8);
+        Smooth.arrow(c, mx, my, pl.getYaw(td), 5.5f, 0xFFF4ECD8);
 
         // North: a small plaque above the rim, joined to it by a brass pin.
         var font = Ui.font();

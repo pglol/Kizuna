@@ -87,11 +87,11 @@ public final class Clashes {
         long now = System.currentTimeMillis();
         String k = key(a, b);
         long[] r = recent.get(k);
-        if (r == null || now - r[1] > 5000) r = new long[] {0, now};
+        if (r == null || now - r[1] > 15000) r = new long[] {0, now};
         r[0]++;
         r[1] = now;
         recent.put(k, r);
-        if (recent.size() > 256) recent.values().removeIf(v -> now - v[1] > 10_000);
+        if (recent.size() > 256) recent.values().removeIf(v -> now - v[1] > 20_000);
         if (r[0] < 2) return false;
         recent.remove(k);
         Lock l = new Lock(a, b);

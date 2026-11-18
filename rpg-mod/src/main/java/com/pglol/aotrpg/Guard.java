@@ -33,8 +33,11 @@ import java.util.UUID;
  */
 public final class Guard {
     public static final int FX_BLOCK = 0, FX_CLASH = 1, FX_BREAK = 2;
-    private static final long CLASH_WINDOW_MS = 650;
-    private static final float CLASH_CHANCE = 0.75f;
+    private static final long CLASH_WINDOW_MS = 420;
+    private static final float CLASH_CHANCE = 0.35f;
+    /** Two who just clashed don't clash again for a while (a fight, not a stream of locks). */
+    private static final long CLASH_REST_MS = 6000;
+    private final java.util.Map<String, Long> clashedAt = new java.util.HashMap<>();
 
     private record Swing(int target, long at) { }
 
@@ -185,16 +188,24 @@ public final class Guard {
             long now = System.currentTimeMillis();
             ServerWorld w = (ServerWorld) entity.getWorld();
             // Clash: both fighters swung at each other just now.
-            if (entity instanceof ServerPlayerEntity def && src instanceof ServerPlayerEntity att && Combat.melee(source)
+            // Only blade on blade, face to face: never a hook or wire hit, never from out of reach.
+            Entity direct = source.getSource();
+            boolean bladeHit = (direct == null || direct == src) && entity.squaredDistanceTo(src) < 4.5 * 4.5;
+            String pair = src.getUuidAsString().compareTo(entity.getUuidAsString()) < 0
+                ? src.getUuidAsString() + entity.getUuidAsString() : entity.getUuidAsString() + src.getUuidAsString();
+            boolean rested = now - clashedAt.getOrDefault(pair, 0L) > CLASH_REST_MS;
+            if (bladeHit && rested && entity instanceof ServerPlayerEntity def && src instanceof ServerPlayerEntity att && Combat.melee(source)
                 && melee(att.getMainHandStack()) && melee(def.getMainHandStack()) && !guarding(def)) {
                 Swing theirs = swings.get(def.getUuid());
                 // They swung at this attacker, or swung at all while facing them close by (air fights rarely line up a target).
                 boolean atThem = theirs != null && (theirs.target() == att.getId()
-                    || (theirs.target() < 0 || w.getEntityById(theirs.target()) == null) && inFront(def, att) && def.squaredDistanceTo(att) < 9 * 9);
+                    || (theirs.target() < 0 || w.getEntityById(theirs.target()) == null) && inFront(def, att) && inFront(att, def) && def.squaredDistanceTo(att) < 4 * 4);
                 if (theirs != null && atThem && now - theirs.at() < CLASH_WINDOW_MS
                     && att.getRandom().nextFloat() < CLASH_CHANCE) {
                     swings.remove(def.getUuid());
                     swings.remove(att.getUuid());
+                    clashedAt.put(pair, now);
+                    if (clashedAt.size() > 256) clashedAt.values().removeIf(v -> now - v > CLASH_REST_MS);
                     // The second clash running between the same two: the blades bind.
                     if (Clashes.clash(att, def)) return false;
                     // Usually an even clash, both thrown apart. Now and then one side overpowers the
