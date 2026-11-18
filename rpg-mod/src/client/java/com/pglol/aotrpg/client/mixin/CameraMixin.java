@@ -22,6 +22,7 @@ public abstract class CameraMixin {
     @Inject(method = "update", at = @At("TAIL"))
     private void aotrpg$cutscene(BlockView area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickDelta, CallbackInfo ci) {
         CutscenePlayer.Cam cam = CutscenePlayer.camera(tickDelta);
+        if (cam == null) cam = com.pglol.aotrpg.client.FinishScene.camera(tickDelta);
         if (cam == null) cam = com.pglol.aotrpg.client.LobbyScreen.camera(tickDelta);
         if (cam == null) cam = com.pglol.aotrpg.client.ShoulderCam.camera(tickDelta);
         if (cam == null) return;

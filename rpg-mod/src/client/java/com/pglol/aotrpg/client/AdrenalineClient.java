@@ -110,6 +110,11 @@ public final class AdrenalineClient {
             case Adrenaline.FX_CHAIN -> MovesHud.chain(f.arg());
             case Adrenaline.FX_METER -> meter = f.arg();
             case Adrenaline.FX_FINISH -> {
+                if (f.arg() < 0) {
+                    FinishScene.stop(f.entity());
+                    break;
+                }
+                FinishScene.start(f.entity(), f.arg());
                 if (e != null) {
                     Afterimages.leave(e, 0xFF3A2A, 400);
                     streaks(mc, e, e.getYaw(), 14, true);

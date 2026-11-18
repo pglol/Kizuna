@@ -42,7 +42,7 @@ public final class Finish {
 
     public static void render(DrawContext c, RenderTickCounter tick) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.options.hudHidden || mc.currentScreen != null || target(mc) == null) return;
+        if (mc.player == null || mc.options.hudHidden || mc.currentScreen != null || FinishScene.mine() || target(mc) == null) return;
         float pulse = 0.6f + 0.4f * MathHelper.sin(Util.getMeasuringTimeMs() / 80f);
         int w = c.getScaledWindowWidth(), h = c.getScaledWindowHeight();
         int col = ((int) (255 * pulse) << 24) | 0xFF3A2A;

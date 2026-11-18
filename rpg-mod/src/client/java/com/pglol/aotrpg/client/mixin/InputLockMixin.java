@@ -13,5 +13,6 @@ public abstract class InputLockMixin {
     @Inject(method = "tick", at = @At("TAIL"))
     private void aotrpg$lock(boolean slowDown, float slowDownFactor, CallbackInfo ci) {
         Autopilot.steer((KeyboardInput) (Object) this);
+        com.pglol.aotrpg.client.FinishScene.steer((KeyboardInput) (Object) this);
     }
 }

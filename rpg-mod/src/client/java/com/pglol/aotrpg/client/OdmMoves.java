@@ -63,6 +63,7 @@ public final class OdmMoves {
 
     /** Strike at someone down and nearly done: a finisher. */
     private static boolean finishTick(MinecraftClient mc, ClientPlayerEntity pl, boolean press) {
+        if (FinishScene.mine()) return press;
         if (!press || Finish.target(mc) == null) return false;
         ClientPlayNetworking.send(new Net.OdmJump(com.pglol.aotrpg.Finishers.KIND, pl.getYaw()));
         return true;

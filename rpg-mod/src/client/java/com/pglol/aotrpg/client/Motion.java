@@ -44,7 +44,7 @@ public final class Motion {
 
     /** Busy with something that sets its own whole pose (pinned, face down, a slam). */
     private static boolean posed(LivingEntity e) {
-        return AdrenalineClient.pinned(e.getId()) || AdrenalineClient.faceplant(e.getId()) > 0 || OdmMoves.anim(e.getId()) != null;
+        return FinishScene.in(e.getId()) || AdrenalineClient.pinned(e.getId()) || AdrenalineClient.faceplant(e.getId()) > 0 || OdmMoves.anim(e.getId()) != null;
     }
 
     /** Called as each body is drawn: works out how it's moving, eased frame to frame. */
@@ -89,6 +89,7 @@ public final class Motion {
 
     /** The whole body: lean, bank, squash, tumble, and the death fall. */
     public static void transforms(LivingEntity e, MatrixStack ms, float td) {
+        if (e.deathTime <= 0 && FinishScene.transforms(e, ms)) return;
         if (!ours(e)) return;
         St s = st(e);
         if (e.deathTime > 0) {
@@ -122,6 +123,7 @@ public final class Motion {
 
     /** The limbs: flinch, tumble, jump and fall, landing, and going limp in death. */
     public static void pose(BipedEntityModel<?> m, LivingEntity e, float age) {
+        if (FinishScene.pose(m, e)) return;
         if (!ours(e)) return;
         St s = st(e);
         if (e.deathTime > 0) {
