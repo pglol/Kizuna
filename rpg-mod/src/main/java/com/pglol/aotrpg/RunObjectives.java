@@ -76,13 +76,13 @@ final class RunObjectives {
     /** Three objectives for a new match, spread over the island. */
     static void create(Extraction ex, ServerWorld w, Extraction.Session ses, BlockPos c, Random r) {
         List<String[]> pool = new ArrayList<>(List.of(NAMES));
-        double k = ses.island.k(), a0 = r.nextDouble() * Math.PI * 2;
+        double sc = ses.island.k(), a0 = r.nextDouble() * Math.PI * 2;
         int n = ses.island.radius > 480 ? 4 : 3;
         for (int i = 0; i < n && !pool.isEmpty(); i++) {
             String[] kind = pool.remove(r.nextInt(pool.size()));
             if (pool.isEmpty()) pool.addAll(List.of(NAMES));
             // Spread round the island, not bunched.
-            double a = a0 + i * Math.PI * 2 / n + (r.nextDouble() - 0.5) * 0.8, d = (90 + r.nextInt(290)) * k;
+            double a = a0 + i * Math.PI * 2 / n + (r.nextDouble() - 0.5) * 0.8, d = (90 + r.nextInt(290)) * sc;
             BlockPos at = Extraction.land(w, c.getX() + (int) (Math.cos(a) * d), c.getZ() + (int) (Math.sin(a) * d), r, 40);
             if (at == null) continue;
             Objective o = new Objective();
