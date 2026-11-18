@@ -648,7 +648,7 @@ public final class Troops {
             if (t.knock != t.knockDone) {
                 t.knockDone = t.knock;
                 double k = t.knock.length();
-                v.setVelocity(v.getVelocity().add(t.knock.x * 1.3, 0.22 + k * 0.2, t.knock.z * 1.3));
+                v.setVelocity(v.getVelocity().add(t.knock.x * 0.45, 0.06 + k * 0.05, t.knock.z * 0.45));
             }
             t.knockT--;
             if (t.knockT >= 2) return;

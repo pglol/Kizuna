@@ -48,14 +48,15 @@ public final class Impact {
             !world.isClient && pinned.containsKey(player.getUuid()) ? ActionResult.FAIL : ActionResult.PASS);
         // A hard cut sends them flying: the harder the hit, the further (once a second at most each).
         ServerLivingEntityEvents.AFTER_DAMAGE.register((e, src, base, taken, blocked) -> {
-            if (blocked || taken < 6 || !(src.getAttacker() instanceof net.minecraft.server.network.ServerPlayerEntity att) || att == e) return;
+            // Only a really heavy cut sends someone flying; ordinary blows just rock them.
+            if (blocked || taken < 14 || !(src.getAttacker() instanceof net.minecraft.server.network.ServerPlayerEntity att) || att == e) return;
             if (AotRpg.isTitan(e) || !Combat.melee(src) || pinned(e) || thrown(e) || Finishers.inScene(e) || Throws.holding(e)) return;
             long now = e.getWorld().getTime();
             Long last = knocked.get(e.getUuid());
             if (last != null && now - last < 24) return;
             knocked.put(e.getUuid(), now);
             if (knocked.size() > 512) knocked.values().removeIf(t -> now - t > 200);
-            launch(e, att, 0.75 + Math.min(0.95, (taken - 6) * 0.07));
+            launch(e, att, 0.7 + Math.min(0.6, (taken - 14) * 0.04));
         });
         ServerLivingEntityEvents.AFTER_DEATH.register((e, src) -> {
             flying.remove(e.getUuid());
