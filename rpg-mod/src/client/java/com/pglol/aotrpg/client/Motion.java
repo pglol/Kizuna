@@ -88,8 +88,8 @@ public final class Motion {
     }
 
     /** The whole body: lean, bank, squash, tumble, and the death fall. */
-    public static void transforms(LivingEntity e, MatrixStack ms, float td) {
-        if (e.deathTime <= 0 && FinishScene.transforms(e, ms)) return;
+    public static void transforms(LivingEntity e, MatrixStack ms, float bodyYaw, float td) {
+        if (e.deathTime <= 0 && FinishScene.transforms(e, ms, bodyYaw, td)) return;
         if (!ours(e)) return;
         St s = st(e);
         if (e.deathTime > 0) {

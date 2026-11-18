@@ -36,6 +36,14 @@ public final class Afterimages {
             rgb & 0xFFFFFF, Util.getMeasuringTimeMs(), life));
     }
 
+    /** An image of this body left at a given spot, facing yaw (for scripted paths). */
+    public static void leaveAt(Entity e, Vec3d at, float yaw, int rgb, long life) {
+        if (!(e instanceof net.minecraft.entity.LivingEntity p)) return;
+        if (ghosts.size() > 40) ghosts.remove(0);
+        ghosts.add(new Ghost(p.getId(), at, yaw, yaw, p.getPitch(), p.limbAnimator.getPos(), p.limbAnimator.getSpeed(),
+            rgb & 0xFFFFFF, Util.getMeasuringTimeMs(), life));
+    }
+
     /** A line of them from a spot to where the body is now (a blur across the gap). */
     public static void smear(Entity e, Vec3d from, int rgb, int count, long life) {
         if (!(e instanceof net.minecraft.entity.LivingEntity p)) return;

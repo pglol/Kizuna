@@ -362,6 +362,7 @@ public final class Troops {
                 double best = 400 * 400;
                 for (ServerPlayerEntity p : players) {
                     if (p.isSpectator() || p.isCreative()) continue;
+                    if (wild(sq) && safe(w, p.getX(), p.getZ())) continue;
                     double d = p.squaredDistanceTo(from);
                     if (d < best) {
                         best = d;
@@ -417,6 +418,13 @@ public final class Troops {
             if (near == null || nd > 300 * 300) continue;
             Squad sq = squads.get(t.squad);
             if (sq == null) continue;
+            // A wild fighter who wanders into a town is gone, the way titans are.
+            if (wild(sq) && ticks % 20 == 3 && safe(w, v.getX(), v.getZ())) {
+                w.spawnParticles(ParticleTypes.CLOUD, v.getX(), v.getY() + 1, v.getZ(), 12, 0.3, 0.6, 0.3, 0.02);
+                troops.remove(en.getKey(), t);
+                v.discard();
+                continue;
+            }
             if (t.grabbed >= 0) {
                 eaten(w, v, t);
                 continue;
@@ -613,6 +621,16 @@ public final class Troops {
 
     // ------------------------------------------------------------------ one man
 
+    /** Inside a town in the open world: wild fighters leave people there alone and never walk in. */
+    public static boolean safe(net.minecraft.world.World w, double x, double z) {
+        return w.getRegistryKey() == net.minecraft.world.World.OVERWORLD
+            && AotRpg.PLACES.nearest(x, z, 100, "town", "village", "city", "capital") != null;
+    }
+
+    private static boolean wild(Squad sq) {
+        return sq != null && sq.session != null && sq.session.startsWith("wild:");
+    }
+
     private static boolean valid(LivingEntity e) {
         return e != null && e.isAlive() && !(e instanceof ServerPlayerEntity sp && (sp.isSpectator() || sp.isCreative() || AotRpg.DOWNED.isDowned(sp)));
     }
@@ -678,6 +696,8 @@ public final class Troops {
                 target = best;
             }
         }
+        // Out in the wilds they fight; once you're inside a town they let you be.
+        if (wild(sq) && target instanceof ServerPlayerEntity tp && safe(w, tp.getX(), tp.getZ())) target = null;
         if (target instanceof ServerPlayerEntity sp && !t.spotted) {
             t.spotted = true;
             sp.playSoundToPlayer(SoundEvents.ENTITY_PILLAGER_CELEBRATE, SoundCategory.HOSTILE, 1f, 0.8f);
@@ -1504,6 +1524,14 @@ public final class Troops {
             }
         }
         Random r = w.random;
+        // Cut down by someone: XP for the fight (officers and masters more).
+        if (src.getAttacker() instanceof ServerPlayerEntity killer && t != null) {
+            long base = officer ? 45 : 18;
+            Arch arch = sq == null ? Arch.MARLEY : sq.arch;
+            if (arch == Arch.MASTER) base = 90;
+            else if (arch == Arch.SWORDSMAN || arch == Arch.MERCENARY) base += 10;
+            AotRpg.PROGRESSION.award(killer, Progression.forLevel(level, AotRpg.PROFILES.get(killer.getUuid()).level, base), officer ? "Officer down" : "Enemy down");
+        }
         List<ItemStack> drops = new ArrayList<>();
         Item ammo = AotItems.exact("apg_cartridge"), gas = AotItems.exact("gas_canister"), blades = AotItems.exact("blade_component");
         if (ammo != null && (officer || r.nextFloat() < 0.6f)) drops.add(new ItemStack(ammo, 2 + r.nextInt(4)));

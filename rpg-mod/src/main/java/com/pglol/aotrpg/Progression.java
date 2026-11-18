@@ -43,6 +43,8 @@ public final class Progression {
         set(p, EntityAttributes.GENERIC_ATTACK_DAMAGE, "stat_strength", 0.5 * pr.total(Stat.STRENGTH), add);
         set(p, EntityAttributes.GENERIC_MOVEMENT_SPEED, "stat_agility", 0.015 * pr.total(Stat.AGILITY), mul);
         set(p, EntityAttributes.GENERIC_MAX_HEALTH, "stat_endurance", 2.0 * pr.total(Stat.ENDURANCE), add);
+        // Every level makes you a little tougher too (and hits harder: see Combat.power).
+        set(p, EntityAttributes.GENERIC_MAX_HEALTH, "level_health", Math.max(0, pr.level - 1), add);
         set(p, EntityAttributes.GENERIC_ARMOR, "stat_resolve", pr.total(Stat.RESOLVE), add);
 
         Discipline d = pr.discipline;
@@ -87,6 +89,26 @@ public final class Progression {
         hungerTier.remove(p.getUuid());
     }
 
+    /**
+     * XP for beating something of this level: more for tougher foes, far less for ones well
+     * beneath you (no farming the shallows at level 60).
+     */
+    public static long forLevel(int foe, int you, long base) {
+        double k = 1 + 0.25 * Math.max(0, foe);
+        int gap = you - foe;
+        if (gap > 8) k *= Math.max(0.2, 1 - (gap - 8) * 0.06);
+        else if (gap < -3) k *= Math.min(1.6, 1 + (-gap - 3) * 0.05);
+        return Math.max(1, Math.round(base * k));
+    }
+
+    /** XP with a word of what for (over the hotbar). */
+    public void award(ServerPlayerEntity p, long xp, String label) {
+        Profile pr = AotRpg.PROFILES.get(p.getUuid());
+        if (!pr.created || xp <= 0) return;
+        p.sendMessage(Text.literal("+" + xp + " XP  ").formatted(Formatting.GOLD, Formatting.BOLD).append(Text.literal(label).formatted(Formatting.GRAY)), true);
+        addXp(p, pr, xp);
+    }
+
     public void addXp(ServerPlayerEntity p, Profile pr, long amount) {
         if (!pr.created || pr.level >= MAX_LEVEL) return;
         amount = Math.round(amount * (1 + Roles.bonus(pr)));
@@ -103,8 +125,17 @@ public final class Progression {
         if (up) {
             apply(p, pr);
             AotRpg.NAMETAGS.update(p, pr);
-            Reveal.show(p, "LEVEL " + pr.level, "+1 stat point" + (pr.level % 10 == 0 ? ", +2 skill points" : pr.level % 2 == 0 ? ", +1 skill point" : "")
-                + (AotRpg.hasClient(p) ? "  ·  open with K" : "  (/character)"), "minecraft:experience_bottle", pr.level % 10 == 0 ? 4 : 3);
+            // Felt, not just read: back to full, a burst of gold, a chord.
+            p.setHealth(p.getMaxHealth());
+            AotRpg.STAMINA.refill(p);
+            var w = p.getServerWorld();
+            AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFD24A, 6f), p.getX(), p.getY() + 0.1, p.getZ(), 0, 0, 0);
+            AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFF0B0, 5f), p.getX(), p.getY() + 1, p.getZ(), 0, 0, 0);
+            AotParticles.burst(w, AotParticles.STREAK, 0xFFD24A, 0.9f, p.getX(), p.getY() + 1, p.getZ(), 26, 0.4, 0.9);
+            w.playSound(null, p.getBlockPos(), SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.PLAYERS, 0.9f, 1.1f);
+            w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 1f, 0.8f);
+            Reveal.show(p, "LEVEL " + pr.level, "+2% damage  ·  +1 health  ·  +1 stat point" + (pr.level % 10 == 0 ? "  ·  +2 skill points" : pr.level % 2 == 0 ? "  ·  +1 skill point" : "")
+                + (AotRpg.hasClient(p) ? "  ·  K" : "  (/character)"), "minecraft:experience_bottle", pr.level % 10 == 0 ? 4 : 3);
         }
         AotRpg.sync(p, pr);
     }

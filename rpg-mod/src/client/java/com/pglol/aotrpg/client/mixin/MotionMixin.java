@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class MotionMixin {
     @Inject(method = "setupTransforms(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/util/math/MatrixStack;FFFF)V", at = @At("TAIL"))
     private void aotrpg$motion(LivingEntity e, MatrixStack ms, float anim, float bodyYaw, float tickDelta, float scale, CallbackInfo ci) {
-        Motion.transforms(e, ms, tickDelta);
+        Motion.transforms(e, ms, bodyYaw, tickDelta);
     }
 
     @Inject(method = "getLyingAngle(Lnet/minecraft/entity/LivingEntity;)F", at = @At("HEAD"), cancellable = true)

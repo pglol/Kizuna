@@ -44,11 +44,27 @@ public final class WarParties {
         });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             if (s.getTicks() % 60 == 13) tick();
+            if (s.getTicks() % 40 == 21) clearTowns();
         });
     }
 
     /** Nothing on the map: you find them. */
     public static void markers(ServerPlayerEntity p, List<Net.Marker> list) { }
+
+    /** Monsters don't stalk the streets: any that get into a town where people are, vanish. */
+    private static void clearTowns() {
+        if (server == null) return;
+        ServerWorld w = server.getOverworld();
+        for (ServerPlayerEntity p : w.getPlayers()) {
+            if (!Troops.safe(w, p.getX(), p.getZ())) continue;
+            for (var e : w.getEntitiesByClass(net.minecraft.entity.mob.MobEntity.class, p.getBoundingBox().expand(64, 32, 64),
+                m -> m instanceof net.minecraft.entity.mob.Monster && m.isAlive() && !AotRpg.isTitan(m) && !m.hasCustomName() && !Troops.is(m))) {
+                if (!Troops.safe(w, e.getX(), e.getZ())) continue;
+                w.spawnParticles(net.minecraft.particle.ParticleTypes.CLOUD, e.getX(), e.getY() + 0.8, e.getZ(), 8, 0.3, 0.4, 0.3, 0.02);
+                e.discard();
+            }
+        }
+    }
 
     private static void tick() {
         if (server == null) return;

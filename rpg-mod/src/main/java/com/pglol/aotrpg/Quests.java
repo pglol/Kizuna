@@ -177,7 +177,7 @@ public final class Quests {
         pr.quests.put(d.id(), new int[] {DONE, d.kills()});
         if (tracked(pr).equals(d.id())) pr.tracked = "main";
         Titles.show(p, Text.literal("QUEST COMPLETE").formatted(Formatting.GOLD, Formatting.BOLD),
-            Text.literal(d.title() + "  ·  +" + d.xp() + " XP").formatted(Formatting.YELLOW), 10, 60, 20);
+            Text.literal(d.title() + "  ·  +" + d.xp() * 3 + " XP").formatted(Formatting.YELLOW), 10, 60, 20);
         p.playSoundToPlayer(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.MASTER, 0.8f, 1f);
         // Rewards: supplies from the AoT mod for fights, Marks for everything, gear for fights.
         if (d.kills() > 0) {
@@ -188,7 +188,7 @@ public final class Quests {
         } else {
             AotRpg.WALLET.earn(p, 10 + d.level() * 2L, d.title());
         }
-        AotRpg.PROGRESSION.addXp(p, pr, d.xp());
+        AotRpg.PROGRESSION.addXp(p, pr, d.xp() * 3);
         AotRpg.ROLES.addPoints(p, 5);
         AotRpg.SEASON.xp(p, d.kills() > 0 ? Season.XP_QUEST : Season.XP_QUEST / 2);
         AotRpg.EVENTS.onQuest(p);

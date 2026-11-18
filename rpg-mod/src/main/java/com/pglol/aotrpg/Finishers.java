@@ -25,7 +25,7 @@ public final class Finishers {
     public static final int KIND = 11;
 
     /** The scene, in ticks (the client plays the same timeline): dash, wind-up, cut, kill, over. */
-    private static final int DASH = 5, CUT = 15, KILL = 24, END = 34;
+    private static final int DASH = 6, CUT = 19, KILL = 38, END = 56;
 
     private static final class Scene {
         final ServerPlayerEntity by;
@@ -87,14 +87,17 @@ public final class Finishers {
         // Squared up: the one finishing ends a long step off, the two facing each other.
         Vec3d dir = best.getPos().subtract(p.getPos()).multiply(1, 0, 1);
         dir = dir.lengthSquared() < 1e-4 ? look : dir.normalize();
-        Vec3d spot = best.getPos().subtract(dir.multiply(1.7));
+        // The scene ends with them through and past, kneeling behind the foe (the client draws the way there).
+        Vec3d spot = best.getPos().add(dir.multiply(1.9));
         float yaw = (float) (Math.toDegrees(Math.atan2(dir.z, dir.x)) - 90);
         face(best, yaw + 180);
         Stuns.stun(best, END + 6);
-        pending.add(new Scene(p, best, p.getPos(), new Vec3d(spot.x, best.getY(), spot.z), yaw));
-        // Everyone around sees it play out.
+        // Everyone around sees it play out (sent before the move, so they know where it started).
         Net.RushFx fx = new Net.RushFx(p.getId(), Adrenaline.FX_FINISH, yaw, best.getId());
         for (ServerPlayerEntity o : PlayerLookup.around(w, best.getPos(), 64)) if (ServerPlayNetworking.canSend(o, Net.RushFx.ID)) ServerPlayNetworking.send(o, fx);
+        Vec3d end = new Vec3d(spot.x, best.getY(), spot.z);
+        pending.add(new Scene(p, best, end, end, yaw));
+        p.teleport(w, end.x, end.y, end.z, yaw, 10);
         w.playSound(null, best.getBlockPos(), SoundEvents.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.5f, 0.6f);
         w.playSound(null, best.getBlockPos(), SoundEvents.ITEM_TRIDENT_RETURN, SoundCategory.PLAYERS, 1.2f, 0.5f);
     }
@@ -134,19 +137,14 @@ public final class Finishers {
             }
             ServerWorld w = p.getServerWorld();
             int t = ++q.t;
-            // The dash in, then held where the scene put them.
-            float k = Math.min(1, t / (float) DASH);
-            k = k * k * (3 - 2 * k);
-            Vec3d at = q.from.lerp(q.to, k);
-            if (t <= DASH || p.getPos().squaredDistanceTo(at) > 0.09) p.teleport(w, at.x, at.y, at.z, q.yaw, 10);
+            // Held where the scene ends; the way there is drawn by everyone's client.
+            Vec3d at = q.to;
+            if (p.getPos().squaredDistanceTo(at) > 0.09) p.teleport(w, at.x, at.y, at.z, q.yaw, 10);
             hold(p);
             if (t < KILL) {
                 hold(v);
                 if (!(v instanceof ServerPlayerEntity)) face(v, q.yaw + 180);
-                if (t <= DASH) {
-                    Vec3d m = at.add(0, 1, 0);
-                    AotParticles.burst(w, AotParticles.STREAK, 0xFF3A2A, 0.7f, m.x, m.y, m.z, 3, 0.2, 0.1);
-                }
+                if (t == DASH + 2) w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.PLAYERS, 1.2f, 0.6f);
             }
             if (t == CUT) {
                 // The blade lands.

@@ -138,6 +138,8 @@ public final class AotRpg implements ModInitializer {
         GiantTrees.register();
         AotParticles.register();
         HitSounds.register();
+        // (Before the talk and trade handlers: a crouching right-click on a fighter is a grab.)
+        Throws.register();
         Net.register();
         SatchelHandler.register();
         Crafting.register();
@@ -891,7 +893,7 @@ public final class AotRpg implements ModInitializer {
         EXTRACT.onTitanKill(killer, dead);
         if (killer == null) return;
         Mentors.count(killer, "titans", 1);
-        long xp = Math.max(15, Math.round(10 + dead.getMaxHealth() / 4));
+        long xp = Progression.forLevel(Math.max(1, TitanLevels.level(dead)), PROFILES.get(killer.getUuid()).level, 30 + Math.round(dead.getMaxHealth() / 12));
         if (PROFILES.get(killer.getUuid()).has(Skill.TITAN_SLAYER)) xp = Math.round(xp * 1.25);
         reward(killer, xp, true, "Titan slain");
         // Salvage: a little for every titan, more for bosses and shifters, double out on a run.

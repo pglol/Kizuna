@@ -2032,10 +2032,13 @@ public final class Extraction {
         int t = Cinematics.cut(List.of(p), Cinematics.extract(p.getPos()), "", "", 0x5BD35B);
         p.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, t + 40, 4, false, false));
         int g = gear;
+        // Getting out alive is worth a good deal (more with tasks done).
+        long runXp = Progression.forLevel(r.island.level(), AotRpg.PROFILES.get(p.getUuid()).level, 120 + doneTasks * 40L);
         AotRpg.SCHEDULER.later(t, () -> {
             if (p.isDisconnected()) return;
             toLobby(p, true);
-            Reveal.show(p, "EXTRACTED", r.island.title + "  ·  +" + salvage + " Salvage", "aot_rpg:gas_refueler", g >= 6 ? 4 : g >= 3 ? 3 : 2);
+            Reveal.show(p, "EXTRACTED", r.island.title + "  ·  +" + salvage + " Salvage  ·  +" + runXp + " XP", "aot_rpg:gas_refueler", g >= 6 ? 4 : g >= 3 ? 3 : 2);
+            AotRpg.PROGRESSION.addXp(p, AotRpg.PROFILES.get(p.getUuid()), runXp);
         });
     }
 

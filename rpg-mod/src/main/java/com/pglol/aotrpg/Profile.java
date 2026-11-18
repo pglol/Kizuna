@@ -138,6 +138,7 @@ public final class Profile {
     }
 
     public static long xpForNext(int level) {
-        return Math.round(40 * Math.pow(level, 1.35));
+        // Quick at first (a couple of fights), then steadier: about ten fair fights a level by 40.
+        return Math.round(80 + 60 * level + 0.9 * level * level);
     }
 }
