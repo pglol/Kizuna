@@ -485,30 +485,18 @@ public final class OneOfOne {
     public static void eyes(MatrixStack ms, VertexConsumerProvider vc, float time, String head, int tint) {
         Matrix4f m = ms.peek().getPositionMatrix();
         boolean red = head.equals("head_uch");
-        int core = red ? 0xFFE01A1A : 0xFF000000 | lighter(tint, 0.45f);
-        int glowA = red ? 0x90FF2A1A : 0x90000000 | tint;
-        float pulse = 0.85f + 0.15f * MathHelper.sin(time * 4);
+        // Exactly over the skin's eyes (two pixels wide, one tall, a row below the middle of the
+        // face), just in front of the hat layer so nothing covers them.
+        float px = 1 / 16f, zf = -4.6f * px, y0 = -4 * px, y1 = -3 * px;
+        int core = red ? 0xFFE81A1A : 0xFF000000 | lighter(tint, 0.35f);
         VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
-        float zf = -0.2535f, y0 = -0.27f, y1 = -0.22f;
+        VertexConsumer solid = vc.getBuffer(RenderLayer.getDebugQuads());
         for (int s = -1; s <= 1; s += 2) {
-            float cx = s * 0.125f;
-            // A soft halo round each eye, then the eye itself.
-            float hw = 0.1f * pulse, hh = 0.06f * pulse;
-            quad(glow, m, cx - hw, (y0 + y1) / 2 - hh, zf - 0.002f, cx + hw, (y0 + y1) / 2 + hh, 0x50000000 | (glowA & 0xFFFFFF));
-            quad(glow, m, cx - 0.06f, y0, zf - 0.003f, cx + 0.06f, y1, core);
-        }
-        if (red) {
-            // The pupils: dark, three marks round them.
-            VertexConsumer solid = vc.getBuffer(RenderLayer.getDebugQuads());
-            for (int s = -1; s <= 1; s += 2) {
-                float cx = s * 0.125f;
-                quad(solid, m, cx - 0.014f, -0.252f, zf - 0.004f, cx + 0.014f, -0.238f, 0xFF140404);
-                for (int k = 0; k < 3; k++) {
-                    double a = time * 1.5 + k * Math.PI * 2 / 3;
-                    float tx = cx + (float) Math.cos(a) * 0.034f, ty = -0.245f + (float) Math.sin(a) * 0.017f;
-                    quad(solid, m, tx - 0.007f, ty - 0.006f, zf - 0.004f, tx + 0.007f, ty + 0.006f, 0xFF140404);
-                }
-            }
+            float x0 = s < 0 ? -3 * px : px, x1 = x0 + 2 * px;
+            quad(solid, m, x0, y0, zf, x1, y1, red ? 0xFFB01010 : 0xFF000000 | Showcase.mix(tint, 0, 0.35f));
+            quad(glow, m, x0, y0, zf - 0.001f, x1, y1, core);
+            // The pupil: one dark dot in the middle of each red eye.
+            if (red) quad(solid, m, x0 + 0.75f * px, y0 + 0.25f * px, zf - 0.002f, x0 + 1.25f * px, y1 - 0.25f * px, 0xFF140404);
         }
     }
 
