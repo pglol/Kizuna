@@ -25,16 +25,18 @@ public final class Finishers {
     public static final int KIND = 11;
 
     /** The scene, in ticks (the client plays the same timeline): dash, wind-up, cut, kill, over. */
-    private static final int DASH = 6, CUT = 19, KILL = 38, END = 56;
+    private static final int DASH = 6;
 
     private static final class Scene {
         final ServerPlayerEntity by;
         final LivingEntity on;
         final Vec3d from, to;
         final float yaw;
+        final FinisherStyles.Style st;
         int t;
 
-        Scene(ServerPlayerEntity by, LivingEntity on, Vec3d from, Vec3d to, float yaw) {
+        Scene(ServerPlayerEntity by, LivingEntity on, Vec3d from, Vec3d to, float yaw, FinisherStyles.Style st) {
+            this.st = st;
             this.by = by;
             this.on = on;
             this.from = from;
@@ -63,7 +65,7 @@ public final class Finishers {
 
     /** In a finisher (either side) right now. */
     public static boolean inScene(Entity e) {
-        for (Scene q : pending) if (q.by == e || q.on == e && q.t < KILL) return true;
+        for (Scene q : pending) if (q.by == e || q.on == e && q.t < q.st.kill()) return true;
         return false;
     }
 
@@ -92,16 +94,19 @@ public final class Finishers {
         // Squared up: the one finishing ends a long step off, the two facing each other.
         Vec3d dir = best.getPos().subtract(p.getPos()).multiply(1, 0, 1);
         dir = dir.lengthSquared() < 1e-4 ? look : dir.normalize();
-        // The scene ends with them through and past, kneeling behind the foe (the client draws the way there).
-        Vec3d spot = best.getPos().add(dir.multiply(1.9));
+        // Your finisher (a cosmetic): where it leaves you, and its timing; the client draws the way there.
+        FinisherStyles.Style st = FinisherStyles.of(AotRpg.COSMETICS.selected(p, "finisher"));
+        Vec3d side = new Vec3d(-dir.z, 0, dir.x);
+        Vec3d spot = best.getPos().add(dir.multiply(st.endAlong())).add(side.multiply(st.endSide()));
         float yaw = (float) (Math.toDegrees(Math.atan2(dir.z, dir.x)) - 90);
         face(best, yaw + 180);
-        Stuns.stun(best, END + 6);
+        Stuns.stun(best, st.end() + 6);
         // Everyone around sees it play out (sent before the move, so they know where it started).
-        Net.RushFx fx = new Net.RushFx(p.getId(), Adrenaline.FX_FINISH, yaw, best.getId());
+        // (The style travels in the yaw field: the client works the facing out itself.)
+        Net.RushFx fx = new Net.RushFx(p.getId(), Adrenaline.FX_FINISH, FinisherStyles.index(st.id()), best.getId());
         for (ServerPlayerEntity o : PlayerLookup.around(w, best.getPos(), 64)) if (ServerPlayNetworking.canSend(o, Net.RushFx.ID)) ServerPlayNetworking.send(o, fx);
         Vec3d end = new Vec3d(spot.x, best.getY(), spot.z);
-        pending.add(new Scene(p, best, end, end, yaw));
+        pending.add(new Scene(p, best, end, end, yaw, st));
         p.teleport(w, end.x, end.y, end.z, yaw, 10);
         w.playSound(null, best.getBlockPos(), SoundEvents.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.5f, 0.6f);
         w.playSound(null, best.getBlockPos(), SoundEvents.ITEM_TRIDENT_RETURN, SoundCategory.PLAYERS, 1.2f, 0.5f);
@@ -136,6 +141,7 @@ public final class Finishers {
             ServerPlayerEntity p = q.by;
             LivingEntity v = q.on;
             boolean victimGone = !v.isAlive() || v.isRemoved() || v.getWorld() != p.getWorld();
+            int KILL = q.st.kill(), END = q.st.end();
             if (p.isRemoved() || !p.isAlive() || q.t < KILL && victimGone) {
                 abort(q);
                 continue;
@@ -151,7 +157,19 @@ public final class Finishers {
                 if (!(v instanceof ServerPlayerEntity)) face(v, q.yaw + 180);
                 if (t == DASH + 2) w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.PLAYERS, 1.2f, 0.6f);
             }
-            if (t == CUT) {
+            boolean cut = false;
+            for (int k : q.st.cuts()) if (k == t) cut = true;
+            if (cut && t != q.st.lastCut() && !victimGone) {
+                // A blow on the way: a flash and the ring of steel.
+                Vec3d c = v.getPos().add(0, v.getHeight() * 0.6, 0);
+                AotParticles.one(w, AotParticles.fx(AotParticles.ARC, 0xFFFFFF, 3.5f), c.x, c.y, c.z, 0, 0, 0);
+                AotParticles.burst(w, AotParticles.SPARK, 0xFFE8C0, 0.5f, c.x, c.y, c.z, 10, 0.2, 0.6);
+                w.playSound(null, v.getBlockPos(), HitSounds.HIT, SoundCategory.PLAYERS, 1.2f, 0.9f + w.random.nextFloat() * 0.3f);
+                if (q.st.id().equals("fin_rumble")) for (ServerPlayerEntity o : PlayerLookup.around(w, c, 32)) {
+                    if (ServerPlayNetworking.canSend(o, Net.Quake.ID)) ServerPlayNetworking.send(o, new Net.Quake(0.6f, 14));
+                }
+            }
+            if (t == q.st.lastCut() && !victimGone) {
                 // The blade lands.
                 Vec3d c = v.getPos().add(0, v.getHeight() * 0.6, 0);
                 AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFFFFF, 9f), c.x, c.y, c.z, 0, 0, 0);
@@ -187,6 +205,8 @@ public final class Finishers {
                 AotParticles.burst(w, AotParticles.SPARK, 0xFF5A3A, 0.6f, c.x, c.y, c.z, 30, 0.3, 0.9);
                 w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_LIGHTNING_BOLT_THUNDER, SoundCategory.PLAYERS, 0.4f, 1.8f);
                 Adrenaline.gain(p, 30);
+                // Now and then a finisher teaches you a new one.
+                if (w.random.nextFloat() < 0.04f) AotRpg.COSMETICS.dropFinisher(p, w.random);
             }
             if (t >= END) pending.remove(q);
         }

@@ -53,7 +53,7 @@ public final class Store {
 
     /** Mythic cosmetics: never in the weekly shop, only from a crate's rarest roll. */
     public static final java.util.Set<String> MYTHIC_COSMETICS = java.util.Set.of(
-        "back_wings_crimson", "kill_rumbling", "body_coordinate", "head_founder", "slash_moon");
+        "back_wings_crimson", "kill_rumbling", "body_coordinate", "head_founder", "slash_moon", "fin_rumble");
 
     private static final long[] TITLE_PRICE = {60, 120, 250, 450, 800, 2000};
     public static final String[] RARITY_NAMES = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic"};

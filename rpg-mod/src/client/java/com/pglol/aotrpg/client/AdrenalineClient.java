@@ -125,7 +125,7 @@ public final class AdrenalineClient {
                     FinishScene.stop(f.entity());
                     break;
                 }
-                FinishScene.start(f.entity(), f.arg());
+                FinishScene.start(f.entity(), f.arg(), (int) f.yaw());
                 if (e != null) {
                     Afterimages.leave(e, 0xFF3A2A, 400);
                     streaks(mc, e, e.getYaw(), 14, true);

@@ -1,6 +1,7 @@
 package com.pglol.aotrpg.client;
 
 import com.pglol.aotrpg.AotParticles;
+import com.pglol.aotrpg.FinisherStyles;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.input.Input;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
@@ -18,25 +19,39 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A finisher as a scene everyone nearby sees, played through start to finish:
- * <ol>
- *   <li>the dash in, blades swept back low (0-6);</li>
- *   <li>a leap over them, spinning with the blades out wide (6-16);</li>
- *   <li>the wind-up at the top and the drop, an overhead cut with both blades (16-20);</li>
- *   <li>sliding on through and past them, down on one knee behind them, back to back (20-26);</li>
- *   <li>the held breath: still, blades out, while they stand a beat too long (26-38);</li>
- *   <li>the cut lands late: they fall (38), and the one who did it rises and flicks the blades clean (44-56).</li>
- * </ol>
- * The body's path is drawn here, smooth, from where the scene began (the server just puts the
- * one finishing where they end up). The two in it get a camera of their own, cut like a fight
- * in an anime, easing back into the ordinary view at the end.
+ * A finisher as a scene everyone nearby sees, played through start to finish. Which one is the
+ * finishing player's pick (a cosmetic): its timing is shared with the server (FinisherStyles),
+ * its choreography is keyframes (FinisherMoves), played here: the body's path eased through its
+ * points, the limbs and the whole body (lean, drop, turn, flips, the drill's twist) between
+ * poses, wind and sparks off the blades, and a camera of its own for the two in it, cut like a
+ * fight in an anime, easing back into the ordinary view at the end.
  */
 public final class FinishScene {
     private FinishScene() {}
 
-    public static final float DASH = 6, LEAP = 16, CUT = 20, SLIDE = 26, KILL = 38, RISE = 44, END = 56;
+    private static final class Scene {
+        final int by, on, style;
+        final long at;
+        final Vec3d from, foe, dir;
+        final float yaw;
+        final FinisherMoves.Move mv;
+        final FinisherStyles.Style st;
+        int fired;
+        boolean fell;
 
-    private record Scene(int by, int on, long at, Vec3d from, Vec3d foe, Vec3d dir, float yaw) {
+        Scene(int by, int on, int style, long at, Vec3d from, Vec3d foe, Vec3d dir, float yaw) {
+            this.by = by;
+            this.on = on;
+            this.style = style;
+            this.at = at;
+            this.from = from;
+            this.foe = foe;
+            this.dir = dir;
+            this.yaw = yaw;
+            this.mv = FinisherMoves.of(style);
+            this.st = FinisherStyles.at(style);
+        }
+
         Vec3d side() {
             return new Vec3d(-dir.z, 0, dir.x);
         }
@@ -46,6 +61,10 @@ public final class FinishScene {
     private static final Map<Integer, Scene> scenes = new HashMap<>();
 
     public static void start(int by, int on) {
+        start(by, on, 0);
+    }
+
+    public static void start(int by, int on, int style) {
         var mc = MinecraftClient.getInstance();
         if (mc.world == null) return;
         Entity a = mc.world.getEntityById(by), b = mc.world.getEntityById(on);
@@ -54,31 +73,33 @@ public final class FinishScene {
         Vec3d dir = foe.subtract(from).multiply(1, 0, 1);
         dir = dir.lengthSquared() < 1e-4 ? Vec3d.fromPolar(0, a.getYaw()).multiply(1, 0, 1).normalize() : dir.normalize();
         float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
-        Scene s = new Scene(by, on, Util.getMeasuringTimeMs(), from, foe, dir, yaw);
+        Scene s = new Scene(by, on, style, Util.getMeasuringTimeMs(), from, foe, dir, yaw);
+        stop(by);
+        stop(on);
         scenes.put(by, s);
         scenes.put(on, s);
     }
 
-    public static void stop(int by) {
-        Scene s = scenes.get(by);
+    public static void stop(int id) {
+        Scene s = scenes.get(id);
         if (s == null) return;
-        scenes.remove(s.by());
-        scenes.remove(s.on());
+        scenes.remove(s.by);
+        scenes.remove(s.on);
     }
 
     private static Scene of(int id) {
         Scene s = scenes.get(id);
         if (s == null) return null;
-        if (t(s) > END) {
-            scenes.remove(s.by());
-            scenes.remove(s.on());
+        if (t(s) > s.st.end()) {
+            scenes.remove(s.by);
+            scenes.remove(s.on);
             return null;
         }
         return s;
     }
 
     private static float t(Scene s) {
-        return (Util.getMeasuringTimeMs() - s.at()) / 50f;
+        return (Util.getMeasuringTimeMs() - s.at) / 50f;
     }
 
     public static boolean in(int id) {
@@ -102,103 +123,100 @@ public final class FinishScene {
 
     // ------------------------------------------------------------------ the path
 
-    /** Where the one finishing is at time t (feet). */
-    private static Vec3d path(Scene s, float t) {
-        Vec3d d = s.dir(), side = s.side(), v = s.foe();
-        Vec3d s1 = v.subtract(d.multiply(2.3)), s2 = v.subtract(d.multiply(0.5)).add(0, 2.7, 0);
-        Vec3d s3 = v.subtract(d.multiply(0.9)), end = v.add(d.multiply(1.9));
-        if (t < DASH) {
-            // Fast off the mark, easing into the leap.
-            float k = MathHelper.clamp(t / DASH, 0, 1);
-            k = 1 - (1 - k) * (1 - k);
-            return s.from().lerp(s1, k);
-        }
-        if (t < LEAP) {
-            float k = (t - DASH) / (LEAP - DASH);
-            Vec3d flat = s1.lerp(s2.multiply(1, 0, 1).add(0, s1.y, 0), ease(k));
-            // An arc: up fast, hanging at the top.
-            double h = (s2.y - s1.y) * Math.sin(Math.min(1, k * 1.15) * Math.PI / 2);
-            return new Vec3d(flat.x, s1.y + h, flat.z);
-        }
-        if (t < CUT) {
-            float k = (t - LEAP) / (CUT - LEAP);
-            return s2.lerp(s3, k * k);
-        }
-        if (t < SLIDE) {
-            // Through and past, swinging wide round them.
-            float k = seg(t, CUT, SLIDE);
-            Vec3d p = s3.lerp(end, k);
-            return p.add(side.multiply(Math.sin(k * Math.PI) * 0.8));
-        }
-        return end;
+    private static Vec3d point(Scene s, FinisherMoves.Way w, Vec3d base, boolean start) {
+        if (Float.isNaN(w.along())) return start ? s.from : base;
+        return base.add(s.dir.multiply(w.along())).add(s.side().multiply(w.side())).add(0, w.up(), 0);
     }
 
-    /** Which way the one finishing faces: along the line, with a full turn in the leap. */
-    private static float facing(Scene s, float t) {
-        return s.yaw() + 360 * seg(t, DASH + 1, LEAP - 1);
+    /** Eased through its points: a smooth curve through moving ones, still where it holds. */
+    private static Vec3d curve(Scene s, java.util.List<FinisherMoves.Way> ways, Vec3d base, boolean start, float t) {
+        int n = ways.size();
+        if (n == 0) return base;
+        if (t <= ways.get(0).t()) return point(s, ways.get(0), base, start);
+        if (t >= ways.get(n - 1).t()) return point(s, ways.get(n - 1), base, start);
+        int i = 0;
+        while (i < n - 2 && t > ways.get(i + 1).t()) i++;
+        Vec3d p1 = point(s, ways.get(i), base, start), p2 = point(s, ways.get(i + 1), base, start);
+        float t1 = ways.get(i).t(), t2 = ways.get(i + 1).t(), dt = Math.max(0.01f, t2 - t1);
+        Vec3d m1 = tangent(s, ways, base, start, i), m2 = tangent(s, ways, base, start, i + 1);
+        float u = (t - t1) / dt, u2 = u * u, u3 = u2 * u;
+        double h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+        return p1.multiply(h00).add(m1.multiply(h10 * dt)).add(p2.multiply(h01)).add(m2.multiply(h11 * dt));
+    }
+
+    private static Vec3d tangent(Scene s, java.util.List<FinisherMoves.Way> ways, Vec3d base, boolean start, int i) {
+        if (i <= 0 || i >= ways.size() - 1) return Vec3d.ZERO;
+        Vec3d a = point(s, ways.get(i - 1), base, start), p = point(s, ways.get(i), base, start), b = point(s, ways.get(i + 1), base, start);
+        // Held still either side: no swing through it.
+        if (a.squaredDistanceTo(p) < 1e-4 || b.squaredDistanceTo(p) < 1e-4) return Vec3d.ZERO;
+        Vec3d m = b.subtract(a).multiply(1 / Math.max(0.01, ways.get(i + 1).t() - ways.get(i - 1).t()));
+        return m.lengthSquared() > 1.0 ? m.normalize() : m;
+    }
+
+    /** Where the one finishing is at time t (feet). */
+    private static Vec3d path(Scene s, float t) {
+        return curve(s, s.mv.path, s.foe, true, t);
+    }
+
+    /** Where the foe is drawn (a reel pulls them in). */
+    private static Vec3d foeAt(Scene s, float t) {
+        return s.mv.foe.isEmpty() ? s.foe : curve(s, s.mv.foe, s.foe, false, t);
+    }
+
+    /** Which way the one finishing faces: along the line, or kept to the foe; plus the move's turns. */
+    private static float facing(Scene s, float t, float[] k) {
+        float base = s.yaw;
+        if (s.mv.faceFoe && t > 4) {
+            Vec3d d = foeAt(s, t).subtract(path(s, t));
+            if (d.horizontalLengthSquared() > 0.04) base = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
+        }
+        return base + k[11];
     }
 
     // ------------------------------------------------------------------ poses
 
-    // rArm pitch/yaw/roll, lArm pitch/yaw/roll, rLeg pitch, lLeg pitch, head pitch, lean (deg), drop (blocks)
-    private static final float[][] BY = {
-        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-        {2, 0.9f, 0, 0.5f, 0.9f, 0, -0.5f, -1.0f, 0.7f, -0.3f, 35, 0.1f},
-        {6, 0.9f, 0, 0.6f, 0.9f, 0, -0.6f, -1.1f, 0.8f, -0.3f, 38, 0.15f},
-        {8, 0.6f, 0, 1.2f, 0.6f, 0, -1.2f, -1.3f, -1.1f, -0.4f, 10, 0},
-        {13, -0.2f, 0, 1.5f, -0.2f, 0, -1.5f, -0.5f, -0.3f, 0.2f, 0, 0},
-        {16.5f, -3.0f, -0.3f, 0.1f, -2.9f, 0.3f, -0.1f, -0.9f, -0.2f, -0.35f, -15, 0},
-        {19.5f, 0.5f, 0.6f, 0, 0.4f, 0.4f, 0, -0.6f, 0.4f, 0.4f, 25, 0},
-        {22, 1.1f, 0, 0.9f, 1.1f, 0, -0.9f, -1.4f, 0.9f, 0.1f, 30, 0.45f},
-        {26, 0.4f, 0.3f, 1.25f, 0.4f, -0.3f, -1.25f, -1.55f, 0.35f, 0.35f, 12, 0.55f},
-        {RISE, 0.45f, 0.3f, 1.3f, 0.45f, -0.3f, -1.3f, -1.55f, 0.35f, 0.4f, 14, 0.55f},
-        {50, -0.4f, 0, 1.6f, 0.1f, 0, -0.4f, 0, 0, 0, 0, 0},
-        {END, 0, 0, 0.1f, 0, 0, -0.1f, 0, 0, 0, 0, 0}};
-
-    private static final float[][] ON = {
-        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-        {4, -1.6f, 0.2f, -0.3f, -1.5f, -0.2f, 0.3f, 0.2f, -0.3f, 0.1f, -5, 0},
-        {10, -1.2f, 0, -0.2f, -1.1f, 0, 0.2f, 0.1f, -0.2f, -0.9f, -10, 0},
-        {18, -1.25f, 0, -0.2f, -1.15f, 0, 0.2f, 0.1f, -0.2f, -1.0f, -12, 0},
-        {20.5f, -0.4f, 0, 0.9f, -0.3f, 0, -0.9f, 0, 0, -0.6f, -18, 0},
-        {24, -0.15f, 0, 0.25f, -0.1f, 0, -0.25f, 0.05f, -0.1f, 0.2f, 4, 0.05f},
-        {KILL, -0.1f, 0, 0.2f, -0.05f, 0, -0.2f, 0.1f, -0.15f, 0.45f, 8, 0.12f},
-        {END, -0.1f, 0, 0.2f, -0.05f, 0, -0.2f, 0.1f, -0.15f, 0.45f, 8, 0.12f}};
-
-    private static float[] key(float[][] keys, float t) {
-        float[] out = new float[keys[0].length - 1];
-        for (int i = 0; i < keys.length - 1; i++) {
-            float[] a = keys[i], b = keys[i + 1];
-            if (t > b[0] && i < keys.length - 2) continue;
-            float k = ease((t - a[0]) / Math.max(0.01f, b[0] - a[0]));
-            for (int j = 1; j < a.length; j++) out[j - 1] = MathHelper.lerp(k, a[j], b[j]);
+    /** The row at time t: rArm p/y/r, lArm p/y/r, rLeg, lLeg, head, lean, drop, yaw, flip, roll. */
+    private static float[] key(java.util.List<float[]> keys, float t) {
+        float[] out = new float[14];
+        if (keys.isEmpty()) return out;
+        if (keys.size() == 1 || t <= keys.get(0)[0]) {
+            System.arraycopy(keys.get(0), 1, out, 0, 14);
             return out;
         }
-        float[] last = keys[keys.length - 1];
-        System.arraycopy(last, 1, out, 0, out.length);
+        for (int i = 0; i < keys.size() - 1; i++) {
+            float[] a = keys.get(i), b = keys.get(i + 1);
+            if (t > b[0] && i < keys.size() - 2) continue;
+            float k = ease((t - a[0]) / Math.max(0.01f, b[0] - a[0]));
+            for (int j = 1; j < 15; j++) out[j - 1] = MathHelper.lerp(k, a[j], b[j]);
+            return out;
+        }
+        System.arraycopy(keys.get(keys.size() - 1), 1, out, 0, 14);
         return out;
     }
 
-    /** The whole body: where it is on the path, which way it faces, the lean and the drop. True if it took over. */
+    /** The whole body: where it is, which way it faces, the lean, the drop, flips and twists. True if it took over. */
     public static boolean transforms(LivingEntity e, MatrixStack ms, float bodyYaw, float td) {
         Scene s = of(e.getId());
         if (s == null) return false;
         float t = t(s);
-        boolean by = e.getId() == s.by();
-        Vec3d at = by ? path(s, t) : s.foe();
-        float yaw = by ? facing(s, t) : s.yaw() + 180;
-        float[] k = key(by ? BY : ON, t);
+        boolean by = e.getId() == s.by;
+        float[] k = key(by ? s.mv.by : s.mv.on, t);
+        Vec3d at = by ? path(s, t) : foeAt(s, t);
+        float yaw = by ? facing(s, t, k) : s.yaw + 180;
         // Back to the world's axes at the body's spot, over to where the scene has it, then turned its way.
         ms.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-(180 - bodyYaw)));
         Vec3d off = at.subtract(e.getLerpedPos(td));
-        if (off.lengthSquared() < 64) ms.translate(off.x, off.y, off.z);
+        if (off.lengthSquared() < 100) ms.translate(off.x, off.y, off.z);
         ms.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180 - yaw));
         float h = e.getHeight() * 0.5f;
-        float breathe = by && t > SLIDE && t < RISE ? MathHelper.sin(t * 0.35f) * 0.015f : 0;
-        if (!by && t > CUT && t < KILL) breathe = MathHelper.sin(t * 2.3f) * 0.01f * seg(t, CUT + 4, KILL);
+        int last = s.st.lastCut(), kill = s.st.kill();
+        float breathe = by && t > last + 3 && t < kill + 6 ? MathHelper.sin(t * 0.35f) * 0.015f : 0;
+        if (!by && t > last && t < kill) breathe = MathHelper.sin(t * 2.3f) * 0.012f * seg(t, last + 3, kill);
         ms.translate(0, -k[10] + breathe, 0);
         ms.translate(0, h, 0);
         ms.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-k[9]));
+        if (by && k[12] != 0) ms.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-k[12]));
+        if (by && k[13] != 0) ms.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(k[13]));
         ms.translate(0, -h, 0);
         return true;
     }
@@ -207,8 +225,8 @@ public final class FinishScene {
     public static boolean pose(BipedEntityModel<?> m, LivingEntity e) {
         Scene s = of(e.getId());
         if (s == null) return false;
-        if (e.getId() == s.on() && e.deathTime > 0) return false;
-        float[] k = key(e.getId() == s.by() ? BY : ON, t(s));
+        if (e.getId() == s.on && e.deathTime > 0) return false;
+        float[] k = key(e.getId() == s.by ? s.mv.by : s.mv.on, t(s));
         m.rightArm.pitch = k[0];
         m.rightArm.yaw = k[1];
         m.rightArm.roll = k[2];
@@ -239,38 +257,95 @@ public final class FinishScene {
         }
     }
 
-    // ------------------------------------------------------------------ trails
+    // ------------------------------------------------------------------ trails and blows
 
     private static final Map<Integer, Float> lastFx = new HashMap<>();
 
-    /** Wind off the blades along the path: streaks in the dash and the slide, sparks in the spin. */
+    /**
+     * Wind off the blades along the path (streaks and afterimages when moving fast, sparks when
+     * spinning), and every blow landing: an arc of light across them and sparks, the last one
+     * bigger, the spear's blast, the Rumbling's rings in the ground.
+     */
     public static void tick(MinecraftClient mc) {
         if (mc.world == null || scenes.isEmpty()) return;
         for (Scene s : new java.util.ArrayList<>(scenes.values())) {
-            if (scenes.get(s.by()) != s || of(s.by()) == null) continue;
+            if (scenes.get(s.by) != s || of(s.by) == null) continue;
             float t = t(s);
-            Float was = lastFx.get(s.by());
+            Entity a = mc.world.getEntityById(s.by);
+            boolean mine = mc.player != null && (mc.player.getId() == s.by || mc.player.getId() == s.on);
+            int[] cuts = s.st.cuts();
+            while (s.fired < cuts.length && t >= cuts[s.fired]) {
+                blow(mc, s, s.fired == cuts.length - 1, s.fired, mine);
+                s.fired++;
+            }
+            if (!s.fell && t >= s.st.kill()) {
+                s.fell = true;
+                Vec3d v = foeAt(s, t);
+                FxParticle.spawn(AotParticles.RING, s.st.color2(), 2.4f, v.x, v.y + 0.05, v.z, 0, 0, 0);
+                for (int i = 0; i < 10; i++) {
+                    FxParticle.spawn(AotParticles.SHARD, i % 2 == 0 ? s.st.color() : s.st.color2(), 0.7f, v.x, v.y + 1.1, v.z,
+                        (Math.random() - 0.5) * 0.5, Math.random() * 0.35, (Math.random() - 0.5) * 0.5);
+                }
+                if (mine) EffectFx.quake(0.35f, 6);
+            }
+            Float was = lastFx.get(s.by);
             if (was != null && t - was < 0.9f) continue;
-            lastFx.put(s.by(), t);
-            Vec3d p = path(s, t).add(0, 1.1, 0), d = s.dir();
-            Entity a = mc.world.getEntityById(s.by());
-            boolean fast = t < DASH || t > CUT && t < SLIDE;
-            if (fast) {
+            lastFx.put(s.by, t);
+            Vec3d now = path(s, t), before = path(s, Math.max(0, t - 1));
+            float[] k = key(s.mv.by, t), kb = key(s.mv.by, Math.max(0, t - 1));
+            double speed = now.distanceTo(before);
+            float spin = Math.abs(k[11] - kb[11]) + Math.abs(k[12] - kb[12]) + Math.abs(k[13] - kb[13]);
+            Vec3d p = now.add(0, 1.1, 0), d = now.subtract(before);
+            float face = facing(s, t, k);
+            if (speed > 0.35) {
+                Vec3d back = speed > 1e-3 ? d.normalize().multiply(-0.6) : s.dir.multiply(-0.6);
                 for (int i = 0; i < 3; i++) {
                     FxParticle.spawn(AotParticles.STREAK, 0xFFFFFF, 0.9f, p.x + (Math.random() - 0.5) * 0.6, p.y + (Math.random() - 0.5) * 0.8,
-                        p.z + (Math.random() - 0.5) * 0.6, -d.x * 0.6, 0, -d.z * 0.6);
+                        p.z + (Math.random() - 0.5) * 0.6, back.x, back.y, back.z);
                 }
-                if (a != null) Afterimages.leaveAt(a, path(s, t), facing(s, t), 0xFF3A2A, 380);
-            } else if (t >= DASH && t < LEAP) {
-                double ang = Math.toRadians(facing(s, t));
+                if (a != null) Afterimages.leaveAt(a, now, face, s.st.color2(), 380);
+            } else if (spin > 25) {
+                double ang = Math.toRadians(face);
                 for (int sgn = -1; sgn <= 1; sgn += 2) {
                     double bx = p.x + Math.cos(ang) * 1.1 * sgn, bz = p.z + Math.sin(ang) * 1.1 * sgn;
-                    FxParticle.spawn(AotParticles.SPARK, 0xFFE8D0, 0.5f, bx, p.y, bz, 0, 0.02, 0);
+                    FxParticle.spawn(AotParticles.SPARK, s.st.color(), 0.5f, bx, p.y, bz, 0, 0.02, 0);
                 }
-                if (a != null && (int) t % 2 == 0) Afterimages.leaveAt(a, path(s, t), facing(s, t), 0xFFFFFF, 300);
+                if (a != null && (int) t % 2 == 0) Afterimages.leaveAt(a, now, face, s.st.color(), 300);
             }
         }
         lastFx.keySet().removeIf(id -> !scenes.containsKey(id));
+    }
+
+    private static void blow(MinecraftClient mc, Scene s, boolean last, int n, boolean mine) {
+        float t = t(s);
+        Vec3d v = foeAt(s, t).add(0, 1.15, 0), side = s.side();
+        FxParticle.spawn(AotParticles.ARC, s.st.color(), last ? 2.6f : 1.6f, v.x, v.y, v.z, side.x * (n % 2 == 0 ? 1 : -1), 0, side.z);
+        int sparks = last ? 14 : 6;
+        for (int i = 0; i < sparks; i++) {
+            FxParticle.spawn(AotParticles.SPARK, i % 3 == 0 ? s.st.color2() : 0xFFF4E8, 0.5f, v.x, v.y, v.z,
+                (Math.random() - 0.5) * 0.6, (Math.random() - 0.3) * 0.4, (Math.random() - 0.5) * 0.6);
+        }
+        if (last) FxParticle.spawn(AotParticles.FLASH, s.st.color(), 1.6f, v.x, v.y, v.z, 0, 0, 0);
+        String id = s.st.id();
+        if (id.equals("fin_spear") && last) {
+            // The blast.
+            FxParticle.spawn(AotParticles.BURST, 0xFFD24A, 3.5f, v.x, v.y, v.z, 0, 0, 0);
+            FxParticle.spawn(AotParticles.FLASH, 0xFFF0C0, 4f, v.x, v.y, v.z, 0, 0, 0);
+            for (int i = 0; i < 16; i++) {
+                FxParticle.spawn(AotParticles.PUFF, 0x5A5048, 1.4f, v.x, v.y, v.z,
+                    (Math.random() - 0.5) * 0.5, Math.random() * 0.25, (Math.random() - 0.5) * 0.5);
+            }
+            if (mine) EffectFx.quake(0.9f, 12);
+        } else if (id.equals("fin_rumble")) {
+            Vec3d g = foeAt(s, t);
+            FxParticle.spawn(AotParticles.RING, 0xC8B090, 2.5f + n * 1.4f, g.x, g.y + 0.05, g.z, 0, 0, 0);
+            for (int i = 0; i < 12; i++) {
+                double ang = i * Math.PI * 2 / 12;
+                FxParticle.spawn(AotParticles.PUFF, 0x8A7A68, 1.2f, g.x + Math.cos(ang) * 1.2, g.y + 0.1, g.z + Math.sin(ang) * 1.2,
+                    Math.cos(ang) * 0.2, 0.08, Math.sin(ang) * 0.2);
+            }
+            if (mine) EffectFx.quake(0.5f + n * 0.25f, 10);
+        } else if (mine) EffectFx.quake(last ? 0.45f : 0.15f, last ? 8 : 3);
     }
 
     // ------------------------------------------------------------------ camera and controls
@@ -286,9 +361,9 @@ public final class FinishScene {
     }
 
     /**
-     * The scene's own camera, in shots: side-on for the dash, low under them looking up into the
-     * leap, tight on the cut (with a shudder), a slow circle round the two in the held breath,
-     * then pulling back and easing into your own view as it ends.
+     * The scene's own camera, in shots: side-on for the approach, low looking up whenever the one
+     * finishing is in the air, tight on every blow (with a shudder), round the two of them
+     * between, a slow circle in the held breath, then pulling back and easing into your own view.
      */
     public static com.pglol.aotrpg.client.story.CutscenePlayer.Cam camera(float td, Vec3d normal, float nyaw, float npitch) {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -296,28 +371,36 @@ public final class FinishScene {
         Scene s = of(mc.player.getId());
         if (s == null) return null;
         float t = t(s);
-        Vec3d d = s.dir(), side = s.side(), v = s.foe().add(0, 1.2, 0), a = path(s, t).add(0, 1.2, 0);
+        int end = s.st.end(), last = s.st.lastCut(), kill = s.st.kill();
+        Vec3d d = s.dir, side = s.side(), foe = foeAt(s, t), v = foe.add(0, 1.2, 0), a = path(s, t).add(0, 1.2, 0);
         Vec3d pos, look;
         float shake = 0;
-        if (t < DASH) {
+        int near = -1;
+        for (int c : s.st.cuts()) if (t >= c - 2.5f && t < c + 2.5f) near = c;
+        if (t < 5) {
             Vec3d mid = a.lerp(v, 0.5);
             pos = mid.add(side.multiply(4.4)).add(0, 0.5, 0).subtract(d.multiply(0.6));
             look = mid;
-        } else if (t < LEAP + 1) {
-            // From low behind them, looking up at the leap.
-            pos = s.foe().add(d.multiply(2.6)).add(side.multiply(1.4)).add(0, 0.35, 0);
+        } else if (near >= 0) {
+            pos = v.subtract(d.multiply(0.3)).add(side.multiply(2.5)).add(0, 0.5 + Math.max(0, a.y - v.y) * 0.4, 0);
+            look = v.lerp(a, 0.25);
+            shake = t >= near ? 1 - seg(t, near, near + 2.5f) : 0;
+        } else if (a.y - v.y > 1.2) {
+            // Low behind them, looking up at whoever is in the air.
+            pos = foe.add(d.multiply(2.6)).add(side.multiply(1.6)).add(0, 0.35, 0);
             look = a.lerp(v, 0.25);
-        } else if (t < CUT + 2) {
-            pos = v.subtract(d.multiply(0.3)).add(side.multiply(2.4)).add(0, 0.5, 0);
-            look = v;
-            shake = 1 - seg(t, CUT, CUT + 2);
+        } else if (t < last) {
+            Vec3d mid = v.lerp(a, 0.4);
+            double ang = Math.atan2(side.z, side.x) + 0.4 - seg(t, 5, last) * 0.9;
+            pos = mid.add(Math.cos(ang) * 4.0, 0.7, Math.sin(ang) * 4.0);
+            look = mid;
         } else {
             // The held breath: a slow circle round them both, then pulling back.
-            Vec3d mid = s.foe().add(d.multiply(0.95)).add(0, 1.0, 0);
-            float k = seg(t, CUT + 2, END);
+            Vec3d mid = v.lerp(a, 0.5).add(0, -0.2, 0);
+            float k = seg(t, last + 2, end);
             double ang = Math.atan2(side.z, side.x) - 0.5 + k * 1.6;
-            double r = 3.4 + 2.4 * seg(t, RISE, END);
-            pos = mid.add(Math.cos(ang) * r, 0.4 + 1.6 * seg(t, RISE, END), Math.sin(ang) * r);
+            double r = 3.4 + 2.4 * seg(t, kill + 4, end);
+            pos = mid.add(Math.cos(ang) * r, 0.4 + 1.6 * seg(t, kill + 4, end), Math.sin(ang) * r);
             look = mid;
         }
         // Kept out of walls.
@@ -327,7 +410,7 @@ public final class FinishScene {
         float yaw = (float) (Math.toDegrees(Math.atan2(l.z, l.x)) - 90) + MathHelper.sin(t * 9) * 2f * shake;
         float pitch = (float) -Math.toDegrees(Math.atan2(l.y, Math.sqrt(l.x * l.x + l.z * l.z))) + MathHelper.cos(t * 11) * 2f * shake;
         // Eased in over the first beat and back out to your own view over the last.
-        float w = Math.min(seg(t, 0, 2), 1 - seg(t, END - 7, END));
+        float w = Math.min(seg(t, 0, 2), 1 - seg(t, end - 7, end));
         if (w < 1 && normal != null) {
             pos = normal.lerp(pos, w);
             yaw = nyaw + MathHelper.wrapDegrees(yaw - nyaw) * w;

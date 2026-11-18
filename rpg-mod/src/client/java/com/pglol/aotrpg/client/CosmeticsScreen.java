@@ -75,6 +75,7 @@ public final class CosmeticsScreen extends Screen {
         client.options.hudHidden = hudWas;
         CosmeticFx.previewSlot = null;
         CosmeticFx.previewId = null;
+        Showcase.clear();
     }
 
     @Override

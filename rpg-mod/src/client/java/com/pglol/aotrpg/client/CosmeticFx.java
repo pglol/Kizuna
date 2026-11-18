@@ -175,7 +175,14 @@ public final class CosmeticFx {
             new Entry("clash_void", "Rift", "Space tears open.", 0x7A3AB8, 0x2A1040),
             new Entry("clash_thunder", "Thunderclap", "A crack of thunder.", 0xB9A8FF, 0xFFFFFF),
             new Entry("clash_petal", "Blossom", "Petals burst out.", 0xFFB0D0, 0xFF7AA8),
-            new Entry("clash_gold", "Gilded Clash", "Gold sparks and a ring of light.", 0xF2C14E, 0xFFF3B0, 2))));
+            new Entry("clash_gold", "Gilded Clash", "Gold sparks and a ring of light.", 0xF2C14E, 0xFFF3B0, 2))),
+        new Category("finisher", "Finishers", "The whole scene when you finish someone off. Found in fights and in the shop.", finishers()));
+
+    private static List<Entry> finishers() {
+        List<Entry> out = new java.util.ArrayList<>();
+        for (var f : com.pglol.aotrpg.FinisherStyles.ALL) out.add(new Entry(f.id(), f.title(), f.desc(), f.color(), f.color2(), f.tier()));
+        return out;
+    }
 
     public static Entry entry(String id) {
         for (Category c : CATEGORIES) for (Entry e : c.entries()) if (e.id().equals(id)) return e;

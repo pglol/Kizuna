@@ -58,6 +58,7 @@ public final class CosmeticTiers {
         Map.entry("clash_gold", 2));
 
     public static int of(String id) {
+        if (id.startsWith("fin_")) return FinisherStyles.of(id).tier();
         Integer t = TIERS.get(id);
         if (t != null) return t;
         if (Store.MYTHIC_COSMETICS.contains(id)) return 4;

@@ -25,7 +25,7 @@ public final class Cosmetics {
     public record Def(String id, String slot, String title, boolean free) { }
 
     /** Every cosmetic slot, in menu order. */
-    public static final List<String> SLOTS = List.of("outfit", "dye", "trail", "slash", "body", "odm", "horse", "head", "back", "kill", "block", "clash");
+    public static final List<String> SLOTS = List.of("outfit", "dye", "trail", "slash", "body", "odm", "horse", "head", "back", "kill", "block", "clash", "finisher");
 
     /** Clothes worn over your uniform (found in the world and in crates), and the colour they're dyed. */
     public static final String[][] OUTFITS = {
@@ -44,6 +44,7 @@ public final class Cosmetics {
         for (String[] o : OUTFITS) out.add(new Def(o[0], "outfit", o[1], false));
         for (String[] d : DYES) out.add(new Def(d[0], "dye", d[1], true));
         out.addAll(BASE);
+        for (FinisherStyles.Style f : FinisherStyles.ALL) out.add(new Def(f.id(), "finisher", f.title(), f.tier() == 0));
         return List.copyOf(out);
     }
 
@@ -265,6 +266,17 @@ public final class Cosmetics {
     }
 
     /** id may be "all". */
+    /** A finisher you don't have yet, earned in a fight: unlocked, with a reveal. */
+    public void dropFinisher(ServerPlayerEntity p, net.minecraft.util.math.random.Random r) {
+        Set<String> have = unlocked(p);
+        List<FinisherStyles.Style> left = new ArrayList<>();
+        for (FinisherStyles.Style f : FinisherStyles.ALL) if (f.tier() > 0 && f.tier() < 4 && !have.contains(f.id())) left.add(f);
+        if (left.isEmpty()) return;
+        FinisherStyles.Style f = left.get(r.nextInt(left.size()));
+        grant(p, f.id(), true);
+        Reveal.show(p, "NEW FINISHER", f.title(), "minecraft:netherite_sword", Math.min(4, f.tier() + 1));
+    }
+
     public void grant(ServerPlayerEntity p, String id, boolean on) {
         Set<String> g = data.grants.computeIfAbsent(p.getUuidAsString(), k -> new LinkedHashSet<>());
         for (Def d : ALL) {

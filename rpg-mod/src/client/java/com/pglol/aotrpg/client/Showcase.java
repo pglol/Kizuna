@@ -35,6 +35,7 @@ public final class Showcase {
             case "head" -> Items.GOLDEN_HELMET;
             case "back" -> Items.ELYTRA;
             case "dye" -> Items.MAGENTA_DYE;
+            case "finisher" -> Items.DIAMOND_SWORD;
             default -> Items.LEATHER_CHESTPLATE;
         });
     }
@@ -105,6 +106,7 @@ public final class Showcase {
         var p = mc.player;
         if (p == null || mc.world == null || id == null) return;
         beat++;
+        if (!slot.equals("finisher")) clear();
         double yaw = Math.toRadians(p.bodyYaw);
         Vec3d fwd = new Vec3d(-Math.sin(yaw), 0, Math.cos(yaw)), right = new Vec3d(-Math.cos(yaw), 0, -Math.sin(yaw));
         Vec3d chest = p.getPos().add(0, 1.2, 0);
@@ -153,11 +155,59 @@ public final class Showcase {
                     if (beat % 2 == 0) CosmeticFx.horseTrail(id, p.getX() + (Math.random() - 0.5) * 0.9, p.getY() + 0.1, p.getZ() + (Math.random() - 0.5) * 0.9,
                         -fwd.x * 0.1, -fwd.z * 0.1);
                 }
+                case "finisher" -> finisher(mc, p, fwd, id);
                 default -> { }
             }
         } finally {
             GasSwap.busy--;
         }
+    }
+
+    // A sparring dummy (only on your screen) for the finisher to be played on, over and over.
+    private static final int DUMMY_ID = -770011;
+    private static net.minecraft.client.network.OtherClientPlayerEntity dummy;
+    private static int finBeat, finStyle = -1;
+
+    private static void finisher(MinecraftClient mc, net.minecraft.client.network.ClientPlayerEntity p, Vec3d fwd, String id) {
+        int style = com.pglol.aotrpg.FinisherStyles.index(id);
+        var st = com.pglol.aotrpg.FinisherStyles.at(style);
+        if (dummy == null || mc.world.getEntityById(DUMMY_ID) != dummy) {
+            dummy = new net.minecraft.client.network.OtherClientPlayerEntity(mc.world,
+                new com.mojang.authlib.GameProfile(java.util.UUID.nameUUIDFromBytes("aotrpg-sparring-dummy".getBytes()), "Sparring Dummy"));
+            dummy.setId(DUMMY_ID);
+            mc.world.addEntity(dummy);
+            finStyle = -1;
+        }
+        if (finStyle != style) {
+            finStyle = style;
+            finBeat = 0;
+        }
+        if (finBeat == 0) {
+            Vec3d at = p.getPos().add(fwd.multiply(3.2));
+            float face = p.bodyYaw + 180;
+            dummy.refreshPositionAndAngles(at.x, at.y, at.z, face, 0);
+            dummy.prevX = dummy.lastRenderX = at.x;
+            dummy.prevY = dummy.lastRenderY = at.y;
+            dummy.prevZ = dummy.lastRenderZ = at.z;
+            dummy.bodyYaw = dummy.prevBodyYaw = dummy.headYaw = dummy.prevHeadYaw = face;
+            dummy.deathTime = 0;
+            dummy.hurtTime = 0;
+            FinishScene.start(p.getId(), DUMMY_ID, style);
+        }
+        for (int c : st.cuts()) if (finBeat == c) dummy.hurtTime = 6;
+        if (finBeat >= st.kill()) dummy.deathTime = Math.min(20, finBeat - st.kill() + 1);
+        finBeat++;
+        if (finBeat > st.end() + 24) finBeat = 0;
+    }
+
+    /** Puts the sparring dummy away (the showroom closed, or moved off finishers). */
+    public static void clear() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (dummy == null) return;
+        FinishScene.stop(DUMMY_ID);
+        if (mc.world != null && mc.world.getEntityById(DUMMY_ID) == dummy) mc.world.removeEntity(DUMMY_ID, net.minecraft.entity.Entity.RemovalReason.DISCARDED);
+        dummy = null;
+        finStyle = -1;
     }
 
     /** How far the showroom camera stands back for a slot (effects need room). */
@@ -166,6 +216,7 @@ public final class Showcase {
             case "trail" -> 6.5f;
             case "kill" -> 7f;
             case "slash", "block", "clash", "odm", "horse" -> 4.4f;
+            case "finisher" -> 7.5f;
             default -> 3.3f;
         };
     }
