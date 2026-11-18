@@ -342,7 +342,7 @@ public final class Minimap {
             if (!m.online() || !m.sameWorld()) continue;
             int[] p = clamp(m.x() - ox, m.z() - oz, s);
             int col = m.leader() ? 0xFFF2C14E : 0xFF8FC07A;
-            Smooth.dot(c, x + p[0], y + p[1], 2.2f, col);
+            Smooth.dot(c, x + p[0], y + p[1], 2.8f, col);
         }
         // Quest targets, map marks and party highlights (pinned to the rim when far away).
         boolean open = MinecraftClient.getInstance().world != null && MinecraftClient.getInstance().world.getRegistryKey() == net.minecraft.world.World.OVERWORLD;

@@ -21,6 +21,15 @@ import org.joml.Matrix4f;
 public final class Beams {
     private Beams() {}
 
+    /** Where a marker stands: the real ground under it once that land is loaded here (the server may not have had it). */
+    static double groundY(MinecraftClient mc, Net.Marker m) {
+        if (mc.world != null && mc.world.getChunkManager().isChunkLoaded(m.x() >> 4, m.z() >> 4)) {
+            int top = mc.world.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, m.x(), m.z());
+            if (top > mc.world.getBottomY() + 1) return Math.max(top, m.y());
+        }
+        return Math.max(m.y(), mc.world == null ? m.y() : mc.world.getSeaLevel());
+    }
+
     public static void render(WorldRenderContext ctx) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.world == null || mc.player == null || (ClientState.markers.isEmpty() && ClientState.party.isEmpty())) return;
@@ -40,7 +49,7 @@ public final class Beams {
             int alpha = (int) Math.min(235, 150 + dist / 3);
             int color = (alpha << 24) | (m.color() & 0xFFFFFF);
             ms.push();
-            ms.translate(m.x() - cam.x, m.y() - cam.y, m.z() - cam.z);
+            ms.translate(m.x() - cam.x, groundY(mc, m) - cam.y, m.z() - cam.z);
             BeaconBlockEntityRenderer.renderBeam(ms, vc, BeaconBlockEntityRenderer.BEAM_TEXTURE, td, 1f, time, 0, 320,
                 color, 0.22f, 0.34f);
             ms.pop();
@@ -55,7 +64,7 @@ public final class Beams {
     }
 
     private static void icon(MinecraftClient mc, MatrixStack ms, VertexConsumerProvider.Immediate vc, Vec3d cam, Net.Marker m) {
-        Vec3d target = new Vec3d(m.x() + 0.5, m.y() + 2.2, m.z() + 0.5);
+        Vec3d target = new Vec3d(m.x() + 0.5, groundY(mc, m) + 2.2, m.z() + 0.5);
         Vec3d rel = target.subtract(cam);
         double dist = rel.length();
         if (dist < 4) return;

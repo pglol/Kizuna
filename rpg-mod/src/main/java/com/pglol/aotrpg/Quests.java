@@ -116,7 +116,13 @@ public final class Quests {
 
     public void setWaypoint(ServerPlayerEntity p, Net.SetWaypoint w) {
         if (w.clear()) waypoints.remove(p.getUuid());
-        else waypoints.put(p.getUuid(), new int[] {w.x(), p.getServerWorld().getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING, w.x(), w.z()), w.z()});
+        else {
+            var sw = p.getServerWorld();
+            // Unloaded land reads as the bottom of the world: ask the terrain itself instead.
+            int y = sw.isChunkLoaded(w.x() >> 4, w.z() >> 4) ? sw.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, w.x(), w.z())
+                : sw.getChunkManager().getChunkGenerator().getHeight(w.x(), w.z(), net.minecraft.world.Heightmap.Type.WORLD_SURFACE_WG, sw, sw.getChunkManager().getNoiseConfig());
+            waypoints.put(p.getUuid(), new int[] {w.x(), Math.max(y, sw.getSeaLevel()), w.z()});
+        }
         refreshParty(p);
     }
 

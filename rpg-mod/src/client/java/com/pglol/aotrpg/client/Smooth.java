@@ -18,9 +18,16 @@ import org.joml.Matrix4f;
 public final class Smooth {
     private Smooth() {}
 
-    private static final float FEATHER = 1.1f;
+    /** The soft edge: one real screen pixel, whatever the GUI scale (so shapes are crisp, not blurred). */
+    private static float FEATHER = 1;
+
+    private static void feather() {
+        double sc = net.minecraft.client.MinecraftClient.getInstance().getWindow().getScaleFactor();
+        FEATHER = (float) (1.2 / Math.max(1, sc));
+    }
 
     private static BufferBuilder begin(VertexFormat.DrawMode mode) {
+        feather();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableCull();
