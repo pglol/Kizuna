@@ -345,7 +345,7 @@ public final class AotRpg implements ModInitializer {
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) ->
             !(entity instanceof net.minecraft.entity.passive.AbstractHorseEntity h) || !HORSES.spare(h));
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) ->
-            !(entity instanceof ServerPlayerEntity sp) || DUELS.allowDeath(sp) && DOWNED.allowDeath(sp, source, amount) && EXTRACT.allowDeath(sp, source) && TeamWatch.allowDeath(sp));
+            !(entity instanceof ServerPlayerEntity sp) || DUELS.allowDeath(sp) && (Finishers.striking() || DOWNED.allowDeath(sp, source, amount)) && EXTRACT.allowDeath(sp, source) && TeamWatch.allowDeath(sp));
         // The balloons are a safe place: nothing hurts anyone aboard (the void included).
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) ->
             !(entity instanceof ServerPlayerEntity sp && sp.getWorld().getRegistryKey() == Extraction.lobbyWorld() && Extraction.inLobby(sp)));

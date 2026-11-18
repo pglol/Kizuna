@@ -171,7 +171,15 @@ public final class Finishers {
                 v.timeUntilRegen = 0;
                 striking = true;
                 try {
-                    v.damage(w.getDamageSources().playerAttack(p), v.getHealth() + 60);
+                    var src = w.getDamageSources().playerAttack(p);
+                    v.damage(src, v.getHealth() + 60);
+                    // Anything that still kept them standing (a ward, a last stand, a mob's own
+                    // rules): the finisher finishes. In an arena or a duel the hit above already
+                    // ended their round, so they're left to that.
+                    if (v.isAlive() && !(v instanceof ServerPlayerEntity sp && (Arenas.decides(sp, p) || AotRpg.DUELS.dueling(sp.getUuid(), p.getUuid())))) {
+                        v.setHealth(0);
+                        v.onDeath(src);
+                    }
                 } finally {
                     striking = false;
                 }

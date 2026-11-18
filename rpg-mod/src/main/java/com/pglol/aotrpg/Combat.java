@@ -20,7 +20,8 @@ public final class Combat {
      */
     /** Damage from level alone: x1 at level 1, about x3 at 100. */
     public static double power(int level) {
-        return 1 + 0.02 * (Math.max(1, level) - 1);
+        // Capped at the level cap, so an admin-set level 700 doesn't wreck the scaling.
+        return 1 + 0.02 * (Math.max(1, Math.min(Progression.MAX_LEVEL, level)) - 1);
     }
 
     /**
@@ -31,7 +32,13 @@ public final class Combat {
      */
     static double pvp(ServerPlayerEntity def, double hit) {
         // Between players only the level gap counts (an even fight stays even), not raw level.
-        return 1 / power(AotRpg.PROFILES.get(def.getUuid()).level);
+        double lv = 1 / power(AotRpg.PROFILES.get(def.getUuid()).level);
+        // Armor counts for half between players: stacked armor alone shouldn't make you untouchable.
+        double armor = def.getArmor(), tough = def.getAttributeValue(net.minecraft.entity.attribute.EntityAttributes.GENERIC_ARMOR_TOUGHNESS);
+        double d = hit * lv;
+        double cut = Math.min(20, Math.max(armor / 5, armor - d / (2 + tough / 4))) / 25;
+        double half = cut < 0.99 ? (1 - cut / 2) / (1 - cut) : 1;
+        return lv * half;
     }
 
     /** No one cut takes more than this share of a player's health in PvP (a finisher aside). */
@@ -39,6 +46,8 @@ public final class Combat {
 
     public static float scale(LivingEntity entity, net.minecraft.entity.damage.DamageSource source, float amount) {
         if (amount <= 0 || entity.getWorld().isClient) return amount;
+        // A finisher's blow is final: no parry, sidestep or multiplier gets in its way.
+        if (Finishers.striking()) return amount;
         double mult = 1;
         if (source.getAttacker() instanceof ServerPlayerEntity attacker && attacker != entity) {
             // A troop reeling from a parry takes a punishing hit.
@@ -103,7 +112,7 @@ public final class Combat {
             // Health (and absorption) just before the hit, so the number shown is what it really took.
             if (before.size() > 512) before.clear();
             if (source.getAttacker() instanceof ServerPlayerEntity) before.put(entity.getUuid(), entity.getHealth() + entity.getAbsorptionAmount());
-            if (amount <= 0) return true;
+            if (amount <= 0 || Finishers.striking()) return true;
             ServerPlayerEntity def = entity instanceof ServerPlayerEntity sp ? sp : null;
             if (def != null && AotRpg.ABILITIES.dodge(def, source)) return false;
             // (The amount here is already scaled by scale(), from the LivingEntity mixin.)

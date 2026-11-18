@@ -183,6 +183,7 @@ public final class Guard {
             return ActionResult.PASS;
         });
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
+            if (Finishers.striking()) return true;
             Entity src = source.getAttacker();
             if (src == null || src == entity || amount <= 0) return true;
             long now = System.currentTimeMillis();
