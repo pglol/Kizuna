@@ -127,35 +127,107 @@ public final class CombatUi {
         // Hits near the camera float up in front of the target rather than inside it.
         nums.add(new Num(at, kill ? text + " ✖" : text, color, kill ? 1.4f : d >= 10 ? 1.2f : 1f, Util.getMeasuringTimeMs()));
         if (nums.size() > 40) nums.remove(0);
+        if (!titan) struck.put(h.entity(), Util.getMeasuringTimeMs());
+    }
+
+    /** Who you hit lately (entity id -> when), and each bar's eased value (for the drain). */
+    private static final java.util.Map<Integer, Long> struck = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, float[]> shown = new java.util.HashMap<>();
+
+    /**
+     * A slim health bar over whoever you're fighting: the one you hit in the last few seconds, or
+     * the foe under your crosshair. Red, with a pale drain where the last hit was. Titans have
+     * their own plates; party members don't get one.
+     */
+    private static void healthBars(MinecraftClient mc, MatrixStack ms, VertexConsumerProvider.Immediate vc, Vec3d cam, float td, long now) {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        struck.entrySet().removeIf(en -> now - en.getValue() > 6000);
+        ids.addAll(struck.keySet());
+        if (mc.targetedEntity != null) ids.add(mc.targetedEntity.getId());
+        shown.keySet().retainAll(ids);
+        for (int id : ids) {
+            if (!(mc.world.getEntityById(id) instanceof net.minecraft.entity.LivingEntity e) || !e.isAlive() || e == mc.player) continue;
+            String type = net.minecraft.registry.Registries.ENTITY_TYPE.getId(e.getType()).getPath();
+            if (type.contains("titan") || e instanceof net.minecraft.entity.decoration.ArmorStandEntity) continue;
+            boolean fighter = e instanceof net.minecraft.entity.player.PlayerEntity || e instanceof net.minecraft.entity.mob.Monster
+                || e instanceof net.minecraft.entity.passive.VillagerEntity && e.hasCustomName();
+            if (!fighter) continue;
+            boolean mate = false;
+            for (Net.PartyMember pm : ClientState.party) if (pm.id().equals(e.getUuid())) mate = true;
+            if (mate) continue;
+            Vec3d pos = e.getLerpedPos(td);
+            if (pos.squaredDistanceTo(cam) > 32 * 32) continue;
+            float frac = Math.max(0, Math.min(1, e.getHealth() / Math.max(1, e.getMaxHealth())));
+            float[] sh = shown.computeIfAbsent(id, k -> new float[] {frac, frac});
+            sh[0] = frac;
+            sh[1] = sh[1] > frac ? Math.max(frac, sh[1] - 0.012f) : frac;
+            Long hit = struck.get(id);
+            float alpha = hit == null ? 0.8f : Math.min(1, 1.6f - (now - hit) / 6000f * 1.6f + 0.6f);
+            alpha = Math.max(0.35f, Math.min(1, alpha));
+            ms.push();
+            ms.translate(pos.x - cam.x, pos.y + e.getHeight() + 0.32 - cam.y, pos.z - cam.z);
+            ms.multiply(mc.getEntityRenderDispatcher().getRotation());
+            ms.scale(-1, -1, 1);
+            var m = ms.peek().getPositionMatrix();
+            var buf = vc.getBuffer(net.minecraft.client.render.RenderLayer.getTextBackgroundSeeThrough());
+            float w = 0.42f, h = 0.035f;
+            int a = (int) (alpha * 255);
+            quad(buf, m, -w - 0.015f, -h - 0.015f, w + 0.015f, h + 0.015f, (a * 3 / 4) << 24);
+            quad(buf, m, -w, -h, -w + 2 * w * sh[1], h, (a * 3 / 4 << 24) | 0xE8D8C8);
+            int col = frac > 0.5f ? 0xD84A3A : frac > 0.25f ? 0xE07A2A : 0xF03A2A;
+            quad(buf, m, -w, -h, -w + 2 * w * frac, h, (a << 24) | col);
+            ms.pop();
+        }
+    }
+
+    private static void quad(net.minecraft.client.render.VertexConsumer b, org.joml.Matrix4f m, float x0, float y0, float x1, float y1, int argb) {
+        int light = LightmapTextureManager.MAX_LIGHT_COORDINATE;
+        b.vertex(m, x0, y0, 0).color(argb).light(light);
+        b.vertex(m, x0, y1, 0).color(argb).light(light);
+        b.vertex(m, x1, y1, 0).color(argb).light(light);
+        b.vertex(m, x1, y0, 0).color(argb).light(light);
     }
 
     public static void renderWorld(WorldRenderContext ctx) {
-        if (nums.isEmpty()) return;
         MinecraftClient mc = MinecraftClient.getInstance();
         MatrixStack ms = ctx.matrixStack();
-        if (ms == null) return;
+        if (ms == null || mc.world == null) return;
         VertexConsumerProvider.Immediate vc = mc.getBufferBuilders().getEntityVertexConsumers();
         Vec3d cam = ctx.camera().getPos();
         long now = Util.getMeasuringTimeMs();
+        if (!mc.options.hudHidden) healthBars(mc, ms, vc, cam, ctx.tickCounter().getTickDelta(true), now);
+        if (nums.isEmpty()) {
+            vc.draw();
+            return;
+        }
         TextRenderer tr = mc.textRenderer;
         for (Iterator<Num> it = nums.iterator(); it.hasNext(); ) {
             Num n = it.next();
-            float t = (now - n.born()) / 900f;
+            float t = (now - n.born()) / 1100f;
             if (t >= 1) {
                 it.remove();
                 continue;
             }
             Vec3d at = n.at().add(0, t * 0.9, 0);
             double dist = at.distanceTo(cam);
-            float s = (float) (0.02 + dist * 0.0012) * n.scale() * (t < 0.12f ? 0.6f + t * 3.3f : 1f);
+            // Big enough to read at any range (the same size on screen near or far), punched in.
+            float s = (float) (0.022 + dist * 0.0032) * n.scale() * (t < 0.1f ? 1.5f - t * 5f : 1f);
             int a = (int) (255 * (t < 0.7f ? 1 : (1 - t) / 0.3f));
             ms.push();
             ms.translate(at.x - cam.x, at.y - cam.y, at.z - cam.z);
             ms.multiply(mc.getEntityRenderDispatcher().getRotation());
             ms.scale(s, -s, s);
-            Text text = Ui.heading(n.text());
-            tr.draw(text, -tr.getWidth(text) / 2f, 0, (Math.max(8, a) << 24) | n.color(), true, ms.peek().getPositionMatrix(), vc,
-                TextRenderer.TextLayerType.SEE_THROUGH, 0, LightmapTextureManager.MAX_LIGHT_COORDINATE);
+            // Plain, bold, with a solid dark outline: legible over sky, grass or a white flash.
+            Text text = Text.literal(n.text()).formatted(net.minecraft.util.Formatting.BOLD);
+            float tx = -tr.getWidth(text) / 2f;
+            int col = (Math.max(8, a) << 24) | n.color(), edge = (Math.max(8, a * 3 / 4) << 24) | 0x140C08;
+            var m = ms.peek().getPositionMatrix();
+            for (int k = 0; k < 8; k++) {
+                float ox = new float[] {-1, 1, 0, 0, -1, 1, -1, 1}[k], oy = new float[] {0, 0, -1, 1, -1, -1, 1, 1}[k];
+                tr.draw(text, tx + ox, oy, edge, false, m, vc, TextRenderer.TextLayerType.SEE_THROUGH, 0, LightmapTextureManager.MAX_LIGHT_COORDINATE);
+            }
+            ms.translate(0, 0, -0.01f);
+            tr.draw(text, tx, 0, col, false, ms.peek().getPositionMatrix(), vc, TextRenderer.TextLayerType.SEE_THROUGH, 0, LightmapTextureManager.MAX_LIGHT_COORDINATE);
             ms.pop();
         }
         vc.draw();
