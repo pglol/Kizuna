@@ -129,13 +129,12 @@ public final class Progression {
             p.setHealth(p.getMaxHealth());
             AotRpg.STAMINA.refill(p);
             var w = p.getServerWorld();
-            AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFD24A, 6f), p.getX(), p.getY() + 0.1, p.getZ(), 0, 0, 0);
-            AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFF0B0, 5f), p.getX(), p.getY() + 1, p.getZ(), 0, 0, 0);
-            AotParticles.burst(w, AotParticles.STREAK, 0xFFD24A, 0.9f, p.getX(), p.getY() + 1, p.getZ(), 26, 0.4, 0.9);
-            w.playSound(null, p.getBlockPos(), SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.PLAYERS, 0.9f, 1.1f);
-            w.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 1f, 0.8f);
-            Reveal.show(p, "LEVEL " + pr.level, "+2% damage  ·  +1 health  ·  +1 stat point" + (pr.level % 10 == 0 ? "  ·  +2 skill points" : pr.level % 2 == 0 ? "  ·  +1 skill point" : "")
-                + (AotRpg.hasClient(p) ? "  ·  K" : "  (/character)"), "minecraft:experience_bottle", pr.level % 10 == 0 ? 4 : 3);
+            // A rush of air and light up off you (seen by those around), a low resonant note.
+            AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xE8D8B0, 3.5f), p.getX(), p.getY() + 0.05, p.getZ(), 0, 0, 0);
+            AotParticles.burst(w, AotParticles.STREAK, 0xF4ECD8, 0.7f, p.getX(), p.getY() + 1, p.getZ(), 14, 0.35, 0.7);
+            w.playSound(null, p.getBlockPos(), SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1f, 0.6f);
+            Reveal.show(p, "Level " + pr.level, "+2% damage · +1 health · +1 stat point" + (pr.level % 10 == 0 ? " · +2 skill points" : pr.level % 2 == 0 ? " · +1 skill point" : "")
+                + (AotRpg.hasClient(p) ? "" : "  (/character)"), "levelup", pr.level % 10 == 0 ? 4 : 3);
         }
         AotRpg.sync(p, pr);
     }

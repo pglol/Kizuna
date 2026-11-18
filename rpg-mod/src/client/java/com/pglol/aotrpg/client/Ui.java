@@ -17,7 +17,18 @@ public final class Ui {
     public static final int GOLD = 0xFFE0B96A, CREAM = 0xFFEDE3C8, MUTED = 0xFF8F8A7A, DIM = 0xFF55524A;
     public static final int RED = 0xFFC0463A, HP = 0xFFB3362C, STAMINA = 0xFF7FB24A, XP = 0xFFD9A441, FOOD = 0xFF9C6A3A, AIR = 0xFF5A8FD0;
 
-    private static final Identifier TITLE = Identifier.of("aot_rpg", "title"), HEADING = Identifier.of("aot_rpg", "heading");
+    private static final Identifier TITLE = Identifier.of("aot_rpg", "title"), HEADING = Identifier.of("aot_rpg", "heading"),
+        BODY = Identifier.of("aot_rpg", "body");
+
+    /** Smooth body text (a book face, not the block font). */
+    public static MutableText body(String s) {
+        return Text.literal(s).styled(st -> st.withFont(BODY));
+    }
+
+    /** Any text, re-set in the smooth body face (keeping its colour). */
+    public static MutableText body(Text t) {
+        return Text.literal(t.getString()).setStyle(t.getStyle().withFont(BODY));
+    }
 
     public static MutableText title(String s) {
         return Text.literal(s).styled(st -> st.withFont(TITLE));

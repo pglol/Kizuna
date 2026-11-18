@@ -22,8 +22,8 @@ import java.util.List;
 public final class Toasts {
     private Toasts() {}
 
-    private static final int W = 172, H = 26, MAX = 5;
-    private static final long IN = 220, STAY = 3800, OUT = 260;
+    private static final int W = 186, H = 28, MAX = 4;
+    private static final long IN = 320, STAY = 3800, OUT = 420;
 
     private static final class Toast {
         Text title, sub;
@@ -55,7 +55,8 @@ public final class Toasts {
         t.title = title;
         t.sub = sub;
         t.accent = 0xFF000000 | (accent & 0xFFFFFF);
-        t.icon = icon == null ? ItemStack.EMPTY : icon;
+        // Only a picked-up item shows its picture; notices are text alone.
+        t.icon = icon == null || key == null || !key.startsWith("loot:") ? ItemStack.EMPTY : icon;
         t.key = key;
         t.born = now;
         toasts.add(t);
@@ -97,28 +98,31 @@ public final class Toasts {
                 it.remove();
                 continue;
             }
-            // Slide in from the right, rest, slide back out.
-            float slide = age < IN ? 1 - ease(age / (float) IN) : age > IN + STAY ? ease((age - IN - STAY) / (float) OUT) : 0;
-            int x = (int) (sw - W - 4 + slide * (W + 8));
+            // A short drift in and fade, a rest, and a fade away.
+            float k = age < IN ? ease(age / (float) IN) : age > IN + STAY ? 1 - ease((age - IN - STAY) / (float) OUT) : 1;
+            int al = (int) (255 * k);
+            if (al < 6) {
+                y += (H + 4) * k;
+                continue;
+            }
+            float x = sw - W - 10 + (1 - k) * 14;
             int iy = (int) y;
-            c.fill(x, iy, x + W, iy + H, 0xD80B0F0C);
-            c.fill(x, iy, x + 2, iy + H, t.accent);
-            c.fill(x + 2, iy + H - 1, x + W, iy + H, 0x607A6139);
-            // A thin timer along the bottom.
-            if (age > IN && age < IN + STAY) {
-                float left = 1 - (age - IN) / (float) STAY;
-                c.fill(x + 2, iy + H - 1, x + 2 + (int) ((W - 2) * left), iy + H, (t.accent & 0xFFFFFF) | 0x90000000);
-            }
-            int tx = x + 7;
+            // A dark glass card fading out to the left, a fine line of its colour down the edge.
+            int accent = Showcase.mix(t.accent & 0xFFFFFF, 0xEDE3C8, 0.35f);
+            c.fillGradient((int) x, iy, (int) x + W, iy + H, (int) (0xC8 * k) << 24 | 0x0A0D0C, (int) (0xC8 * k) << 24 | 0x0A0D0C);
+            Smooth.pill(c, x + W - 1.5f, iy + 3, x + W - 0.5f, iy + H - 3, (int) (0xE0 * k) << 24 | accent);
+            Smooth.pill(c, x, iy + H - 0.6f, x + W, iy + H, (int) (0x30 * k) << 24 | accent);
+            float tx = x + 10;
             if (!t.icon.isEmpty()) {
-                c.drawItem(t.icon, x + 5, iy + 5);
-                tx = x + 25;
-            }
-            int maxW = x + W - 4 - tx;
-            Text title = fit(t.title, maxW, 0.85f);
-            Ui.text(c, title, tx, iy + (t.sub == null ? 9 : 4), 0.85f, t.accent, false);
-            if (t.sub != null) Ui.text(c, fit(t.sub, maxW, 0.65f), tx, iy + 15, 0.65f, Ui.MUTED, false);
-            y += (H + 3) * (1 - Math.max(0, age - IN - STAY) / (float) OUT * 0.9f);
+                c.drawItem(t.icon, (int) x + 6, iy + 6);
+                tx = x + 27;
+            } else Smooth.diamond(c, x + 7, iy + (t.sub == null ? H / 2f : 9.5f), 1.6f, al << 24 | accent);
+            if (t.icon.isEmpty()) tx = x + 13;
+            int maxW = (int) (x + W - 8 - tx);
+            Text title = fit(Ui.heading(t.title.getString()), maxW, 0.72f);
+            Ui.text(c, title, tx, iy + (t.sub == null ? 10 : 5), 0.72f, al << 24 | accent, false);
+            if (t.sub != null) Ui.text(c, fit(Ui.body(t.sub.getString()), maxW, 0.62f), tx, iy + 16, 0.62f, (int) (al * 0.85f) << 24 | 0xC8C0AE, false);
+            y += (H + 4) * k;
         }
     }
 
