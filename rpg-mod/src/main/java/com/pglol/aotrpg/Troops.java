@@ -88,6 +88,8 @@ public final class Troops {
         /** A grab: who's held (ticks left before the throw), and when he may grab again. */
         UUID holding;
         int holdT, grabCd;
+        /** Brutes and headsmen: a signature move under way (2 leap slam, 4 grab reach, 5 head cut), its clock, its cooldown, how a grab ends (0 throw, 1 pummel). */
+        int move, moveT, poundCd, holdMode, shrug;
 
         Troop(UUID id, int squad, boolean officer, int role, int slot) {
             this.id = id;
@@ -166,14 +168,25 @@ public final class Troops {
         MERCENARY("Mercenary", "Mercenary Captain", false, true, 0, 55, 90),
         DESERTER("Garrison Deserter", "Deserter Sergeant", true, true, 12, 50, 80),
         SWORDSMAN("Wandering Swordsman", "Wandering Swordsman", true, true, 5, 90, 90),
-        MASTER("Blade Master", "Blade Master", true, true, 0, 160, 160);
+        MASTER("Blade Master", "Blade Master", true, true, 0, 160, 160),
+        /** Huge and bare-handed: grabs and throws, pummels you into the ground, leaps and craters the earth. */
+        BRUTE("Brute", "Iron Brute", true, true, 7, 150, 230, 1),
+        /** Quiet, fast, one fine blade: a dash at neck height that takes heads. Duck it or get clear. */
+        HEADSMAN("Headsman", "Headsman", true, true, 12, 85, 95, 2);
 
         public final String name, leaderName;
         public final boolean swords, neutral;
         public final double touchy;
         public final int hp, leaderHp;
+        /** How they fight: 0 blades, 1 fists (brute), 2 the head cut (headsman). */
+        public final int style;
 
         Arch(String name, String leaderName, boolean swords, boolean neutral, double touchy, int hp, int leaderHp) {
+            this(name, leaderName, swords, neutral, touchy, hp, leaderHp, 0);
+        }
+
+        Arch(String name, String leaderName, boolean swords, boolean neutral, double touchy, int hp, int leaderHp, int style) {
+            this.style = style;
             this.name = name;
             this.leaderName = leaderName;
             this.swords = swords;
@@ -208,6 +221,7 @@ public final class Troops {
         if (t == null) return;
         t.stun = Math.max(t.stun, ticks);
         t.swing = 0;
+        if (t.move != 2) t.move = 0;
         t.swingShown = false;
         if (e instanceof VillagerEntity sv) anim(sv, 0, 0, 0);
         t.windup = 0;
@@ -248,7 +262,8 @@ public final class Troops {
         squads.put(sq.id, sq);
         int made = 0;
         for (int i = 0; i < n; i++) {
-            boolean officer = arch == Arch.SWORDSMAN || arch == Arch.MASTER || i == 0 && n >= 3 && r.nextFloat() < 0.6f;
+            boolean officer = arch == Arch.SWORDSMAN || arch == Arch.MASTER || arch == Arch.HEADSMAN && sq.skill >= 5
+                || arch == Arch.BRUTE && i == 0 && r.nextFloat() < 0.4f || i == 0 && n >= 3 && r.nextFloat() < 0.6f;
             int x = at.getX() + r.nextInt(7) - 3, z = at.getZ() + r.nextInt(7) - 3;
             int y = w.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z);
             VillagerEntity v = EntityType.VILLAGER.create(w);
@@ -270,6 +285,11 @@ public final class Troops {
             v.setCustomNameVisible(true);
             var hp = v.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
             if (hp != null) hp.setBaseValue((officer ? arch.leaderHp : arch.hp) * (0.8 + 0.1 * sq.skill) + level * (officer ? 3.5 : 2.2));
+            if (arch.style == 1) {
+                // A head taller than anyone, and broad with it.
+                var size = v.getAttributeInstance(EntityAttributes.GENERIC_SCALE);
+                if (size != null) size.setBaseValue(officer ? 1.45 : 1.3);
+            }
             v.setHealth(v.getMaxHealth());
             Item gun = AotItems.exact("apg_gun");
             if (gun != null) v.equipStack(net.minecraft.entity.EquipmentSlot.MAINHAND, new ItemStack(gun));
@@ -937,6 +957,12 @@ public final class Troops {
         t.burst = 0;
         t.cool = 4;
         Squad sq0 = squads.get(t.squad);
+        if (sq0 != null && sq0.arch.style == 1) {
+            // Bare hands.
+            v.equipStack(net.minecraft.entity.EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            v.equipStack(net.minecraft.entity.EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            return;
+        }
         boolean fine = t.officer || sq0 != null && sq0.skill >= 3;
         ItemStack grip = fine ? officerGrip(v.getRandom(), sq0 == null ? 1 : sq0.level + sq0.skill * 2) : loadedGrip();
         v.equipStack(net.minecraft.entity.EquipmentSlot.MAINHAND, grip.copy());
@@ -952,6 +978,11 @@ public final class Troops {
      * thrown off balance, wide open; step out of reach and it whiffs.
      */
     private static void melee(ServerWorld w, VillagerEntity v, Troop t, LivingEntity target, double dist, Squad sq) {
+        if (sq.arch.style == 1) {
+            brute(w, v, t, target, dist, sq);
+            return;
+        }
+        if (sq.arch.style == 2 && headsman(w, v, t, target, dist, sq)) return;
         face(v, target.getEyePos());
         Vec3d to = target.getPos().subtract(v.getPos()).multiply(1, 0, 1);
         if (t.grabCd > 0) t.grabCd--;
@@ -1091,6 +1122,320 @@ public final class Troops {
         w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ITEM_TRIDENT_RETURN, SoundCategory.HOSTILE, 1f, 1.6f);
     }
 
+    // ------------------------------------------------------------------ brutes
+
+    private static boolean guarding(LivingEntity e) {
+        return e instanceof ServerPlayerEntity gp && AotRpg.GUARD_FIGHT.guarding(gp);
+    }
+
+    private static void quake(ServerWorld w, Vec3d at, double range, float strength, int ticks) {
+        for (ServerPlayerEntity o : PlayerLookup.around(w, at, range)) {
+            if (!ServerPlayNetworking.canSend(o, Net.Quake.ID)) continue;
+            float k = (float) (1 - Math.sqrt(o.squaredDistanceTo(at)) / range);
+            if (k > 0.05f) ServerPlayNetworking.send(o, new Net.Quake(strength * k, ticks));
+        }
+    }
+
+    /**
+     * A brute, bare-handed: lumbers in, a big readable haymaker that sends you flying, a reach
+     * for you (it beats a raised guard: get out of the way), and then either lifted overhead and
+     * hurled, or slammed face first into the ground and pummelled there, the earth cracking under
+     * every blow. From further off he leaps and comes down fists first, cratering the ground (jump
+     * it). Hits barely rock him; three while he has you pinned and he lets go.
+     */
+    private static void brute(ServerWorld w, VillagerEntity v, Troop t, LivingEntity target, double dist, Squad sq) {
+        face(v, target.getEyePos());
+        Vec3d to = target.getPos().subtract(v.getPos()).multiply(1, 0, 1);
+        Vec3d look = v.getRotationVec(1f).multiply(1, 0, 1);
+        look = look.lengthSquared() < 1e-4 ? Vec3d.ZERO : look.normalize();
+        if (t.grabCd > 0) t.grabCd--;
+        if (t.poundCd > 0) t.poundCd--;
+        float power = 1 + sq.level * 0.02f + sq.skill * 0.1f + (t.officer ? 0.25f : 0);
+        // Up in a leap: down fists first.
+        if (t.move == 2) {
+            t.moveT++;
+            if (t.moveT > 4 && v.isOnGround() || t.moveT > 50) {
+                t.move = 0;
+                pound(w, v, sq, power, t.officer ? 5.5 : 4.5);
+                t.cool = 16;
+            }
+            return;
+        }
+        if (t.holding != null) {
+            hold(w, v, t, sq, look, power);
+            return;
+        }
+        // Reaching for you.
+        if (t.move == 4) {
+            if (--t.moveT > 0) {
+                if (dist > 1.8) walk(w, v, to, 0.2);
+                return;
+            }
+            t.move = 0;
+            boolean reach = dist < 2.9 && to.lengthSquared() > 1e-4 && look.dotProduct(to.normalize()) > 0.35 && !AotRpg.isTitan(target)
+                && !Impact.thrown(target) && target.isAlive();
+            if (!reach) {
+                w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_NODAMAGE, SoundCategory.HOSTILE, 1f, 0.6f);
+                t.cool = 18;
+                t.grabCd = 50;
+                return;
+            }
+            t.holding = target.getUuid();
+            t.shrug = 0;
+            t.holdMode = w.random.nextFloat() < 0.55f ? 1 : 0;
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.HOSTILE, 1.2f, 0.5f);
+            if (target instanceof ServerPlayerEntity gp) gp.playSoundToPlayer(SoundEvents.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 0.7f, 1.3f);
+            if (t.holdMode == 0) {
+                t.holdT = 16;
+                anim(v, 6, 16, 1);
+            } else {
+                // Slammed down face first, right there in front of him.
+                Vec3d at = v.getPos().add(look.multiply(1.4 * v.getScale()));
+                if (target instanceof ServerPlayerEntity hp) hp.requestTeleport(at.x, v.getY(), at.z);
+                else target.refreshPositionAndAngles(at.x, v.getY(), at.z, target.getYaw(), target.getPitch());
+                t.holdT = 46;
+                anim(v, 7, 6, 2);
+                Impact.faceplant(w, target, 50);
+                Impact.crater(w, BlockPos.ofFloored(at).down(), 1);
+                target.damage(w.getDamageSources().mobAttack(v), 4 * power);
+                AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xC8B090, 3f), at.x, v.getY() + 0.05, at.z, 0, 0, 0);
+                quake(w, at, 18, 0.6f, 8);
+                w.playSound(null, at.x, at.y, at.z, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.HOSTILE, 0.6f, 0.7f);
+            }
+            return;
+        }
+        // The haymaker, cocked back (he doesn't stop for a hit).
+        if (t.swing > 0) {
+            if (!t.swingShown) {
+                anim(v, 6, t.swing, 0);
+                t.swingShown = true;
+            }
+            t.swing--;
+            if (dist > 2.4) walk(w, v, to, 0.1);
+            if (t.swing > 0) return;
+            t.swingShown = false;
+            anim(v, 7, 6, 0);
+            v.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.HOSTILE, 1.3f, 0.6f);
+            boolean reach = dist < 3.4 * Math.max(1, v.getScale() * 0.85) && to.lengthSquared() > 1e-4 && look.dotProduct(to.normalize()) > 0.3;
+            if (!reach) {
+                t.cool = 14;
+                return;
+            }
+            boolean blocked = guarding(target);
+            target.damage(w.getDamageSources().mobAttack(v), (8 + sq.level * 0.25f + sq.skill) * (blocked ? 0.5f : 1) * (t.officer ? 1.15f : 1));
+            Vec3d hit = target.getPos().add(0, target.getHeight() * 0.6, 0);
+            if (!blocked) Impact.launch(target, v, 1.6 + 0.15 * sq.skill);
+            else {
+                // Through the guard anyway: it buckles.
+                Stuns.stun(target, 10);
+                target.addVelocity(look.x * 0.7, 0.2, look.z * 0.7);
+                target.velocityModified = true;
+            }
+            Impact.frame(w, hit, 0.85f, target);
+            AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFF0D0, 3.2f), hit.x, hit.y, hit.z, 0, 0, 0);
+            quake(w, hit, 14, 0.35f, 6);
+            t.cool = t.officer ? 12 : 16;
+            return;
+        }
+        if (t.cool > 0) {
+            t.cool--;
+            if (dist > 2.6) walk(w, v, to, 0.14);
+            return;
+        }
+        // From a distance: the leap.
+        if (t.poundCd <= 0 && dist > 4.5 && dist < 14 && v.isOnGround() && w.random.nextInt(3) == 0) {
+            Vec3d hz = to.normalize().multiply(Math.min(1.1, dist * 0.072));
+            v.setVelocity(hz.x, 0.95, hz.z);
+            t.move = 2;
+            t.moveT = 0;
+            t.poundCd = 150 - sq.skill * 12;
+            anim(v, 6, 22, 1);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 1.2f, 1.1f);
+            AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xD8C8A8, 3f), v.getX(), v.getY() + 0.05, v.getZ(), 0, 0, 0);
+            return;
+        }
+        if (dist > 2.6) {
+            walk(w, v, to, 0.17 + 0.012 * sq.skill);
+            return;
+        }
+        // Up close: reach for you (the more you turtle, the likelier), a pound where he stands, or the haymaker.
+        if (t.grabCd <= 0 && !AotRpg.isTitan(target) && w.random.nextInt(guarding(target) ? 2 : 4) == 0) {
+            t.move = 4;
+            t.moveT = Math.max(6, 10 - sq.skill);
+            anim(v, 10, t.moveT + 2, 0);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_ATTACK, SoundCategory.HOSTILE, 1f, 0.8f);
+            return;
+        }
+        if (t.poundCd <= 0 && w.random.nextInt(3) == 0) {
+            v.setVelocity(0, 0.6, 0);
+            t.move = 2;
+            t.moveT = 0;
+            t.poundCd = 120 - sq.skill * 10;
+            anim(v, 6, 14, 1);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 1f, 1.2f);
+            return;
+        }
+        t.swing = Math.max(8, 14 - sq.skill);
+        w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_STEP, SoundCategory.HOSTILE, 1f, 0.7f);
+    }
+
+    /** Someone in a brute's hands: lifted and hurled, or pinned and pummelled. */
+    private static void hold(ServerWorld w, VillagerEntity v, Troop t, Squad sq, Vec3d look, float power) {
+        LivingEntity held = find(w, t.holding);
+        if (held == null || !held.isAlive()) {
+            t.holding = null;
+            return;
+        }
+        t.holdT--;
+        if (t.holdMode == 0) {
+            // Up over his head...
+            Vec3d at = v.getPos().add(look.multiply(0.4)).add(0, v.getHeight() + 0.1, 0);
+            if (held instanceof ServerPlayerEntity hp) hp.requestTeleport(at.x, at.y, at.z);
+            else held.refreshPositionAndAngles(at.x, at.y, at.z, held.getYaw(), held.getPitch());
+            held.setVelocity(Vec3d.ZERO);
+            held.fallDistance = 0;
+            if (t.holdT > 0) return;
+            // ...and hurled.
+            t.holding = null;
+            t.grabCd = 150;
+            t.cool = 14;
+            anim(v, 5, 6, 0);
+            Impact.launch(held, v, 2.6 + 0.2 * sq.skill);
+            held.damage(w.getDamageSources().mobAttack(v), 5 * power);
+            Impact.frame(w, at, 0.9f, held);
+            afterimage(w, v, 0xFFD24A);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.HOSTILE, 1.3f, 0.5f);
+            return;
+        }
+        // Pinned: fists coming down, the ground giving way under each one.
+        Vec3d at = held.getPos();
+        face(v, at);
+        if (t.holdT > 6 && t.holdT % 9 == 0) {
+            int n = t.holdT / 9;
+            anim(v, 7, 5, 2 + n % 2);
+            v.swingHand(n % 2 == 0 ? net.minecraft.util.Hand.MAIN_HAND : net.minecraft.util.Hand.OFF_HAND);
+            held.damage(w.getDamageSources().mobAttack(v), (2.5f + sq.skill * 0.5f) * power);
+            Impact.crater(w, BlockPos.ofFloored(at).down(), 1);
+            AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xE8D8B8, 2.4f), at.x, at.y + 0.3, at.z, 0, 0, 0);
+            AotParticles.burst(w, AotParticles.SHARD, 0x8A7A68, 0.5f, at.x, at.y + 0.2, at.z, 8, 0.3, 0.35);
+            quake(w, at, 16, 0.45f, 5);
+            w.playSound(null, at.x, at.y, at.z, SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, SoundCategory.HOSTILE, 1.2f, 0.5f);
+            w.playSound(null, at.x, at.y, at.z, SoundEvents.BLOCK_ROOTED_DIRT_BREAK, SoundCategory.HOSTILE, 1.2f, 0.6f);
+        }
+        if (t.holdT > 0) return;
+        // The last one, both fists: the earth caves in.
+        t.holding = null;
+        t.grabCd = 180;
+        t.cool = 20;
+        anim(v, 7, 8, 2);
+        held.damage(w.getDamageSources().mobAttack(v), (5 + sq.skill) * power);
+        Impact.crater(w, BlockPos.ofFloored(at).down(), t.officer ? 3 : 2);
+        Impact.frame(w, at.add(0, 0.4, 0), 1f, held);
+        AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xC8B090, 4.5f), at.x, at.y + 0.05, at.z, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFF0D0, 3f), at.x, at.y + 0.4, at.z, 0, 0, 0);
+        quake(w, at, 24, 0.9f, 12);
+        w.playSound(null, at.x, at.y, at.z, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.HOSTILE, 1f, 0.6f);
+    }
+
+    /** Landing fists first: a crater, and everyone on the ground near him hurled out of it (unless they jumped). */
+    private static void pound(ServerWorld w, VillagerEntity v, Squad sq, float power, double radius) {
+        Vec3d c = v.getPos();
+        anim(v, 7, 8, 2);
+        Impact.crater(w, v.getBlockPos().down(), radius > 5 ? 3 : 2);
+        AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xC8B090, (float) radius * 1.2f), c.x, c.y + 0.05, c.z, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFF0D0, 3.5f), c.x, c.y + 0.3, c.z, 0, 0, 0);
+        for (int i = 0; i < 16; i++) {
+            double a = i * Math.PI * 2 / 16;
+            AotParticles.one(w, AotParticles.fx(AotParticles.PUFF, 0x8A7A68, 1.6f), c.x + Math.cos(a) * 1.5, c.y + 0.2, c.z + Math.sin(a) * 1.5,
+                Math.cos(a) * 0.35, 0.1, Math.sin(a) * 0.35);
+        }
+        quake(w, c, 28, 1f, 12);
+        w.playSound(null, c.x, c.y, c.z, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.HOSTILE, 1.2f, 0.55f);
+        w.playSound(null, c.x, c.y, c.z, SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.HOSTILE, 1f, 0.5f);
+        for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, new Box(c, c).expand(radius, 2.5, radius), x -> x != v && x.isAlive())) {
+            if (Troops.is(e) && sameSquad(e, v) || AotRpg.isTitan(e)) continue;
+            if (e instanceof ServerPlayerEntity sp && (sp.isSpectator() || sp.isCreative())) continue;
+            // Jumped it: it passes under you.
+            if (!e.isOnGround() && e.getY() - c.y > 0.8) continue;
+            double d = Math.sqrt(e.squaredDistanceTo(c));
+            if (d > radius) continue;
+            float k = (float) (1 - d / radius * 0.55);
+            e.damage(w.getDamageSources().mobAttack(v), (7 + sq.level * 0.22f + sq.skill) * power * k);
+            Impact.launch(e, v, 1.2 + 0.5 * k);
+        }
+    }
+
+    // ------------------------------------------------------------------ headsmen
+
+    /**
+     * A headsman's signature: a crouch, the blade drawn low behind him, a red glint at neck
+     * height, and then he's through you, past and behind, one cut at the neck. Duck (crouch) under
+     * it or get off the line. If it lands on someone already badly hurt, it takes their head.
+     * Between head cuts he fights like any good swordsman. True if it took the tick.
+     */
+    private static boolean headsman(ServerWorld w, VillagerEntity v, Troop t, LivingEntity target, double dist, Squad sq) {
+        if (t.poundCd > 0) t.poundCd--;
+        if (t.move == 5) {
+            face(v, target.getEyePos());
+            Vec3d eye = v.getEyePos().add(v.getRotationVec(1f).multiply(0.5)).add(0, -0.25, 0);
+            if (t.moveT % 2 == 0) AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xE02A2A, 1.2f), eye.x, eye.y, eye.z, 0, 0, 0);
+            if (--t.moveT > 0) return true;
+            t.move = 0;
+            Vec3d from = v.getPos();
+            Vec3d d = target.getPos().subtract(from).multiply(1, 0, 1);
+            Vec3d dn = d.lengthSquared() < 1e-4 ? v.getRotationVec(1f).multiply(1, 0, 1).normalize() : d.normalize();
+            double len = Math.min(9, d.length() + 2.2);
+            Vec3d end = from.add(dn.multiply(len));
+            var wall = w.raycast(new RaycastContext(from.add(0, 1, 0), end.add(0, 1, 0), RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, v));
+            if (wall.getType() != HitResult.Type.MISS) end = wall.getPos().subtract(dn.multiply(0.6)).add(0, -1, 0);
+            // Who's on the line, at neck height.
+            Vec3d tp = target.getPos();
+            double along = MathHelper.clamp(tp.subtract(from).dotProduct(dn), 0, end.subtract(from).length());
+            Vec3d closest = from.add(dn.multiply(along));
+            boolean ducked = target instanceof ServerPlayerEntity sp && (sp.isSneaking() || sp.isInSwimmingPose() || sp.isCrawling());
+            boolean hit = tp.multiply(1, 0, 1).distanceTo(closest.multiply(1, 0, 1)) < 1.25 && Math.abs(tp.y - from.y) < 1.6 && !ducked;
+            for (int i = 0; i <= 8; i++) {
+                Vec3d p = from.lerp(end, i / 8.0).add(0, 1.45, 0);
+                AotParticles.one(w, AotParticles.fx(AotParticles.STREAK, 0xF4ECE8, 1f), p.x, p.y, p.z, dn.x * 0.4, 0, dn.z * 0.4);
+            }
+            afterimage(w, v, 0xE02A2A);
+            v.refreshPositionAndAngles(end.x, from.y, end.z, v.getYaw(), v.getPitch());
+            v.setVelocity(dn.multiply(0.3));
+            anim(v, 9, 6, 0);
+            v.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+            w.playSound(null, from.x, from.y + 1, from.z, SoundEvents.ITEM_TRIDENT_THROW, SoundCategory.HOSTILE, 1.2f, 0.7f);
+            t.cool = 16;
+            if (!hit) {
+                w.playSound(null, end.x, end.y + 1, end.z, SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.HOSTILE, 1f, 1.6f);
+                if (ducked && target instanceof ServerPlayerEntity sp) sp.playSoundToPlayer(SoundEvents.ENTITY_PLAYER_ATTACK_NODAMAGE, SoundCategory.HOSTILE, 1f, 1.4f);
+                return true;
+            }
+            Vec3d neck = target.getPos().add(0, target.getHeight() * 0.85, 0);
+            boolean takes = target.getHealth() <= target.getMaxHealth() * 0.25f;
+            float dmg = 12 + sq.level * 0.32f + sq.skill * 1.5f + (t.officer ? 3 : 0);
+            target.damage(w.getDamageSources().mobAttack(v), takes ? 9999 : dmg);
+            AotParticles.one(w, AotParticles.fx(AotParticles.ARC, 0xE02A2A, 3.4f), neck.x, neck.y, neck.z, -dn.z, 0, dn.x);
+            AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFE8E0, takes ? 4f : 2.5f), neck.x, neck.y, neck.z, 0, 0, 0);
+            AotParticles.burst(w, AotParticles.SHARD, 0xB01A1A, 0.6f, neck.x, neck.y, neck.z, takes ? 22 : 10, 0.25, 0.45);
+            Impact.frame(w, neck, takes ? 1f : 0.8f, target);
+            quake(w, neck, 12, takes ? 0.7f : 0.35f, 6);
+            w.playSound(null, neck.x, neck.y, neck.z, SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, SoundCategory.HOSTILE, 1.3f, 0.6f);
+            w.playSound(null, neck.x, neck.y, neck.z, SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.HOSTILE, 0.5f, 2f);
+            return true;
+        }
+        if (t.poundCd <= 0 && t.swing == 0 && t.cool <= 2 && t.guard == 0 && dist > 2.5 && dist < 8 && v.isOnGround() && w.random.nextInt(4) == 0) {
+            t.move = 5;
+            t.moveT = Math.max(9, 16 - sq.skill);
+            t.poundCd = 100 - sq.skill * 8;
+            anim(v, 8, t.moveT, 0);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.BLOCK_GRINDSTONE_USE, SoundCategory.HOSTILE, 1f, 1.4f);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ITEM_TRIDENT_RETURN, SoundCategory.HOSTILE, 1f, 0.6f);
+            return true;
+        }
+        return false;
+    }
+
     /** Shows everyone nearby what his body is doing (see Net.TroopAnim). */
     private static void anim(VillagerEntity v, int kind, int ticks, int hand) {
         Net.TroopAnim a = new Net.TroopAnim(v.getId(), (byte) kind, (byte) Math.min(127, Math.max(0, ticks)), (byte) hand);
@@ -1191,6 +1536,22 @@ public final class Troops {
         Squad hsq = squads.get(t.squad);
         if (hsq != null) provoke(w, hsq, by);
         int sk = skill(t);
+        if (hsq != null && hsq.arch.style == 1 && t.stun <= 0) {
+            // A brute barely rocks: hits land, but he doesn't flinch. Three on him while he has
+            // someone pinned and he lets go.
+            Vec3d away = v.getPos().subtract(by.getPos()).multiply(1, 0, 1);
+            t.knock = away.lengthSquared() < 1e-4 ? Vec3d.ZERO : away.normalize().multiply(0.22);
+            t.knockT = 3;
+            if (t.holding != null && ++t.shrug >= 3) {
+                t.shrug = 0;
+                t.holding = null;
+                t.grabCd = 120;
+                t.cool = 16;
+                anim(v, 0, 0, 0);
+                w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_STUNNED, SoundCategory.HOSTILE, 1f, 0.9f);
+            }
+            return 0.75;
+        }
         if (t.stun > 0) {
             // Reeling: every hit lands, and sends him staggering back.
             Vec3d away = v.getPos().subtract(by.getPos()).multiply(1, 0, 1);
@@ -1590,11 +1951,14 @@ public final class Troops {
             long base = officer ? 45 : 18;
             Arch arch = sq == null ? Arch.MARLEY : sq.arch;
             if (arch == Arch.MASTER) base = 90;
+            else if (arch == Arch.BRUTE) base = officer ? 80 : 60;
+            else if (arch == Arch.HEADSMAN) base = 75;
             else if (arch == Arch.SWORDSMAN || arch == Arch.MERCENARY) base += 10;
             AotRpg.PROGRESSION.award(killer, Progression.forLevel(level, AotRpg.PROFILES.get(killer.getUuid()).level, base), officer ? "Officer down" : "Enemy down");
             Extraction.count(killer, 2);
             // A blade master's style can be learned from them.
-            if (arch == Arch.MASTER && r.nextFloat() < 0.18f) AotRpg.COSMETICS.dropFinisher(killer, r);
+            if (arch == Arch.MASTER && r.nextFloat() < 0.18f || arch == Arch.HEADSMAN && r.nextFloat() < 0.12f
+                || arch == Arch.BRUTE && r.nextFloat() < 0.08f) AotRpg.COSMETICS.dropFinisher(killer, r);
         }
         List<ItemStack> drops = new ArrayList<>();
         Item ammo = AotItems.exact("apg_cartridge"), gas = AotItems.exact("gas_canister"), blades = AotItems.exact("blade_component");

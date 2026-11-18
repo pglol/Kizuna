@@ -65,6 +65,8 @@ public final class ActorRenderer extends EntityRenderer<VillagerEntity> {
         if (name.contains("kenny ackerman")) return "thug";
         // The people of the wilds, each in their own look.
         if (name.contains("bandit")) return "thug";
+        if (name.contains("brute")) return "keith";
+        if (name.contains("headsman")) return "mp_officer";
         if (name.contains("mercenary")) return "smuggler";
         if (name.contains("deserter")) return "garrison_soldier";
         if (name.contains("wandering swordsman")) return "garrison_captain";

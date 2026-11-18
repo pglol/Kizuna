@@ -116,15 +116,20 @@ public final class WarParties {
         String session = "wild:" + (seq++);
         float roll = r.nextFloat();
         int made;
-        if (roll < 0.34f) {
+        if (roll < 0.30f) {
             // A Marleyan patrol: they hunt.
             made = Troops.hunters(w, at, 3 + r.nextInt(3), level + 1, session, at, 400, r);
-        } else if (roll < 0.56f) {
+        } else if (roll < 0.48f) {
             made = Troops.group(w, at, 2 + r.nextInt(3), level, session, at, 140, r, Troops.Arch.BANDIT, 1 + r.nextInt(2));
-        } else if (roll < 0.70f) {
+        } else if (roll < 0.60f) {
             made = Troops.group(w, at, 2 + r.nextInt(2), level + 1, session, at, 140, r, Troops.Arch.DESERTER, 2 + r.nextInt(2));
-        } else if (roll < 0.82f) {
+        } else if (roll < 0.70f) {
             made = Troops.group(w, at, 2, level + 2, session, at, 180, r, Troops.Arch.MERCENARY, 3);
+        } else if (roll < 0.80f) {
+            // Brutes: one, or a pair.
+            made = Troops.group(w, at, r.nextInt(3) == 0 ? 2 : 1, level + 3, session, at, 160, r, Troops.Arch.BRUTE, 3 + r.nextInt(2));
+        } else if (roll < 0.88f) {
+            made = Troops.group(w, at, 1, level + 4, session, at, 200, r, Troops.Arch.HEADSMAN, 4 + r.nextInt(2));
         } else if (roll < 0.97f) {
             // Alone, or a master travelling with an apprentice (they spar when nobody's about).
             made = Troops.group(w, at, r.nextInt(5) < 2 ? 2 : 1, level + 3, session, at, 200, r, Troops.Arch.SWORDSMAN, 3 + r.nextInt(3));

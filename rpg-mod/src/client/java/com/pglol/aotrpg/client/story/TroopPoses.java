@@ -30,6 +30,8 @@ public final class TroopPoses {
         int ms = switch (a.kind()) {
             case 2 -> 260;
             case 5 -> 320;
+            case 7 -> 240;
+            case 9 -> 300;
             default -> Math.max(100, a.ticks() * 50);
         };
         moves.put(a.entity(), new Move(a.kind(), Util.getMeasuringTimeMs(), ms, a.hand()));
@@ -121,6 +123,79 @@ public final class TroopPoses {
                 lp = MathHelper.lerp(k, lp, -1.55f);
                 ry = MathHelper.lerp(k, ry, -0.2f);
                 ly = MathHelper.lerp(k, ly, 0.2f);
+                by = MathHelper.lerp(k, by, 0);
+            }
+            case 6 -> {
+                float k = ease(Math.min(1, t * 2.5f));
+                if (mv.hand == 1) {
+                    // Both fists up over the head (a lift, or a leap coming down).
+                    rp = MathHelper.lerp(k, rp, -3.0f);
+                    lp = MathHelper.lerp(k, lp, -3.0f);
+                    ry = MathHelper.lerp(k, ry, -0.25f);
+                    ly = MathHelper.lerp(k, ly, 0.25f);
+                    rr = MathHelper.lerp(k, rr, 0.15f);
+                    lr = MathHelper.lerp(k, lr, -0.15f);
+                    by = MathHelper.lerp(k, by, 0);
+                } else {
+                    // The haymaker cocked: right fist drawn far back, the body wound round, the left out to measure.
+                    float shake = t > 0.7f ? (float) Math.sin(now / 25.0) * 0.05f : 0;
+                    rp = MathHelper.lerp(k, rp, 0.9f + shake);
+                    ry = MathHelper.lerp(k, ry, 0.3f);
+                    rr = MathHelper.lerp(k, rr, 0.5f);
+                    lp = MathHelper.lerp(k, lp, -1.4f);
+                    ly = MathHelper.lerp(k, ly, 0.3f);
+                    by = MathHelper.lerp(k, by, 0.7f);
+                }
+            }
+            case 7 -> {
+                // A blow: driven straight out (0/1), or down at the ground (2 both, 2/3 a hand).
+                float k = ease(Math.min(1, t * 2.2f));
+                boolean down = mv.hand >= 2;
+                boolean right = mv.hand == 0 || mv.hand == 2;
+                float pitch = down ? -0.55f : -1.6f;
+                if (down && mv.hand == 2 && t < 0.05f) {
+                    rp = lp = pitch;
+                }
+                if (right || mv.hand == 2) {
+                    rp = MathHelper.lerp(k, -2.6f, pitch);
+                    ry = MathHelper.lerp(k, 0.3f, -0.1f);
+                }
+                if (!right || mv.hand == 2) {
+                    lp = MathHelper.lerp(k, -2.6f, pitch);
+                    ly = MathHelper.lerp(k, -0.3f, 0.1f);
+                }
+                by = down ? 0 : MathHelper.lerp(k, 0.7f, -0.35f);
+            }
+            case 8 -> {
+                // A headsman coiling: the blade low and back, the body turned away, the other hand forward.
+                float k = ease(Math.min(1, t * 3));
+                float shake = t > 0.6f ? (float) Math.sin(now / 18.0) * 0.03f : 0;
+                rp = MathHelper.lerp(k, rp, 0.5f + shake);
+                ry = MathHelper.lerp(k, ry, 1.0f);
+                rr = MathHelper.lerp(k, rr, 1.2f);
+                lp = MathHelper.lerp(k, lp, -1.2f);
+                ly = MathHelper.lerp(k, ly, 0.5f);
+                by = MathHelper.lerp(k, by, 0.9f);
+            }
+            case 9 -> {
+                // The head cut: flat across at neck height, the body unwinding behind it.
+                float k = ease(Math.min(1, t * 1.6f));
+                rp = -1.55f;
+                ry = MathHelper.lerp(k, 1.1f, -1.2f);
+                rr = MathHelper.lerp(k, 1.2f, -0.2f);
+                lp = MathHelper.lerp(k, -1.2f, 0.4f);
+                ly = 0.3f;
+                by = MathHelper.lerp(k, 0.9f, -0.8f);
+            }
+            case 10 -> {
+                // Reaching for you: both arms out, hands open.
+                float k = ease(Math.min(1, t * 2));
+                rp = MathHelper.lerp(k, rp, -1.45f);
+                lp = MathHelper.lerp(k, lp, -1.45f);
+                ry = MathHelper.lerp(k, ry, 0.35f);
+                ly = MathHelper.lerp(k, ly, -0.35f);
+                rr = MathHelper.lerp(k, rr, 0);
+                lr = MathHelper.lerp(k, lr, 0);
                 by = MathHelper.lerp(k, by, 0);
             }
             default -> { }
