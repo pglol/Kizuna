@@ -36,7 +36,7 @@ public final class Cosmetics {
             new Def("trail_sp", "trail", "Pressure Round", false, true), new Def("slash_sp", "slash", "Crescent Fang", false, true),
             new Def("body_sp", "body", "Spiritual Pressure", false, true), new Def("odm_sp", "odm", "Pressure Wake", false, true),
             new Def("horse_sp", "horse", "Spirit Stride", false, true), new Def("head_sp", "head", "Eyes of Pressure", false, true),
-            new Def("back_sp", "back", "Pressure Column", false, true), new Def("kill_sp", "kill", "Pillar of Pressure", false, true),
+            new Def("back_sp", "back", "Released", false, true), new Def("kill_sp", "kill", "Pillar of Pressure", false, true),
             new Def("block_sp", "block", "Pressure Wall", false, true), new Def("clash_sp", "clash", "Pressure Clash", false, true),
             new Def("fin_sp", "finisher", "Overwhelming Pressure", false, true)),
         "uch", List.of(

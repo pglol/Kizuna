@@ -69,70 +69,132 @@ public final class OneOfOne {
             VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
             boolean firstPerson = p == mc.player && mc.options.getPerspective().isFirstPerson();
             if (field && lift > 0.02f) {
+                // Faint on the ground under it: the air there is thick with it.
                 ms.push();
                 ms.translate(pos.x - cam.x, gy - cam.y + 0.04, pos.z - cam.z);
                 Matrix4f m = ms.peek().getPositionMatrix();
-                float breathe = 1 + 0.04f * MathHelper.sin(time * 2.1f);
-                int a0 = (int) (0x46 * lift);
-                disc(glow, m, FIELD * breathe, a0 << 24 | tint, tint & 0xFFFFFF);
-                disc(glow, m, 1.6f, (int) (0x60 * lift) << 24 | lighter(tint, 0.4f), tint & 0xFFFFFF);
-                // Shock rings running out over the ground.
-                for (int i = 0; i < 3; i++) {
-                    float k = (time * 0.55f + i / 3f) % 1f;
-                    ring(glow, m, 0.6f + k * FIELD, 0.09f + 0.12f * k, (int) (0xB0 * (1 - k) * lift) << 24 | lighter(tint, 0.3f));
+                float breathe = 1 + 0.05f * MathHelper.sin(time * 2.1f);
+                disc(glow, m, 3.2f * breathe, (int) (0x34 * lift) << 24 | tint, tint & 0xFFFFFF);
+                for (int i = 0; i < 2; i++) {
+                    float k = (time * 0.45f + i / 2f) % 1f;
+                    ring(glow, m, 0.5f + k * 4.5f, 0.06f + 0.08f * k, (int) (0x70 * (1 - k) * lift) << 24 | lighter(tint, 0.3f));
                 }
-                // A ring of marks turning in it, and the field's edge.
-                for (int i = 0; i < 18; i++) {
-                    double a = time * 0.35 + i * Math.PI * 2 / 18;
-                    arcSeg(glow, m, 2.9f, 0.08f, a, a + 0.18, (int) (0x90 * lift) << 24 | tint);
-                }
-                ring(glow, m, FIELD * breathe - 0.08f, 0.08f, (int) (0x70 * lift) << 24 | tint);
                 ms.pop();
             }
-            if (field && !firstPerson) {
-                // The aura: tongues of it flickering up round the body.
+            if (!firstPerson && (field || column)) {
                 ms.push();
                 ms.translate(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z);
                 Matrix4f m = ms.peek().getPositionMatrix();
-                int n = 14;
-                for (int i = 0; i < n; i++) {
-                    double a0 = i * Math.PI * 2 / n + time * 0.6, a1 = (i + 1) * Math.PI * 2 / n + time * 0.6;
-                    float h0 = 1.9f + 0.7f * MathHelper.sin(time * 7 + i * 1.7f), h1 = 1.9f + 0.7f * MathHelper.sin(time * 7 + (i + 1) * 1.7f);
-                    float r = 0.62f;
-                    int bot = 0x70 << 24 | tint, top = tint & 0xFFFFFF;
-                    wall(glow, m, (float) Math.cos(a0) * r, (float) Math.sin(a0) * r, (float) Math.cos(a1) * r, (float) Math.sin(a1) * r, 0, h0, h1, bot, top);
-                    float r2 = 0.42f;
-                    wall(glow, m, (float) Math.cos(a0) * r2, (float) Math.sin(a0) * r2, (float) Math.cos(a1) * r2, (float) Math.sin(a1) * r2, 0, h0 * 0.8f, h1 * 0.8f,
-                        0x50 << 24 | lighter(tint, 0.5f), tint & 0xFFFFFF);
+                Vec3d view = pos.subtract(cam);
+                float sneak = p.isInSneakingPose() ? 0.8f : 1f;
+                long seed = p.getUuid().getLeastSignificantBits();
+                // The aura: flame tongues all round the body, rising, swaying and gone, the
+                // brightest nearest the body, thinner and wilder further out.
+                if (field) {
+                    wisps(glow, m, view, time, seed, 30, 0.2f, 0.55f, 2.2f * sneak, 0.55f, lighter(tint, 0.45f), 0xB0, 1.3f);
+                    wisps(glow, m, view, time, seed + 7, 26, 0.45f, 1.0f, 2.6f * sneak, 0.75f, tint, 0x80, 1f);
+                    sparkles(glow, m, view, time, seed, 14, 1.1f, 2.6f);
+                }
+                // Released: towering flames billowing up well over the head.
+                if (column) {
+                    wisps(glow, m, view, time * 0.8f, seed + 13, 22, 0.5f, 1.5f, 5.5f * sneak, 1.5f, tint, 0x70, 0.7f);
+                    wisps(glow, m, view, time * 0.8f, seed + 29, 14, 0.3f, 0.9f, 4f * sneak, 1.1f, lighter(tint, 0.55f), 0x60, 0.9f);
+                    sparkles(glow, m, view, time, seed + 3, 10, 1.6f, 5f);
                 }
                 ms.pop();
             }
-            if (column && !firstPerson) {
-                // The column: straight up into the sky.
-                ms.push();
-                ms.translate(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z);
-                Matrix4f m = ms.peek().getPositionMatrix();
-                float hgt = 22, pulse = 1 + 0.08f * MathHelper.sin(time * 3);
-                int n = 16;
-                for (int i = 0; i < n; i++) {
-                    double a0 = i * Math.PI * 2 / n, a1 = (i + 1) * Math.PI * 2 / n;
-                    float r = 0.85f * pulse;
-                    wall(glow, m, (float) Math.cos(a0) * r, (float) Math.sin(a0) * r, (float) Math.cos(a1) * r, (float) Math.sin(a1) * r, 0, hgt, hgt,
-                        0x80 << 24 | tint, tint & 0xFFFFFF);
-                    float rc = 0.3f * pulse;
-                    wall(glow, m, (float) Math.cos(a0) * rc, (float) Math.sin(a0) * rc, (float) Math.cos(a1) * rc, (float) Math.sin(a1) * rc, 0, hgt * 0.8f, hgt * 0.8f,
-                        0xA0FFFFFF, 0xFFFFFF);
-                }
-                // Bands of it rushing upward.
-                for (int k = 0; k < 4; k++) {
-                    float y = (time * 6 + k * hgt / 4) % hgt;
-                    ms.push();
-                    ms.translate(0, y, 0);
-                    ring(glow, ms.peek().getPositionMatrix(), 0.8f * pulse, 0.12f, (int) (0xC0 * (1 - y / hgt)) << 24 | lighter(tint, 0.4f));
-                    ms.pop();
-                }
-                ms.pop();
-            }
+        }
+    }
+
+    private static float hash(long seed, int i, int k) {
+        long h = seed * 0x9E3779B97F4A7C15L + i * 0xBF58476D1CE4E5B9L + k * 0x94D049BB133111EBL;
+        h ^= h >>> 31;
+        h *= 0x7FB5D329728EA185L;
+        h ^= h >>> 27;
+        return (h & 0xFFFFFF) / (float) 0xFFFFFF;
+    }
+
+    /**
+     * n flame tongues, each living its own short life: born low in a ring between rMin and rMax,
+     * rising to height, swelling then thinning to a point, swaying, fading. Drawn as soft-edged
+     * flame shapes facing the camera (bright at the heart, nothing at the edge).
+     */
+    private static void wisps(VertexConsumer vc, Matrix4f m, Vec3d view, float time, long seed, int n, float rMin, float rMax, float height,
+                              float size, int col, int alpha, float speed) {
+        Vec3d flat = new Vec3d(view.x, 0, view.z);
+        Vec3d right = flat.lengthSquared() < 1e-4 ? new Vec3d(1, 0, 0) : new Vec3d(-flat.z, 0, flat.x).normalize();
+        for (int i = 0; i < n; i++) {
+            float rate = (0.6f + hash(seed, i, 1) * 0.7f) * speed;
+            float u = (time * rate + hash(seed, i, 2)) % 1f;
+            int gen = (int) Math.floor(time * rate + hash(seed, i, 2));
+            // A fresh spot each time it's reborn.
+            double a = hash(seed, i * 31 + gen, 3) * Math.PI * 2;
+            float r = rMin + (rMax - rMin) * hash(seed, i * 17 + gen, 4);
+            float sway = MathHelper.sin(time * 3.1f + i) * 0.08f + (float) Math.sin(u * Math.PI * 2 + i) * 0.05f;
+            float x = (float) Math.cos(a) * r + (float) right.x * sway, z = (float) Math.sin(a) * r + (float) right.z * sway;
+            float y = -0.1f + u * height * (0.55f + 0.45f * hash(seed, i, 5));
+            float life = MathHelper.sin(u * MathHelper.PI);
+            float w = size * (0.18f + 0.22f * hash(seed, i, 6)) * life, h = w * (2.6f + 1.4f * hash(seed, i, 7));
+            int ca = (int) (alpha * life * life);
+            if (ca < 4 || w < 0.01f) continue;
+            flame(vc, m, x, y, z, right, w, h, ca << 24 | col);
+        }
+    }
+
+    /** A soft flame shape facing the camera: a rounded base, drawn up to a point; bright heart, clear edge. */
+    private static void flame(VertexConsumer vc, Matrix4f m, float x, float y, float z, Vec3d right, float w, float h, int argb) {
+        int edge = argb & 0xFFFFFF;
+        float cx = x, cy = y + h * 0.3f, cz = z;
+        int seg = 10;
+        float[] px = new float[seg + 1], py = new float[seg + 1];
+        for (int k = 0; k <= seg; k++) {
+            // Around the outline: from the tip, down one side, round the base, up the other.
+            double t = k / (double) seg * Math.PI * 2;
+            float sx = (float) Math.sin(t), cyy = (float) Math.cos(t);
+            float up = cyy > 0 ? cyy * h * 0.7f : cyy * w * 0.9f;
+            float side = sx * w * (cyy > 0 ? (1 - cyy) * 0.9f + 0.1f : 1);
+            px[k] = side;
+            py[k] = up;
+        }
+        for (int k = 0; k < seg; k++) {
+            float ax = cx + (float) right.x * px[k], az = cz + (float) right.z * px[k], ay = cy + py[k];
+            float bx = cx + (float) right.x * px[k + 1], bz = cz + (float) right.z * px[k + 1], by = cy + py[k + 1];
+            vc.vertex(m, cx, cy, cz).color(argb);
+            vc.vertex(m, ax, ay, az).color(edge);
+            vc.vertex(m, bx, by, bz).color(edge);
+            vc.vertex(m, cx, cy, cz).color(argb);
+            vc.vertex(m, cx, cy, cz).color(argb);
+            vc.vertex(m, bx, by, bz).color(edge);
+            vc.vertex(m, ax, ay, az).color(edge);
+            vc.vertex(m, cx, cy, cz).color(argb);
+        }
+    }
+
+    /** Tiny four-pointed glints drifting up through it. */
+    private static void sparkles(VertexConsumer vc, Matrix4f m, Vec3d view, float time, long seed, int n, float radius, float height) {
+        Vec3d flat = new Vec3d(view.x, 0, view.z);
+        Vec3d right = flat.lengthSquared() < 1e-4 ? new Vec3d(1, 0, 0) : new Vec3d(-flat.z, 0, flat.x).normalize();
+        for (int i = 0; i < n; i++) {
+            float rate = 0.35f + hash(seed, i, 8) * 0.4f;
+            float u = (time * rate + hash(seed, i, 9)) % 1f;
+            int gen = (int) Math.floor(time * rate + hash(seed, i, 9));
+            double a = hash(seed, i * 13 + gen, 10) * Math.PI * 2;
+            float r = 0.3f + radius * hash(seed, i * 7 + gen, 11);
+            float x = (float) Math.cos(a) * r, z = (float) Math.sin(a) * r, y = 0.2f + u * height;
+            float tw = MathHelper.sin(u * MathHelper.PI) * (0.6f + 0.4f * MathHelper.sin(time * 14 + i));
+            float s = 0.09f * tw;
+            if (s < 0.01f) continue;
+            int c = (int) (0xF0 * tw) << 24 | 0xFFFFFF;
+            float rx = (float) right.x, rz = (float) right.z;
+            // Two thin crossed diamonds.
+            vc.vertex(m, x, y + s * 2, z).color(c);
+            vc.vertex(m, x + rx * s * 0.3f, y, z + rz * s * 0.3f).color(c & 0xFFFFFF);
+            vc.vertex(m, x, y - s * 2, z).color(c);
+            vc.vertex(m, x - rx * s * 0.3f, y, z - rz * s * 0.3f).color(c & 0xFFFFFF);
+            vc.vertex(m, x - rx * s * 2, y, z - rz * s * 2).color(c);
+            vc.vertex(m, x, y + s * 0.3f, z).color(c & 0xFFFFFF);
+            vc.vertex(m, x + rx * s * 2, y, z + rz * s * 2).color(c);
+            vc.vertex(m, x, y - s * 0.3f, z).color(c & 0xFFFFFF);
         }
     }
 
