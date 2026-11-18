@@ -16,7 +16,35 @@ public final class FinisherStyles {
         public int lastCut() {
             return cuts[cuts.length - 1];
         }
+
+        /**
+         * Scene time at a real time (ticks): normal speed, then slow motion through the killing
+         * blow (a quarter speed from just before it to just after), and a dead stop, a hit-stop,
+         * the instant they fall. Shared, so the server lands everything when the client shows it.
+         */
+        public float scene(float real) {
+            float a = lastCut() - SLOW_BEFORE, b = lastCut() + SLOW_AFTER, slowReal = (b - a) / SLOW;
+            if (real <= a) return real;
+            if (real <= a + slowReal) return a + (real - a) * SLOW;
+            float r = real - slowReal + (b - a);
+            if (r <= kill) return r;
+            if (r <= kill + FREEZE) return kill;
+            return Math.min(end, r - FREEZE);
+        }
+
+        /** How long it really lasts (ticks), slow motion and all. */
+        public int realEnd() {
+            return (int) Math.ceil(end + (SLOW_BEFORE + SLOW_AFTER) * (1 / SLOW - 1) + FREEZE);
+        }
+
+        /** Whether scene time `at` was crossed from real tick t-1 to t. */
+        public boolean crossed(int t, float at) {
+            return scene(t - 1) < at && scene(t) >= at;
+        }
     }
+
+    /** Slow motion round the killing blow: how far either side of it (scene ticks), how slow, and the hit-stop (real ticks). */
+    public static final float SLOW_BEFORE = 2, SLOW_AFTER = 3, SLOW = 0.25f, FREEZE = 5;
 
     public static final List<Style> ALL = List.of(
         new Style("fin_nape", "Nape Cleaver", "A spinning leap over them, an overhead drop and a slide through.", 0, 0xE8E0D0, 0xB0A890,

@@ -65,7 +65,7 @@ public final class Finishers {
 
     /** In a finisher (either side) right now. */
     public static boolean inScene(Entity e) {
-        for (Scene q : pending) if (q.by == e || q.on == e && q.t < q.st.kill()) return true;
+        for (Scene q : pending) if (q.by == e || q.on == e && q.st.scene(q.t) < q.st.kill()) return true;
         return false;
     }
 
@@ -100,7 +100,7 @@ public final class Finishers {
         Vec3d spot = best.getPos().add(dir.multiply(st.endAlong())).add(side.multiply(st.endSide()));
         float yaw = (float) (Math.toDegrees(Math.atan2(dir.z, dir.x)) - 90);
         face(best, yaw + 180);
-        Stuns.stun(best, st.end() + 6);
+        Stuns.stun(best, st.realEnd() + 6);
         // Everyone around sees it play out (sent before the move, so they know where it started).
         // (The style travels in the yaw field: the client works the facing out itself.)
         Net.RushFx fx = new Net.RushFx(p.getId(), Adrenaline.FX_FINISH, FinisherStyles.index(st.id()), best.getId());
@@ -141,8 +141,8 @@ public final class Finishers {
             ServerPlayerEntity p = q.by;
             LivingEntity v = q.on;
             boolean victimGone = !v.isAlive() || v.isRemoved() || v.getWorld() != p.getWorld();
-            int KILL = q.st.kill(), END = q.st.end();
-            if (p.isRemoved() || !p.isAlive() || q.t < KILL && victimGone) {
+            int KILL = q.st.kill();
+            if (p.isRemoved() || !p.isAlive() || q.st.scene(q.t) < KILL && victimGone) {
                 abort(q);
                 continue;
             }
@@ -152,14 +152,14 @@ public final class Finishers {
             Vec3d at = q.to;
             if (p.getPos().squaredDistanceTo(at) > 0.09) p.teleport(w, at.x, at.y, at.z, q.yaw, 10);
             hold(p);
-            if (t < KILL) {
+            if (q.st.scene(t) < KILL) {
                 hold(v);
                 if (!(v instanceof ServerPlayerEntity)) face(v, q.yaw + 180);
                 if (t == DASH + 2) w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.PLAYERS, 1.2f, 0.6f);
             }
             boolean cut = false;
-            for (int k : q.st.cuts()) if (k == t) cut = true;
-            if (cut && t != q.st.lastCut() && !victimGone) {
+            for (int k : q.st.cuts()) if (k != q.st.lastCut() && q.st.crossed(t, k)) cut = true;
+            if (cut && !victimGone) {
                 // A blow on the way: a flash and the ring of steel.
                 Vec3d c = v.getPos().add(0, v.getHeight() * 0.6, 0);
                 AotParticles.one(w, AotParticles.fx(AotParticles.ARC, 0xFFFFFF, 3.5f), c.x, c.y, c.z, 0, 0, 0);
@@ -169,7 +169,7 @@ public final class Finishers {
                     if (ServerPlayNetworking.canSend(o, Net.Quake.ID)) ServerPlayNetworking.send(o, new Net.Quake(0.6f, 14));
                 }
             }
-            if (t == q.st.lastCut() && !victimGone) {
+            if (q.st.crossed(t, q.st.lastCut()) && !victimGone) {
                 // The blade lands.
                 Vec3d c = v.getPos().add(0, v.getHeight() * 0.6, 0);
                 AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFFFFF, 9f), c.x, c.y, c.z, 0, 0, 0);
@@ -183,7 +183,7 @@ public final class Finishers {
                 w.playSound(null, v.getBlockPos(), HitSounds.HEAVY, SoundCategory.PLAYERS, 1.4f, 0.8f);
                 for (ServerPlayerEntity o : PlayerLookup.around(w, c, 24)) if (ServerPlayNetworking.canSend(o, Net.Quake.ID)) ServerPlayNetworking.send(o, new Net.Quake(0.5f, 10));
             }
-            if (t == KILL && !victimGone) {
+            if (q.st.crossed(t, KILL) && !victimGone) {
                 // A beat too long on their feet, then it lets go.
                 Vec3d c = v.getPos().add(0, v.getHeight() * 0.6, 0);
                 v.timeUntilRegen = 0;
@@ -208,7 +208,7 @@ public final class Finishers {
                 // Now and then a finisher teaches you a new one.
                 if (w.random.nextFloat() < 0.04f) AotRpg.COSMETICS.dropFinisher(p, w.random);
             }
-            if (t >= END) pending.remove(q);
+            if (t >= q.st.realEnd()) pending.remove(q);
         }
     }
 }

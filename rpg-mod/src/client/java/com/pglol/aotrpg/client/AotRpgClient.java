@@ -156,6 +156,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(MovesHud::render);
         HudRenderCallback.EVENT.register(Finish::render);
         HudRenderCallback.EVENT.register(HudPops::render);
+        HudRenderCallback.EVENT.register(FinishScene::hud);
         HudRenderCallback.EVENT.register(BladeLock::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.ClashLock.ID, (payload, ctx) -> BladeLock.on(payload));
         ClientTickEvents.END_CLIENT_TICK.register(BladeLock::tick);

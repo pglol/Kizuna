@@ -46,7 +46,7 @@ public final class Gestures {
     public static final String[] IDLE_NAMES = {"Lively", "Calm", "Soldier", "Off"};
 
     private static final class G {
-        long at, fastAt, sprintFrom, stillFrom, airFrom, lastDust, nextIdle;
+        long at, fastAt, sprintFrom, runFrom, stillFrom, airFrom, lastDust, nextIdle;
         double hx, hz;
         float peak, minVy;
         boolean ground = true;
@@ -121,20 +121,23 @@ public final class Gestures {
         }
         // ---- on the move
         g.peak = Math.max(sp, g.peak - dts * 0.6f);
-        if (sp > 0.2f) {
+        // Only a real sprint counts: flat out (a sprint, not a jog), for most of a second.
+        boolean sprinting = !(e instanceof PlayerEntity pl) || pl.isSprinting() || sp > 0.4f;
+        if (sp > 0.265f && sprinting) {
             if (now - g.fastAt > 400) g.sprintFrom = now;
+            if (now - g.fastAt > 150) g.runFrom = now;
             g.fastAt = now;
         }
         boolean loco = g.act == SKID || g.act == SLIDE || g.act == ROLL || g.act == HERO || g.act == PIVOT;
-        if (ground && g.ground && sp < 0.06f && g.fastAt > 0 && now - g.fastAt < 200 && !loco) {
-            boolean slide = g.peak > 0.34f;
+        if (ground && g.ground && sp < 0.05f && g.fastAt > 0 && now - g.fastAt < 180 && g.fastAt - g.runFrom > 700 && !loco) {
+            boolean slide = g.peak > 0.45f;
             start(g, slide ? SLIDE : SKID, slide ? 720 : 520, now);
             g.fastAt = 0;
             g.side = rnd.nextBoolean() ? 1 : -1;
         }
         if (sp > 0.1f) {
             double ux = dx / sp, uz = dz / sp;
-            if (ground && sp > 0.16f && (g.hx != 0 || g.hz != 0) && ux * g.hx + uz * g.hz < -0.25 && !loco) {
+            if (ground && sp > 0.22f && g.fastAt - g.runFrom > 500 && (g.hx != 0 || g.hz != 0) && ux * g.hx + uz * g.hz < -0.25 && !loco) {
                 start(g, PIVOT, 380, now);
                 g.side = ux * g.hz - uz * g.hx > 0 ? 1 : -1;
                 g.hx = ux;

@@ -90,6 +90,7 @@ public final class Motion {
     /** The whole body: lean, bank, squash, tumble, and the death fall. */
     public static void transforms(LivingEntity e, MatrixStack ms, float bodyYaw, float td) {
         if (e.deathTime <= 0 && FinishScene.transforms(e, ms, bodyYaw, td)) return;
+        if (e.deathTime > 0 && FinishScene.death(e, ms, bodyYaw, td)) return;
         Emotes.transforms(e, ms);
         if (!ours(e)) return;
         St s = st(e);

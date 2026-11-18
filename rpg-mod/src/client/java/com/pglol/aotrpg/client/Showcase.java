@@ -166,7 +166,7 @@ public final class Showcase {
     // A sparring dummy (only on your screen) for the finisher to be played on, over and over.
     private static final int DUMMY_ID = -770011;
     private static net.minecraft.client.network.OtherClientPlayerEntity dummy;
-    private static int finBeat, finStyle = -1;
+    private static int finBeat, finKill, finStyle = -1;
 
     private static void finisher(MinecraftClient mc, net.minecraft.client.network.ClientPlayerEntity p, Vec3d fwd, String id) {
         int style = com.pglol.aotrpg.FinisherStyles.index(id);
@@ -181,6 +181,7 @@ public final class Showcase {
         if (finStyle != style) {
             finStyle = style;
             finBeat = 0;
+            finKill = 0;
         }
         if (finBeat == 0) {
             Vec3d at = p.getPos().add(fwd.multiply(3.2));
@@ -194,10 +195,14 @@ public final class Showcase {
             dummy.hurtTime = 0;
             FinishScene.start(p.getId(), DUMMY_ID, style);
         }
-        for (int c : st.cuts()) if (finBeat == c) dummy.hurtTime = 6;
-        if (finBeat >= st.kill()) dummy.deathTime = Math.min(20, finBeat - st.kill() + 1);
+        for (int c : st.cuts()) if (finBeat > 0 && st.crossed(finBeat, c)) dummy.hurtTime = 6;
+        if (finBeat > 0 && st.crossed(finBeat, st.kill())) finKill = finBeat;
+        if (finKill > 0) dummy.deathTime = Math.min(20, finBeat - finKill + 1);
         finBeat++;
-        if (finBeat > st.end() + 24) finBeat = 0;
+        if (finBeat > st.realEnd() + 24) {
+            finBeat = 0;
+            finKill = 0;
+        }
     }
 
     /** Puts the sparring dummy away (the showroom closed, or moved off finishers). */
