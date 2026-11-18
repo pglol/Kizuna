@@ -142,6 +142,10 @@ public final class AotRpg implements ModInitializer {
         Throws.register();
         PassiveHeal.register();
         Occupation.register();
+        Elites.register();
+        Delves.register();
+        Contracts.register();
+        ServerPlayNetworking.registerGlobalReceiver(Net.ContractAction.ID, (payload, ctx) -> Contracts.action(ctx.player(), payload.action(), payload.arg()));
         Net.register();
         SatchelHandler.register();
         Crafting.register();
@@ -894,6 +898,7 @@ public final class AotRpg implements ModInitializer {
         ServerPlayerEntity killer = attacker instanceof ServerPlayerEntity atk ? atk : TITAN_LEVELS.lastStriker(dead);
         WAVES.onKill(killer, dead);
         ACTIVITY.onKill(killer, dead);
+        Elites.onKill(killer, dead);
         EXTRACT.onTitanKill(killer, dead);
         if (killer == null) return;
         Mentors.count(killer, "titans", 1);

@@ -267,7 +267,7 @@ public final class Troops {
             boolean officer = arch == Arch.SWORDSMAN || arch == Arch.MASTER || arch == Arch.HEADSMAN && sq.skill >= 5
                 || arch == Arch.BRUTE && i == 0 && r.nextFloat() < 0.4f || i == 0 && n >= 3 && r.nextFloat() < 0.6f;
             int x = at.getX() + r.nextInt(7) - 3, z = at.getZ() + r.nextInt(7) - 3;
-            int y = w.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z);
+            int y = floorY != Integer.MIN_VALUE ? floor(w, x, floorY, z) : w.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z);
             VillagerEntity v = EntityType.VILLAGER.create(w);
             if (v == null) continue;
             v.refreshPositionAndAngles(x + 0.5, y, z + 0.5, r.nextFloat() * 360, 0);
@@ -326,6 +326,50 @@ public final class Troops {
             if (sq != null) sq.hunter = true;
         }
         return made;
+    }
+
+    /** Spawning underground (a cave): the floor near this height instead of the surface. */
+    private static int floorY = Integer.MIN_VALUE;
+
+    private static int floor(ServerWorld w, int x, int near, int z) {
+        for (int y = near + 4; y >= near - 8; y--) {
+            BlockPos b = new BlockPos(x, y, z);
+            if (!w.getBlockState(b.down()).isAir() && w.getBlockState(b).isAir() && w.getBlockState(b.up()).isAir()) return y;
+        }
+        return near;
+    }
+
+    /** A group set down on the floor at this height (in a cave), not on the surface above. */
+    /** Makes a squad of this session angry with someone (they came into its cave, say). */
+    public static void provokeAll(String session, UUID who) {
+        for (Squad sq : squads.values()) if (sq.session.equals(session)) sq.provoked.add(who);
+    }
+
+    public static int groupBelow(ServerWorld w, BlockPos at, int n, int level, String session, int radius, Random r, Arch arch, int skill, UUID prey) {
+        floorY = at.getY();
+        int first = nextSquad;
+        try {
+            int made = group(w, at, n, level, session, at, radius, r, arch, skill);
+            // Already angry with whoever came down here.
+            for (int id = first; id < nextSquad; id++) {
+                Squad sq = squads.get(id);
+                if (sq != null && prey != null) sq.provoked.add(prey);
+            }
+            return made;
+        } finally {
+            floorY = Integer.MIN_VALUE;
+        }
+    }
+
+    /** The bodies of a session's troops. */
+    public static List<VillagerEntity> bodies(ServerWorld w, String session) {
+        List<VillagerEntity> out = new ArrayList<>();
+        for (Troop t : troops.values()) {
+            Squad s = squads.get(t.squad);
+            if (s == null || !s.session.equals(session)) continue;
+            if (w.getEntity(t.id) instanceof VillagerEntity v && v.isAlive()) out.add(v);
+        }
+        return out;
     }
 
     /** A squad sent after someone in particular (any kind; the neutral ones come already angry). */

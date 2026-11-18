@@ -67,6 +67,8 @@ public final class SocialWheel extends Screen {
                 mc.setScreen(new TradeScreen());
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.TradeAction("open", null, ""));
             }),
+            new Option("Contracts", "Criminals, titans and bounties for pay", new ItemStack(Items.WRITABLE_BOOK), true,
+                ContractsScreen::open),
             new Option("Market", "Buy and sell (by courier away from town)", new ItemStack(Items.GOLD_NUGGET), true, () -> {
                 mc.setScreen(null);
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.pglol.aotrpg.Net.MarketAction("open", "", 0, 0));

@@ -2004,6 +2004,31 @@ public final class Net {
     }
 
     /** Server -> client: a small gain to note (kind "xp", "marks", "kill"), shown as a quiet pop by the crosshair. */
+    /** Server -> client: the mercenary board (rows "id|kind|title|desc|reward|level|taken|mins|mine"), how many you hold, and whether to open it. */
+    public record ContractView(java.util.List<String> rows, int taken, boolean open) implements CustomPayload {
+        public static final Id<ContractView> ID = id("contract_view");
+        public static final PacketCodec<RegistryByteBuf, ContractView> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.rows.size());
+            for (String r : v.rows) b.writeString(r);
+            b.writeVarInt(v.taken);
+            b.writeBoolean(v.open);
+        }, b -> {
+            int n = b.readVarInt();
+            java.util.List<String> rows = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) rows.add(b.readString());
+            return new ContractView(rows, b.readVarInt(), b.readBoolean());
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Client -> server: on the mercenary board (open, take, drop, post "name|marks"). */
+    public record ContractAction(String action, String arg) implements CustomPayload {
+        public static final Id<ContractAction> ID = id("contract_action");
+        public static final PacketCodec<RegistryByteBuf, ContractAction> CODEC = PacketCodec.of((v, b) -> { b.writeString(v.action); b.writeString(v.arg); },
+            b -> new ContractAction(b.readString(), b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: how wanted you are in Marley (heat 0..100; level 0 unseen, 1 suspected, 2 hunted, 3 manhunt). */
     public record Wanted(int heat, int level) implements CustomPayload {
         public static final Id<Wanted> ID = id("wanted");
@@ -2772,6 +2797,8 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(Pop.ID, Pop.CODEC);
         PayloadTypeRegistry.playS2C().register(Wanted.ID, Wanted.CODEC);
+        PayloadTypeRegistry.playS2C().register(ContractView.ID, ContractView.CODEC);
+        PayloadTypeRegistry.playC2S().register(ContractAction.ID, ContractAction.CODEC);
         PayloadTypeRegistry.playS2C().register(RunSummary.ID, RunSummary.CODEC);
         PayloadTypeRegistry.playS2C().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(ForgeView.ID, ForgeView.CODEC);

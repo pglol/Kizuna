@@ -302,7 +302,9 @@ public final class TitanLevels {
         n += (partySize(t) - 1) / 2;
         // Lone Wolf: one strike fewer when you're fighting it alone.
         if (Classes.alone(p) && n > 1) n--;
-        return Math.max(1, Math.min(9, n));
+        // Ogres and apex titans take far more.
+        int extra = Elites.extraStrikes(t);
+        return Math.max(1, Math.min(9 + extra, n + extra));
     }
 
     // ------------------------------------------------------------------ the nape
