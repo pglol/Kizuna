@@ -287,7 +287,7 @@ public final class Duels {
             if (w != null) {
                 // The winner's kill effect, over the loser, for everyone around.
                 Vec3d c = l.getBoundingBox().getCenter();
-                Net.SlashFx fx = new Net.SlashFx(AotRpg.COSMETICS.selected(w, "kill"), c.x, c.y, c.z, l.getHeight());
+                Net.SlashFx fx = new Net.SlashFx(AotRpg.COSMETICS.styled(w, "kill"), c.x, c.y, c.z, l.getHeight());
                 for (ServerPlayerEntity o : Cinematics.near(l.getServerWorld(), c, 96)) {
                     if (ServerPlayNetworking.canSend(o, Net.SlashFx.ID)) ServerPlayNetworking.send(o, fx);
                 }

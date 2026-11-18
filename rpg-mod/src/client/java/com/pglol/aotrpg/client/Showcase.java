@@ -36,6 +36,7 @@ public final class Showcase {
             case "back" -> Items.ELYTRA;
             case "dye" -> Items.MAGENTA_DYE;
             case "finisher" -> Items.DIAMOND_SWORD;
+            case "outfit" -> Items.LEATHER_CHESTPLATE;
             default -> Items.LEATHER_CHESTPLATE;
         });
     }
@@ -107,6 +108,8 @@ public final class Showcase {
         if (p == null || mc.world == null || id == null) return;
         beat++;
         if (!slot.equals("finisher")) clear();
+        // The pieces that take a colour show yours.
+        if (OneOfOne.sp(id) && !slot.equals("finisher")) id = id + "#" + String.format("%06X", OneOfOne.tint(p.getUuid()));
         double yaw = Math.toRadians(p.bodyYaw);
         Vec3d fwd = new Vec3d(-Math.sin(yaw), 0, Math.cos(yaw)), right = new Vec3d(-Math.cos(yaw), 0, -Math.sin(yaw));
         Vec3d chest = p.getPos().add(0, 1.2, 0);

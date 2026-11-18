@@ -72,7 +72,12 @@ public final class FinisherStyles {
         new Style("fin_drill", "Spiral Drill", "Spinning like a drill along the line, through and out the other side.", 3, 0xE0E8FF, 0x8A9AC8,
             46, 30, new int[] {20}, 2.6, 0),
         new Style("fin_rumble", "The Rumbling", "The earth shakes under every blow. Mythic.", 4, 0xE02A2A, 0x7A0A0A,
-            70, 52, new int[] {20, 32, 44}, 0, 1.8));
+            70, 52, new int[] {20, 32, 44}, 0, 1.8),
+        // 1 of 1s (tier 5): never sold or dropped, only given.
+        new Style("fin_sp", "Overwhelming Pressure", "They can't stand under it. A slow walk, a fist through the chest, and a long stare.", 5,
+            0x6AC8FF, 0xFFFFFF, 84, 64, new int[] {34}, -0.7, 0),
+        new Style("fin_uch", "Chidori", "A thousand birds in one hand. Charged low, driven through them, and a cold look back.", 5,
+            0x8FD0FF, 0x6A3AB0, 70, 52, new int[] {26}, 1.6, 0));
 
     public static Style of(String id) {
         for (Style s : ALL) if (s.id().equals(id)) return s;

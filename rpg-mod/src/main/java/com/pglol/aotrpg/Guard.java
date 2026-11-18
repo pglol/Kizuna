@@ -159,7 +159,7 @@ public final class Guard {
 
     private static void fx(ServerWorld w, int kind, Vec3d at, ServerPlayerEntity by) {
         String slot = kind == FX_CLASH ? "clash" : "block";
-        String style = by == null ? "" : AotRpg.COSMETICS.selected(by, slot);
+        String style = by == null ? "" : AotRpg.COSMETICS.styled(by, slot);
         Net.GuardFx msg = new Net.GuardFx(kind, at.x, at.y, at.z, style);
         for (ServerPlayerEntity o : PlayerLookup.around(w, at, 64)) {
             if (ServerPlayNetworking.canSend(o, Net.GuardFx.ID)) ServerPlayNetworking.send(o, msg);

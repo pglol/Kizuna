@@ -295,6 +295,10 @@ public final class CombatUi {
     public static void onGuardFx(Net.GuardFx fx) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.world == null) return;
+        if (OneOfOne.ours(fx.style())) {
+            OneOfOne.guard(fx);
+            return;
+        }
         Style s = Style.of(fx.style(), fx.kind());
         int n = fx.kind() == 1 ? 36 : fx.kind() == 2 ? 22 : 16;
         double spread = fx.kind() == 1 ? 0.55 : 0.3;

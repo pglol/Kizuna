@@ -22,7 +22,36 @@ import java.util.Set;
  * allowlist (everything unlocked). Operators always have everything. Saved in aot_rpg/cosmetics.json.
  */
 public final class Cosmetics {
-    public record Def(String id, String slot, String title, boolean free) { }
+    /** exclusive: a 1 of 1, never sold, dropped or unlocked by "all": only given to someone by an operator. */
+    public record Def(String id, String slot, String title, boolean free, boolean exclusive) {
+        public Def(String id, String slot, String title, boolean free) {
+            this(id, slot, title, free, false);
+        }
+    }
+
+    /** The 1 of 1 sets: every slot, given whole to whoever earned it. */
+    public static final Map<String, List<Def>> SETS = Map.of(
+        "sp", List.of(
+            new Def("outfit_sp_robe", "outfit", "Reaper's Robe", false, true), new Def("dye_sp", "dye", "Pressure Dye", false, true),
+            new Def("trail_sp", "trail", "Pressure Round", false, true), new Def("slash_sp", "slash", "Crescent Fang", false, true),
+            new Def("body_sp", "body", "Spiritual Pressure", false, true), new Def("odm_sp", "odm", "Pressure Wake", false, true),
+            new Def("horse_sp", "horse", "Spirit Stride", false, true), new Def("head_sp", "head", "Eyes of Pressure", false, true),
+            new Def("back_sp", "back", "Pressure Mantle", false, true), new Def("kill_sp", "kill", "Pillar of Pressure", false, true),
+            new Def("block_sp", "block", "Pressure Wall", false, true), new Def("clash_sp", "clash", "Pressure Clash", false, true),
+            new Def("fin_sp", "finisher", "Overwhelming Pressure", false, true)),
+        "uch", List.of(
+            new Def("outfit_uch", "outfit", "Avenger's Garb", false, true), new Def("dye_uch", "dye", "Avenger Indigo", false, true),
+            new Def("trail_uch", "trail", "Lightning Release", false, true), new Def("slash_uch", "slash", "Chidori Edge", false, true),
+            new Def("body_uch", "body", "Cursed Lightning", false, true), new Def("odm_uch", "odm", "Black Flame Wake", false, true),
+            new Def("horse_uch", "horse", "Black Flame Hooves", false, true), new Def("head_uch", "head", "Red Eyes", false, true),
+            new Def("back_uch", "back", "Spectral Warrior", false, true), new Def("kill_uch", "kill", "Black Flames", false, true),
+            new Def("block_uch", "block", "Ribcage Guard", false, true), new Def("clash_uch", "clash", "Thousand Birds", false, true),
+            new Def("fin_uch", "finisher", "Chidori", false, true)));
+
+    public static boolean exclusiveId(String id) {
+        for (List<Def> set : SETS.values()) for (Def d : set) if (d.id().equals(id)) return true;
+        return false;
+    }
 
     /** Every cosmetic slot, in menu order. */
     public static final List<String> SLOTS = List.of("outfit", "dye", "trail", "slash", "body", "odm", "horse", "head", "back", "kill", "block", "clash", "finisher");
@@ -44,7 +73,8 @@ public final class Cosmetics {
         for (String[] o : OUTFITS) out.add(new Def(o[0], "outfit", o[1], false));
         for (String[] d : DYES) out.add(new Def(d[0], "dye", d[1], true));
         out.addAll(BASE);
-        for (FinisherStyles.Style f : FinisherStyles.ALL) out.add(new Def(f.id(), "finisher", f.title(), f.tier() == 0));
+        for (FinisherStyles.Style f : FinisherStyles.ALL) if (f.tier() < 5) out.add(new Def(f.id(), "finisher", f.title(), f.tier() == 0));
+        for (List<Def> set : SETS.values()) out.addAll(set);
         return List.copyOf(out);
     }
 
@@ -195,6 +225,8 @@ public final class Cosmetics {
         Set<String> allowlist = new LinkedHashSet<>();
         Map<String, Set<String>> grants = new HashMap<>();
         Map<String, Map<String, String>> selected = new HashMap<>();
+        /** The colour each player picked for the pieces that take one (hex). */
+        Map<String, String> tints = new HashMap<>();
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -214,6 +246,7 @@ public final class Cosmetics {
         if (data.allowlist == null) data.allowlist = new LinkedHashSet<>();
         if (data.grants == null) data.grants = new HashMap<>();
         if (data.selected == null) data.selected = new HashMap<>();
+        if (data.tints == null) data.tints = new HashMap<>();
     }
 
     private void save() {
@@ -238,7 +271,8 @@ public final class Cosmetics {
         Set<String> out = new LinkedHashSet<>();
         boolean all = allowlisted(p);
         Set<String> g = data.grants.getOrDefault(p.getUuidAsString(), Set.of());
-        for (Def d : ALL) if (d.free() || all || g.contains(d.id())) out.add(d.id());
+        // A 1 of 1 is only ever yours if it was given to you (being an operator or on the allowlist isn't enough).
+        for (Def d : ALL) if (d.exclusive() ? g.contains(d.id()) : d.free() || all || g.contains(d.id())) out.add(d.id());
         return out;
     }
 
@@ -249,7 +283,24 @@ public final class Cosmetics {
         return "";
     }
 
+    /** What's worn in a slot as sent with an effect: with the player's colour on the pieces that take one ("id#RRGGBB"). */
+    public String styled(ServerPlayerEntity p, String slot) {
+        String id = selected(p, slot);
+        return id.endsWith("_sp") ? id + "#" + data.tints.getOrDefault(p.getUuidAsString(), "6AC8FF") : id;
+    }
+
     public void select(ServerPlayerEntity p, String id) {
+        if (id.startsWith("tint:")) {
+            String hex = id.substring(5);
+            boolean owns = false;
+            for (Def d : SETS.get("sp")) if (unlocked(p).contains(d.id())) owns = true;
+            if (!owns || !hex.matches("[0-9A-Fa-f]{6}")) return;
+            data.tints.put(p.getUuidAsString(), hex.toUpperCase(java.util.Locale.ROOT));
+            save();
+            sync(p);
+            broadcast(p);
+            return;
+        }
         Def d = def(id);
         if (d == null || !unlocked(p).contains(id)) return;
         data.selected.computeIfAbsent(p.getUuidAsString(), k -> new HashMap<>()).put(d.slot(), id);
@@ -263,6 +314,24 @@ public final class Cosmetics {
         else data.allowlist.remove(p.getUuidAsString());
         save();
         sync(p);
+    }
+
+    /** A whole 1 of 1 set to one player (or taken back). */
+    public boolean grantSet(ServerPlayerEntity p, String set, boolean on) {
+        List<Def> defs = SETS.get(set);
+        if (defs == null) return false;
+        Set<String> g = data.grants.computeIfAbsent(p.getUuidAsString(), k -> new LinkedHashSet<>());
+        for (Def d : defs) {
+            if (on) g.add(d.id());
+            else g.remove(d.id());
+        }
+        save();
+        sync(p);
+        if (on) {
+            Reveal.show(p, "1 OF 1", set.equals("sp") ? "The Spiritual Pressure set is yours" : "The Avenger set is yours", "minecraft:nether_star", 4);
+            for (Def d : defs) select(p, d.id());
+        } else broadcast(p);
+        return true;
     }
 
     /** id may be "all". */
@@ -281,6 +350,7 @@ public final class Cosmetics {
         Set<String> g = data.grants.computeIfAbsent(p.getUuidAsString(), k -> new LinkedHashSet<>());
         for (Def d : ALL) {
             if (!id.equals("all") && !d.id().equals(id)) continue;
+            if (id.equals("all") && d.exclusive() && on) continue;
             if (on) g.add(d.id());
             else g.remove(d.id());
         }
@@ -292,6 +362,7 @@ public final class Cosmetics {
     public List<String> worn(ServerPlayerEntity p) {
         List<String> out = new ArrayList<>();
         for (String slot : SLOTS) out.add(slot + "=" + selected(p, slot));
+        out.add("tint=" + data.tints.getOrDefault(p.getUuidAsString(), "6AC8FF"));
         return out;
     }
 

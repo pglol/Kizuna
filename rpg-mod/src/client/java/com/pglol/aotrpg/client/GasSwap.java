@@ -69,6 +69,7 @@ public final class GasSwap {
         }
         if (flier == null) return false;
         String style = CosmeticFx.worn(flier.getUuid(), "odm");
+        if (style.equals("odm_sp")) style += "#" + String.format("%06X", OneOfOne.tint(flier.getUuid()));
         if (style.isEmpty()) return false;
         boosted.put(flier.getId(), net.minecraft.util.Util.getMeasuringTimeMs());
         if (boosted.size() > 128) boosted.clear();

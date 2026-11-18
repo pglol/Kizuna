@@ -45,8 +45,50 @@ public final class CosmeticFx {
         }
     }
 
-    public static final String[] TIERS = {"Standard", "Rare", "Epic", "Legendary", "Mythic"};
-    public static final int[] TIER_COLORS = {0xFF8F8A7A, 0xFF5A9AE0, 0xFFB06AE0, 0xFFF2C14E, 0xFFE02A2A};
+    public static final String[] TIERS = {"Standard", "Rare", "Epic", "Legendary", "Mythic", "1 of 1"};
+    public static final int[] TIER_COLORS = {0xFF8F8A7A, 0xFF5A9AE0, 0xFFB06AE0, 0xFFF2C14E, 0xFFE02A2A, 0xFFF4F0FF};
+
+    /** The 1 of 1 pieces, by slot (tier 5: only ever seen by their owner and operators). */
+    private static final Map<String, List<Entry>> EXCLUSIVE = Map.ofEntries(
+        Map.entry("outfit", List.of(new Entry("outfit_sp_robe", "Reaper's Robe", "Black, with trim that glows your colour. 1 of 1.", 0x141418, 0x6AC8FF, 5),
+            new Entry("outfit_uch", "Avenger's Garb", "Open collar, rope belt, cloth to the knee. 1 of 1.", 0xD8D8DC, 0x6A3AA8, 5))),
+        Map.entry("dye", List.of(new Entry("dye_sp", "Pressure Dye", "Your outfit in your pressure's colour. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("dye_uch", "Avenger Indigo", "Deep indigo, near black. 1 of 1.", 0x3A2A6A, 0x1A1430, 5))),
+        Map.entry("trail", List.of(new Entry("trail_sp", "Pressure Round", "A white-hot core with light spiralling round it. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("trail_uch", "Lightning Release", "Every shot a forked bolt. 1 of 1.", 0x9FD8FF, 0x0A0610, 5))),
+        Map.entry("slash", List.of(new Entry("slash_sp", "Crescent Fang", "A crescent of pressure flies off the blade. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("slash_uch", "Chidori Edge", "The blade sings with lightning. 1 of 1.", 0x9FD8FF, 0x7A3AD0, 5))),
+        Map.entry("body", List.of(new Entry("body_sp", "Spiritual Pressure", "It burns off you in your colour. The ground feels it. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("body_uch", "Cursed Lightning", "Lightning in your hand, black flames at your feet. 1 of 1.", 0x9FD8FF, 0x0A0610, 5))),
+        Map.entry("odm", List.of(new Entry("odm_sp", "Pressure Wake", "Your gas burns your colour. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("odm_uch", "Black Flame Wake", "Black fire and sparks behind you. 1 of 1.", 0x0A0610, 0x9FD8FF, 5))),
+        Map.entry("horse", List.of(new Entry("horse_sp", "Spirit Stride", "Light where the hooves fall. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("horse_uch", "Black Flame Hooves", "They leave black fire behind. 1 of 1.", 0x0A0610, 0x7A3AD0, 5))),
+        Map.entry("head", List.of(new Entry("head_sp", "Eyes of Pressure", "Your eyes glow your colour, and streak when you move. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("head_uch", "Red Eyes", "Red, with three marks turning. 1 of 1.", 0xE01A1A, 0x140404, 5))),
+        Map.entry("back", List.of(new Entry("back_sp", "Pressure Mantle", "Light flowing up off your shoulders like flame. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("back_uch", "Spectral Warrior", "A purple ribcage of light around you. 1 of 1.", 0x7A3AD0, 0xB08AF0, 5))),
+        Map.entry("kill", List.of(new Entry("kill_sp", "Pillar of Pressure", "A column of light into the sky. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("kill_uch", "Black Flames", "Black fire swallows them whole. 1 of 1.", 0x0A0610, 0x7A3AD0, 5))),
+        Map.entry("block", List.of(new Entry("block_sp", "Pressure Wall", "The blow breaks on your pressure. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("block_uch", "Ribcage Guard", "Purple bone takes the hit. 1 of 1.", 0x7A3AD0, 0xB08AF0, 5))),
+        Map.entry("clash", List.of(new Entry("clash_sp", "Pressure Clash", "Two wills meet; the air splits. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+            new Entry("clash_uch", "Thousand Birds", "A shriek of lightning where steel meets. 1 of 1.", 0x9FD8FF, 0xFFFFFF, 5))));
+
+    private static List<Category> withExclusive(List<Category> base) {
+        List<Category> out = new java.util.ArrayList<>();
+        for (Category c : base) {
+            List<Entry> more = EXCLUSIVE.get(c.slot());
+            if (more == null) {
+                out.add(c);
+                continue;
+            }
+            List<Entry> all = new java.util.ArrayList<>(c.entries());
+            all.addAll(more);
+            out.add(new Category(c.slot(), c.title(), c.blurb(), List.copyOf(all)));
+        }
+        return List.copyOf(out);
+    }
 
     public record Category(String slot, String title, String blurb, List<Entry> entries) { }
 
@@ -59,7 +101,7 @@ public final class CosmeticFx {
         return out;
     }
 
-    public static final List<Category> CATEGORIES = List.of(
+    public static final List<Category> CATEGORIES = withExclusive(List.of(
         new Category("trail", "Bullet Trails", "The streak your APG shots leave.", List.of(
             new Entry("trail_tracer", "Tracer", "A clean white tracer. Standard issue.", 0xEDE3C8, 0xFFFFFF),
             new Entry("trail_ember", "Ember", "Sparks and smoke, like a flintlock.", 0xE0782A, 0x6A6A6A),
@@ -176,7 +218,7 @@ public final class CosmeticFx {
             new Entry("clash_thunder", "Thunderclap", "A crack of thunder.", 0xB9A8FF, 0xFFFFFF),
             new Entry("clash_petal", "Blossom", "Petals burst out.", 0xFFB0D0, 0xFF7AA8),
             new Entry("clash_gold", "Gilded Clash", "Gold sparks and a ring of light.", 0xF2C14E, 0xFFF3B0, 2))),
-        new Category("finisher", "Finishers", "The whole scene when you finish someone off. Found in fights and in the shop.", finishers()));
+        new Category("finisher", "Finishers", "The whole scene when you finish someone off. Found in fights and in the shop.", finishers())));
 
     private static List<Entry> finishers() {
         List<Entry> out = new java.util.ArrayList<>();
@@ -267,6 +309,10 @@ public final class CosmeticFx {
     public static void horseTrail(String style, double x, double y, double z, double vx, double vz) {
         var mc = MinecraftClient.getInstance();
         if (mc.world == null || style.isEmpty()) return;
+        if (OneOfOne.ours(style)) {
+            OneOfOne.horseFx(style, mc.player == null ? OneOfOne.DEFAULT_TINT : OneOfOne.tint(mc.player.getUuid()), x, y, z, vx, vz);
+            return;
+        }
         mc.world.addParticle(pick(particles(style)), x, y, z, vx, 0.03, vz);
     }
 
@@ -275,7 +321,12 @@ public final class CosmeticFx {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.world == null) return;
         if (fx.style().startsWith("kill_")) {
-            kill(mc, fx.style(), fx.x(), fx.y(), fx.z(), Math.max(1.5f, fx.yaw()));
+            if (OneOfOne.ours(fx.style())) OneOfOne.kill(fx.style(), fx.x(), fx.y(), fx.z(), Math.max(1.5f, fx.yaw()));
+            else kill(mc, fx.style(), fx.x(), fx.y(), fx.z(), Math.max(1.5f, fx.yaw()));
+            return;
+        }
+        if (OneOfOne.ours(fx.style())) {
+            OneOfOne.slash(fx);
             return;
         }
         ParticleEffect[] set = fx.style().equals("slash_steel") || fx.style().isEmpty()
@@ -416,6 +467,10 @@ public final class CosmeticFx {
      * (soft gas in its colours, with the style's own sparks, shards or streaks through it).
      */
     public static void odmPuff(String style, double x, double y, double z, double vx, double vy, double vz) {
+        if (OneOfOne.ours(style)) {
+            OneOfOne.odm(style, x, y, z, vx, vy, vz);
+            return;
+        }
         Entry en = entry(style);
         int c1 = en == null ? 0xF0F0F0 : en.color(), c2 = en == null ? 0xBFBFBF : en.color2();
         var r = new java.util.Random();
@@ -436,8 +491,9 @@ public final class CosmeticFx {
         for (PlayerEntity p : mc.world.getPlayers()) {
             if (p.isInvisible() || p.isSpectator() || p.squaredDistanceTo(mc.player) > 64 * 64) continue;
             boolean me = p == mc.player && mc.options.getPerspective().isFirstPerson() && !showroom();
+            OneOfOne.tickPlayer(mc, p, me, t);
             String body = worn(p.getUuid(), "body");
-            if (!body.isEmpty() && !body.equals("body_none") && t % 3 == 0 && !me) {
+            if (!body.isEmpty() && !body.equals("body_none") && !OneOfOne.ours(body) && t % 3 == 0 && !me) {
                 ParticleEffect[] set = particles(body);
                 double a = Math.random() * Math.PI * 2, r = 0.45 + Math.random() * 0.2;
                 mc.world.addParticle(pick(set), p.getX() + Math.cos(a) * r, p.getY() + 0.2 + Math.random() * 1.5, p.getZ() + Math.sin(a) * r,
@@ -448,7 +504,7 @@ public final class CosmeticFx {
             if (p.getVehicle() instanceof AbstractHorseEntity horse) {
                 String style = worn(p.getUuid(), "horse");
                 double hs = horse.getPos().subtract(horse.prevX, horse.prevY, horse.prevZ).horizontalLength();
-                if (!style.isEmpty() && hs > 0.22 && horse.isOnGround()) {
+                if (!style.isEmpty() && !OneOfOne.ours(style) && hs > 0.22 && horse.isOnGround()) {
                     ParticleEffect[] set = particles(style);
                     for (int i = 0; i < 2; i++) {
                         mc.world.addParticle(pick(set), horse.getX() + (Math.random() - 0.5) * 0.9, horse.getY() + 0.1,

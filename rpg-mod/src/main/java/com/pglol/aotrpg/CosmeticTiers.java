@@ -59,6 +59,7 @@ public final class CosmeticTiers {
 
     public static int of(String id) {
         if (id.startsWith("fin_")) return FinisherStyles.of(id).tier();
+        if (Cosmetics.exclusiveId(id)) return 5;
         Integer t = TIERS.get(id);
         if (t != null) return t;
         if (Store.MYTHIC_COSMETICS.contains(id)) return 4;

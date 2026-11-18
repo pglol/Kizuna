@@ -43,7 +43,7 @@ public final class Catalog {
         List<String> titles = new ArrayList<>();
         for (Store.Title t : Store.TITLES) titles.add(t.id() + "|" + t.text() + "|" + t.color() + "|" + t.rarity());
         List<String> cosmetics = new ArrayList<>();
-        for (Cosmetics.Def d : Cosmetics.ALL) if (!d.free()) cosmetics.add(d.id() + "|" + d.title());
+        for (Cosmetics.Def d : Cosmetics.ALL) if (!d.free() && (!d.exclusive() || p.hasPermissionLevel(2))) cosmetics.add(d.id() + "|" + d.title());
         List<String> players = new ArrayList<>();
         players.add(p.getUuidAsString() + "|" + name(p) + " (you)|1");
         for (ServerPlayerEntity o : p.getServer().getPlayerManager().getPlayerList()) {

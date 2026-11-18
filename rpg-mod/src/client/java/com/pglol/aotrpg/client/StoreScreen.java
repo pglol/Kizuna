@@ -149,11 +149,11 @@ public final class StoreScreen extends Screen {
     }
 
     private static int colorOf(Net.StoreOffer o) {
-        return cosmetic(o) ? Sleek.TIER[Math.min(4, tierOf(o))] : RARITY[Math.min(5, tierOf(o))];
+        return cosmetic(o) ? Sleek.TIER[Math.min(5, tierOf(o))] : RARITY[Math.min(5, tierOf(o))];
     }
 
     private static String rarityName(Net.StoreOffer o) {
-        return cosmetic(o) ? Sleek.TIER_NAME[Math.min(4, tierOf(o))] : RARITY_NAME[Math.min(5, tierOf(o))];
+        return cosmetic(o) ? Sleek.TIER_NAME[Math.min(5, tierOf(o))] : RARITY_NAME[Math.min(5, tierOf(o))];
     }
 
     private List<Net.StoreOffer> listed() {

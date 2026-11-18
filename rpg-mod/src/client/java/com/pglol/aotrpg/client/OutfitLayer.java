@@ -22,10 +22,15 @@ public final class OutfitLayer extends FeatureRenderer<AbstractClientPlayerEntit
     private final PlayerEntityModel<AbstractClientPlayerEntity> wide, slim;
 
     /** Each piece's own colour when it isn't dyed. */
-    private static final Map<String, Integer> NATURAL = Map.of(
-        "outfit_scout_jacket", 0x8A6A44, "outfit_garrison_coat", 0x6E6650, "outfit_mp_coat", 0x3A3F48, "outfit_marley_tunic", 0x6A6A48,
-        "outfit_officer_sash", 0xA0202A, "outfit_hooded_cape", 0x2F4A2A, "outfit_scarf", 0x9A1A1A, "outfit_civilian_vest", 0x5A4632,
-        "outfit_bandana", 0x2A3A6A, "outfit_armband", 0xEDE3C8);
+    private static final Map<String, Integer> NATURAL = Map.ofEntries(
+        Map.entry("outfit_scout_jacket", 0x8A6A44), Map.entry("outfit_garrison_coat", 0x6E6650), Map.entry("outfit_mp_coat", 0x3A3F48),
+        Map.entry("outfit_marley_tunic", 0x6A6A48), Map.entry("outfit_officer_sash", 0xA0202A), Map.entry("outfit_hooded_cape", 0x2F4A2A),
+        Map.entry("outfit_scarf", 0x9A1A1A), Map.entry("outfit_civilian_vest", 0x5A4632), Map.entry("outfit_bandana", 0x2A3A6A),
+        Map.entry("outfit_armband", 0xEDE3C8),
+        // The 1 of 1s are painted in their own colours.
+        Map.entry("outfit_sp_robe", 0xFFFFFF), Map.entry("outfit_uch", 0xFFFFFF));
+
+    private static int dyeTint = 0x6AC8FF;
 
     public OutfitLayer(FeatureRendererContext<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> context) {
         super(context);
@@ -41,6 +46,8 @@ public final class OutfitLayer extends FeatureRenderer<AbstractClientPlayerEntit
     }
 
     public static int dye(String dye, String outfit) {
+        if (dye.equals("dye_uch")) return 0x6A5AA8;
+        if (dye.equals("dye_sp")) return Showcase.mix(dyeTint, 0xFFFFFF, 0.35f);
         for (String[] d : com.pglol.aotrpg.Cosmetics.DYES) if (d[0].equals(dye) && !d[0].equals("dye_none")) return Integer.parseInt(d[2], 16);
         return NATURAL.getOrDefault(outfit, 0xC8C8C8);
     }
@@ -54,8 +61,16 @@ public final class OutfitLayer extends FeatureRenderer<AbstractClientPlayerEntit
         boolean thin = p.getSkinTextures().model() == net.minecraft.client.util.SkinTextures.Model.SLIM;
         PlayerEntityModel<AbstractClientPlayerEntity> m = thin ? slim : wide;
         getContextModel().copyBipedStateTo(m);
+        dyeTint = OneOfOne.tint(p.getUuid());
         int col = 0xFF000000 | dye(CosmeticFx.worn(p.getUuid(), "dye"), outfit);
         Identifier tex = Identifier.of("aot_rpg", "textures/entity/outfit/" + outfit + ".png");
         m.render(ms, vc.getBuffer(RenderLayer.getEntityTranslucent(tex)), light, OverlayTexture.DEFAULT_UV, col);
+        // The robe's trim glows its owner's colour, breathing slowly.
+        if (outfit.equals("outfit_sp_robe")) {
+            float k = 0.75f + 0.25f * net.minecraft.util.math.MathHelper.sin((p.age + tickDelta) / 9f);
+            int g = 0xFF000000 | Showcase.mix(0, dyeTint, k);
+            Identifier glow = Identifier.of("aot_rpg", "textures/entity/outfit/outfit_sp_robe_glow.png");
+            m.render(ms, vc.getBuffer(RenderLayer.getEyes(glow)), 0xF000F0, OverlayTexture.DEFAULT_UV, g);
+        }
     }
 }

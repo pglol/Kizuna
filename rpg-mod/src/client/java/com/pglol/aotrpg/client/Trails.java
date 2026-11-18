@@ -88,6 +88,13 @@ public final class Trails {
     public static void spawn(Net.Trail t) {
         ClientWorld w = MinecraftClient.getInstance().world;
         if (w == null) return;
+        if (OneOfOne.ours(t.style())) {
+            var mc = MinecraftClient.getInstance();
+            if (t.style().equals("trail_sp") && mc.player != null)
+                t = new Net.Trail(t.style() + "#" + String.format("%06X", OneOfOne.tint(mc.player.getUuid())), t.x0(), t.y0(), t.z0(), t.x1(), t.y1(), t.z1());
+            OneOfOne.trail(t);
+            return;
+        }
         Vec3d a = new Vec3d(t.x0(), t.y0(), t.z0()), b = new Vec3d(t.x1(), t.y1(), t.z1());
         Vec3d d = b.subtract(a);
         double len = d.length();

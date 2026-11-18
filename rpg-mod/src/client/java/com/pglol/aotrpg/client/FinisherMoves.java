@@ -106,7 +106,7 @@ public final class FinisherMoves {
 
     static final float NaN = Float.NaN;
 
-    public static final Move[] ALL = new Move[13];
+    public static final Move[] ALL = new Move[15];
 
     static {
         // 0 Nape Cleaver: leap and spin over them, drop with an overhead cut, slide through.
@@ -181,6 +181,35 @@ public final class FinisherMoves {
             .by(0, N).by(6, DASH).by(16, OVERHEAD).by(20, CUTDOWN).by(28, CROSS_UP).by(32, CROSS_OUT).by(38, TUCK, 0, 0, 0).by(42, OVERHEAD, 0, 360, 0)
             .by(44, CUTDOWN, 0, 360, 0).by(48, KNEEL, 0, 360, 0).by(64, KNEEL, 0, 360, 0).by(70, N, 0, 360, 0)
             .on(0, N).on(8, GUARD).on(20, STRUCK).on(24, GUARD).on(32, KNEEL_STRUCK).on(36, KNEELING).on(44, KNEEL_STRUCK).on(48, KNEELING).on(70, KNEELING);
+    }
+
+    // Poses for the 1 of 1s.
+    static final float[] STROLL_A = {0.18f, 0, 0.08f, -0.18f, 0, -0.08f, -0.35f, 0.35f, 0.05f, 2, 0};
+    static final float[] STROLL_B = {-0.18f, 0, 0.08f, 0.18f, 0, -0.08f, 0.35f, -0.35f, 0.05f, 2, 0};
+    static final float[] COCK_FIST = {1.05f, 0.35f, 0.35f, -0.5f, -0.3f, -0.2f, -0.45f, 0.35f, 0, -6, 0.05f};
+    static final float[] FIST_THROUGH = {-1.6f, 0.05f, 0, 0.35f, 0, -0.35f, -0.7f, 0.55f, 0.02f, 18, 0.1f};
+    static final float[] STARE = {-1.55f, 0.05f, 0, 0.3f, 0, -0.3f, -0.65f, 0.5f, 0, 14, 0.08f};
+    static final float[] PULL_OUT = {0.25f, 0, 0.25f, 0.1f, 0, -0.15f, -0.2f, 0.2f, -0.02f, 0, 0};
+    static final float[] CHARGE = {0.75f, 0.1f, 0.45f, 0.55f, 0.75f, -0.1f, -1.35f, 0.9f, -0.15f, 32, 0.45f};
+    static final float[] CHIDORI_RUN = {0.95f, 0.05f, 0.4f, 0.9f, 0, -0.5f, -1.1f, 0.8f, -0.4f, 48, 0.2f};
+    static final float[] CHIDORI_HIT = {-1.55f, 0, 0, 0.6f, 0, -0.4f, -0.9f, 0.7f, -0.1f, 30, 0.2f};
+    static final float[] LOOK_BACK = {0.15f, 0, 0.1f, 0.1f, 0, -0.1f, 0, 0, 0.05f, 0, 0};
+    static final float[] OPPRESSED = {-0.1f, 0, 0.35f, -0.05f, 0, -0.35f, 0.15f, -0.2f, 0.25f, -6, 0.1f};
+    static final float[] IMPALED = {-0.6f, 0, 0.6f, -0.55f, 0, -0.6f, 0.05f, -0.1f, -0.25f, -14, 0.05f};
+
+    static {
+        // 13 Overwhelming Pressure: they can't move under it. A slow walk, the fist drawn back, through the chest; the stare.
+        Move sp = new Move().way(0, NaN, 0, 0).way(5, NaN, 0, 0).way(27, -0.85f, 0, 0).way(31, -0.85f, 0, 0).way(34, -0.6f, 0, 0).way(58, -0.6f, 0, 0)
+            .way(62, -0.7f, 0, 0);
+        sp.by(0, N).by(5, N);
+        for (int i = 0; i < 6; i++) sp.by(7 + i * 3.4f, i % 2 == 0 ? STROLL_A : STROLL_B);
+        ALL[13] = sp.by(27, N).by(31, COCK_FIST).by(34, FIST_THROUGH).by(40, STARE).by(56, STARE).by(60, PULL_OUT).by(66, N).by(84, N)
+            .on(0, N).on(6, OPPRESSED).on(31, OPPRESSED).on(34, IMPALED).on(56, IMPALED).on(61, CRUMPLE).on(84, CRUMPLE);
+        // 14 Chidori: crouched low, the hand charging; the run; through them; out past, and a look back over the shoulder.
+        ALL[14] = new Move().way(0, NaN, 0, 0).way(15, NaN, 0, 0).way(24, -0.55f, 0, 0).way(36, -0.55f, 0, 0).way(42, 1.6f, 0.5f, 0)
+            .by(0, N).by(4, CHARGE).by(14, CHARGE).by(18, CHIDORI_RUN).by(24, CHIDORI_RUN).by(26, CHIDORI_HIT).by(36, CHIDORI_HIT)
+            .by(40, PULL_OUT, 0, 0, 0).by(44, LOOK_BACK, 0, 0, 0).by(50, LOOK_BACK, 30, 0, 0).by(66, LOOK_BACK, 30, 0, 0).by(70, N, 0, 0, 0)
+            .on(0, N).on(8, GUARD).on(22, GUARD).on(26, IMPALED).on(36, IMPALED).on(40, CRUMPLE).on(70, CRUMPLE);
     }
 
     public static Move of(int style) {

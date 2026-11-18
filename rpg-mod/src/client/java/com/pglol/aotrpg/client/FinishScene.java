@@ -99,6 +99,23 @@ public final class FinishScene {
         return s;
     }
 
+    /** The scene's colours: a 1 of 1 that takes a colour burns its owner's. */
+    private static int col1(Scene s) {
+        if (s.st.id().equals("fin_sp")) return OneOfOne.tint(owner(s));
+        return s.st.color();
+    }
+
+    private static int col2(Scene s) {
+        if (s.st.id().equals("fin_sp")) return OneOfOne.lighter(OneOfOne.tint(owner(s)), 0.55f);
+        return s.st.color2();
+    }
+
+    private static java.util.UUID owner(Scene s) {
+        var mc = MinecraftClient.getInstance();
+        Entity a = mc.world == null ? null : mc.world.getEntityById(s.by);
+        return a == null ? new java.util.UUID(0, 0) : a.getUuid();
+    }
+
     /** Real time into the scene (ticks). */
     private static float realT(Scene s) {
         return (Util.getMeasuringTimeMs() - s.at) / 50f;
@@ -321,12 +338,13 @@ public final class FinishScene {
                 s.fell = true;
                 kill(mc, s, mine);
             }
+            special(mc, s, t, mine);
             float rt = realT(s), slow = slowness(s);
             Float was = lastFx.get(s.by);
             if (was != null && rt - was < 0.9f) continue;
             lastFx.put(s.by, rt);
             // In slow motion, a trail of ghosts behind every move.
-            if (slow > 0.5f && a != null && t < s.st.kill()) Afterimages.leaveAt(a, path(s, t), facing(s, t, key(s.mv.by, t)), s.st.color(), 520);
+            if (slow > 0.5f && a != null && t < s.st.kill()) Afterimages.leaveAt(a, path(s, t), facing(s, t, key(s.mv.by, t)), col1(s), 520);
             Vec3d now = path(s, t), before = path(s, Math.max(0, t - 1));
             float[] k = key(s.mv.by, t), kb = key(s.mv.by, Math.max(0, t - 1));
             double speed = now.distanceTo(before);
@@ -339,14 +357,14 @@ public final class FinishScene {
                     FxParticle.spawn(AotParticles.STREAK, 0xFFFFFF, 0.9f, p.x + (Math.random() - 0.5) * 0.6, p.y + (Math.random() - 0.5) * 0.8,
                         p.z + (Math.random() - 0.5) * 0.6, back.x, back.y, back.z);
                 }
-                if (a != null) Afterimages.leaveAt(a, now, face, s.st.color2(), 380);
+                if (a != null) Afterimages.leaveAt(a, now, face, col2(s), 380);
             } else if (spin > 25) {
                 double ang = Math.toRadians(face);
                 for (int sgn = -1; sgn <= 1; sgn += 2) {
                     double bx = p.x + Math.cos(ang) * 1.1 * sgn, bz = p.z + Math.sin(ang) * 1.1 * sgn;
-                    FxParticle.spawn(AotParticles.SPARK, s.st.color(), 0.5f, bx, p.y, bz, 0, 0.02, 0);
+                    FxParticle.spawn(AotParticles.SPARK, col1(s), 0.5f, bx, p.y, bz, 0, 0.02, 0);
                 }
-                if (a != null && (int) t % 2 == 0) Afterimages.leaveAt(a, now, face, s.st.color(), 300);
+                if (a != null && (int) t % 2 == 0) Afterimages.leaveAt(a, now, face, col1(s), 300);
             }
         }
         lastFx.keySet().removeIf(id -> !scenes.containsKey(id));
@@ -355,18 +373,18 @@ public final class FinishScene {
     private static void blow(MinecraftClient mc, Scene s, boolean last, int n, boolean mine) {
         float t = t(s);
         Vec3d v = foeAt(s, t).add(0, 1.15, 0), side = s.side();
-        FxParticle.spawn(AotParticles.ARC, s.st.color(), last ? 2.6f : 1.6f, v.x, v.y, v.z, side.x * (n % 2 == 0 ? 1 : -1), 0, side.z);
+        FxParticle.spawn(AotParticles.ARC, col1(s), last ? 2.6f : 1.6f, v.x, v.y, v.z, side.x * (n % 2 == 0 ? 1 : -1), 0, side.z);
         int sparks = last ? 14 : 6;
         for (int i = 0; i < sparks; i++) {
-            FxParticle.spawn(AotParticles.SPARK, i % 3 == 0 ? s.st.color2() : 0xFFF4E8, 0.5f, v.x, v.y, v.z,
+            FxParticle.spawn(AotParticles.SPARK, i % 3 == 0 ? col2(s) : 0xFFF4E8, 0.5f, v.x, v.y, v.z,
                 (Math.random() - 0.5) * 0.6, (Math.random() - 0.3) * 0.4, (Math.random() - 0.5) * 0.6);
         }
-        if (last) FxParticle.spawn(AotParticles.FLASH, s.st.color(), 1.6f, v.x, v.y, v.z, 0, 0, 0);
+        if (last) FxParticle.spawn(AotParticles.FLASH, col1(s), 1.6f, v.x, v.y, v.z, 0, 0, 0);
         // A slash across the screen for everyone near enough to see it.
         if (mc.player != null) {
             double d = mc.player.getPos().distanceTo(v);
             float near = mine ? 1 : (float) MathHelper.clamp(1 - d / 24, 0, 0.6);
-            if (near > 0.05f) slash((n % 2 == 0 ? -0.5f : 0.5f) + (float) (Math.random() - 0.5) * 0.5f, s.st.color(), (last ? 1.2f : 0.6f) * near);
+            if (near > 0.05f) slash((n % 2 == 0 ? -0.5f : 0.5f) + (float) (Math.random() - 0.5) * 0.5f, col1(s), (last ? 1.2f : 0.6f) * near);
         }
         String id = s.st.id();
         if (id.equals("fin_spear") && last) {
@@ -388,6 +406,69 @@ public final class FinishScene {
             }
             if (mine) EffectFx.quake(0.5f + n * 0.25f, 10);
         } else if (mine) EffectFx.quake(last ? 0.45f : 0.15f, last ? 8 : 3);
+    }
+
+    private static final Map<Integer, Float> lastSpecial = new HashMap<>();
+
+    /** The 1 of 1 finishers' own show, every tick of the scene. */
+    private static void special(MinecraftClient mc, Scene s, float t, boolean mine) {
+        String id = s.st.id();
+        if (!id.equals("fin_sp") && !id.equals("fin_uch")) return;
+        float rt = realT(s);
+        Float was = lastSpecial.get(s.by);
+        if (was != null && rt - was < 1) return;
+        lastSpecial.put(s.by, rt);
+        if (lastSpecial.size() > 32) lastSpecial.keySet().removeIf(k -> !scenes.containsKey(k));
+        Vec3d a = path(s, t), v = foeAt(s, t), d = s.dir;
+        int c1 = col1(s), c2 = col2(s);
+        if (id.equals("fin_sp")) {
+            if (t < 34) {
+                // The pressure: it burns off them, the ground cracks under every step, the air shakes.
+                for (int i = 0; i < 4; i++) {
+                    double ang = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.4;
+                    FxParticle.spawn(AotParticles.PUFF, i == 0 ? c2 : c1, 0.7f + (float) Math.random() * 0.6f, a.x + Math.cos(ang) * r, a.y + Math.random() * 1.9,
+                        a.z + Math.sin(ang) * r, 0, 0.09 + Math.random() * 0.08, 0);
+                }
+                FxParticle.spawn(AotParticles.STREAK, c2, 0.7f, a.x + rr() * 0.8, a.y + 0.2 + Math.random(), a.z + rr() * 0.8, 0, 0.5, 0);
+                if ((int) t % 7 == 0 && t > 6) {
+                    FxParticle.spawn(AotParticles.RING, c1, 3.5f, a.x, a.y + 0.05, a.z, 0, 0, 0);
+                    if (mine) EffectFx.quake(0.15f, 4);
+                }
+                // Pebbles lifting off the ground around them, the weight of it.
+                FxParticle.spawn(AotParticles.SHARD, 0x8A8070, 0.35f, v.x + rr() * 3, v.y + 0.1, v.z + rr() * 3, 0, 0.12, 0);
+            } else if (t < 58) {
+                // Through: light pouring out of their back.
+                Vec3d c = v.add(0, 1.15, 0).add(d.multiply(0.3));
+                for (int i = 0; i < 3; i++) {
+                    FxParticle.spawn(AotParticles.STREAK, i == 0 ? 0xFFFFFF : c1, 0.8f, c.x + rr() * 0.2, c.y + rr() * 0.2, c.z + rr() * 0.2,
+                        d.x * 1.1 + rr() * 0.3, rr() * 0.3, d.z * 1.1 + rr() * 0.3);
+                }
+                FxParticle.spawn(AotParticles.PUFF, c1, 1.1f, c.x, c.y, c.z, d.x * 0.1, 0.05, d.z * 0.1);
+            } else {
+                FxParticle.spawn(AotParticles.PUFF, c1, 0.6f, a.x + rr() * 0.6, a.y + Math.random() * 1.8, a.z + rr() * 0.6, 0, 0.06, 0);
+            }
+        } else {
+            double yr = Math.toRadians(s.yaw);
+            Vec3d right = new Vec3d(-Math.cos(yr), 0, -Math.sin(yr));
+            Vec3d hand = a.add(right.multiply(0.4)).add(0, t < 15 ? 0.45 : 0.8, 0).add(d.multiply(t < 15 ? 0.15 : 0.5));
+            if (t < 26) {
+                // The chidori, louder and wilder as it charges.
+                int n = t < 15 ? 2 + (int) (t / 4) : 5;
+                for (int i = 0; i < n; i++) FxParticle.spawn(AotParticles.SPARK, i % 2 == 0 ? OneOfOne.LIGHT : 0xFFFFFF, 0.4f, hand.x, hand.y, hand.z, rr() * 0.5, rr() * 0.5, rr() * 0.5);
+                FxParticle.spawn(AotParticles.STREAK, 0xEAF6FF, 0.5f, hand.x, hand.y, hand.z, rr() * 1.2, rr() * 1.2, rr() * 1.2);
+                if ((int) t % 5 == 0) FxParticle.spawn(AotParticles.FLASH, OneOfOne.LIGHT, 1.2f, hand.x, hand.y, hand.z, 0, 0, 0);
+                if (t < 15 && (int) t % 3 == 0) FxParticle.spawn(AotParticles.STREAK, OneOfOne.LIGHT, 0.6f, a.x + rr() * 1.5, a.y + 0.05, a.z + rr() * 1.5, rr() * 0.6, 0, rr() * 0.6);
+                if (t >= 15) FxParticle.spawn(AotParticles.STREAK, 0xEAF6FF, 1f, hand.x, hand.y, hand.z, -d.x * 1.2, 0, -d.z * 1.2);
+                if (mine && (int) t == 1 && mc.player != null)
+                    mc.world.playSound(mc.player, a.x, a.y, a.z, net.minecraft.sound.SoundEvents.ITEM_TRIDENT_THUNDER.value(), net.minecraft.sound.SoundCategory.PLAYERS, 0.4f, 1.8f);
+            } else if (t < 38) {
+                Vec3d c = v.add(0, 1.15, 0).add(d.multiply(0.3));
+                for (int i = 0; i < 3; i++) FxParticle.spawn(AotParticles.STREAK, i == 0 ? 0xFFFFFF : OneOfOne.LIGHT, 0.7f, c.x, c.y, c.z, d.x + rr() * 0.6, rr() * 0.6, d.z + rr() * 0.6);
+                FxParticle.spawn(AotParticles.SPARK, OneOfOne.LIGHT, 0.4f, c.x, c.y, c.z, rr() * 0.4, rr() * 0.4, rr() * 0.4);
+            } else if (t > 40 && (int) t % 2 == 0) {
+                FxParticle.spawn(AotParticles.PUFF, OneOfOne.BLACK, 0.8f, v.x + rr() * 0.6, v.y + Math.random() * 1.2, v.z + rr() * 0.6, 0, 0.05, 0);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ the kill
@@ -421,7 +502,7 @@ public final class FinishScene {
     private static void kill(MinecraftClient mc, Scene s, boolean mine) {
         float t = t(s);
         Vec3d v = foeAt(s, t), c = v.add(0, 1.1, 0), d = s.dir, side = s.side();
-        int c1 = s.st.color(), c2 = s.st.color2();
+        int c1 = col1(s), c2 = col2(s);
         dying.put(s.on, new Dying(d, s.yaw, deathKind(s.st.id()), Util.getMeasuringTimeMs(), v, new boolean[1]));
         if (dying.size() > 32) dying.values().removeIf(x -> Util.getMeasuringTimeMs() - x.at() > 3000);
         for (int i = 0; i < 3; i++) FxParticle.spawn(AotParticles.RING, i == 0 ? 0xFFFFFF : i == 1 ? c1 : c2, 2.5f + i * 2.4f, v.x, v.y + 0.05 + i * 0.02, v.z, 0, 0, 0);
@@ -510,6 +591,22 @@ public final class FinishScene {
                     Vec3d p = a.lerp(c, i / 14.0);
                     FxParticle.spawn(AotParticles.SPARK, 0xC8C0B0, 0.4f, p.x, p.y, p.z, rr() * 0.2, 0.1, rr() * 0.2);
                 }
+            }
+            case "fin_sp" -> {
+                // A pillar of their pressure into the sky, and the weight of it lifting.
+                for (int i = 0; i < 50; i++) FxParticle.spawn(AotParticles.STREAK, i % 4 == 0 ? 0xFFFFFF : c1, 1.1f, v.x + rr() * 1.1, v.y + i * 0.3, v.z + rr() * 1.1, 0, 1.8, 0);
+                for (int i = 0; i < 4; i++) FxParticle.spawn(AotParticles.RING, i % 2 == 0 ? c1 : 0xFFFFFF, 4f + i * 3f, v.x, v.y + 0.05, v.z, 0, 0, 0);
+                FxParticle.spawn(AotParticles.FLASH, 0xFFFFFF, 6f, c.x, c.y, c.z, 0, 0, 0);
+                if (mine) EffectFx.quake(1.2f, 18);
+            }
+            case "fin_uch" -> {
+                for (int i = 0; i < 60; i++) {
+                    double ang = Math.random() * Math.PI * 2, r = Math.random() * 0.8;
+                    FxParticle.spawn(AotParticles.PUFF, i % 5 == 0 ? OneOfOne.PURPLE : OneOfOne.BLACK, 1.1f + (float) Math.random() * 0.7f,
+                        v.x + Math.cos(ang) * r, v.y + Math.random() * 1.9, v.z + Math.sin(ang) * r, 0, 0.06, 0);
+                }
+                for (int i = 0; i < 3; i++) FxParticle.spawn(AotParticles.STREAK, 0xEAF6FF, 1.8f, v.x + rr() * 0.5, v.y + 8, v.z + rr() * 0.5, 0, -2.4, 0);
+                FxParticle.spawn(AotParticles.FLASH, OneOfOne.LIGHT, 5f, c.x, c.y, c.z, 0, 0, 0);
             }
             case "fin_rising" -> {
                 for (int i = 0; i < 24; i++) FxParticle.spawn(AotParticles.STREAK, i % 2 == 0 ? c1 : c2, 1.3f, v.x + rr() * 0.5, v.y + i * 0.2, v.z + rr() * 0.5, 0, 1.2, 0);

@@ -407,7 +407,7 @@ public final class AotRpg implements ModInitializer {
                 net.minecraft.world.RaycastContext.FluidHandling.NONE, sp));
             var to = hit.getType() == net.minecraft.util.hit.HitResult.Type.MISS ? end2 : hit.getPos();
             var start = eye.add(dir.multiply(0.8)).add(0, -0.25, 0);
-            Net.Trail t = new Net.Trail(COSMETICS.selected(sp, "trail"), start.x, start.y, start.z, to.x, to.y, to.z);
+            Net.Trail t = new Net.Trail(COSMETICS.styled(sp, "trail"), start.x, start.y, start.z, to.x, to.y, to.z);
             for (ServerPlayerEntity o : sp.getServerWorld().getPlayers()) {
                 if (o != sp && o.squaredDistanceTo(sp) < 128 * 128 && ServerPlayNetworking.canSend(o, Net.Trail.ID)) ServerPlayNetworking.send(o, t);
             }

@@ -23,7 +23,14 @@ public final class CosmeticLayer extends FeatureRenderer<AbstractClientPlayerEnt
         if (p.isInvisible()) return;
         float time = (p.age + tickDelta) / 20f;
         String back = CosmeticFx.worn(p.getUuid(), "back");
-        if (back.startsWith("back_wings") || back.startsWith("back_cloak") || back.equals("back_banner")) {
+        if (back.equals("back_sp") || back.equals("back_uch")) {
+            ms.push();
+            getContextModel().body.rotate(ms);
+            ms.translate(0, 0.1, 0);
+            ms.scale(1, -1, -1);
+            OneOfOne.back(ms, vc, time, back, OneOfOne.tint(p.getUuid()), p.getVelocity().horizontalLength());
+            ms.pop();
+        } else if (back.startsWith("back_wings") || back.startsWith("back_cloak") || back.equals("back_banner")) {
             ms.push();
             getContextModel().body.rotate(ms);
             // Model space: +Y is down and the back faces +Z. Flip both so the shapes read Y up, Z forward.
@@ -33,6 +40,12 @@ public final class CosmeticLayer extends FeatureRenderer<AbstractClientPlayerEnt
             ms.pop();
         }
         String head = CosmeticFx.worn(p.getUuid(), "head");
+        if (head.equals("head_sp") || head.equals("head_uch")) {
+            ms.push();
+            getContextModel().head.rotate(ms);
+            OneOfOne.eyes(ms, vc, time, head, OneOfOne.tint(p.getUuid()));
+            ms.pop();
+        }
         if (head.equals("head_halo") || head.equals("head_crown") || head.equals("head_laurel") || head.equals("head_sun") || head.equals("head_founder")) {
             ms.push();
             getContextModel().head.rotate(ms);

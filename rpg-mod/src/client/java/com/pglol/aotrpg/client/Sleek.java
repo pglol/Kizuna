@@ -15,8 +15,8 @@ public final class Sleek {
     private Sleek() {}
 
     public static final int BG = 0xF00B0E0D, BG2 = 0xF0121614, LINE = 0x24FFFFFF, LINE2 = 0x45FFFFFF, GOLD = 0xFFE8C36F, GOLD_DARK = 0xFF1A1408;
-    public static final int[] TIER = {0xFF9A958A, 0xFF5A9AE0, 0xFFB06AE0, 0xFFF2C14E, 0xFFE8433A};
-    public static final String[] TIER_NAME = {"Standard", "Rare", "Epic", "Legendary", "Mythic"};
+    public static final int[] TIER = {0xFF9A958A, 0xFF5A9AE0, 0xFFB06AE0, 0xFFF2C14E, 0xFFE8433A, 0xFFF4F0FF};
+    public static final String[] TIER_NAME = {"Standard", "Rare", "Epic", "Legendary", "Mythic", "1 of 1"};
 
     /** Mouse position this frame (set by the screen), for hover states. */
     public static int mx, my;

@@ -312,6 +312,35 @@ final class Commands {
                         })
                         .executes(c -> cosmetic(c.getSource(), EntityArgumentType.getPlayer(c, "player"),
                             com.mojang.brigadier.arguments.StringArgumentType.getString(c, "id"), false)))))
+                .then(CommandManager.literal("oneofone").then(CommandManager.argument("player", EntityArgumentType.player())
+                    .then(CommandManager.argument("set", com.mojang.brigadier.arguments.StringArgumentType.word())
+                        .suggests((c, b) -> {
+                            for (String k : Cosmetics.SETS.keySet()) b.suggest(k);
+                            return b.buildFuture();
+                        })
+                        .executes(c -> {
+                            ServerPlayerEntity p = EntityArgumentType.getPlayer(c, "player");
+                            String set = com.mojang.brigadier.arguments.StringArgumentType.getString(c, "set");
+                            if (!AotRpg.COSMETICS.grantSet(p, set, true)) {
+                                c.getSource().sendError(Text.literal("Unknown set: " + set + " (sets: " + String.join(", ", Cosmetics.SETS.keySet()) + ")"));
+                                return 0;
+                            }
+                            c.getSource().sendFeedback(() -> Text.literal("Gave the 1 of 1 set '" + set + "' to " + p.getName().getString()), true);
+                            return 1;
+                        }))))
+                .then(CommandManager.literal("takeoneofone").then(CommandManager.argument("player", EntityArgumentType.player())
+                    .then(CommandManager.argument("set", com.mojang.brigadier.arguments.StringArgumentType.word())
+                        .suggests((c, b) -> {
+                            for (String k : Cosmetics.SETS.keySet()) b.suggest(k);
+                            return b.buildFuture();
+                        })
+                        .executes(c -> {
+                            ServerPlayerEntity p = EntityArgumentType.getPlayer(c, "player");
+                            String set = com.mojang.brigadier.arguments.StringArgumentType.getString(c, "set");
+                            if (!AotRpg.COSMETICS.grantSet(p, set, false)) return 0;
+                            c.getSource().sendFeedback(() -> Text.literal("Took the 1 of 1 set '" + set + "' from " + p.getName().getString()), true);
+                            return 1;
+                        }))))
                 .then(CommandManager.literal("list").then(CommandManager.argument("player", EntityArgumentType.player()).executes(c -> {
                     ServerPlayerEntity p = EntityArgumentType.getPlayer(c, "player");
                     c.getSource().sendFeedback(() -> Text.literal(p.getName().getString() + (AotRpg.COSMETICS.allowlisted(p) ? " (allowlisted)" : "")

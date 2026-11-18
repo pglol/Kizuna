@@ -51,8 +51,27 @@ public final class CosmeticsScreen extends Screen {
     }
 
     private static boolean owned(CosmeticFx.Entry e, int index) {
+        // A 1 of 1 is only yours if it was given to you.
+        if (e.tier() >= 5) return ClientState.cosmetics.contains(e.id());
         return ClientState.cosmeticsAll || ClientState.cosmetics.contains(e.id()) || index == 0;
     }
+
+    private static boolean op() {
+        var p = net.minecraft.client.MinecraftClient.getInstance().player;
+        return p != null && p.hasPermissionLevel(2);
+    }
+
+    /** What this player may see in a category: 1 of 1s stay secret, except to their owner and operators. */
+    private static java.util.List<CosmeticFx.Entry> visible(CosmeticFx.Category cat) {
+        java.util.List<CosmeticFx.Entry> out = new java.util.ArrayList<>();
+        boolean op = op();
+        for (CosmeticFx.Entry e : cat.entries()) if (e.tier() < 5 || op || ClientState.cosmetics.contains(e.id())) out.add(e);
+        return out;
+    }
+
+    /** The colours a pressure can burn. */
+    private static final int[] TINTS = {0x6AC8FF, 0x2A6AFF, 0x8A5AFF, 0xC84AFF, 0xFF4AA8, 0xFF2A3A, 0xFF7A2A, 0xFFD24A, 0xB8FF4A, 0x3AFF8A,
+        0x2AE8D8, 0xFFFFFF, 0x8A0A1A, 0x101018};
 
     private String shown() {
         return showing != null ? showing : selected(slot);
@@ -132,7 +151,7 @@ public final class CosmeticsScreen extends Screen {
     public boolean mouseScrolled(double mx, double my, double h, double v) {
         if (mx > libX) {
             CosmeticFx.Category cat = CosmeticFx.category(slot);
-            int rows = (cat.entries().size() + cols() - 1) / cols();
+            int rows = (visible(cat).size() + cols() - 1) / cols();
             scroll = Math.max(0, Math.min(rows - visibleRows(), scroll - (int) Math.signum(v)));
         }
         return true;
@@ -197,7 +216,7 @@ public final class CosmeticsScreen extends Screen {
             CosmeticFx.Entry worn = CosmeticFx.entry(selected(cc.slot()));
             Ui.text(c, Ui.heading(cc.title()), 22, y + rh / 2f - 7.5f, 0.72f, sel ? Sleek.GOLD : hov ? Ui.CREAM : 0xFFB8B0A0, false);
             if (worn != null) {
-                int tc = Sleek.TIER[Math.min(4, worn.tier())];
+                int tc = Sleek.TIER[Math.min(5, worn.tier())];
                 Smooth.disc(c, 24, y + rh / 2f + 5.5f, 2, tc);
                 Ui.text(c, Text.literal(fit(worn.title(), railW - 40, 0.58f)), 29, y + rh / 2f + 3, 0.58f, tc, false);
             }
@@ -213,23 +232,23 @@ public final class CosmeticsScreen extends Screen {
         // The library.
         Sleek.panel(c, libX, top, libW, bottom - top);
         int have = 0;
-        for (int k = 0; k < cat.entries().size(); k++) if (owned(cat.entries().get(k), k)) have++;
+        for (int k = 0; k < visible(cat).size(); k++) if (owned(visible(cat).get(k), k)) have++;
         Ui.text(c, Ui.heading(cat.title()), libX + 8, top + 8, 0.9f, Ui.CREAM, false);
-        String cnt = have + " / " + cat.entries().size() + " owned";
+        String cnt = have + " / " + visible(cat).size() + " owned";
         Ui.text(c, Text.literal(cnt), libX + libW - 8 - Ui.font().getWidth(cnt) * 0.6f, top + 10, 0.6f, 0xFF9A958A, false);
         Ui.text(c, Text.literal(fit(cat.blurb(), libW - 16, 0.56f)), libX + 8, top + 20, 0.56f, 0xFF8A857A, false);
         int cols = cols(), tw = tileW();
-        for (int i = scroll * cols; i < cat.entries().size() && i < (scroll + visibleRows()) * cols; i++) {
-            CosmeticFx.Entry e = cat.entries().get(i);
+        for (int i = scroll * cols; i < visible(cat).size() && i < (scroll + visibleRows()) * cols; i++) {
+            CosmeticFx.Entry e = visible(cat).get(i);
             int r = i / cols - scroll, col = i % cols;
             int x = libX + 8 + col * (tw + GAP), y = gridTop() + r * (TILE_H + GAP);
             boolean own = owned(e, i), worn = e.id().equals(selected(slot)), on = e.id().equals(shown());
-            int tc = Sleek.TIER[Math.min(4, e.tier())];
+            int tc = Sleek.TIER[Math.min(5, e.tier())];
             Sleek.tile(c, x, y, tw, TILE_H, tc, Sleek.over(x, y, tw, TILE_H), on, !own);
             Showcase.thumb(c, x + 1, y + 3, tw - 2, 44, slot, e, !own);
             if (!own) c.fill(x + 1, y + 3, x + tw - 1, y + 47, 0x66000000);
             Ui.text(c, Text.literal(fit(e.title(), tw - 10, 0.66f)), x + 5, y + 50, 0.66f, own ? Ui.CREAM : 0xFF9A958A, false);
-            Sleek.chip(c, x + 5, y + 61, Sleek.TIER_NAME[Math.min(4, e.tier())].toUpperCase(), tc);
+            Sleek.chip(c, x + 5, y + 61, Sleek.TIER_NAME[Math.min(5, e.tier())].toUpperCase(), tc);
             if (worn) Sleek.chip(c, x + tw - 5 - (Ui.font().getWidth("WORN") * 0.55f + 8), y + 61, "WORN", Sleek.GOLD);
             else if (!own) {
                 Net.StoreOffer o = offer(e.id());
@@ -239,7 +258,7 @@ public final class CosmeticsScreen extends Screen {
             String id = e.id();
             hits.add(x, y, tw, TILE_H, () -> showing = id);
         }
-        int rows = (cat.entries().size() + cols - 1) / cols;
+        int rows = (visible(cat).size() + cols - 1) / cols;
         if (rows > visibleRows()) {
             int gy = gridTop(), gh = visibleRows() * (TILE_H + GAP) - GAP;
             c.fill(libX + libW - 4, gy, libX + libW - 2, gy + gh, 0x20FFFFFF);
@@ -251,15 +270,15 @@ public final class CosmeticsScreen extends Screen {
         CosmeticFx.Entry show = CosmeticFx.entry(shown());
         int sx0 = railW + 24, sx1 = libX - 12, bw = sx1 - sx0, by = bottom - 62;
         if (show != null) {
-            int idx = cat.entries().indexOf(show);
+            int idx = visible(cat).indexOf(show);
             boolean own = owned(show, Math.max(0, idx)), worn = show.id().equals(selected(slot));
-            int tc = Sleek.TIER[Math.min(4, show.tier())];
+            int tc = Sleek.TIER[Math.min(5, show.tier())];
             c.fill(sx0, by, sx1, bottom, 0xD00B0E0D);
             c.fill(sx0, by, sx1, by + 2, tc);
             c.drawBorder(sx0, by, bw, bottom - by, Sleek.LINE);
             Ui.text(c, Ui.heading(show.title()), sx0 + 10, by + 9, 1.05f, 0xFF000000 | show.color(), false);
             float nw = Ui.font().getWidth(show.title()) * 1.05f;
-            Sleek.chip(c, sx0 + 16 + nw, by + 10, Sleek.TIER_NAME[Math.min(4, show.tier())].toUpperCase(), tc);
+            Sleek.chip(c, sx0 + 16 + nw, by + 10, Sleek.TIER_NAME[Math.min(5, show.tier())].toUpperCase(), tc);
             Ui.text(c, Text.literal(fit(show.desc(), bw - 200, 0.64f)), sx0 + 10, by + 25, 0.64f, 0xFFC8BEA6, false);
             int bx = sx1 - 10;
             if (worn) {
@@ -272,6 +291,9 @@ public final class CosmeticsScreen extends Screen {
                     Sleek.price(c, bx - 200, by + 14, o.price(), o.was(), 0.85f);
                     Sleek.button(c, hits, bx - 96, by + 9, 96, 20, "Buy in store", true, true,
                         () -> client.setScreen(new StoreScreen(this, "cosmetic:" + show.id())));
+                } else if (show.tier() >= 5) {
+                    String where = "1 of 1: given, never sold";
+                    Ui.text(c, Text.literal(where), bx - Ui.font().getWidth(where) * 0.62f, by + 15, 0.62f, 0xFFF4F0FF, false);
                 } else {
                     String where = com.pglol.aotrpg.Store.MYTHIC_COSMETICS.contains(show.id()) ? "Mythic: found only in crates"
                         : slot.equals("outfit") || slot.equals("dye") ? "Found in the world and in crates" : "From crates and the battle pass";
@@ -280,6 +302,21 @@ public final class CosmeticsScreen extends Screen {
                 }
             }
             Ui.text(c, Text.literal(own ? "Previewing on you  ·  drag to turn" : "Try it on  ·  drag to turn"), sx0 + 10, by + 40, 0.55f, 0xFF7A766C, false);
+            // Pieces that take a colour: pick it here (it changes the whole set).
+            if (own && OneOfOne.sp(show.id()) && client.player != null) {
+                int cur = OneOfOne.tint(client.player.getUuid()), sw = 14, gap = 4;
+                int total = TINTS.length * (sw + gap) - gap, sx = sx0 + (bw - total) / 2, sy = by - 26;
+                c.fill(sx - 8, sy - 12, sx + total + 8, sy + sw + 4, 0xC00B0E0D);
+                Ui.text(c, Text.literal("YOUR COLOUR"), sx0 + bw / 2f, sy - 9, 0.5f, 0xFFB8B0A0, true);
+                for (int i = 0; i < TINTS.length; i++) {
+                    int x = sx + i * (sw + gap), col = TINTS[i];
+                    boolean sel = col == cur, hov = Sleek.over(x, sy, sw, sw);
+                    Smooth.disc(c, x + sw / 2f, sy + sw / 2f, sw / 2f + (sel ? 2.5f : hov ? 1.5f : 0), sel ? 0xFFFFFFFF : hov ? 0xA0FFFFFF : 0x50FFFFFF);
+                    Smooth.disc(c, x + sw / 2f, sy + sw / 2f, sw / 2f - 1, 0xFF000000 | col);
+                    String hex = String.format("%06X", col);
+                    hits.add(x, sy, sw, sw, () -> ClientPlayNetworking.send(new Net.SelectCosmetic("tint:" + hex)));
+                }
+            }
         }
     }
 
