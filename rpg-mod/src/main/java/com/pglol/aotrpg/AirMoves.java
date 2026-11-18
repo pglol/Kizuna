@@ -177,6 +177,16 @@ public final class AirMoves {
                 slot++;
             }
             boolean landed = p.isOnGround() || p.isTouchingWater() || age > 4 && height(p) < 0.4;
+            // A drop with no ground near after a second or so: the dive breaks off (they fall free,
+            // and so does anyone carried), the way the diver's own client stops it.
+            if (!landed && age > 26 && height(p, 16) >= 16) {
+                diving.remove(e.getKey());
+                for (LivingEntity le : d.caught()) {
+                    le.setVelocity(le.getVelocity().multiply(0.3));
+                    le.velocityModified = true;
+                }
+                continue;
+            }
             if (!landed && age < 120) continue;
             diving.remove(e.getKey());
             if (landed) impact(w, p, d);

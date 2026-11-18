@@ -97,6 +97,10 @@ public final class OdmMoves {
     /** The dive under way: its line, speed now, and how high it began. */
     private static Vec3d diveDir;
     private static double diveSpeed, diveFrom;
+    private static long diveAt;
+    /** A dive lasts this long unless the ground is near enough to finish it. */
+    private static final long DIVE_MS = 1200;
+    private static final double DIVE_NEAR = 14;
 
     public static boolean gear;
     public static float gas = -1;
@@ -248,6 +252,21 @@ public final class OdmMoves {
             slamming = false;
             diveDir = null;
         }
+        // Too long a drop with no ground near (off a tower into the void): the dive breaks off,
+        // and you're falling free with your gear to save you.
+        if (slamming && diveDir != null && !onGround && now - diveAt > DIVE_MS) {
+            Vec3d from = pl.getPos();
+            var below = mc.world.raycast(new net.minecraft.world.RaycastContext(from, from.add(diveDir.multiply(DIVE_NEAR)),
+                net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.ANY, pl));
+            if (below.getType() == net.minecraft.util.hit.HitResult.Type.MISS) {
+                slamming = false;
+                diveDir = null;
+                anims.remove(pl.getId());
+                pl.setVelocity(pl.getVelocity().multiply(0.3));
+                ImpactFrames.rush(0, 0);
+                MovesHud.popup("DIVE BROKEN", 0xFFB8C8D8);
+            }
+        }
         // Diving: faster every moment, the further there is to fall.
         if (slamming && diveDir != null && !onGround) {
             double max = 2.2 + Math.min(50, diveFrom) * 0.05;
@@ -293,6 +312,7 @@ public final class OdmMoves {
         int kind = MathHelper.clamp(ShoulderCam.cfg.slam, 3, 5);
         float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
         slamming = true;
+        diveAt = now;
         slamUntil = now + SLAM_COOLDOWN_MS;
         ClientPlayNetworking.send(new Net.OdmJump(kind, yaw));
         anims.put(pl.getId(), new Anim(kind, yaw, now, pl.getYaw()));

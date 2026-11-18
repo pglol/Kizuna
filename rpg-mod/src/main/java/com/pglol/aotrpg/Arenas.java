@@ -297,7 +297,26 @@ public final class Arenas {
         if (data.built == null) data.built = new HashMap<>();
         if (data.spawns == null) data.spawns = new HashMap<>();
         if (data.back == null) data.back = new HashMap<>();
-        for (ArenaMap m : ArenaMap.values()) if (data.built.getOrDefault(m.id, 0) != BUILD_VERSION) queueBuild(m);
+        for (ArenaMap m : ArenaMap.values()) {
+            // Built by the record, but the blocks are gone (a world reset or moved): build again.
+            if (data.built.getOrDefault(m.id, 0) == BUILD_VERSION && !intact(m, 0)) {
+                AotRpg.LOG.warn("Arena {} is missing from its world: rebuilding", m.id);
+                data.built.remove(m.id);
+            }
+            if (data.built.getOrDefault(m.id, 0) != BUILD_VERSION) queueBuild(m);
+        }
+    }
+
+    /** The map is really there in this copy: solid ground under its first spawn. */
+    private static boolean intact(ArenaMap map, int slot) {
+        ServerWorld w = aw();
+        List<int[]> sp = spawns(map);
+        if (w == null || sp.isEmpty()) return false;
+        int[] s = sp.get(0);
+        int x = map.ox(slot) + s[0], z = map.oz(slot) + s[2];
+        w.getChunk(x >> 4, z >> 4);
+        for (int y = s[1] + 1; y >= s[1] - 6; y--) if (!w.getBlockState(new BlockPos(x, y, z)).isAir()) return true;
+        return false;
     }
 
     private static void save() {
@@ -594,6 +613,12 @@ public final class Arenas {
                 boolean taken = false;
                 for (Match o : MATCHES) if (o.map == map && o.slot == slot) taken = true;
                 if (taken) continue;
+                if (!intact(map, slot)) {
+                    // Never fight over the void: put it back up and use another.
+                    data.built.remove(map.id);
+                    queueBuild(map);
+                    break;
+                }
                 Match m = new Match(nextId++, mode, map, slot);
                 MATCHES.add(m);
                 return m;
@@ -807,6 +832,11 @@ public final class Arenas {
             if (m == null) goBack(p);
             return true;
         }
+        // Off the edge before the fight's begun (or between rounds): back on your spawn, no harm done.
+        if (!m.ffa() && m.phase != Phase.FIGHT) {
+            respawn(p, m, aw, m.side(p.getUuid()));
+            return true;
+        }
         if (killer == null) killer = p.getAttacker();
         if (killer == null) killer = p.getPrimeAdversary();
         m.score.get(p.getUuid())[1]++;
@@ -914,7 +944,10 @@ public final class Arenas {
         if (ticks % 20 == 0) matchmake();
         for (Match m : new ArrayList<>(MATCHES)) {
             if (m.phase == Phase.DONE) continue;
-            if (m.phase == Phase.SHIELD && --m.timer <= 0) m.phase = Phase.FIGHT;
+            if (m.phase == Phase.SHIELD && --m.timer <= 0) {
+                m.phase = Phase.FIGHT;
+                checkRound(m);
+            }
             if (m.phase == Phase.BETWEEN && --m.timer <= 0) startRound(m);
             if (m.phase == Phase.FIGHT && --m.left <= 0) {
                 if (m.ffa()) end(m, -1);
@@ -1084,8 +1117,9 @@ public final class Arenas {
         }
         Match m = create(Mode.DUEL, map);
         if (m == null) {
-            no(a, "Every " + map.title + " is in use");
-            no(b, "Every " + map.title + " is in use");
+            String why = building.contains(map) ? map.title + " is being built: try again in a minute" : "Every " + map.title + " is in use";
+            no(a, why);
+            no(b, why);
             return true;
         }
         m.a.add(a.getUuid());
