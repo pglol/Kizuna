@@ -12,7 +12,9 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
  * own collision disagrees by a hair at speed) is loosened too, so a fast pass by a wall doesn't
  * yank you back either.
  */
-@Mixin(ServerPlayNetworkHandler.class)
+// Applied after other mods' (Danny's AoT mod raises the walking limit itself): whatever they've
+// already changed is left to them, and these only touch what's still the vanilla number.
+@Mixin(value = ServerPlayNetworkHandler.class, priority = 2000)
 public abstract class FastMoveMixin {
     @ModifyConstant(method = "onPlayerMove", constant = @Constant(floatValue = 100.0F), require = 0)
     private float aotrpg$fastWalk(float f) {
