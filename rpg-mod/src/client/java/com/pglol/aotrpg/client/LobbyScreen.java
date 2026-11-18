@@ -31,9 +31,6 @@ public final class LobbyScreen extends Screen {
     private static boolean socialTab;
     private final long opened = Util.getMeasuringTimeMs();
     private boolean bagAsked;
-    /** The loadout slot whose picker is open (-1 none). */
-    private static int picker = -1;
-    private static final String[] SLOT_NAMES = {"Head", "Chest", "Legs", "Feet", "Weapon", "ODM", "Gas", "Blades", "Spears", "Food"};
 
     public LobbyScreen() {
         super(Text.literal("Lobby"));
@@ -55,6 +52,35 @@ public final class LobbyScreen extends Screen {
     private static boolean aboard(MinecraftClient mc) {
         return mc.player != null && mc.world != null && mc.player.getX() < -399_744
             && BalloonStations.skyWorld(mc.world);
+    }
+
+    private static boolean walkHidden;
+
+    /**
+     * Start of every client tick aboard: fighting and gear keys swallowed (attack, use, abilities,
+     * ODM), the ready key handled, the HUD tucked away while walking about the deck.
+     */
+    public static void guardKeys(MinecraftClient mc) {
+        boolean on = aboard(mc) && view != null;
+        boolean walking = on && mc.currentScreen == null;
+        if (walking != walkHidden) {
+            walkHidden = walking;
+            if (walking) HudHide.hide("lobby_walk");
+            else HudHide.show("lobby_walk");
+        }
+        if (!on) return;
+        var keep = java.util.Set.of(AotRpgClient.socialKey(), AotRpgClient.readyKey(), AotRpgClient.mapKey(), mc.options.chatKey, mc.options.commandKey,
+            mc.options.inventoryKey, mc.options.playerListKey, mc.options.screenshotKey, mc.options.togglePerspectiveKey, mc.options.fullscreenKey);
+        for (var k : mc.options.allKeys) {
+            String cat = k.getCategory();
+            boolean vanillaMove = cat.equals("key.categories.movement") || cat.equals("key.categories.multiplayer") || cat.equals("key.categories.misc")
+                || cat.equals("key.categories.ui");
+            if (keep.contains(k) || vanillaMove || k == mc.options.inventoryKey) continue;
+            // Attack, use, pick, swap hands, hotbar keys, and every mod's own (abilities, ODM gear).
+            while (k.wasPressed()) { }
+            k.setPressed(false);
+        }
+        if (mc.currentScreen == null) while (AotRpgClient.readyKey().wasPressed()) ClientPlayNetworking.send(new Net.ExtractionAction("ready", ""));
     }
 
     /** Seated in the balloon with nothing else open: the lobby comes back up. */
@@ -81,28 +107,67 @@ public final class LobbyScreen extends Screen {
         mc.setScreen(new LobbyScreen());
     }
 
-    /** On your feet aboard the balloon: the island, the squad and who's ready, in the corner. */
+    /**
+     * On your feet aboard the balloon: a clean overlay (the rest of the HUD steps aside): the
+     * island, the squad and who's ready, the countdown, and the keys that matter here.
+     */
     public static void hud(DrawContext c, net.minecraft.client.render.RenderTickCounter tick) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (view == null || !aboard(mc) || mc.currentScreen instanceof LobbyScreen || CutscenePlayer.active() || mc.options.hudHidden) return;
-        int w = c.getScaledWindowWidth(), x = w - 150, y = 40;
+        if (view == null || !aboard(mc) || mc.currentScreen != null || CutscenePlayer.active()) return;
+        int w = c.getScaledWindowWidth(), h = c.getScaledWindowHeight();
         Net.LobbyIsland is = null;
         for (Net.LobbyIsland i : view.islands()) if (i.id().equals(view.island())) is = i;
-        c.fill(x - 6, y - 6, w - 8, y + 30 + view.squad().size() * 12 + 14, 0xA0000000);
-        c.fill(x - 6, y - 6, x - 4, y + 30 + view.squad().size() * 12 + 14, is == null ? Ui.GOLD : is.color());
-        Ui.text(c, Text.literal("EXTRACTION"), x, y, 0.6f, 0xFFE03A3A, false);
-        if (is != null) Ui.text(c, Ui.heading(is.name()), x, y + 9, 0.9f, is.color(), false);
-        Ui.text(c, Text.literal(view.fill() ? "Squad Fill On" : "Squad Fill Off"), x, y + 20, 0.6f, Ui.CREAM, false);
-        int yy = y + 32;
+        int col = is == null ? Sleek.GOLD : 0xFF000000 | is.color();
+        // Top centre: where you're bound.
+        c.fillGradient(0, 0, w, 46, 0x90000000, 0x00000000);
+        Ui.text(c, Text.literal("EXTRACTION"), w / 2f, 6, 0.55f, 0xFFE8433A, true);
+        if (is != null) {
+            Ui.text(c, Ui.title(is.name().toUpperCase(Locale.ROOT)), w / 2f, 14, 1.2f, col, true);
+            Ui.text(c, Text.literal("Lv " + is.min() + "-" + is.max() + "  \u00B7  " + is.condition()), w / 2f, 30, 0.58f, 0xFFC8BEA6, true);
+        }
+        // Right: the squad and who's ready.
+        int x = w - 150, y = 50;
+        c.fill(x - 8, y - 6, w - 10, y + 16 + view.squad().size() * 13 + 18, 0x90000000);
+        c.fill(x - 8, y - 6, w - 10, y - 5, col);
+        Ui.text(c, Ui.heading("Squad"), x, y, 0.75f, Ui.CREAM, false);
+        int ready = 0;
+        for (Net.LobbyMember m : view.squad()) if (m.ready()) ready++;
+        String rc = ready + " / " + view.squad().size() + " ready";
+        Ui.text(c, Text.literal(rc), w - 16 - Ui.font().getWidth(rc) * 0.58f, y + 1, 0.58f, ready == view.squad().size() ? 0xFF5BD35B : 0xFF9A958A, false);
+        int yy = y + 14;
         for (Net.LobbyMember m : view.squad()) {
-            c.fill(x, yy + 2, x + 4, yy + 6, m.ready() ? 0xFF5BD35B : 0xFF55524A);
-            Ui.text(c, Text.literal(m.name()), x + 8, yy, 0.7f, m.you() ? Ui.GOLD : Ui.CREAM, false);
-            yy += 12;
+            Smooth.disc(c, x + 3, yy + 4, 2.5f, m.ready() ? 0xFF5BD35B : 0xFF55524A);
+            Ui.text(c, Text.literal((m.leader() ? "\u2605 " : "") + m.name()), x + 10, yy, 0.68f, m.you() ? Sleek.GOLD : Ui.CREAM, false);
+            String lv = "Lv " + m.level();
+            Ui.text(c, Text.literal(lv), w - 16 - Ui.font().getWidth(lv) * 0.55f, yy + 1, 0.55f, 0xFF8A857A, false);
+            yy += 13;
         }
         long cd = view.countdown() < 0 ? -1 : Math.max(0, view.countdown() - (Util.getMeasuringTimeMs() - viewAt));
-        if (cd >= 0) Ui.text(c, Ui.heading("Deploying " + (int) Math.ceil(cd / 1000.0)), x, yy + 2, 0.85f, 0xFFE03A3A, false);
-        else Ui.text(c, Text.literal("Take a seat to ready up"), x, yy + 2, 0.6f, Ui.MUTED, false);
+        if (cd >= 0) {
+            // The countdown, big and centred, a ring running down.
+            float cx = w / 2f, cy = h / 2f - 40, k = cd / (float) COUNTDOWN_MS;
+            Smooth.ring(c, cx, cy, 22, 2, 0x40FFFFFF);
+            Smooth.arc(c, cx, cy, 20.5f, 23.5f, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k, 0xFFE8433A);
+            Ui.text(c, Ui.title(String.valueOf((int) Math.ceil(cd / 1000.0))), cx, cy - 9, 1.6f, Ui.CREAM, true);
+            Ui.text(c, Ui.heading("DEPLOYING"), cx, cy + 28, 0.75f, 0xFFE8433A, true);
+        }
+        // Bottom: the keys.
+        boolean me = false;
+        for (Net.LobbyMember m : view.squad()) if (m.you()) me = m.ready();
+        String[][] keys = {{AotRpgClient.readyKey().getBoundKeyLocalizedText().getString(), me ? "Stand down" : "Ready up"},
+            {"Sit", "Open the lobby"}, {AotRpgClient.socialKey().getBoundKeyLocalizedText().getString(), "Menu"}};
+        float kx = w / 2f - 150;
+        for (String[] k : keys) {
+            float kw = Ui.font().getWidth(k[0]) * 0.65f + 10;
+            c.fill((int) kx, h - 26, (int) (kx + kw), h - 13, 0x90000000);
+            c.drawBorder((int) kx, h - 26, (int) kw, 13, Sleek.LINE2);
+            Ui.text(c, Text.literal(k[0]), kx + kw / 2f, h - 23, 0.65f, Sleek.GOLD, true);
+            Ui.text(c, Text.literal(k[1]), kx + kw + 5, h - 23, 0.65f, Ui.CREAM, false);
+            kx += kw + Ui.font().getWidth(k[1]) * 0.65f + 22;
+        }
     }
+
+    private static final long COUNTDOWN_MS = 5000;
 
     /** The lobby camera: in front of you on the bench, drifting a little. */
     public static CutscenePlayer.Cam camera(float tickDelta) {
@@ -133,24 +198,23 @@ public final class LobbyScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        if (super.mouseClicked(mx, my, button)) return true;
-        if (!socialTab && view != null) {
-            for (int k = 0; k < 10; k++) {
-                int[] at = slotPos(k);
-                if (mx >= at[0] && mx < at[0] + 36 && my >= at[1] && my < at[1] + 36) {
-                    picker = picker == k ? -1 : k;
-                    if (client != null && client.player != null) client.player.playSound(net.minecraft.sound.SoundEvents.ITEM_ARMOR_EQUIP_LEATHER.value(), 0.5f, 1.2f);
-                    clearAndInit();
-                    return true;
-                }
-            }
-        }
-        if (picker >= 0) {
-            picker = -1;
-            clearAndInit();
+        if ((button == 0 || button == 1) && (button == 0 ? hits : rightHits).click(mx, my)) return true;
+        return super.mouseClicked(mx, my, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double h, double v) {
+        stashScroll = Math.max(0, stashScroll - (int) Math.signum(v));
+        return true;
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scan, int mods) {
+        if (AotRpgClient.readyKey().matchesKey(key, scan)) {
+            act("ready", "");
             return true;
         }
-        return false;
+        return super.keyPressed(key, scan, mods);
     }
 
     /** Escape opens the game menu (the lobby returns after). */
@@ -162,6 +226,7 @@ public final class LobbyScreen extends Screen {
     @Override
     public void removed() {
         HudHide.show("lobby");
+        ClientPlayNetworking.send(new Net.StashAction("close", 0));
     }
 
     private Net.LobbyIsland island() {
@@ -181,75 +246,18 @@ public final class LobbyScreen extends Screen {
         return Math.max(0, view.countdown() - (Util.getMeasuringTimeMs() - viewAt));
     }
 
+    /** The stash's contents (sent while the lobby is open). */
+    public static Net.StashView stash;
+    private final Sleek.Hits hits = new Sleek.Hits(), rightHits = new Sleek.Hits();
+    private int stashScroll;
+
     @Override
     protected void init() {
         HudHide.hide("lobby");
         if (!bagAsked) {
             bagAsked = true;
             act("bag", "");
-        }
-        if (view == null) return;
-        // The island picker (the leader's call).
-        if (view.leader() && view.islands().size() > 1 && view.countdown() < 0) {
-            addDrawableChild(new AotButton(width / 2 - 150, 22, 22, 22, Text.literal("<"), () -> cycle(-1)));
-            addDrawableChild(new AotButton(width / 2 + 128, 22, 22, 22, Text.literal(">"), () -> cycle(1)));
-        }
-        AotButton fill = addDrawableChild(new AotButton(width / 2 - 60, 50, 120, 16,
-            Text.literal(view.fill() ? "Squad Fill: On" : "Squad Fill: Off"), () -> act("fill", "")));
-        fill.selected(view.fill());
-        fill.active = view.leader() && view.countdown() < 0;
-        fill.textScale = 0.8f;
-        // The left panel: your loadout, or squad up (friends and recent teammates).
-        addDrawableChild(new AotButton(16, 64, 78, 16, Ui.heading("Loadout"), () -> {
-            socialTab = false;
-            clearAndInit();
-        })).selected(!socialTab);
-        addDrawableChild(new AotButton(98, 64, 78, 16, Ui.heading("Squad Up"), () -> {
-            socialTab = true;
-            clearAndInit();
-        })).selected(socialTab);
-        if (socialTab) {
-            int y = 88;
-            for (Net.LobbyFriend f : view.social()) {
-                if (y > height - 120) break;
-                if (!f.where().equals("aboard") && !f.where().equals("offline") && !f.where().equals("in a run")) {
-                    AotButton inv = addDrawableChild(new AotButton(126, y + 3, 50, 16, Text.literal("Invite"), () -> act("invite", f.id().toString())));
-                    inv.textScale = 0.75f;
-                    inv.accent = 0xFF5BD35B;
-                }
-                if (!f.friend()) {
-                    AotButton add = addDrawableChild(new AotButton(104, y + 3, 18, 16, Text.literal("+"), () -> act("friend", f.id().toString())));
-                    add.setTooltip(net.minecraft.client.gui.tooltip.Tooltip.of(Text.literal("Add friend")));
-                }
-                y += 24;
-            }
-        }
-        pickerButtons();
-        // Loadout.
-        addDrawableChild(new AotButton(16, height - 88, 160, 20, Ui.heading("Edit Loadout"), () -> act("stash", "")))
-            .icon(new ItemStack(Items.ENDER_CHEST));
-        addDrawableChild(new AotButton(16, height - 62, 78, 18, Text.literal("Walk Around"), () -> {
-            suppressUntil = Util.getMeasuringTimeMs() + 1500;
-            act("walk", "");
-            if (client != null) client.setScreen(null);
-        }));
-        addDrawableChild(new AotButton(98, height - 62, 78, 18, Text.literal("Leave"), () -> act("leave", "")));
-        // Ready (or, in the countdown, stand down).
-        boolean ready = meReady();
-        AotButton go = addDrawableChild(new AotButton(width - 176, height - 62, 160, 44,
-            Ui.heading(view.countdown() >= 0 ? "" : ready ? "READY" : "READY UP"), () -> act("ready", "")));
-        go.selected(ready);
-        go.accent = 0xFF5BD35B;
-        go.visible = view.countdown() < 0;
-        if (view.countdown() >= 0) {
-            addDrawableChild(new AotButton(width - 176, height - 16 - 14, 160, 14, Text.literal("Stand down"), () -> act("ready", ""))).textScale = 0.75f;
-        }
-        // Stash space.
-        if (view.rowCost() >= 0) {
-            AotButton ex = addDrawableChild(new AotButton(width - 176, 58, 160, 16,
-                Text.literal("+9 stash slots · " + String.format(Locale.ROOT, "%,d", view.rowCost())), () -> act("expand", "")));
-            ex.textScale = 0.75f;
-            ex.active = view.salvage() >= view.rowCost();
+            act("stash", "");
         }
     }
 
@@ -262,244 +270,231 @@ public final class LobbyScreen extends Screen {
 
     @Override
     public void renderBackground(DrawContext c, int mouseX, int mouseY, float delta) {
-        // No dimming: your character is the backdrop. Just shade the edges behind the panels.
-        c.fillGradient(0, 0, width, 80, 0xB0000000, 0x00000000);
-        c.fillGradient(0, height - 110, width, height, 0x00000000, 0xC0000000);
-        for (int x = 0; x < 200; x += 4) {
-            int a = (int) (150 * (1 - x / 200f));
-            c.fill(x, 70, x + 4, height - 100, a << 24);
-            c.fill(width - x - 4, 70, width - x, height - 100, a << 24);
-        }
-    }
-
-    @Override
-    public void render(DrawContext c, int mouseX, int mouseY, float delta) {
-        super.render(c, mouseX, mouseY, delta);
-        if (view == null) return;
-        long t = Util.getMeasuringTimeMs();
-        float in = Math.min(1, (t - opened) / 300f);
-        // Mode tag and the island.
-        Net.LobbyIsland is = island();
-        Ui.text(c, Text.literal("EXTRACTION"), 16, 12, 0.8f, 0xFFE03A3A, false);
-        if (is != null) {
-            int col = is.color();
-            int a = (int) (255 * in);
-            Ui.text(c, Ui.title(is.name().toUpperCase(Locale.ROOT)), width / 2f, 24, 1.7f, (a << 24) | (col & 0xFFFFFF), true);
-            String lv = "Lv " + is.min() + "-" + is.max();
-            Ui.text(c, Text.literal(lv), width / 2f, 40, 0.75f, Ui.CREAM, true);
-            int lw = 110;
-            float pulse = 0.6f + 0.4f * MathHelper.sin(t * 0.004f);
-            c.fill(width / 2 - lw, 46, width / 2 + lw, 47, ((int) (160 * pulse) << 24) | (col & 0xFFFFFF));
-            // The map cycle: what it's like out there now, and what's coming.
-            String cond = is.condition().toUpperCase(Locale.ROOT) + (is.bonus() ? "  ·  BONUS LOOT" : "");
-            Ui.text(c, Ui.heading(cond), width / 2f, 51, 0.8f, (a << 24) | (is.conditionColor() & 0xFFFFFF), true);
-            Ui.text(c, Text.literal(is.next() + " in " + is.minutesLeft() + "m"), width / 2f, 61, 0.65f, (a << 24) | 0xB8B0A0, true);
-        }
-        // Salvage and stash, top right.
-        String sv = String.format(Locale.ROOT, "%,d", view.salvage());
-        ItemStack fuel = icon("aot_rpg:gas_refueler");
-        Ui.item(c, fuel, width - 32, 8, 1f);
-        Ui.text(c, Text.literal(sv), width - 36 - Ui.font().getWidth(sv) * 1.1f, 13, 1.1f, 0xFF9AD0FF, false);
-        String st = view.stashUsed() + " / " + view.stashCap();
-        Ui.text(c, Text.literal("Stash " + st), width - 16 - Ui.font().getWidth("Stash " + st) * 0.8f, 32, 0.8f, Ui.CREAM, false);
-        float frac = view.stashCap() == 0 ? 0 : view.stashUsed() / (float) view.stashCap();
-        Ui.bar(c, width - 176, 44, 160, 4, frac, frac > 0.9f ? 0xFFE03A3A : 0xFF6FB6E0);
-
-        if (socialTab) drawSocial(c);
-        else drawLoadout(c, t);
-        drawSquad(c, t);
-
-        // The countdown, in the Ready button's place.
-        long cd = countdown();
-        if (cd >= 0) {
-            int x = width - 176, y = height - 62;
-            int secs = (int) Math.ceil(cd / 1000.0);
-            float k = (cd % 1000) / 1000f;
-            c.fill(x, y, x + 160, y + 30, 0xE0140404);
-            c.drawBorder(x, y, 160, 30, ((int) (120 + 135 * k) << 24) | 0xE03A3A);
-            c.fill(x, y + 28, x + (int) (160 * (cd / 10_000f)), y + 30, 0xFFE03A3A);
-            Ui.text(c, Ui.heading("DEPLOYING"), x + 10, y + 11, 0.9f, Ui.CREAM, false);
-            Ui.text(c, Text.literal(String.valueOf(secs)), x + 140, y + 15 - 8 * (1 + 0.3f * k), 1.6f + 0.3f * k, 0xFFE03A3A, true);
-        }
-    }
-
-    /** Squad up: friends and recent teammates, where they are, invite or befriend. */
-    private void drawSocial(DrawContext c) {
-        int y = 88;
-        if (view.social().isEmpty()) Ui.text(c, Text.literal("No friends or teammates yet"), 16, y + 4, 0.75f, Ui.DIM, false);
-        for (Net.LobbyFriend f : view.social()) {
-            if (y > height - 120) break;
-            c.fill(16, y, 176, y + 22, 0xB0101010);
-            int dot = switch (f.where()) {
-                case "aboard" -> 0xFFE0B96A;
-                case "online" -> 0xFF5BD35B;
-                case "in a run" -> 0xFFE0823A;
-                default -> 0xFF55524A;
-            };
-            c.fill(20, y + 8, 25, y + 13, dot);
-            Ui.text(c, Text.literal(f.name()), 30, y + 4, 0.75f, f.where().equals("offline") ? Ui.DIM : Ui.CREAM, false);
-            String tag = f.where() + (f.friend() ? "" : f.recent() ? "  \u00B7  teammate" : "");
-            Ui.text(c, Text.literal(tag), 30, y + 13, 0.55f, dot, false);
-            y += 24;
-        }
-    }
-
-    /** Where loadout slot k sits on screen. */
-    private static int[] slotPos(int k) {
-        if (k < 4) return new int[] {16 + k * 40, 88};
-        if (k < 8) return new int[] {16 + (k - 4) * 40, 134};
-        return new int[] {16 + (k - 8) * 40, 180};
-    }
-
-    /** Does this stack go in loadout slot k? */
-    private boolean fits(int k, ItemStack s) {
-        if (s.isEmpty() || client == null || client.player == null) return false;
-        String path = Registries.ITEM.getId(s.getItem()).getPath();
-        return switch (k) {
-            case 0 -> client.player.getPreferredEquipmentSlot(s) == EquipmentSlot.HEAD;
-            case 1 -> client.player.getPreferredEquipmentSlot(s) == EquipmentSlot.CHEST;
-            case 2 -> client.player.getPreferredEquipmentSlot(s) == EquipmentSlot.LEGS;
-            case 3 -> client.player.getPreferredEquipmentSlot(s) == EquipmentSlot.FEET;
-            case 4 -> !path.contains("odm") && !path.contains("gas") && !path.contains("component") && !path.contains("thunder_spear")
-                && (path.contains("grip") || path.contains("blade") || path.contains("apg") || com.pglol.aotrpg.Loadout.isMelee(s)
-                    || com.pglol.aotrpg.Loadout.isRanged(s));
-            case 5 -> path.contains("odm");
-            case 6 -> path.contains("gas_canister");
-            case 7 -> path.contains("blade_component");
-            case 8 -> path.contains("thunder_spear");
-            default -> s.getComponents().contains(net.minecraft.component.DataComponentTypes.FOOD);
-        };
+        c.fillGradient(0, 0, width, height, 0xB0050706, 0xD0030404);
     }
 
     private static final EquipmentSlot[] ARMOR = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+    private static final String[] ARMOR_NAMES = {"Head", "Chest", "Legs \u00B7 ODM", "Feet"};
 
-    /** What's in loadout slot k now: the stack, how many of it you carry, and its inventory index (-1 worn). */
-    private Object[] current(int k) {
+    @Override
+    public void render(DrawContext c, int mouseX, int mouseY, float delta) {
+        Sleek.mx = mouseX;
+        Sleek.my = mouseY;
+        hits.clear();
+        rightHits.clear();
+        renderBackground(c, mouseX, mouseY, delta);
+        if (view == null || client == null || client.player == null) return;
+        long t = Util.getMeasuringTimeMs();
+        Net.LobbyIsland is = island();
+        int col = is == null ? Sleek.GOLD : 0xFF000000 | is.color();
+        ItemStack[] tip = {ItemStack.EMPTY};
+
+        // ---- Top: mode, island (the leader turns it), conditions, squad fill; salvage and stash on the right.
+        Ui.text(c, Text.literal("EXTRACTION"), 16, 12, 0.7f, 0xFFE8433A, false);
+        if (is != null) {
+            Ui.text(c, Ui.title(is.name().toUpperCase(Locale.ROOT)), width / 2f, 10, 1.5f, col, true);
+            String sub = "Lv " + is.min() + "-" + is.max() + "   \u00B7   " + is.condition() + (is.bonus() ? "  \u00B7  BONUS LOOT" : "");
+            Ui.text(c, Text.literal(sub), width / 2f, 28, 0.62f, (is.conditionColor() & 0xFFFFFF) | 0xFF000000, true);
+            Ui.text(c, Text.literal(is.next() + " in " + is.minutesLeft() + "m"), width / 2f, 37, 0.55f, 0xFF8A857A, true);
+            if (view.leader() && view.islands().size() > 1 && view.countdown() < 0) {
+                Sleek.button(c, hits, width / 2 - 140, 12, 18, 18, "\u2039", false, true, () -> cycle(-1));
+                Sleek.button(c, hits, width / 2 + 122, 12, 18, 18, "\u203A", false, true, () -> cycle(1));
+            }
+        }
+        boolean canFill = view.leader() && view.countdown() < 0;
+        Sleek.button(c, hits, width / 2 - 50, 46, 100, 14, view.fill() ? "Squad fill: on" : "Squad fill: off", view.fill(), canFill, () -> act("fill", ""));
+        String sv = String.format(Locale.ROOT, "%,d Salvage", view.salvage());
+        Ui.text(c, Text.literal(sv), width - 16 - Ui.font().getWidth(sv) * 0.8f, 12, 0.8f, 0xFF9AD0FF, false);
+        c.fill(12, 64, width - 12, 65, Sleek.LINE);
+
+        int top = 72, bottom = height - 14;
+        // ---- Left: equipment (you, what you wear, your loadout bar) and your numbers.
+        int lw = Math.min(210, width / 4 + 30), lx = 12;
+        Sleek.panel(c, lx, top, lw, bottom - top);
+        Ui.text(c, Ui.heading("Equipment"), lx + 8, top + 7, 0.8f, Ui.CREAM, false);
+        int mh = 108;
+        c.enableScissor(lx + 50, top + 18, lx + lw - 50, top + 18 + mh);
+        Showcase.model(c, lx + lw / 2f, top + 16 + mh, mh * 0.42f, (t % 16000) / 16000f * 360, null, null);
+        c.disableScissor();
         var p = client.player;
-        if (k < 4) return new Object[] {p.getEquippedStack(ARMOR[k]), 1, -1};
-        var inv = p.getInventory();
-        ItemStack first = ItemStack.EMPTY;
-        int count = 0, index = -1;
-        for (int i = 0; i < inv.main.size(); i++) {
-            ItemStack s = inv.main.get(i);
-            if (!fits(k, s)) continue;
-            if (first.isEmpty()) {
-                first = s;
-                index = i;
+        for (int k = 0; k < 4; k++) {
+            int sx = k % 2 == 0 ? lx + 8 : lx + lw - 8 - 38, sy = top + 22 + (k / 2) * 50 + (k == 1 || k == 3 ? 0 : 0);
+            if (k >= 2) sy = top + 22 + 50;
+            if (k == 1) sy = top + 22;
+            if (k == 0) sy = top + 22;
+            sx = k == 0 || k == 2 ? lx + 8 : lx + lw - 46;
+            ItemStack st = p.getEquippedStack(ARMOR[k]);
+            int target = 103 - k;
+            if (cell(c, sx, sy, 38, st, ARMOR_NAMES[k], tip)) {
+                if (!st.isEmpty()) hits.add(sx, sy, 38, 38, () -> ClientPlayNetworking.send(new Net.StashAction("unequip", target)));
             }
-            count += s.getCount();
         }
-        return new Object[] {first, count, index};
-    }
-
-    /** Your loadout: what you'll carry into the run, gear slots only. Click one to swap or take it off. */
-    private void drawLoadout(DrawContext c, long t) {
-        if (client == null || client.player == null) return;
-        for (int k = 0; k < 10; k++) {
-            int[] at = slotPos(k);
-            Object[] cur = current(k);
-            slot(c, at[0], at[1], SLOT_NAMES[k], (ItemStack) cur[0], k >= 6 ? (int) cur[1] : -1);
-            if (k == picker) c.drawBorder(at[0] - 1, at[1] - 1, 38, 38, 0xFFF2C14E);
-        }
-        if (picker >= 0) {
-            // The picker: a small card beside the loadout.
-            int[] at = slotPos(picker);
-            int px = 184, py = Math.min(at[1], height - 150), rows = pickerItems().size();
-            int ph = 30 + Math.max(1, Math.min(8, rows)) * 20 + 24;
-            c.fill(px, py, px + 180, py + ph, 0xF0100C0A);
-            c.drawBorder(px, py, 180, ph, 0xFF7A6139);
-            c.fill(px, py, px + 180, py + 2, 0xFFF2C14E);
-            Ui.text(c, Ui.heading(SLOT_NAMES[picker]), px + 8, py + 8, 0.85f, Ui.GOLD, false);
-            if (rows == 0) Ui.text(c, Text.literal("Nothing in your satchel fits"), px + 8, py + 30, 0.7f, Ui.DIM, false);
-        }
-    }
-
-    /** Satchel slots holding something for the open picker's slot. */
-    private java.util.List<Integer> pickerItems() {
-        java.util.List<Integer> out = new java.util.ArrayList<>();
-        if (picker < 0) return out;
-        for (var e : ClientState.bag.entrySet()) if (fits(picker, e.getValue())) out.add(e.getKey());
-        out.sort((a, b) -> BagScreen.quality(ClientState.bag.get(b)) - BagScreen.quality(ClientState.bag.get(a)));
-        return out;
-    }
-
-    /** Called when the satchel changes: the picker's list follows. */
-    public void refreshBag() {
-        clearAndInit();
-    }
-
-    private void pickerButtons() {
-        if (picker < 0 || socialTab || client == null || client.player == null) return;
-        int[] at = slotPos(picker);
-        int px = 184, py = Math.min(at[1], height - 150);
-        int y = py + 24;
-        int k = picker;
-        for (int slot : pickerItems()) {
-            if (y > py + 24 + 7 * 20) break;
-            ItemStack s = ClientState.bag.get(slot);
-            String name = s.getName().getString();
-            if (name.length() > 22) name = name.substring(0, 21) + "\u2026";
-            AotButton b = addDrawableChild(new AotButton(px + 6, y, 168, 18,
-                Text.literal(name + (s.getCount() > 1 ? " x" + s.getCount() : "")), () -> {
-                    ClientPlayNetworking.send(new Net.BagAction("equip", slot, k < 4 ? 103 - k : -1));
-                    picker = -1;
-                }));
-            b.icon(s);
-            b.textScale = 0.7f;
-            b.accent = Ui.rarityTone(BagScreen.quality(s));
-            y += 20;
-        }
-        Object[] cur = current(k);
-        ItemStack now = (ItemStack) cur[0];
-        int index = (int) cur[2];
-        int ph = 30 + Math.max(1, Math.min(8, pickerItems().size())) * 20 + 24;
-        AotButton off = addDrawableChild(new AotButton(px + 6, py + ph - 22, 80, 16, Text.literal("Take off"), () -> {
-            ClientPlayNetworking.send(new Net.BagAction("store", -1, k < 4 ? 103 - k : index));
-            picker = -1;
-        }));
-        off.textScale = 0.7f;
-        off.accent = Ui.RED;
-        off.active = !now.isEmpty() && (k < 4 || index >= 0 && index < 9);
-        AotButton close = addDrawableChild(new AotButton(px + 94, py + ph - 22, 80, 16, Text.literal("Close"), () -> {
-            picker = -1;
-            clearAndInit();
-        }));
-        close.textScale = 0.7f;
-    }
-
-    private void slot(DrawContext c, int x, int y, String label, ItemStack s, int count) {
-        boolean has = !s.isEmpty();
-        c.fill(x, y, x + 36, y + 36, has ? 0xD0141914 : 0x90101010);
-        c.drawBorder(x, y, 36, 36, has ? 0xFF7A6139 : 0xFF34322C);
-        if (has) {
-            Ui.item(c, s, x + 6, y + 4, 1.5f);
-            if (count > 1) Ui.text(c, Text.literal(String.valueOf(count)), x + 34 - Ui.font().getWidth(String.valueOf(count)) * 0.7f, y + 26, 0.7f, Ui.CREAM, false);
-        }
-        Ui.text(c, Text.literal(label), x + 18, y + 38, 0.6f, has ? Ui.CREAM : Ui.DIM, true);
-    }
-
-    /** The squad: who's aboard, their level, ready or not; open seats search when fill is on. */
-    private void drawSquad(DrawContext c, long t) {
-        int x = width - 176, y = 80, w = 160;
-        Ui.text(c, Ui.heading("Squad"), x, y, 1f, Ui.GOLD, false);
-        y += 16;
-        for (int i = 0; i < 3; i++) {
-            Net.LobbyMember m = i < view.squad().size() ? view.squad().get(i) : null;
-            c.fill(x, y, x + w, y + 26, m != null && m.you() ? 0xD0302614 : 0xB0101010);
-            if (m != null) {
-                c.fill(x, y, x + 3, y + 26, m.ready() ? 0xFF5BD35B : 0xFF55524A);
-                Ui.text(c, Text.literal((m.leader() ? "★ " : "") + m.name()), x + 9, y + 5, 0.85f, Ui.CREAM, false);
-                Ui.text(c, Text.literal("Lv " + m.level()), x + 9, y + 16, 0.6f, Ui.MUTED, false);
-                String r = m.ready() ? "READY" : "...";
-                Ui.text(c, Text.literal(r), x + w - 8 - Ui.font().getWidth(r) * 0.75f, y + 9, 0.75f, m.ready() ? 0xFF5BD35B : Ui.DIM, false);
-            } else if (view.fill() && (meReady() || view.countdown() >= 0)) {
-                int dots = (int) ((t / 400) % 4);
-                Ui.text(c, Text.literal("Searching" + ".".repeat(dots)), x + 9, y + 9, 0.8f, 0xFF9AD0FF, false);
-            } else {
-                Ui.text(c, Text.literal("Open"), x + 9, y + 9, 0.8f, Ui.DIM, false);
+        // The loadout bar: what each of the nine places is for.
+        int by = top + mh + 26;
+        Ui.text(c, Text.literal("Loadout"), lx + 8, by, 0.62f, 0xFF9A958A, false);
+        by += 9;
+        int cw = (lw - 16 - 8 * 2) / 9;
+        for (int k = 0; k < 9; k++) {
+            int sx = lx + 8 + k * (cw + 2);
+            ItemStack st = p.getInventory().getStack(k);
+            int slot = k;
+            cell(c, sx, by, cw, st, "", tip);
+            if (!st.isEmpty()) hits.add(sx, by, cw, cw, () -> ClientPlayNetworking.send(new Net.StashAction("unequip", slot)));
+            if (Sleek.over(sx, by, cw, cw) && st.isEmpty()) {
+                var kind = com.pglol.aotrpg.Loadout.SLOTS[k];
+                c.drawTooltip(Ui.font(), java.util.List.of(Text.literal(kind.title).withColor(Sleek.GOLD), Text.literal(kind.hint).withColor(0xFF9A958A)), mouseX, mouseY);
             }
-            y += 30;
         }
+        for (int k = 0; k < 9; k++) {
+            String n = com.pglol.aotrpg.Loadout.SLOTS[k].title;
+            String sh = n.length() > 5 ? n.substring(0, 5) : n;
+            Ui.text(c, Text.literal(sh), lx + 8 + k * (cw + 2) + cw / 2f, by + cw + 2, 0.42f, 0xFF7A766C, true);
+        }
+        // Your numbers.
+        int ny = by + cw + 14;
+        String[][] stats = {
+            {"Health", String.format(Locale.ROOT, "%.0f", p.getMaxHealth())},
+            {"Armor", String.valueOf(p.getArmor())},
+            {"Damage", String.format(Locale.ROOT, "%.1f", p.getAttributeValue(net.minecraft.entity.attribute.EntityAttributes.GENERIC_ATTACK_DAMAGE))},
+            {"Speed", String.format(Locale.ROOT, "%.0f%%", p.getAttributeValue(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MOVEMENT_SPEED) / 0.1 * 100)}};
+        int sw = (lw - 16) / 4;
+        for (int k = 0; k < 4; k++) {
+            int sx = lx + 8 + k * sw;
+            Ui.text(c, Text.literal(stats[k][1]), sx + sw / 2f, ny, 0.85f, Ui.CREAM, true);
+            Ui.text(c, Text.literal(stats[k][0].toUpperCase(Locale.ROOT)), sx + sw / 2f, ny + 10, 0.45f, 0xFF8A857A, true);
+        }
+        Sleek.button(c, hits, lx + 8, bottom - 26, (lw - 20) / 2, 18, "Walk around", false, true, () -> {
+            suppressUntil = Util.getMeasuringTimeMs() + 1500;
+            act("walk", "");
+            client.setScreen(null);
+        });
+        Sleek.button(c, hits, lx + 12 + (lw - 20) / 2, bottom - 26, (lw - 20) / 2, 18, "Leave", false, true, () -> act("leave", ""));
+
+        // ---- Right: the squad, invites, ready and the countdown.
+        int rw = Math.min(190, width / 5 + 30), rx = width - 12 - rw;
+        Sleek.panel(c, rx, top, rw, bottom - top);
+        Sleek.tabs(c, hits, rx + 4, top + 4, new String[] {"Squad", "Invite"}, socialTab ? 1 : 0, k -> socialTab = k == 1);
+        int ry = top + 26;
+        if (!socialTab) {
+            for (int i = 0; i < 3; i++) {
+                Net.LobbyMember m = i < view.squad().size() ? view.squad().get(i) : null;
+                c.fill(rx + 6, ry, rx + rw - 6, ry + 26, m != null && m.you() ? 0x24E8C36F : 0x14FFFFFF);
+                if (m != null) {
+                    c.fill(rx + 6, ry, rx + 8, ry + 26, m.ready() ? 0xFF5BD35B : 0xFF55524A);
+                    Ui.text(c, Text.literal((m.leader() ? "\u2605 " : "") + m.name()), rx + 13, ry + 5, 0.78f, Ui.CREAM, false);
+                    Ui.text(c, Text.literal("Lv " + m.level()), rx + 13, ry + 16, 0.55f, 0xFF8A857A, false);
+                    Sleek.chip(c, rx + rw - 12 - (Ui.font().getWidth(m.ready() ? "READY" : "NOT READY") * 0.55f + 8), ry + 9,
+                        m.ready() ? "READY" : "NOT READY", m.ready() ? 0xFF5BD35B : 0xFF7A766C);
+                } else if (view.fill() && (meReady() || view.countdown() >= 0)) {
+                    Ui.text(c, Text.literal("Searching" + ".".repeat((int) ((t / 400) % 4))), rx + 13, ry + 9, 0.72f, 0xFF9AD0FF, false);
+                } else Ui.text(c, Text.literal("Open seat"), rx + 13, ry + 9, 0.72f, 0xFF55524A, false);
+                ry += 30;
+            }
+        } else {
+            if (view.social().isEmpty()) Ui.text(c, Text.literal("No friends or teammates yet"), rx + 10, ry + 4, 0.62f, 0xFF7A766C, false);
+            for (Net.LobbyFriend f : view.social()) {
+                if (ry > bottom - 110) break;
+                int dot = switch (f.where()) {
+                    case "aboard" -> 0xFFE0B96A;
+                    case "online" -> 0xFF5BD35B;
+                    case "in a run" -> 0xFFE0823A;
+                    default -> 0xFF55524A;
+                };
+                Smooth.disc(c, rx + 12, ry + 9, 2.5f, dot);
+                Ui.text(c, Text.literal(f.name()), rx + 20, ry + 3, 0.7f, Ui.CREAM, false);
+                Ui.text(c, Text.literal(f.where()), rx + 20, ry + 12, 0.5f, dot, false);
+                if (!f.where().equals("aboard") && !f.where().equals("offline") && !f.where().equals("in a run"))
+                    Sleek.button(c, hits, rx + rw - 56, ry + 2, 48, 15, "Invite", true, true, () -> act("invite", f.id().toString()));
+                else if (!f.friend()) Sleek.button(c, hits, rx + rw - 30, ry + 2, 22, 15, "+", false, true, () -> act("friend", f.id().toString()));
+                ry += 24;
+            }
+        }
+        // Ready, the countdown, and how many are set.
+        int ready = 0;
+        for (Net.LobbyMember m : view.squad()) if (m.ready()) ready++;
+        String rc = ready + " of " + view.squad().size() + " ready";
+        Ui.text(c, Text.literal(rc), rx + rw / 2f, bottom - 78, 0.62f, ready == view.squad().size() ? 0xFF5BD35B : 0xFF9A958A, true);
+        long cd = countdown();
+        if (cd >= 0) {
+            float cx = rx + rw / 2f, cy = bottom - 46, k = cd / (float) COUNTDOWN_MS;
+            Smooth.ring(c, cx, cy, 17, 2, 0x40FFFFFF);
+            Smooth.arc(c, cx, cy, 15.5f, 18.5f, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k, 0xFFE8433A);
+            Ui.text(c, Ui.title(String.valueOf((int) Math.ceil(cd / 1000.0))), cx, cy - 7, 1.3f, Ui.CREAM, true);
+            Sleek.button(c, hits, rx + 8, bottom - 22, rw - 16, 14, "Stand down", false, true, () -> act("ready", ""));
+        } else {
+            boolean me = meReady();
+            String key = AotRpgClient.readyKey().getBoundKeyLocalizedText().getString();
+            Sleek.button(c, hits, rx + 8, bottom - 64, rw - 16, 32, me ? "READY  \u2714" : "READY UP", !me, true, () -> act("ready", ""));
+            Ui.text(c, Text.literal("or press " + key + " anywhere aboard"), rx + rw / 2f, bottom - 26, 0.55f, 0xFF7A766C, true);
+        }
+
+        // ---- Middle: the stash (and your satchel under it). Click to move; right-click a stash item to put it in the satchel.
+        int mx0 = lx + lw + 8, mx1 = rx - 8, mw = mx1 - mx0;
+        Sleek.panel(c, mx0, top, mw, bottom - top);
+        int used = stash == null ? view.stashUsed() : stash.items().size(), cap = stash == null ? view.stashCap() : stash.capacity();
+        Ui.text(c, Ui.heading("Stash"), mx0 + 8, top + 7, 0.8f, Ui.CREAM, false);
+        Ui.text(c, Text.literal(used + " / " + cap), mx0 + 52, top + 9, 0.6f, used >= cap ? 0xFFE8433A : 0xFF9A958A, false);
+        Sleek.button(c, hits, mx1 - 46, top + 5, 40, 14, "Sort", false, stash != null, () -> ClientPlayNetworking.send(new Net.StashAction("sort", 0)));
+        if (view.rowCost() >= 0) Sleek.button(c, hits, mx1 - 150, top + 5, 100, 14, "+9 slots \u00B7 " + view.rowCost(), false, view.salvage() >= view.rowCost(),
+            () -> act("expand", ""));
+        int cell = 20, cols = Math.max(1, (mw - 16) / cell);
+        int satRows = 2, gridTop = top + 24, gridBottom = bottom - 16 - satRows * cell - 22;
+        int rows = Math.max(1, (gridBottom - gridTop) / cell);
+        java.util.Map<Integer, ItemStack> items = new java.util.HashMap<>();
+        if (stash != null) for (Net.BagEntry e : stash.items()) items.put(e.slot(), e.stack());
+        int total = (Math.max(cap, 1) + cols - 1) / cols;
+        stashScroll = Math.max(0, Math.min(stashScroll, total - rows));
+        for (int r = 0; r < rows; r++) for (int ccol = 0; ccol < cols; ccol++) {
+            int idx = (stashScroll + r) * cols + ccol;
+            if (idx >= cap) break;
+            int sx = mx0 + 8 + ccol * cell, sy = gridTop + r * cell;
+            ItemStack st = items.getOrDefault(idx, ItemStack.EMPTY);
+            cell(c, sx, sy, cell - 2, st, "", tip);
+            if (!st.isEmpty()) {
+                hits.add(sx, sy, cell - 2, cell - 2, () -> ClientPlayNetworking.send(new Net.StashAction("equip", idx)));
+                rightHits.add(sx, sy, cell - 2, cell - 2, () -> ClientPlayNetworking.send(new Net.StashAction("take", idx)));
+            }
+        }
+        if (total > rows) {
+            int gh = rows * cell, bh = Math.max(10, gh * rows / total), bby = gridTop + (gh - bh) * stashScroll / Math.max(1, total - rows);
+            c.fill(mx1 - 5, gridTop, mx1 - 3, gridTop + gh, 0x20FFFFFF);
+            c.fill(mx1 - 5, bby, mx1 - 3, bby + bh, Sleek.GOLD);
+        }
+        // The satchel: what you carry besides your loadout.
+        int sy0 = bottom - 12 - satRows * cell;
+        Ui.text(c, Ui.heading("Satchel"), mx0 + 8, sy0 - 11, 0.7f, Ui.CREAM, false);
+        Ui.text(c, Text.literal("click: equip or stash  \u00B7  right-click a stash item: to satchel"), mx0 + 60, sy0 - 10, 0.5f, 0xFF7A766C, false);
+        for (int i = 0; i < satRows * cols; i++) {
+            int sx = mx0 + 8 + (i % cols) * cell, sy = sy0 + (i / cols) * cell;
+            ItemStack st = ClientState.bag.getOrDefault(i, ItemStack.EMPTY);
+            cell(c, sx, sy, cell - 2, st, "", tip);
+            int slot = i;
+            if (!st.isEmpty()) {
+                hits.add(sx, sy, cell - 2, cell - 2, () -> ClientPlayNetworking.send(new Net.StashAction("put", slot)));
+                rightHits.add(sx, sy, cell - 2, cell - 2, () -> ClientPlayNetworking.send(new Net.BagAction("equip", slot, -1)));
+            }
+        }
+        if (!tip[0].isEmpty()) c.drawItemTooltip(Ui.font(), tip[0], mouseX, mouseY);
+    }
+
+    /** One slot: a dark square, the item, its count; returns whether it's hovered (and offers its tooltip). */
+    private boolean cell(DrawContext c, int x, int y, int size, ItemStack st, String label, ItemStack[] tip) {
+        boolean hov = Sleek.over(x, y, size, size);
+        int tone = st.isEmpty() ? 0 : Ui.rarityTone(BagScreen.quality(st));
+        c.fill(x, y, x + size, y + size, hov ? 0x30FFFFFF : 0x18FFFFFF);
+        if (!st.isEmpty() && tone != 0) c.fill(x, y + size - 2, x + size, y + size, tone);
+        c.drawBorder(x, y, size, size, hov ? Sleek.LINE2 : Sleek.LINE);
+        if (!st.isEmpty()) {
+            float sc = size >= 30 ? 1.5f : 1f;
+            Ui.item(c, st, x + (int) (size / 2f - 8 * sc), y + (int) (size / 2f - 8 * sc), sc);
+            if (st.getCount() > 1) {
+                String n = String.valueOf(st.getCount());
+                Ui.text(c, Text.literal(n), x + size - 2 - Ui.font().getWidth(n) * 0.6f, y + size - 8, 0.6f, Ui.CREAM, false);
+            }
+            if (hov) tip[0] = st;
+        }
+        if (!label.isEmpty()) Ui.text(c, Text.literal(label), x + size / 2f, y + size + 2, 0.5f, st.isEmpty() ? 0xFF55524A : 0xFF9A958A, true);
+        return hov;
     }
 
     private static ItemStack icon(String id) {

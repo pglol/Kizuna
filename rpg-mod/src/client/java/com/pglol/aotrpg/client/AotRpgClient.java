@@ -37,6 +37,13 @@ public final class AotRpgClient implements ClientModInitializer {
         return socialKey;
     }
 
+    private static KeyBinding readyKey;
+
+    /** Ready up (or stand down) aboard the balloon, from anywhere on deck. */
+    public static KeyBinding readyKey() {
+        return readyKey;
+    }
+
     public static KeyBinding mapKey() {
         return mapKey;
     }
@@ -71,6 +78,11 @@ public final class AotRpgClient implements ClientModInitializer {
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.aot_rpg"));
         socialKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.social",
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, "category.aot_rpg"));
+        readyKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.ready",
+            InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.aot_rpg"));
+        // Aboard the balloon: no fighting keys (ready, the menu and the map still work), and the
+        // rest of the HUD steps aside for the lobby's own.
+        ClientTickEvents.START_CLIENT_TICK.register(LobbyScreen::guardKeys);
         LockOn.key = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.lockon",
             InputUtil.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_MIDDLE, "category.aot_rpg"));
         ShoulderCam.swapKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.shoulder_swap",
@@ -180,6 +192,8 @@ public final class AotRpgClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(Net.Quake.ID, (payload, ctx) -> EffectFx.quake(payload.strength(), payload.ticks()));
         ClientPlayNetworking.registerGlobalReceiver(Net.DuelIntro.ID, (payload, ctx) -> DuelIntro.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.StashView.ID, (payload, ctx) -> {
+            LobbyScreen.stash = payload;
+            if (ctx.client().currentScreen instanceof LobbyScreen) return;
             if (payload.open()) ctx.client().setScreen(new StashScreen(payload));
             else StashScreen.update(payload);
         });
@@ -199,7 +213,7 @@ public final class AotRpgClient implements ClientModInitializer {
             ClientState.bagSize = payload.size();
             if (ctx.client().currentScreen instanceof BagScreen s) s.refresh();
             else if (ctx.client().currentScreen instanceof StashScreen st) st.refresh();
-            else if (ctx.client().currentScreen instanceof LobbyScreen ls) ls.refreshBag();
+            else if (ctx.client().currentScreen instanceof LobbyScreen) { }
             else if (payload.open()) ctx.client().setScreen(new BagScreen());
         });
         ClientPlayNetworking.registerGlobalReceiver(Net.EstateView.ID, (payload, ctx) -> {

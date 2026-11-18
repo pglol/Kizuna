@@ -1007,7 +1007,7 @@ public final class Extraction {
         long countdownAt;
     }
 
-    private static final long COUNTDOWN_MS = 10_000;
+    private static final long COUNTDOWN_MS = 5_000;
     public static final int SQUAD = 3;
     private final Map<Integer, Lobby> lobbies = new HashMap<>();
 
@@ -1165,7 +1165,7 @@ public final class Extraction {
                 continue;
             }
             lb.ready.removeIf(id -> on.stream().noneMatch(m -> m.getUuid().equals(id)));
-            boolean all = on.stream().allMatch(m -> lb.ready.contains(m.getUuid()) && m.hasVehicle());
+            boolean all = on.stream().allMatch(m -> lb.ready.contains(m.getUuid()));
             if (!all) {
                 if (lb.countdownAt != 0) {
                     lb.countdownAt = 0;
@@ -2503,11 +2503,8 @@ public final class Extraction {
         switch (action) {
             case "open" -> sendLobby(p);
             case "ready" -> {
+                // Ready from anywhere on deck: no need to sit back down.
                 if (!lb.ready.remove(p.getUuid())) {
-                    if (!p.hasVehicle()) {
-                        BlockPos seat = freeSeat(slot, p);
-                        if (seat != null) sitOn(p, seat);
-                    }
                     lb.ready.add(p.getUuid());
                     p.playSoundToPlayer(SoundEvents.ITEM_ARMOR_EQUIP_IRON.value(), SoundCategory.PLAYERS, 0.8f, 1.1f);
                 }
