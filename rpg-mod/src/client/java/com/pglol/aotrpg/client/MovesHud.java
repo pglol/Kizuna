@@ -41,6 +41,8 @@ public final class MovesHud {
         if (mc.player == null || mc.options.hudHidden || mc.currentScreen != null) return;
         int w = c.getScaledWindowWidth(), h = c.getScaledWindowHeight();
         long now = Util.getMeasuringTimeMs();
+        // A finisher on offer: everything else steps back so the prompt is the only thing there.
+        if (Finish.showing()) return;
         if (text != null) {
             long t = now - at;
             if (t > 1100) text = null;

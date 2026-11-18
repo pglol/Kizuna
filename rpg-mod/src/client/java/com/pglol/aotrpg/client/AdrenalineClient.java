@@ -84,6 +84,17 @@ public final class AdrenalineClient {
         return Math.min(in, out);
     }
 
+    /** When this body is back on its feet (ms), or 0 if it isn't down. */
+    public static long downUntil(int entity) {
+        long u = 0, now = Util.getMeasuringTimeMs();
+        Long s = stunnedUntil.get(entity), p = pinned.get(entity);
+        long[] f = faceplants.get(entity);
+        if (s != null) u = Math.max(u, s);
+        if (p != null) u = Math.max(u, p);
+        if (f != null) u = Math.max(u, f[1]);
+        return u > now ? u : 0;
+    }
+
     public static boolean pinned(int entity) {
         Long u = pinned.get(entity);
         return u != null && Util.getMeasuringTimeMs() < u;
@@ -418,6 +429,7 @@ public final class AdrenalineClient {
         if (su != null && su > now) red = Math.max(red, 0.7f);
         float dark = huntedUntil > now ? Math.min(1, (huntedUntil - now) / 600f) : 0;
         if (pinned(mc.player.getId())) dark = Math.max(dark, 0.8f);
+        if (Finish.showing()) red *= 0.25f;
         if (red < 0.02f && dark < 0.02f) return;
         int w = c.getScaledWindowWidth(), h = c.getScaledWindowHeight();
         float beat = 0.75f + 0.25f * MathHelper.sin(now / 90f);

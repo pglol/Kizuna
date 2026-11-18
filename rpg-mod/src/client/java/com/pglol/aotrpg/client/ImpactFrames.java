@@ -83,7 +83,7 @@ public final class ImpactFrames {
     }
 
     /** Where a world point lands on screen (the middle if it's behind you). */
-    private static float[] screen(MinecraftClient mc, Vec3d p, int w, int h) {
+    static float[] screen(MinecraftClient mc, Vec3d p, int w, int h) {
         Camera cam = mc.gameRenderer.getCamera();
         Vec3d rel = p.subtract(cam.getPos());
         Vector3f v = new Vector3f((float) rel.x, (float) rel.y, (float) rel.z);

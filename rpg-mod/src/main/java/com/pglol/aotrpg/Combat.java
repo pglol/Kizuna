@@ -18,6 +18,27 @@ public final class Combat {
      * reads whether its hit landed (a nape strike only kills if the blow went through), so a
      * cancelled-and-replaced hit counted as a miss and upgraded blades could not kill titans.
      */
+    /** Damage from level alone: x1 at level 1, about x3 at 100. */
+    public static double power(int level) {
+        return 1 + 0.02 * (Math.max(1, level) - 1);
+    }
+
+    /**
+     * Player against player: big health pools and stacked armor shouldn't make high-level fights
+     * last forever. A hit is scaled to the defender's pool (so an even fight at level 80 takes
+     * about as many cuts as one at level 5; endurance still buys time), their level only takes a
+     * little of the attacker's back, and armor counts for half.
+     */
+    static double pvp(ServerPlayerEntity def, double hit) {
+        double pool = Math.pow(Math.max(1, def.getMaxHealth() / 20.0), 0.7);
+        double lv = Math.sqrt(power(AotRpg.PROFILES.get(def.getUuid()).level));
+        double armor = def.getArmor(), tough = def.getAttributeValue(net.minecraft.entity.attribute.EntityAttributes.GENERIC_ARMOR_TOUGHNESS);
+        double d = hit * pool / lv;
+        double cut = Math.min(20, Math.max(armor / 5, armor - d / (2 + tough / 4))) / 25;
+        double half = cut < 0.99 ? (1 - cut / 2) / (1 - cut) : 1;
+        return pool / lv * half;
+    }
+
     public static float scale(LivingEntity entity, net.minecraft.entity.damage.DamageSource source, float amount) {
         if (amount <= 0 || entity.getWorld().isClient) return amount;
         double mult = 1;
@@ -40,6 +61,11 @@ public final class Combat {
             if (Gear.canUse(attacker, attacker.getMainHandStack())) mult *= 1 + Gear.power(attacker.getMainHandStack());
             mult *= AotRpg.ABILITIES.outgoing(attacker, entity, source);
             mult *= AotRpg.CLASSES.outgoing(attacker, entity, source);
+            // Levels mean something: every level hits harder (half as much on titans, whose own
+            // levels already set their toughness).
+            int lv = AotRpg.PROFILES.get(attacker.getUuid()).level;
+            mult *= AotRpg.isTitan(entity) ? 1 + 0.01 * (lv - 1) : power(lv);
+            if (entity instanceof ServerPlayerEntity def) mult *= pvp(def, amount * mult);
         }
         if (entity instanceof ServerPlayerEntity def) {
             mult *= AotRpg.ABILITIES.incoming(def);
