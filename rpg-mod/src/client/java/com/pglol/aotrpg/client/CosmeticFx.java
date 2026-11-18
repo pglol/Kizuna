@@ -58,7 +58,7 @@ public final class CosmeticFx {
             new Entry("trail_uch", "Lightning Release", "Every shot a forked bolt. 1 of 1.", 0x9FD8FF, 0x0A0610, 5))),
         Map.entry("slash", List.of(new Entry("slash_sp", "Crescent Fang", "A crescent of pressure flies off the blade. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
             new Entry("slash_uch", "Chidori Edge", "The blade sings with lightning. 1 of 1.", 0x9FD8FF, 0x7A3AD0, 5))),
-        Map.entry("body", List.of(new Entry("body_sp", "Spiritual Pressure", "It burns off you in your colour. The ground feels it. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+        Map.entry("body", List.of(new Entry("body_sp", "Spiritual Pressure", "It fills the ground around you and hugs your body; everyone near feels the weight of it. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
             new Entry("body_uch", "Cursed Lightning", "Lightning in your hand, black flames at your feet. 1 of 1.", 0x9FD8FF, 0x0A0610, 5))),
         Map.entry("odm", List.of(new Entry("odm_sp", "Pressure Wake", "Your gas burns your colour. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
             new Entry("odm_uch", "Black Flame Wake", "Black fire and sparks behind you. 1 of 1.", 0x0A0610, 0x9FD8FF, 5))),
@@ -66,7 +66,7 @@ public final class CosmeticFx {
             new Entry("horse_uch", "Black Flame Hooves", "They leave black fire behind. 1 of 1.", 0x0A0610, 0x7A3AD0, 5))),
         Map.entry("head", List.of(new Entry("head_sp", "Eyes of Pressure", "Your eyes glow your colour, and streak when you move. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
             new Entry("head_uch", "Red Eyes", "Red, with three marks turning. 1 of 1.", 0xE01A1A, 0x140404, 5))),
-        Map.entry("back", List.of(new Entry("back_sp", "Pressure Mantle", "Light flowing up off your shoulders like flame. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
+        Map.entry("back", List.of(new Entry("back_sp", "Pressure Column", "A pillar of your pressure straight up into the sky, seen from far off. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
             new Entry("back_uch", "Spectral Warrior", "A purple ribcage of light around you. 1 of 1.", 0x7A3AD0, 0xB08AF0, 5))),
         Map.entry("kill", List.of(new Entry("kill_sp", "Pillar of Pressure", "A column of light into the sky. 1 of 1.", 0x6AC8FF, 0xFFFFFF, 5),
             new Entry("kill_uch", "Black Flames", "Black fire swallows them whole. 1 of 1.", 0x0A0610, 0x7A3AD0, 5))),
@@ -569,6 +569,7 @@ public final class CosmeticFx {
         Vec3d cam = ctx.camera().getPos();
         float td = ctx.tickCounter().getTickDelta(true);
         float time = (mc.world.getTime() + td) / 20f;
+        OneOfOne.renderWorld(ms, vc, cam, td, time);
         for (PlayerEntity p : mc.world.getPlayers()) {
             if (p.isInvisible() || p == mc.player && mc.options.getPerspective().isFirstPerson() && !showroom()) continue;
             if (p.squaredDistanceTo(cam) > 48 * 48) continue;

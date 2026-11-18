@@ -33,6 +33,194 @@ public final class OneOfOne {
 
     static final int LIGHT = 0x9FD8FF, PURPLE = 0x7A3AD0, BLACK = 0x0A0610, RED = 0xE01A1A;
     static final int DEFAULT_TINT = 0x6AC8FF;
+    /** How far the pressure reaches along the ground, and how far away you still feel it. */
+    static final float FIELD = 6.5f, FELT = 14f;
+
+    // ------------------------------------------------------------------ the pressure, in the world
+
+    /**
+     * Drawn in the world (glowing geometry, so it reads under shaders too): a field of pressure
+     * over the ground around its owner, shock rings running out across it and a slow ring of
+     * marks turning in it, the aura hugging the body in flickering tongues; and the column, a
+     * pillar of it straight up into the sky.
+     */
+    public static void renderWorld(MatrixStack ms, VertexConsumerProvider vc, Vec3d cam, float td, float time) {
+        var mc = MinecraftClient.getInstance();
+        if (mc.world == null) return;
+        for (PlayerEntity p : mc.world.getPlayers()) {
+            if (p.isInvisible() || p.isSpectator() || p.squaredDistanceTo(cam) > 64 * 64) continue;
+            String body = CosmeticFx.worn(p.getUuid(), "body"), back = CosmeticFx.worn(p.getUuid(), "back");
+            boolean field = body.equals("body_sp"), column = back.equals("back_sp");
+            if (!field && !column) continue;
+            int tint = tint(p.getUuid());
+            Vec3d pos = p.getLerpedPos(td);
+            // Where the ground is under them (it thins out the higher up they are).
+            double gy = pos.y;
+            float lift = 1;
+            if (!p.isOnGround()) {
+                var hit = mc.world.raycast(new net.minecraft.world.RaycastContext(pos, pos.add(0, -12, 0), net.minecraft.world.RaycastContext.ShapeType.COLLIDER,
+                    net.minecraft.world.RaycastContext.FluidHandling.NONE, p));
+                if (hit.getType() == net.minecraft.util.hit.HitResult.Type.MISS) lift = 0;
+                else {
+                    gy = hit.getPos().y;
+                    lift = (float) Math.max(0, 1 - (pos.y - gy) / 12);
+                }
+            }
+            VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
+            boolean firstPerson = p == mc.player && mc.options.getPerspective().isFirstPerson();
+            if (field && lift > 0.02f) {
+                ms.push();
+                ms.translate(pos.x - cam.x, gy - cam.y + 0.04, pos.z - cam.z);
+                Matrix4f m = ms.peek().getPositionMatrix();
+                float breathe = 1 + 0.04f * MathHelper.sin(time * 2.1f);
+                int a0 = (int) (0x46 * lift);
+                disc(glow, m, FIELD * breathe, a0 << 24 | tint, tint & 0xFFFFFF);
+                disc(glow, m, 1.6f, (int) (0x60 * lift) << 24 | lighter(tint, 0.4f), tint & 0xFFFFFF);
+                // Shock rings running out over the ground.
+                for (int i = 0; i < 3; i++) {
+                    float k = (time * 0.55f + i / 3f) % 1f;
+                    ring(glow, m, 0.6f + k * FIELD, 0.09f + 0.12f * k, (int) (0xB0 * (1 - k) * lift) << 24 | lighter(tint, 0.3f));
+                }
+                // A ring of marks turning in it, and the field's edge.
+                for (int i = 0; i < 18; i++) {
+                    double a = time * 0.35 + i * Math.PI * 2 / 18;
+                    arcSeg(glow, m, 2.9f, 0.08f, a, a + 0.18, (int) (0x90 * lift) << 24 | tint);
+                }
+                ring(glow, m, FIELD * breathe - 0.08f, 0.08f, (int) (0x70 * lift) << 24 | tint);
+                ms.pop();
+            }
+            if (field && !firstPerson) {
+                // The aura: tongues of it flickering up round the body.
+                ms.push();
+                ms.translate(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z);
+                Matrix4f m = ms.peek().getPositionMatrix();
+                int n = 14;
+                for (int i = 0; i < n; i++) {
+                    double a0 = i * Math.PI * 2 / n + time * 0.6, a1 = (i + 1) * Math.PI * 2 / n + time * 0.6;
+                    float h0 = 1.9f + 0.7f * MathHelper.sin(time * 7 + i * 1.7f), h1 = 1.9f + 0.7f * MathHelper.sin(time * 7 + (i + 1) * 1.7f);
+                    float r = 0.62f;
+                    int bot = 0x70 << 24 | tint, top = tint & 0xFFFFFF;
+                    wall(glow, m, (float) Math.cos(a0) * r, (float) Math.sin(a0) * r, (float) Math.cos(a1) * r, (float) Math.sin(a1) * r, 0, h0, h1, bot, top);
+                    float r2 = 0.42f;
+                    wall(glow, m, (float) Math.cos(a0) * r2, (float) Math.sin(a0) * r2, (float) Math.cos(a1) * r2, (float) Math.sin(a1) * r2, 0, h0 * 0.8f, h1 * 0.8f,
+                        0x50 << 24 | lighter(tint, 0.5f), tint & 0xFFFFFF);
+                }
+                ms.pop();
+            }
+            if (column && !firstPerson) {
+                // The column: straight up into the sky.
+                ms.push();
+                ms.translate(pos.x - cam.x, pos.y - cam.y, pos.z - cam.z);
+                Matrix4f m = ms.peek().getPositionMatrix();
+                float hgt = 22, pulse = 1 + 0.08f * MathHelper.sin(time * 3);
+                int n = 16;
+                for (int i = 0; i < n; i++) {
+                    double a0 = i * Math.PI * 2 / n, a1 = (i + 1) * Math.PI * 2 / n;
+                    float r = 0.85f * pulse;
+                    wall(glow, m, (float) Math.cos(a0) * r, (float) Math.sin(a0) * r, (float) Math.cos(a1) * r, (float) Math.sin(a1) * r, 0, hgt, hgt,
+                        0x80 << 24 | tint, tint & 0xFFFFFF);
+                    float rc = 0.3f * pulse;
+                    wall(glow, m, (float) Math.cos(a0) * rc, (float) Math.sin(a0) * rc, (float) Math.cos(a1) * rc, (float) Math.sin(a1) * rc, 0, hgt * 0.8f, hgt * 0.8f,
+                        0xA0FFFFFF, 0xFFFFFF);
+                }
+                // Bands of it rushing upward.
+                for (int k = 0; k < 4; k++) {
+                    float y = (time * 6 + k * hgt / 4) % hgt;
+                    ms.push();
+                    ms.translate(0, y, 0);
+                    ring(glow, ms.peek().getPositionMatrix(), 0.8f * pulse, 0.12f, (int) (0xC0 * (1 - y / hgt)) << 24 | lighter(tint, 0.4f));
+                    ms.pop();
+                }
+                ms.pop();
+            }
+        }
+    }
+
+    private static void disc(VertexConsumer vc, Matrix4f m, float r, int inner, int outer) {
+        int n = 40;
+        for (int i = 0; i < n; i++) {
+            double a0 = i * Math.PI * 2 / n, a1 = (i + 1) * Math.PI * 2 / n;
+            float x0 = (float) Math.cos(a0) * r, z0 = (float) Math.sin(a0) * r, x1 = (float) Math.cos(a1) * r, z1 = (float) Math.sin(a1) * r;
+            vc.vertex(m, 0, 0, 0).color(inner);
+            vc.vertex(m, x0, 0, z0).color(outer);
+            vc.vertex(m, x1, 0, z1).color(outer);
+            vc.vertex(m, 0, 0, 0).color(inner);
+            vc.vertex(m, 0, 0, 0).color(inner);
+            vc.vertex(m, x1, 0, z1).color(outer);
+            vc.vertex(m, x0, 0, z0).color(outer);
+            vc.vertex(m, 0, 0, 0).color(inner);
+        }
+    }
+
+    private static void ring(VertexConsumer vc, Matrix4f m, float r, float w, int argb) {
+        arcSeg(vc, m, r, w, 0, Math.PI * 2, argb);
+    }
+
+    private static void arcSeg(VertexConsumer vc, Matrix4f m, float r, float w, double from, double to, int argb) {
+        int n = Math.max(2, (int) ((to - from) / (Math.PI * 2) * 48));
+        for (int i = 0; i < n; i++) {
+            double a0 = from + (to - from) * i / n, a1 = from + (to - from) * (i + 1) / n;
+            float c0 = (float) Math.cos(a0), s0 = (float) Math.sin(a0), c1 = (float) Math.cos(a1), s1 = (float) Math.sin(a1);
+            float ri = r - w / 2, ro = r + w / 2;
+            vc.vertex(m, c0 * ri, 0, s0 * ri).color(argb);
+            vc.vertex(m, c0 * ro, 0, s0 * ro).color(argb);
+            vc.vertex(m, c1 * ro, 0, s1 * ro).color(argb);
+            vc.vertex(m, c1 * ri, 0, s1 * ri).color(argb);
+            vc.vertex(m, c1 * ri, 0, s1 * ri).color(argb);
+            vc.vertex(m, c1 * ro, 0, s1 * ro).color(argb);
+            vc.vertex(m, c0 * ro, 0, s0 * ro).color(argb);
+            vc.vertex(m, c0 * ri, 0, s0 * ri).color(argb);
+        }
+    }
+
+    /** An upright panel between two points on the ground, its top at its own heights, fading up. */
+    private static void wall(VertexConsumer vc, Matrix4f m, float x0, float z0, float x1, float z1, float y, float h0, float h1, int bottom, int top) {
+        vc.vertex(m, x0, y, z0).color(bottom);
+        vc.vertex(m, x1, y, z1).color(bottom);
+        vc.vertex(m, x1, y + h1, z1).color(top);
+        vc.vertex(m, x0, y + h0, z0).color(top);
+        vc.vertex(m, x0, y + h0, z0).color(top);
+        vc.vertex(m, x1, y + h1, z1).color(top);
+        vc.vertex(m, x1, y, z1).color(bottom);
+        vc.vertex(m, x0, y, z0).color(bottom);
+    }
+
+    // ------------------------------------------------------------------ feeling it
+
+    private static long nextWeight;
+
+    /**
+     * Standing near someone giving off pressure: you feel it. The edges of your sight press in,
+     * in their colour, pulsing with it, and now and then the weight of it shudders through you.
+     */
+    public static void hud(net.minecraft.client.gui.DrawContext c, net.minecraft.client.render.RenderTickCounter tick) {
+        var mc = MinecraftClient.getInstance();
+        if (mc.player == null || mc.world == null || mc.options.hudHidden) return;
+        PlayerEntity src = null;
+        double best = FELT;
+        for (PlayerEntity p : mc.world.getPlayers()) {
+            if (p.isSpectator() || !CosmeticFx.worn(p.getUuid(), "body").equals("body_sp")) continue;
+            double d = p.distanceTo(mc.player);
+            if (d < best) {
+                best = d;
+                src = p;
+            }
+        }
+        if (src == null) return;
+        boolean own = src == mc.player;
+        float k = own ? 0.35f : (float) (1 - best / FELT);
+        long now = net.minecraft.util.Util.getMeasuringTimeMs();
+        float pulse = 0.7f + 0.3f * MathHelper.sin(now / 420f);
+        int tint = tint(src.getUuid());
+        int a = (int) (0x70 * k * pulse);
+        int W = c.getScaledWindowWidth(), H = c.getScaledWindowHeight(), e = (int) (H * (0.12f + 0.12f * k));
+        c.fillGradient(0, 0, W, e, a << 24 | tint, tint & 0xFFFFFF);
+        c.fillGradient(0, H - e, W, H, tint & 0xFFFFFF, a << 24 | tint);
+        if (!own && now > nextWeight) {
+            nextWeight = now + 2200 + (long) (Math.random() * 1500);
+            EffectFx.quake(0.08f + 0.3f * k, 8);
+        }
+    }
 
     public static String base(String s) {
         int i = s == null ? -1 : s.indexOf('#');
@@ -96,21 +284,13 @@ public final class OneOfOne {
         Vec3d v = p.getPos().subtract(p.prevX, p.prevY, p.prevZ);
         double speed = v.length();
         double x = p.getX(), y = p.getY(), z = p.getZ();
-        if (!me && body.equals("body_sp")) {
-            // Tongues of light burning up off the whole body.
-            for (int i = 0; i < 3; i++) {
-                double a = Math.random() * Math.PI * 2, r = 0.28 + Math.random() * 0.32;
-                fx(AotParticles.PUFF, i == 0 ? lighter(tint, 0.35f) : tint, 0.45f + (float) Math.random() * 0.45f, x + Math.cos(a) * r, y + Math.random() * 1.75,
-                    z + Math.sin(a) * r, Math.cos(a) * 0.012, 0.05 + Math.random() * 0.07, Math.sin(a) * 0.012);
+        if (body.equals("body_sp") && p.isOnGround()) {
+            // The ground feels it: grit and pebbles shiver up all through the field.
+            if (t % 3 == 0) {
+                double a = Math.random() * Math.PI * 2, r = 1 + Math.random() * (FIELD - 1);
+                fx(AotParticles.SHARD, 0x8A8070, 0.25f, x + Math.cos(a) * r, y + 0.05, z + Math.sin(a) * r, 0, 0.18 + Math.random() * 0.1, 0);
             }
-            if (t % 2 == 0) {
-                double a = Math.random() * Math.PI * 2;
-                fx(AotParticles.STREAK, lighter(tint, 0.55f), 0.5f, x + Math.cos(a) * 0.4, y + 0.2 + Math.random() * 1.2, z + Math.sin(a) * 0.4, 0, 0.32, 0);
-            }
-            if (t % 5 == 0) fx(AotParticles.SPARK, 0xFFFFFF, 0.35f, x + rr() * 0.8, y + Math.random() * 1.8, z + rr() * 0.8, 0, 0.08, 0);
-            // The weight of it: a pulse of pressure along the ground.
-            if (t % 28 == Math.floorMod(p.getId(), 28)) fx(AotParticles.RING, tint, 2.4f, x, y + 0.05, z, 0, 0, 0);
-            if (speed > 0.25 && p.isOnGround() && t % 2 == 0) fx(AotParticles.PUFF, tint, 1f, x - v.x * 2, y + 0.15, z - v.z * 2, 0, 0.02, 0);
+            if (!me && t % 4 == 0) fx(AotParticles.SPARK, lighter(tint, 0.6f), 0.3f, x + rr() * 0.9, y + Math.random() * 2, z + rr() * 0.9, 0, 0.12, 0);
         }
         if (!me && body.equals("body_uch")) {
             // Lightning in the right hand...
@@ -133,10 +313,7 @@ public final class OneOfOne {
                 fx(AotParticles.STREAK, ec, 0.28f, e.x, e.y, e.z, -v.x * 0.6, -v.y * 0.6, -v.z * 0.6);
             }
         }
-        if (!me && back.equals("back_sp") && t % 2 == 0) {
-            Vec3d sh = p.getPos().add(fwd.multiply(-0.25)).add(right.multiply(rr() * 0.6)).add(0, 1.3 + Math.random() * 0.3, 0);
-            fx(AotParticles.SPARK, lighter(tint, 0.4f), 0.4f, sh.x, sh.y, sh.z, -fwd.x * 0.04, 0.12, -fwd.z * 0.04);
-        }
+        if (back.equals("back_sp") && t % 3 == 0) fx(AotParticles.SPARK, 0xFFFFFF, 0.35f, x + rr() * 0.6, y + 2 + Math.random() * 6, z + rr() * 0.6, 0, 0.35, 0);
         if (!me && back.equals("back_uch") && t % 4 == 0) {
             double a = Math.random() * Math.PI * 2;
             fx(AotParticles.PUFF, PURPLE, 0.6f, x + Math.cos(a) * 0.55, y + 0.6 + Math.random() * 1.1, z + Math.sin(a) * 0.55, 0, 0.03, 0);

@@ -23,7 +23,7 @@ public final class CosmeticLayer extends FeatureRenderer<AbstractClientPlayerEnt
         if (p.isInvisible()) return;
         float time = (p.age + tickDelta) / 20f;
         String back = CosmeticFx.worn(p.getUuid(), "back");
-        if (back.equals("back_sp") || back.equals("back_uch")) {
+        if (back.equals("back_uch")) {
             ms.push();
             getContextModel().body.rotate(ms);
             ms.translate(0, 0.1, 0);
