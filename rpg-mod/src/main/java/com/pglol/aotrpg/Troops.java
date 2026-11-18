@@ -117,6 +117,8 @@ public final class Troops {
         int plan;
         /** Out looking for a fight: goes after the nearest player (or a titan) rather than wandering. */
         boolean hunter;
+        /** Sent after one person in particular (a manhunt): tracks them wherever they go. */
+        UUID prey;
         /** Who they are: how good (1-5), whether they mind their own business until disturbed (and how
          * close is too close), blades only, and who has picked a fight with them. */
         Arch arch = Arch.MARLEY;
@@ -326,6 +328,28 @@ public final class Troops {
         return made;
     }
 
+    /** A squad sent after someone in particular (any kind; the neutral ones come already angry). */
+    public static int hunt(ServerWorld w, BlockPos at, int n, int level, String session, BlockPos centre, int radius, Random r,
+                           Arch arch, int skill, UUID prey) {
+        int first = nextSquad;
+        int made = group(w, at, n, level, session, centre, radius, r, arch, skill);
+        for (int id = first; id < nextSquad; id++) {
+            Squad sq = squads.get(id);
+            if (sq == null) continue;
+            sq.hunter = true;
+            sq.prey = prey;
+            if (prey != null) sq.provoked.add(prey);
+        }
+        return made;
+    }
+
+    /** Marleyan (the army of Marley, who answer to the occupation). */
+    public static boolean marleyan(Entity e) {
+        Troop t = e == null ? null : troops.get(e.getUuid());
+        Squad sq = t == null ? null : squads.get(t.squad);
+        return sq != null && sq.arch == Arch.MARLEY;
+    }
+
     /** Where a session's squads stand (the middle of the first one still up), or null. */
     public static Vec3d where(String session) {
         for (Squad sq : squads.values()) if (sq.session.equals(session) && sq.mid != null) return sq.mid;
@@ -382,7 +406,12 @@ public final class Troops {
                 Vec3d from = sq.mid != null ? sq.mid : Vec3d.ofCenter(sq.centre);
                 ServerPlayerEntity prey = null;
                 double best = 400 * 400;
-                for (ServerPlayerEntity p : players) {
+                if (sq.prey != null && w.getPlayerByUuid(sq.prey) instanceof ServerPlayerEntity mark && !mark.isSpectator()
+                    && mark.squaredDistanceTo(from) < 900 * 900) {
+                    prey = mark;
+                    best = -1;
+                }
+                if (best >= 0) for (ServerPlayerEntity p : players) {
                     if (p.isSpectator() || p.isCreative()) continue;
                     if (wild(sq) && safe(w, p.getX(), p.getZ())) continue;
                     double d = p.squaredDistanceTo(from);

@@ -66,6 +66,10 @@ public final class ActorRenderer extends EntityRenderer<VillagerEntity> {
         // The people of the wilds, each in their own look.
         if (name.contains("bandit")) return "thug";
         if (name.contains("brute")) return "keith";
+        if (name.contains("eldian laborer") || name.contains("eldian refugee")) return "refugee";
+        if (name.contains("marleyan merchant")) return "merchant";
+        if (name.contains("warrior candidate")) return (e.getUuid().getLeastSignificantBits() & 1) == 0 ? "cadet_m" : "cadet_f";
+        if (name.contains("marleyan citizen")) return (e.getUuid().getLeastSignificantBits() & 1) == 0 ? "civilian_m" : "civilian_f";
         if (name.contains("headsman")) return "mp_officer";
         if (name.contains("mercenary")) return "smuggler";
         if (name.contains("deserter")) return "garrison_soldier";

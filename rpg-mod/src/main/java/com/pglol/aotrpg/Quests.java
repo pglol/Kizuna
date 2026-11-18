@@ -268,6 +268,7 @@ public final class Quests {
         AotRpg.FERRIES.markers(p, list);
         AotRpg.BOUNTIES.markers(p, list);
         WarParties.markers(p, list);
+        Occupation.markers(p, list);
         AotRpg.ESCORTS.markers(p, list);
         AotRpg.STORY.markers(p, list);
         Parties.Party party = AotRpg.PARTIES.of(p.getUuid());

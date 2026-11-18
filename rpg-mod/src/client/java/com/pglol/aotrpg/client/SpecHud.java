@@ -49,7 +49,7 @@ public final class SpecHud {
         c.fill(x, y, x + bw, y + 1, 0xFFA02020);
         Ui.text(c, Text.literal(view.whose().toUpperCase(java.util.Locale.ROOT)), w / 2f, y + 4, 0.6f, 0xFFE07A6A, true);
         Ui.text(c, Ui.heading("◀  " + view.watching() + "  ▶"), w / 2f, y + 13, 1f, Ui.CREAM, true);
-        Ui.text(c, Text.literal("Click to switch · Hold Space: back to the balloon"), w / 2f, y + 25, 0.55f, Ui.GOLD, true);
+        Ui.text(c, Text.literal("Click to switch · Hold Space: " + (view.leave().isEmpty() ? "leave" : view.leave())), w / 2f, y + 25, 0.55f, Ui.GOLD, true);
         if (holdSince > 0) {
             float k = Math.min(1, (Util.getMeasuringTimeMs() - holdSince) / 1000f);
             c.fill(x, y + 33, x + (int) (bw * k), y + 34, 0xFFE0B96A);

@@ -117,6 +117,11 @@ public final class Classes {
     // ------------------------------------------------------------------ helpers
 
     /** Hit or hitting in the last 8 seconds. */
+    /** When this player last gave or took a hit (ms). */
+    public static long lastCombat(ServerPlayerEntity p) {
+        return AotRpg.CLASSES.st(p).lastCombat;
+    }
+
     public static boolean inCombat(ServerPlayerEntity p) {
         return System.currentTimeMillis() - AotRpg.CLASSES.st(p).lastCombat < 8000;
     }

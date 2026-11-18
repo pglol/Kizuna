@@ -2004,6 +2004,14 @@ public final class Net {
     }
 
     /** Server -> client: a small gain to note (kind "xp", "marks", "kill"), shown as a quiet pop by the crosshair. */
+    /** Server -> client: how wanted you are in Marley (heat 0..100; level 0 unseen, 1 suspected, 2 hunted, 3 manhunt). */
+    public record Wanted(int heat, int level) implements CustomPayload {
+        public static final Id<Wanted> ID = id("wanted");
+        public static final PacketCodec<RegistryByteBuf, Wanted> CODEC = PacketCodec.of((v, b) -> { b.writeVarInt(v.heat); b.writeVarInt(v.level); },
+            b -> new Wanted(b.readVarInt(), b.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     public record Pop(String kind, long amount, String label) implements CustomPayload {
         public static final Id<Pop> ID = id("pop");
         public static final PacketCodec<RegistryByteBuf, Pop> CODEC = PacketCodec.of((v, b) -> { b.writeString(v.kind); b.writeVarLong(v.amount); b.writeString(v.label); },
@@ -2715,11 +2723,14 @@ public final class Net {
     }
 
     /** Server -> client: watching the match after falling (who), or not any more. */
-    public record SpecView(boolean active, String watching, String whose) implements CustomPayload {
+    public record SpecView(boolean active, String watching, String whose, String leave) implements CustomPayload {
+        public SpecView(boolean active, String watching, String whose) {
+            this(active, watching, whose, "back to the balloon");
+        }
         public static final Id<SpecView> ID = Net.id("spec_view");
         public static final PacketCodec<RegistryByteBuf, SpecView> CODEC = PacketCodec.of((v, b) -> {
-            b.writeBoolean(v.active); b.writeString(v.watching); b.writeString(v.whose);
-        }, b -> new SpecView(b.readBoolean(), b.readString(), b.readString()));
+            b.writeBoolean(v.active); b.writeString(v.watching); b.writeString(v.whose); b.writeString(v.leave);
+        }, b -> new SpecView(b.readBoolean(), b.readString(), b.readString(), b.readString()));
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
@@ -2760,6 +2771,7 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(TradeView.ID, TradeView.CODEC);
         PayloadTypeRegistry.playC2S().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(Pop.ID, Pop.CODEC);
+        PayloadTypeRegistry.playS2C().register(Wanted.ID, Wanted.CODEC);
         PayloadTypeRegistry.playS2C().register(RunSummary.ID, RunSummary.CODEC);
         PayloadTypeRegistry.playS2C().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(ForgeView.ID, ForgeView.CODEC);

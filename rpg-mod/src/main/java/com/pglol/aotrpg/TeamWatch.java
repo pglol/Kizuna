@@ -134,7 +134,7 @@ public final class TeamWatch {
         w.watching = t.getUuid();
         p.setCameraEntity(t);
         if (ServerPlayNetworking.canSend(p, Net.SpecView.ID)) {
-            ServerPlayNetworking.send(p, new Net.SpecView(true, AotRpg.PROFILES.get(t.getUuid()).name, w.whose));
+            ServerPlayNetworking.send(p, new Net.SpecView(true, AotRpg.PROFILES.get(t.getUuid()).name, w.whose, "back on your feet"));
         }
     }
 

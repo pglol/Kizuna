@@ -140,6 +140,8 @@ public final class AotRpg implements ModInitializer {
         HitSounds.register();
         // (Before the talk and trade handlers: a crouching right-click on a fighter is a grab.)
         Throws.register();
+        PassiveHeal.register();
+        Occupation.register();
         Net.register();
         SatchelHandler.register();
         Crafting.register();
