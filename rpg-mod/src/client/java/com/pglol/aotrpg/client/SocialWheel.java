@@ -33,8 +33,13 @@ public final class SocialWheel extends Screen {
     static Option[] emotes() {
         MinecraftClient mc = MinecraftClient.getInstance();
         ItemStack[] icons = {ItemStack.EMPTY, new ItemStack(Items.WHITE_BANNER), new ItemStack(Items.IRON_SWORD), new ItemStack(Items.FEATHER),
-            new ItemStack(Items.FIREWORK_ROCKET), new ItemStack(Items.SPYGLASS), new ItemStack(Items.OAK_STAIRS)};
-        String[] hints = {"", "A friendly wave", "Fist to the heart: shinzou wo sasageyo", "A respectful bow", "Arms up!", "Look over there", "Take a seat"};
+            new ItemStack(Items.FIREWORK_ROCKET), new ItemStack(Items.SPYGLASS), new ItemStack(Items.OAK_STAIRS), new ItemStack(Items.NOTE_BLOCK),
+            new ItemStack(Items.PAPER), new ItemStack(Items.SLIME_BALL), new ItemStack(Items.BOOK), new ItemStack(Items.ANVIL),
+            new ItemStack(Items.REDSTONE), new ItemStack(Items.INK_SAC), new ItemStack(Items.JUKEBOX), new ItemStack(Items.SHIELD),
+            new ItemStack(Items.STRING)};
+        String[] hints = {"", "A friendly wave", "Fist to the heart: shinzou wo sasageyo", "A respectful bow", "Arms up!", "Look over there",
+            "Take a seat", "Applause", "Who knows?", "Doubled over laughing", "Hand to the chin", "Show them the arms",
+            "Come on, then", "Unbelievable", "Bust a move", "Down on one knee", "A good long stretch"};
         Option[] out = new Option[Emotes.NAMES.length - 1];
         for (int k = 1; k < Emotes.NAMES.length; k++) {
             int kind = k;
@@ -52,7 +57,7 @@ public final class SocialWheel extends Screen {
         options = new Option[] {
             new Option("Party", "Invite, leave, see your squad", new ItemStack(Items.WHITE_BANNER), true,
                 () -> mc.setScreen(new PartyScreen())),
-            new Option("Emote", "Wave, salute, bow, cheer, sit", new ItemStack(Items.ARMOR_STAND), true,
+            new Option("Emote", "Dance, taunt, kneel, clap and more", new ItemStack(Items.ARMOR_STAND), true,
                 () -> mc.setScreen(new SocialWheel(emotes()))),
             new Option("People", "Friends and everyone online", new ItemStack(Items.PLAYER_HEAD), true, () -> {
                 mc.setScreen(new SocialScreen());
@@ -141,7 +146,8 @@ public final class SocialWheel extends Screen {
         super.render(c, mouseX, mouseY, delta);
         float cx = width / 2f, cy = height / 2f, in = open();
         int n = options.length;
-        float r0 = 54 * (0.85f + 0.15f * in), r1 = 112 * (0.85f + 0.15f * in), mid = (r0 + r1) / 2;
+        float big = n > 10 ? 1.28f : 1f;
+        float r0 = 54 * big * (0.85f + 0.15f * in), r1 = 112 * big * (0.85f + 0.15f * in), mid = (r0 + r1) / 2;
         double dx = mouseX - cx, dy = mouseY - cy;
         hovered = -1;
         if (dx * dx + dy * dy > 30 * 30) {

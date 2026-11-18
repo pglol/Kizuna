@@ -106,6 +106,8 @@ public final class Motion {
         }
         if (posed(e) || e.hasVehicle() || e.isSwimming() || e.isFallFlying() || e.isSleeping()) return;
         track(e, s, td);
+        // Skids, pivots, rolls, landings and idles (see Gestures): a move on the ground takes the body over.
+        if (Gestures.transforms(e, ms)) return;
         float h = e.getHeight() * 0.5f;
         if (Math.abs(s.lean) > 0.2f || Math.abs(s.bank) > 0.2f || s.tumble > 0.01f || s.dive > 0.01f) {
             ms.translate(0, h, 0);
@@ -125,6 +127,8 @@ public final class Motion {
     /** The limbs: flinch, tumble, jump and fall, landing, and going limp in death. */
     public static void pose(BipedEntityModel<?> m, LivingEntity e, float age) {
         if (FinishScene.pose(m, e)) return;
+        // Head tilts (emotes, idles) last only while they play.
+        if (!AdrenalineClient.pinned(e.getId())) m.head.roll = 0;
         if (Emotes.pose(m, e, age)) return;
         if (!ours(e)) return;
         St s = st(e);
@@ -199,6 +203,7 @@ public final class Motion {
             m.body.pitch += 0.25f * q;
             m.head.pitch -= 0.15f * q;
         }
+        Gestures.pose(m, e, age);
         sync(m);
     }
 

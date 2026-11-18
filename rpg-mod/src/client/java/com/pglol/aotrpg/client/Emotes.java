@@ -19,8 +19,10 @@ import java.util.Map;
 public final class Emotes {
     private Emotes() {}
 
-    public static final int WAVE = 1, SALUTE = 2, BOW = 3, CHEER = 4, POINT = 5, SIT = 6;
-    public static final String[] NAMES = {"", "Wave", "Salute", "Bow", "Cheer", "Point", "Sit"};
+    public static final int WAVE = 1, SALUTE = 2, BOW = 3, CHEER = 4, POINT = 5, SIT = 6, CLAP = 7, SHRUG = 8, LAUGH = 9, THINK = 10,
+        FLEX = 11, TAUNT = 12, FACEPALM = 13, DANCE = 14, KNEEL = 15, STRETCH = 16;
+    public static final String[] NAMES = {"", "Wave", "Salute", "Bow", "Cheer", "Point", "Sit", "Clap", "Shrug", "Laugh", "Think",
+        "Flex", "Taunt", "Facepalm", "Dance", "Kneel", "Stretch"};
 
     private record Playing(int kind, long at, Vec3d where) { }
 
@@ -34,7 +36,16 @@ public final class Emotes {
     }
 
     private static long length(int kind) {
-        return kind == SIT ? 60_000 : kind == SALUTE ? 3500 : 2800;
+        return switch (kind) {
+            case SIT, KNEEL -> 60_000;
+            case SALUTE -> 3500;
+            case SHRUG -> 1800;
+            case THINK -> 4200;
+            case DANCE -> 8000;
+            case STRETCH -> 3600;
+            case FLEX -> 3000;
+            default -> 2800;
+        };
     }
 
     /** How far in (0..1) an emote is for this body, or -1; ends it if they've moved or it's over. */
@@ -62,6 +73,21 @@ public final class Emotes {
             ms.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-38 * ease(k)));
             ms.translate(0, -h, 0);
         } else if (p.kind() == SIT) ms.translate(0, -0.62f * ease(k), 0);
+        else if (p.kind() == KNEEL) ms.translate(0, -0.55f * ease(k), 0);
+        else if (p.kind() == DANCE) {
+            float t = (Util.getMeasuringTimeMs() - p.at()) / 1000f, q = ease(k);
+            ms.translate(0, Math.abs(MathHelper.sin(t * 7)) * 0.08f * q, 0);
+            ms.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(MathHelper.sin(t * 3.5f) * 22 * q));
+            ms.translate(0, h, 0);
+            ms.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(MathHelper.sin(t * 7) * 5 * q));
+            ms.translate(0, -h, 0);
+        } else if (p.kind() == LAUGH || p.kind() == STRETCH || p.kind() == FACEPALM) {
+            float t = (Util.getMeasuringTimeMs() - p.at()) / 1000f;
+            float deg = p.kind() == FACEPALM ? -10 : p.kind() == STRETCH ? 7 : 6 + MathHelper.sin(t * 16) * 2;
+            ms.translate(0, h, 0);
+            ms.multiply(RotationAxis.POSITIVE_X.rotationDegrees(deg * ease(k)));
+            ms.translate(0, -h, 0);
+        }
         return false;
     }
 
@@ -121,6 +147,85 @@ public final class Emotes {
                 m.leftLeg.yaw = MathHelper.lerp(k, m.leftLeg.yaw, -0.25f);
                 m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -0.5f);
                 m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, -0.5f);
+            }
+            case CLAP -> {
+                float c = MathHelper.sin(t * 16) * 0.2f;
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -1.3f);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, -1.3f);
+                m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, 0.5f + c);
+                m.leftArm.yaw = MathHelper.lerp(k, m.leftArm.yaw, -0.5f - c);
+            }
+            case SHRUG -> {
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -0.85f);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, -0.85f);
+                m.rightArm.roll = MathHelper.lerp(k, m.rightArm.roll, 0.6f);
+                m.leftArm.roll = MathHelper.lerp(k, m.leftArm.roll, -0.6f);
+                m.head.roll = MathHelper.lerp(k, m.head.roll, 0.22f);
+                m.head.pitch = MathHelper.lerp(k, m.head.pitch, -0.1f);
+            }
+            case LAUGH -> {
+                float b = MathHelper.sin(t * 18) * 0.08f;
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -0.8f + b);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, -0.8f - b);
+                m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, 0.6f);
+                m.leftArm.yaw = MathHelper.lerp(k, m.leftArm.yaw, -0.6f);
+                m.head.pitch = MathHelper.lerp(k, m.head.pitch, -0.45f + b);
+            }
+            case THINK -> {
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -2.0f);
+                m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, 0.55f);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, -0.9f);
+                m.leftArm.yaw = MathHelper.lerp(k, m.leftArm.yaw, -0.8f);
+                m.head.pitch = MathHelper.lerp(k, m.head.pitch, 0.15f);
+                m.head.roll = MathHelper.lerp(k, m.head.roll, 0.12f);
+            }
+            case FLEX -> {
+                float pump = MathHelper.sin(t * 6) * 0.12f;
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -0.2f);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, -0.2f);
+                m.rightArm.roll = MathHelper.lerp(k, m.rightArm.roll, 2.3f + pump);
+                m.leftArm.roll = MathHelper.lerp(k, m.leftArm.roll, -2.3f - pump);
+                m.head.yaw = MathHelper.lerp(k, m.head.yaw, t < 1.5f ? 0.5f : -0.5f);
+            }
+            case TAUNT -> {
+                float b = MathHelper.sin(t * 12) * 0.28f;
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -1.5f + b);
+                m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, -0.1f);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, -0.3f);
+                m.leftArm.roll = MathHelper.lerp(k, m.leftArm.roll, -0.35f);
+                m.head.pitch = MathHelper.lerp(k, m.head.pitch, -0.18f);
+            }
+            case FACEPALM -> {
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -2.3f);
+                m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, 0.5f);
+                m.head.pitch = MathHelper.lerp(k, m.head.pitch, 0.5f);
+                m.head.yaw = MathHelper.lerp(k, m.head.yaw, MathHelper.sin(t * 4) * 0.15f);
+            }
+            case DANCE -> {
+                float a = MathHelper.sin(t * 7), b = MathHelper.cos(t * 7);
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -1.6f + a * 1.2f);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, -1.6f - a * 1.2f);
+                m.rightArm.roll = MathHelper.lerp(k, m.rightArm.roll, 0.4f + b * 0.3f);
+                m.leftArm.roll = MathHelper.lerp(k, m.leftArm.roll, -0.4f + b * 0.3f);
+                m.rightLeg.pitch = MathHelper.lerp(k, m.rightLeg.pitch, a * 0.35f);
+                m.leftLeg.pitch = MathHelper.lerp(k, m.leftLeg.pitch, -a * 0.35f);
+                m.head.roll = MathHelper.lerp(k, m.head.roll, b * 0.2f);
+            }
+            case KNEEL -> {
+                m.rightLeg.pitch = MathHelper.lerp(k, m.rightLeg.pitch, -1.55f);
+                m.leftLeg.pitch = MathHelper.lerp(k, m.leftLeg.pitch, 0.35f);
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, -0.65f);
+                m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, 0.1f);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, 0.05f);
+                m.head.pitch = MathHelper.lerp(k, m.head.pitch, 0.4f);
+            }
+            case STRETCH -> {
+                boolean up = t < 1.9f;
+                m.rightArm.pitch = MathHelper.lerp(k, m.rightArm.pitch, up ? -3.0f : -0.2f);
+                m.leftArm.pitch = MathHelper.lerp(k, m.leftArm.pitch, up ? -3.0f : -0.2f);
+                m.rightArm.roll = MathHelper.lerp(k, m.rightArm.roll, up ? -0.22f : 1.6f);
+                m.leftArm.roll = MathHelper.lerp(k, m.leftArm.roll, up ? 0.22f : -1.6f);
+                m.head.pitch = MathHelper.lerp(k, m.head.pitch, -0.35f);
             }
             default -> { }
         }

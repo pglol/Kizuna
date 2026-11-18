@@ -63,6 +63,12 @@ public final class ShoulderSettingsScreen extends Screen {
             clearAndInit();
         }));
         my += gap;
+        addDrawableChild(new AotButton(mx, my, w, 20, Text.literal("Idle: " + Gestures.idleName(c.idleStyle)), () -> {
+            c.idleStyle = Gestures.nextIdle(c.idleStyle);
+            Poses.announce();
+            clearAndInit();
+        }));
+        my += gap;
         String[] slams = {"Crescent Slam", "Spiral Drop", "Piercing Dive"};
         addDrawableChild(new AotButton(mx, my, w, 20, Text.literal("Air slam: " + slams[Math.max(0, Math.min(2, c.slam - 3))]), () -> {
             c.slam = c.slam >= 5 ? 3 : c.slam + 1;
@@ -100,11 +106,12 @@ public final class ShoulderSettingsScreen extends Screen {
         addDrawableChild(new Slider(x, y, w, "Banking", 0f, 2f, c.bank, v -> c.bank = v, pct));
         y += gap + 6;
         addDrawableChild(new AotButton(x, y, w / 2 - 2, 20, Text.literal("Defaults"), () -> {
-            String run = ShoulderCam.cfg.runStyle;
+            String run = ShoulderCam.cfg.runStyle, idle = ShoulderCam.cfg.idleStyle;
             int slam = ShoulderCam.cfg.slam;
             boolean dash = ShoulderCam.cfg.dashHoming;
             ShoulderCam.cfg = new ShoulderCam.Settings();
             ShoulderCam.cfg.runStyle = run;
+            ShoulderCam.cfg.idleStyle = idle;
             ShoulderCam.cfg.slam = slam;
             ShoulderCam.cfg.dashHoming = dash;
             clearAndInit();

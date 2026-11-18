@@ -25,8 +25,8 @@ import java.util.UUID;
 public final class Poses {
     private Poses() {}
 
-    public static final String[] STYLES = {"", "shinobi", "blade_runner", "scout", "charger", "reverse_grip", "feral", "glide", "drill"};
-    public static final String[] NAMES = {"Ordinary", "Shinobi", "Blade Runner", "Scout", "Charger", "Reverse Grip", "Feral", "Glide", "Drill"};
+    public static final String[] STYLES = {"", "shinobi", "blade_runner", "scout", "charger", "reverse_grip", "feral", "glide", "drill", "sprinter", "stalker", "carefree", "captain", "heavy"};
+    public static final String[] NAMES = {"Ordinary", "Shinobi", "Blade Runner", "Scout", "Charger", "Reverse Grip", "Feral", "Glide", "Drill", "Sprinter", "Stalker", "Carefree", "Captain", "Heavy"};
 
     /** Who else is aiming down a gun's sights. */
     private static final java.util.Set<Integer> aimers = new java.util.HashSet<>();
@@ -47,7 +47,7 @@ public final class Poses {
 
     /** How far into the Reverse Grip run a body is (0 .. 1): its blades turned back while it lasts. */
     public static float reverseGrip(net.minecraft.entity.LivingEntity e) {
-        if (!(e instanceof PlayerEntity pl) || !"reverse_grip".equals(styles.get(pl.getUuid()))) return 0;
+        if (!(e instanceof PlayerEntity pl) || !"reverse_grip".equals(runOf(pl.getUuid()))) return 0;
         float[] b = blend.get(e.getId());
         if (b == null) return 0;
         return b[0] * b[0] * (3 - 2 * b[0]);
@@ -75,11 +75,30 @@ public final class Poses {
         styles.put(s.player(), s.style());
     }
 
+    /** A player's run style ("style;idle" as announced). */
+    public static String runOf(UUID id) {
+        String s = styles.getOrDefault(id, "");
+        int i = s.indexOf(';');
+        return i < 0 ? s : s.substring(0, i);
+    }
+
+    /** A player's idle style (see Gestures). */
+    public static String idleOf(UUID id) {
+        String s = styles.getOrDefault(id, "");
+        int i = s.indexOf(';');
+        return i < 0 ? "" : s.substring(i + 1);
+    }
+
+    private static String mine() {
+        String idle = ShoulderCam.cfg.idleStyle == null ? "" : ShoulderCam.cfg.idleStyle;
+        return ShoulderCam.cfg.runStyle + (idle.isEmpty() ? "" : ";" + idle);
+    }
+
     /** Tells the server (and so everyone) which style is mine. */
     public static void announce() {
-        if (ClientPlayNetworking.canSend(Net.RunStyleSet.ID)) ClientPlayNetworking.send(new Net.RunStyleSet(ShoulderCam.cfg.runStyle));
+        if (ClientPlayNetworking.canSend(Net.RunStyleSet.ID)) ClientPlayNetworking.send(new Net.RunStyleSet(mine()));
         var mc = net.minecraft.client.MinecraftClient.getInstance();
-        if (mc.player != null) styles.put(mc.player.getUuid(), ShoulderCam.cfg.runStyle);
+        if (mc.player != null) styles.put(mc.player.getUuid(), mine());
     }
 
     public static String name(String style) {
@@ -146,7 +165,7 @@ public final class Poses {
             sync(m);
             return;
         }
-        String style = styles.getOrDefault(pl.getUuid(), "");
+        String style = runOf(pl.getUuid());
         float[] b = blend.computeIfAbsent(e.getId(), k -> new float[] {0, now, 0, 0});
         float dt = MathHelper.clamp((now - b[1]) / 1000f, 0, 0.1f);
         b[1] = now;
@@ -249,6 +268,48 @@ public final class Poses {
                 ry = 0.1f;
                 ly = -0.1f;
             }
+            case "sprinter" -> {
+                // A track sprinter: driving arms, bent hard at the elbow, tall and forward.
+                lean = 0.2f;
+                rp = -swing * 2.0f - 0.3f;
+                lp = swing * 2.0f - 0.3f;
+                rr = 0.05f;
+                lr = -0.05f;
+            }
+            case "stalker" -> {
+                // Low and hunting: one blade out ahead, the other drawn back ready.
+                lean = 0.65f;
+                rp = -1.25f + swing * 0.1f;
+                lp = 0.7f - swing * 0.1f;
+                rr = 0.1f;
+                lr = -0.2f;
+                ry = -0.15f;
+            }
+            case "carefree" -> {
+                // Upright and easy, arms swinging loose and wide.
+                lean = 0.02f;
+                rp = -swing * 1.25f;
+                lp = swing * 1.25f;
+                rr = 0.35f;
+                lr = -0.35f;
+            }
+            case "captain" -> {
+                // One hand resting on the blade grip at the hip, the other pumping.
+                lean = 0.25f;
+                rp = 0.15f;
+                lp = swing * 1.4f - 0.1f;
+                rr = 0.2f;
+                lr = -0.05f;
+                ry = 0.4f;
+            }
+            case "heavy" -> {
+                // Big and heavy-footed: shoulders rolling, arms out wide.
+                lean = 0.3f;
+                rp = -swing * 0.9f;
+                lp = swing * 0.9f;
+                rr = 0.5f;
+                lr = -0.5f;
+            }
             default -> { // charger
                 lean = 0.1f;
                 rp = -swing * 1.7f;
@@ -265,7 +326,8 @@ public final class Poses {
         m.rightArm.yaw = MathHelper.lerp(k, m.rightArm.yaw, ry);
         m.leftArm.yaw = MathHelper.lerp(k, m.leftArm.yaw, ly);
         // Longer strides for the hard leans.
-        if (style.equals("shinobi") || style.equals("blade_runner") || style.equals("reverse_grip") || style.equals("feral")) {
+        if (style.equals("shinobi") || style.equals("blade_runner") || style.equals("reverse_grip") || style.equals("feral")
+            || style.equals("sprinter") || style.equals("stalker") || style.equals("heavy")) {
             m.rightLeg.pitch *= 1 + 0.35f * k;
             m.leftLeg.pitch *= 1 + 0.35f * k;
         }

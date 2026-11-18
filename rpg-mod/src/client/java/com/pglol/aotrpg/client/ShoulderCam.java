@@ -42,6 +42,8 @@ public final class ShoulderCam {
         public float bank = 1f;
         /** How you run (see Poses), and the moves you take into the air. */
         public String runStyle = "";
+        /** How lively you are standing about (see Gestures): "", calm, soldier, off. */
+        public String idleStyle = "";
         /** Slam slash: 3 Crescent, 4 Spiral, 5 Piercing Dive. */
         public int slam = 3;
         public boolean dashHoming = true;
