@@ -99,49 +99,77 @@ public final class SocialWheel extends Screen {
 
     @Override
     public void renderBackground(DrawContext c, int mouseX, int mouseY, float delta) {
-        c.fillGradient(0, 0, width, height, 0x60000000, 0x90000000);
+        float cx = width / 2f, cy = height / 2f;
+        c.fillGradient(0, 0, width, height, 0x50000000, 0x80000000);
+        Smooth.glow(c, cx, cy, 190, 0x70000000);
+    }
+
+    private float open() {
+        float k = Math.min(1, (System.currentTimeMillis() - opened) / 160f);
+        return 1 - (1 - k) * (1 - k);
     }
 
     @Override
     public void render(DrawContext c, int mouseX, int mouseY, float delta) {
         super.render(c, mouseX, mouseY, delta);
-        float cx = width / 2f, cy = height / 2f;
+        float cx = width / 2f, cy = height / 2f, in = open();
         int n = options.length;
-        float r = options.length > 6 ? 96 : 78;
+        float r0 = 54 * (0.85f + 0.15f * in), r1 = 112 * (0.85f + 0.15f * in), mid = (r0 + r1) / 2;
         double dx = mouseX - cx, dy = mouseY - cy;
         hovered = -1;
-        if (dx * dx + dy * dy > 22 * 22) {
+        if (dx * dx + dy * dy > 30 * 30) {
             double ang = Math.atan2(dy, dx) + Math.PI / 2; // 0 = straight up
             if (ang < 0) ang += Math.PI * 2;
             hovered = (int) Math.round(ang / (Math.PI * 2 / n)) % n;
         }
-        // Hub
-        Ui.crest(c, (int) cx - 16, (int) cy - 16, 32, 0.9f);
+        double step = Math.PI * 2 / n, gap = 0.035;
+        int alpha = (int) (255 * in);
+        // The ring: one wedge per option, the one you point at lifted out and lit.
+        Smooth.ring(c, cx, cy, r1 + 3, 1, (alpha / 3 << 24) | 0xE0B96A);
         for (int i = 0; i < n; i++) {
-            double a = i * Math.PI * 2 / n - Math.PI / 2;
-            int ox = (int) (cx + Math.cos(a) * r), oy = (int) (cy + Math.sin(a) * r);
-            Option o = options[i];
+            double a = i * step - Math.PI / 2;
             boolean h = i == hovered;
-            int bw = 76, bh = 44;
-            int x = ox - bw / 2, y = oy - bh / 2;
-            if (h) {
-                // A thin spoke from the hub to the choice.
-                for (int s = 1; s < 12; s++) {
-                    double t = 22 + s * (r - 44) / 12.0;
-                    c.fill((int) (cx + Math.cos(a) * t), (int) (cy + Math.sin(a) * t),
-                        (int) (cx + Math.cos(a) * t) + 2, (int) (cy + Math.sin(a) * t) + 2, 0xC0E0B96A);
-                }
+            Option o = options[i];
+            int fill = h ? 0xE6322A1A : 0xD80C100E;
+            float lift = h ? 5 : 0;
+            Smooth.arc(c, cx, cy, r0 + lift, r1 + lift, a - step / 2 + gap, a + step / 2 - gap, (Math.min(alpha, fill >>> 24) << 24) | (fill & 0xFFFFFF));
+            if (h) Smooth.arc(c, cx, cy, r1 + lift - 2.5f, r1 + lift, a - step / 2 + gap, a + step / 2 - gap, (alpha << 24) | 0xE0B96A);
+            float ix = cx + (float) Math.cos(a) * (mid + lift), iy = cy + (float) Math.sin(a) * (mid + lift);
+            if (!o.icon().isEmpty()) {
+                var ms = c.getMatrices();
+                ms.push();
+                float sc = h ? 1.35f : 1.1f;
+                ms.translate(ix, iy - 5, 0);
+                ms.scale(sc, sc, 1);
+                c.drawItem(o.icon(), -8, -8);
+                ms.pop();
+                if (!o.ready()) Smooth.disc(c, ix, iy - 5, 11, 0x900C100E);
             }
-            c.fill(x, y, x + bw, y + bh, h ? 0xF0202820 : 0xD00B0F0C);
-            c.drawBorder(x, y, bw, bh, h ? Ui.GOLD : o.name().isEmpty() ? 0x6055524A : Ui.BORDER);
-            if (o.name().isEmpty()) {
-                Ui.text(c, Text.literal("—"), ox, oy - 4, 1f, Ui.DIM, true);
-                continue;
-            }
-            if (!o.icon().isEmpty()) c.drawItem(o.icon(), ox - 8, y + 5);
-            Ui.text(c, Ui.heading(o.name()), ox, y + 24, 0.9f, o.ready() ? (h ? Ui.GOLD : Ui.CREAM) : Ui.MUTED, true);
-            Ui.text(c, Text.literal(o.hint()), ox, y + 34, 0.55f, Ui.MUTED, true);
+            int lc = !o.ready() ? Ui.DIM : h ? Ui.GOLD : Ui.CREAM;
+            Ui.text(c, Text.literal(o.name()), ix, iy + 9, 0.62f, (Math.min(alpha, lc >>> 24) << 24) | (lc & 0xFFFFFF), true);
         }
-        Ui.text(c, Text.literal("Release to choose"), cx, cy + r + 34, 0.7f, Ui.MUTED, true);
+        // The hub: what you're pointing at, and what it does.
+        Smooth.disc(c, cx, cy, r0 - 6, (Math.min(alpha, 0xE8) << 24) | 0x0A0D0C);
+        Smooth.ring(c, cx, cy, r0 - 6, 1.2f, (Math.min(alpha, 0x90) << 24) | 0xB8955A);
+        if (hovered >= 0) {
+            Option o = options[hovered];
+            Ui.text(c, Ui.heading(o.name()), cx, cy - 9, 1f, o.ready() ? Ui.GOLD : Ui.MUTED, true);
+            var lines = Ui.font().wrapLines(Text.literal(o.hint()), (int) ((r0 - 14) * 2 / 0.6f));
+            float yy = cy + 4;
+            for (int k = 0; k < Math.min(2, lines.size()); k++) {
+                var ln = lines.get(k);
+                float w = Ui.font().getWidth(ln) * 0.6f;
+                var ms = c.getMatrices();
+                ms.push();
+                ms.translate(cx - w / 2, yy, 0);
+                ms.scale(0.6f, 0.6f, 1);
+                c.drawText(Ui.font(), ln, 0, 0, Ui.MUTED, false);
+                ms.pop();
+                yy += 7;
+            }
+        } else {
+            Ui.crest(c, (int) cx - 14, (int) cy - 14, 28, 0.85f * in);
+        }
+        Ui.text(c, Text.literal("Point and release"), cx, cy + r1 + 18, 0.65f, (Math.min(alpha, 0xA0) << 24) | 0xB8B0A0, true);
     }
 }

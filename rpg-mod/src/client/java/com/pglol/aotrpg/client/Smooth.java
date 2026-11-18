@@ -189,6 +189,30 @@ public final class Smooth {
         end(b);
     }
 
+    /** A wedge of a ring, from angle a0 to a1 (radians, 0 = right, clockwise on screen), soft-edged. */
+    public static void arc(DrawContext c, float x, float y, float r0, float r1, double a0, double a1, int argb) {
+        Matrix4f m = c.getMatrices().peek().getPositionMatrix();
+        int n = Math.max(6, (int) (Math.abs(a1 - a0) * r1 / 3));
+        BufferBuilder b = begin(VertexFormat.DrawMode.TRIANGLES);
+        float[] rad = {r0 - FEATHER, r0, r1, r1 + FEATHER};
+        int[] col = {clear(argb), argb, argb, clear(argb)};
+        for (int i = 0; i < n; i++) {
+            double t0 = a0 + (a1 - a0) * i / n, t1 = a0 + (a1 - a0) * (i + 1) / n;
+            float c0 = (float) Math.cos(t0), s0 = (float) Math.sin(t0), c1 = (float) Math.cos(t1), s1 = (float) Math.sin(t1);
+            for (int k = 0; k < 3; k++) {
+                float ra = Math.max(0, rad[k]), rb = Math.max(0, rad[k + 1]);
+                quad(b, m, x + c0 * ra, y + s0 * ra, x + c1 * ra, y + s1 * ra, x + c1 * rb, y + s1 * rb, x + c0 * rb, y + s0 * rb, col[k], col[k + 1]);
+            }
+        }
+        end(b);
+    }
+
+    /** A soft-edged rounded box with a thin outline (cards, tiles). */
+    public static void card(DrawContext c, float x0, float y0, float x1, float y1, int fill, int outline) {
+        if (outline != 0) pill(c, x0 - 1, y0 - 1, x1 + 1, y1 + 1, outline);
+        pill(c, x0, y0, x1, y1, fill);
+    }
+
     /** A convex polygon (x, y pairs) as a fan. */
     public static void poly(DrawContext c, float[] p, int argb) {
         Matrix4f m = c.getMatrices().peek().getPositionMatrix();

@@ -15,10 +15,14 @@ import net.minecraft.util.math.MathHelper;
  * category. Hover an option to preview it before equipping.
  */
 public final class CosmeticsScreen extends Screen {
-    private static final int CARD_H = 56, GAP = 6;
-    private int left, top, w, h, listX, listW, scroll;
-    private String slot = "slash";
+    private static final int TILE_H = 58, GAP = 8, RAIL_W = 150;
+    private int left, top, w, h, stageX, stageW, gridX, gridW, scroll;
+    private String slot = "outfit";
     private String hovered;
+    /** The model's turn (degrees): drags with the mouse, drifts when left alone. */
+    private float spin = 200, spinVel;
+    private boolean dragging;
+    private long lastFrame;
 
     public CosmeticsScreen() {
         super(Text.literal("Cosmetics"));
@@ -41,82 +45,124 @@ public final class CosmeticsScreen extends Screen {
     }
 
     private int gridTop() {
-        return top + 132;
+        return top + 26;
     }
 
     private int cols() {
-        return Math.max(2, Math.min(4, (listW - 16 + GAP) / (110 + GAP)));
+        return Math.max(1, Math.min(3, (gridW + GAP) / (128 + GAP)));
     }
 
-    private int cardW() {
-        return (listW - 16 - GAP * (cols() - 1)) / cols();
+    private int tileW() {
+        return (gridW - GAP * (cols() - 1)) / cols();
     }
 
     private int visibleRows() {
-        return Math.max(1, (top + h - 8 - gridTop()) / (CARD_H + GAP));
+        return Math.max(1, (top + h - gridTop()) / (TILE_H + GAP));
     }
 
     private static boolean owned(CosmeticFx.Entry e, int index) {
         return ClientState.cosmeticsAll || ClientState.cosmetics.contains(e.id()) || index == 0;
     }
 
+    private int rowH() {
+        return Math.max(22, Math.min(30, (h - 8) / CosmeticFx.CATEGORIES.size()));
+    }
+
     @Override
     protected void init() {
-        w = Math.min(640, width - 20);
-        h = Math.min(380, height - 60);
+        w = Math.min(820, width - 24);
+        h = Math.min(430, height - 64);
         left = (width - w) / 2;
-        top = Math.max(44, (height - h) / 2 + 8);
-        int catW = Math.min(160, w / 4);
-        listX = left + catW + 8;
-        listW = w - catW - 8;
-        addDrawableChild(new AotButton(left + w - 20, top - 22, 20, 20, Text.literal("✕"), this::close));
-        int y = top + 8;
-        int ch = Math.max(24, Math.min(34, (h - 16) / CosmeticFx.CATEGORIES.size()));
-        for (CosmeticFx.Category cat : CosmeticFx.CATEGORIES) {
-            CosmeticFx.Entry sel = CosmeticFx.entry(selected(cat.slot()));
-            addDrawableChild(new AotButton(left + 4, y, catW - 8, ch - 3, Ui.heading(cat.title()), () -> {
-                slot = cat.slot();
-                scroll = 0;
-                clearAndInit();
-            }).sub(Text.literal(sel == null ? "" : sel.title()).withColor(sel == null ? Ui.MUTED : 0xFF000000 | sel.color()))
-                .selected(slot.equals(cat.slot())));
-            y += ch;
-        }
+        top = Math.max(46, (height - h) / 2 + 12);
+        stageX = left + RAIL_W + 12;
+        stageW = Math.max(170, Math.min(250, (w - RAIL_W) / 3));
+        gridX = stageX + stageW + 12;
+        gridW = left + w - gridX;
         CosmeticFx.Category cat = CosmeticFx.category(slot);
         int rows = (cat.entries().size() + cols() - 1) / cols();
         scroll = Math.max(0, Math.min(scroll, rows - visibleRows()));
     }
 
-    /** The card under the mouse, as an index into the category, or -1. */
+    /** The tile under the mouse, as an index into the category, or -1. */
     private int cardAt(double mx, double my) {
         CosmeticFx.Category cat = CosmeticFx.category(slot);
-        int cols = cols(), cw = cardW();
+        int cols = cols(), cw = tileW();
         for (int i = scroll * cols; i < cat.entries().size() && i < (scroll + visibleRows()) * cols; i++) {
             int r = i / cols - scroll, col = i % cols;
-            int x = listX + 8 + col * (cw + GAP), y = gridTop() + r * (CARD_H + GAP);
-            if (mx >= x && mx < x + cw && my >= y && my < y + CARD_H) return i;
+            int x = gridX + col * (cw + GAP), y = gridTop() + r * (TILE_H + GAP);
+            if (mx >= x && mx < x + cw && my >= y && my < y + TILE_H) return i;
         }
         return -1;
     }
 
+    private int railAt(double mx, double my) {
+        if (mx < left || mx > left + RAIL_W) return -1;
+        int i = (int) ((my - top) / rowH());
+        return my >= top && i >= 0 && i < CosmeticFx.CATEGORIES.size() ? i : -1;
+    }
+
+    private boolean onClose(double mx, double my) {
+        double dx = mx - (left + w - 9), dy = my - (top - 27);
+        return dx * dx + dy * dy < 11 * 11;
+    }
+
+    private void click() {
+        if (client != null) client.getSoundManager().play(net.minecraft.client.sound.PositionedSoundInstance.master(
+            net.minecraft.sound.SoundEvents.UI_BUTTON_CLICK, 1.2f));
+    }
+
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (button != 0) return super.mouseClicked(mx, my, button);
+        if (onClose(mx, my)) {
+            close();
+            return true;
+        }
+        int r = railAt(mx, my);
+        if (r >= 0) {
+            slot = CosmeticFx.CATEGORIES.get(r).slot();
+            scroll = 0;
+            if (slot.equals("back")) spin = 20;
+            else if (slot.equals("outfit") || slot.equals("dye") || slot.equals("head")) spin = 200;
+            click();
+            clearAndInit();
+            return true;
+        }
         int i = cardAt(mx, my);
-        if (i >= 0 && button == 0) {
+        if (i >= 0) {
             CosmeticFx.Entry e = CosmeticFx.category(slot).entries().get(i);
             if (owned(e, i) && !e.id().equals(selected(slot))) {
                 ClientPlayNetworking.send(new Net.SelectCosmetic(e.id()));
-                if (client != null) client.getSoundManager().play(net.minecraft.client.sound.PositionedSoundInstance.master(
-                    net.minecraft.sound.SoundEvents.UI_BUTTON_CLICK, 1.2f));
+                click();
             }
+            return true;
+        }
+        if (mx >= stageX && mx < stageX + stageW && my >= top && my < top + h) {
+            dragging = true;
             return true;
         }
         return super.mouseClicked(mx, my, button);
     }
 
     @Override
+    public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        if (dragging) {
+            spin -= (float) dx * 1.6f;
+            spinVel = (float) -dx * 1.6f;
+            return true;
+        }
+        return super.mouseDragged(mx, my, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mx, double my, int button) {
+        dragging = false;
+        return super.mouseReleased(mx, my, button);
+    }
+
+    @Override
     public boolean mouseScrolled(double mx, double my, double hAmount, double vAmount) {
-        if (mx > listX) {
+        if (mx > gridX) {
             scroll -= (int) Math.signum(vAmount);
             clearAndInit();
         }
@@ -130,115 +176,180 @@ public final class CosmeticsScreen extends Screen {
         super.render(c, mouseX, mouseY, delta);
     }
 
-    @Override
-    public void renderBackground(DrawContext c, int mouseX, int mouseY, float delta) {
-        Ui.backdrop(c, width, height);
-        Ui.text(c, Ui.title("COSMETICS"), width / 2f, top - 40, 1.3f, Ui.GOLD, true);
-        Ui.panel(c, left, top, listX - left - 4, h);
-        Ui.panel(c, listX, top, listW, h);
-        CosmeticFx.Category cat = CosmeticFx.category(slot);
-        String showId = hovered != null ? hovered : selected(slot);
-        CosmeticFx.Entry show = CosmeticFx.entry(showId);
-        float t = (Util.getMeasuringTimeMs() % 100000) / 1000f;
-
-        // Preview: your character with the effect drawn around it.
-        int px = listX + 8, py = top + 8, pw = listW - 16, ph = 112;
-        c.fill(px, py, px + pw, py + ph, 0x60000000);
-        c.drawBorder(px, py, pw, ph, 0x807A6139);
-        int mx = px + 70;
-        if (client.player != null) {
-            InventoryScreen.drawEntity(c, px + 10, py + 4, px + 130, py + ph - 4, 38, 0.0625f, mx, py + 30, client.player);
-        }
-        if (show != null) preview(c, slot, show, mx, py + ph - 10, px, py, pw, ph);
-        Ui.text(c, Ui.heading(cat.title()), px + 140, py + 8, 1.1f, Ui.GOLD, false);
-        Ui.wrapped(c, Text.literal(cat.blurb()), px + 140, py + 22, pw - 150, Ui.MUTED);
-        if (show != null) {
-            Ui.text(c, Ui.heading(show.title()), px + 140, py + 48, 1f, 0xFF000000 | show.color(), false);
-            Ui.text(c, Text.literal(CosmeticFx.TIERS[show.tier()].toUpperCase()), px + 140, py + 60, 0.6f, CosmeticFx.TIER_COLORS[show.tier()], false);
-            Ui.wrapped(c, Text.literal(show.desc()), px + 140, py + 70, pw - 150, Ui.CREAM);
-            if (hovered != null) Ui.text(c, Text.literal("Previewing"), px + pw - 60, py + ph - 12, 0.6f, Ui.MUTED, false);
-        }
-        int have = 0;
-        for (int k = 0; k < cat.entries().size(); k++) if (owned(cat.entries().get(k), k)) have++;
-        Ui.text(c, Text.literal((ClientState.cosmeticsAll ? "Everything unlocked" : have + " / " + cat.entries().size() + " owned")
-            + "  ·  looks only, never power  ·  click a card to equip"), listX + 10, top + 122, 0.6f, Ui.MUTED, false);
-
-        // The cards.
-        int cols = cols(), cw = cardW();
-        for (int i = scroll * cols; i < cat.entries().size() && i < (scroll + visibleRows()) * cols; i++) {
-            CosmeticFx.Entry e = cat.entries().get(i);
-            int r = i / cols - scroll, col = i % cols;
-            int x = listX + 8 + col * (cw + GAP), y = gridTop() + r * (CARD_H + GAP);
-            card(c, e, owned(e, i), e.id().equals(selected(slot)), e.id().equals(hovered), x, y, cw, t, i);
-        }
-        int rows = (cat.entries().size() + cols - 1) / cols;
-        if (rows > visibleRows()) {
-            // A slim scroll bar down the right edge.
-            int gy = gridTop(), gh = visibleRows() * (CARD_H + GAP) - GAP;
-            c.fill(listX + listW - 5, gy, listX + listW - 3, gy + gh, 0x40000000);
-            int bh = Math.max(12, gh * visibleRows() / rows), by = gy + (gh - bh) * scroll / Math.max(1, rows - visibleRows());
-            c.fill(listX + listW - 5, by, listX + listW - 3, by + bh, Ui.GOLD);
+    /** Your character, turned to `yaw`, wearing what's being previewed. */
+    private void model(DrawContext c, float x, float feetY, float size, float yaw, String previewSlot, String previewId) {
+        var p = client.player;
+        if (p == null) return;
+        float by = p.bodyYaw, yw = p.getYaw(), pt = p.getPitch(), ph = p.prevHeadYaw, hy = p.headYaw;
+        p.bodyYaw = 180 + yaw;
+        p.setYaw(180 + yaw);
+        p.setPitch(0);
+        p.headYaw = p.bodyYaw;
+        p.prevHeadYaw = p.bodyYaw;
+        CosmeticFx.previewSlot = previewSlot;
+        CosmeticFx.previewId = previewId;
+        try {
+            org.joml.Quaternionf q = new org.joml.Quaternionf().rotateZ((float) Math.PI);
+            org.joml.Quaternionf tilt = new org.joml.Quaternionf().rotateX((float) Math.toRadians(-6));
+            q.mul(tilt);
+            InventoryScreen.drawEntity(c, x, feetY - p.getHeight() / 2 * size, size, new org.joml.Vector3f(0, p.getHeight() / 2, 0), q, tilt, p);
+        } finally {
+            CosmeticFx.previewSlot = null;
+            CosmeticFx.previewId = null;
+            p.bodyYaw = by;
+            p.setYaw(yw);
+            p.setPitch(pt);
+            p.prevHeadYaw = ph;
+            p.headYaw = hy;
         }
     }
 
-    /** One cosmetic card: a swatch banner in its colours, its name, its rarity frame, and whether you have it. */
-    private void card(DrawContext c, CosmeticFx.Entry e, boolean owned, boolean sel, boolean hov, int x, int y, int cw, float t, int i) {
-        int tierCol = CosmeticFx.TIER_COLORS[e.tier()];
-        c.fill(x, y, x + cw, y + CARD_H, hov ? 0xE0252A22 : 0xD0161914);
-        // Banner: the two colours in a slanted gradient, with a sweep of light on rare and better.
-        int bh = 22;
-        for (int k = 0; k < cw - 2; k++) {
-            float u = k / (float) (cw - 2);
-            int col = lerp(e.color(), e.color2(), (float) (0.5 + 0.5 * Math.sin(u * 3.2 + t * (e.tier() >= 2 ? 1.5 : 0.4))));
-            if (e.id().contains("rainbow")) col = MathHelper.hsvToRgb((u + t * 0.2f) % 1f, 0.7f, 1f);
-            int a = owned ? 0xFF : 0x70;
-            c.fill(x + 1 + k, y + 1, x + 2 + k, y + 1 + bh, (a << 24) | (col & 0xFFFFFF));
+    @Override
+    public void renderBackground(DrawContext c, int mouseX, int mouseY, float delta) {
+        c.fillGradient(0, 0, width, height, 0xE00A0C0B, 0xF0050606);
+        long now = Util.getMeasuringTimeMs();
+        float dt = lastFrame == 0 ? 0.016f : Math.min(0.1f, (now - lastFrame) / 1000f);
+        lastFrame = now;
+        if (!dragging) {
+            spinVel *= (float) Math.exp(-dt * 3);
+            spin += spinVel + dt * 14;
         }
-        if (e.tier() >= 2 && owned) {
-            float sweep = (t * 0.6f + i * 0.13f) % 1.6f - 0.3f;
-            int sx = x + (int) (sweep * cw);
-            for (int k = -6; k <= 6; k++) {
-                int xx = sx + k;
-                if (xx <= x || xx >= x + cw - 1) continue;
-                int a = (int) (90 * (1 - Math.abs(k) / 7f));
-                c.fill(xx, y + 1, xx + 1, y + 1 + bh, (a << 24) | 0xFFFFFF);
+        CosmeticFx.Category cat = CosmeticFx.category(slot);
+        String showId = hovered != null ? hovered : selected(slot);
+        CosmeticFx.Entry show = CosmeticFx.entry(showId);
+        float t = (now % 100000) / 1000f;
+
+        // Header.
+        Ui.text(c, Ui.title("COSMETICS"), left, top - 34, 1.25f, Ui.GOLD, false);
+        int have = 0;
+        for (int k = 0; k < cat.entries().size(); k++) if (owned(cat.entries().get(k), k)) have++;
+        Ui.text(c, Text.literal((ClientState.cosmeticsAll ? "Everything unlocked" : have + " of " + cat.entries().size() + " owned")
+            + "   \u00B7   looks only, never power"), left, top - 16, 0.62f, Ui.MUTED, false);
+        boolean ch = onClose(mouseX, mouseY);
+        Smooth.disc(c, left + w - 9, top - 27, 10, ch ? 0xFF3A2E1C : 0xC0141816);
+        Smooth.ring(c, left + w - 9, top - 27, 10, 1, ch ? Ui.GOLD : 0x80B8955A);
+        Ui.text(c, Text.literal("\u2715"), left + w - 9, top - 31, 0.8f, ch ? Ui.GOLD : Ui.CREAM, true);
+
+        // The rail of categories.
+        int rh = rowH(), hr = railAt(mouseX, mouseY);
+        for (int k = 0; k < CosmeticFx.CATEGORIES.size(); k++) {
+            CosmeticFx.Category cc = CosmeticFx.CATEGORIES.get(k);
+            int y = top + k * rh;
+            boolean sel = cc.slot().equals(slot), hov = k == hr;
+            if (sel) {
+                Smooth.pill(c, left, y + 1, left + RAIL_W, y + rh - 1, 0x40E0B96A);
+                Smooth.pill(c, left, y + 4, left + 2.5f, y + rh - 4, Ui.GOLD);
+            } else if (hov) Smooth.pill(c, left, y + 1, left + RAIL_W, y + rh - 1, 0x1EFFFFFF);
+            CosmeticFx.Entry worn = CosmeticFx.entry(selected(cc.slot()));
+            Ui.text(c, Ui.heading(cc.title()), left + 10, y + rh / 2f - 7, 0.72f, sel ? Ui.GOLD : hov ? Ui.CREAM : 0xFFC8BEA6, false);
+            if (worn != null) Ui.text(c, Text.literal(fit(worn.title(), RAIL_W - 16, 0.58f)), left + 10, y + rh / 2f + 2, 0.58f,
+                sel ? 0xFF000000 | worn.color() : Ui.MUTED, false);
+        }
+
+        // The stage: you, wearing it, turning slowly (drag to turn).
+        Smooth.card(c, stageX, top, stageX + stageW, top + h, 0xC00D1110, 0x30B8955A);
+        float scx = stageX + stageW / 2f, feet = top + h * 0.66f;
+        float size = Math.min(stageW * 0.36f, h * 0.2f);
+        Smooth.glow(c, scx, feet - size * 0.9f, stageW * 0.55f, 0x26000000 | (show == null ? 0xE0B96A : show.color()));
+        Smooth.glow(c, scx, feet + 2, stageW * 0.3f, 0x90000000);
+        c.enableScissor(stageX + 1, top + 1, stageX + stageW - 1, top + h - 1);
+        boolean worn = slot.equals("outfit") || slot.equals("dye") || slot.equals("head") || slot.equals("back");
+        model(c, scx, feet, size, spin, worn ? slot : null, worn ? showId : null);
+        if (show != null && !worn) {
+            // Effects: a sketch of it playing round you, scaled to the stage.
+            var ms = c.getMatrices();
+            ms.push();
+            ms.translate(scx, feet, 200);
+            float k = size / 38f;
+            ms.scale(k, k, 1);
+            ms.translate(-scx, -feet, 0);
+            preview(c, slot, show, (int) scx, (int) feet, stageX, top, stageW, h);
+            ms.pop();
+        }
+        c.disableScissor();
+        if (show != null) {
+            int sy = (int) (top + h * 0.72f);
+            Ui.text(c, Ui.heading(show.title()), scx, sy, 1.05f, 0xFF000000 | show.color(), true);
+            String tier = CosmeticFx.TIERS[show.tier()].toUpperCase();
+            float tw = Ui.font().getWidth(tier) * 0.55f;
+            int tc = CosmeticFx.TIER_COLORS[show.tier()];
+            Smooth.pill(c, scx - tw / 2 - 6, sy + 13, scx + tw / 2 + 6, sy + 22, (0x40 << 24) | (tc & 0xFFFFFF));
+            Ui.text(c, Text.literal(tier), scx, sy + 15, 0.55f, tc, true);
+            var lines = Ui.font().wrapLines(Text.literal(show.desc()), (int) ((stageW - 24) / 0.66f));
+            float yy = sy + 28;
+            for (var ln : lines) {
+                if (yy > top + h - 22) break;
+                float lw = Ui.font().getWidth(ln) * 0.66f;
+                var ms = c.getMatrices();
+                ms.push();
+                ms.translate(scx - lw / 2, yy, 0);
+                ms.scale(0.66f, 0.66f, 1);
+                c.drawText(Ui.font(), ln, 0, 0, Ui.CREAM, false);
+                ms.pop();
+                yy += 8;
             }
+            String state = show.id().equals(selected(slot)) ? "Equipped" : hovered != null ? "Previewing  \u00B7  click to equip" : "";
+            Ui.text(c, Text.literal(state), scx, top + h - 14, 0.6f, show.id().equals(selected(slot)) ? Ui.GOLD : Ui.MUTED, true);
         }
-        if (e.tier() >= 3 && owned) {
-            // Legendary: a few glints drift over the banner.
-            for (int k = 0; k < 4; k++) {
-                float life = (t * 0.8f + k * 0.29f) % 1f;
-                int gx = x + 6 + (int) (((k * 37 + (int) (t * 3)) % 97) / 97f * (cw - 12)), gy = y + bh - (int) (life * bh);
-                int a = (int) (255 * (1 - life));
-                c.fill(gx, gy, gx + 1, gy + 1, (a << 24) | 0xFFFFFF);
-                c.fill(gx - 1, gy, gx + 2, gy + 1, ((a / 3) << 24) | 0xFFFFFF);
-            }
+        Ui.text(c, Text.literal("drag to turn"), stageX + 8, top + 7, 0.5f, 0x80B8B0A0, false);
+
+        // The library.
+        Ui.text(c, Ui.heading(cat.title()), gridX, top + 2, 0.95f, Ui.CREAM, false);
+        Ui.text(c, Text.literal(fit(cat.blurb(), gridW - 4, 0.58f)), gridX, top + 14, 0.58f, Ui.MUTED, false);
+        int cols = cols(), cw = tileW();
+        for (int k = scroll * cols; k < cat.entries().size() && k < (scroll + visibleRows()) * cols; k++) {
+            CosmeticFx.Entry e = cat.entries().get(k);
+            int r = k / cols - scroll, col = k % cols;
+            int x = gridX + col * (cw + GAP), y = gridTop() + r * (TILE_H + GAP);
+            tile(c, e, owned(e, k), e.id().equals(selected(slot)), e.id().equals(hovered), x, y, cw, t, k);
         }
-        if (e.tier() == 4) {
-            // Mythic: a pulsing red glow around the card.
-            int pa = (int) (70 + 60 * Math.sin(t * 3 + i));
-            c.drawBorder(x - 2, y - 2, cw + 4, CARD_H + 4, (pa << 24) | 0xE02A2A);
-            c.drawBorder(x - 3, y - 3, cw + 6, CARD_H + 6, ((pa / 2) << 24) | 0xE02A2A);
+        int rows = (cat.entries().size() + cols - 1) / cols;
+        if (rows > visibleRows()) {
+            int gy = gridTop(), gh = visibleRows() * (TILE_H + GAP) - GAP;
+            Smooth.pill(c, left + w + 4, gy, left + w + 6, gy + gh, 0x30FFFFFF);
+            int bh = Math.max(14, gh * visibleRows() / rows), by = gy + (gh - bh) * scroll / Math.max(1, rows - visibleRows());
+            Smooth.pill(c, left + w + 4, by, left + w + 6, by + bh, Ui.GOLD);
         }
-        // Frame in the rarity colour (dim when locked, gold when worn).
-        int frame = sel ? Ui.GOLD : owned ? tierCol : 0xFF3A3830;
-        c.drawBorder(x, y, cw, CARD_H, frame);
-        if (sel || hov) c.drawBorder(x - 1, y - 1, cw + 2, CARD_H + 2, sel ? 0x80E0B96A : 0x40FFFFFF);
-        Ui.text(c, Ui.heading(fit(e.title(), cw - 10, 0.85f)), x + 5, y + bh + 5, 0.85f, owned ? Ui.CREAM : Ui.DIM, false);
-        Ui.text(c, Text.literal(CosmeticFx.TIERS[e.tier()]), x + 5, y + bh + 17, 0.55f, owned ? tierCol : Ui.DIM, false);
-        String state = sel ? "EQUIPPED" : owned ? "" : "LOCKED";
-        if (!state.isEmpty()) {
-            float sw = Ui.font().getWidth(state) * 0.55f;
-            Ui.text(c, Text.literal(state), x + cw - 5 - sw, y + bh + 17, 0.55f, sel ? Ui.GOLD : Ui.DIM, false);
+    }
+
+    /** One item: a rounded tile, a glowing swatch of its colours, its name and rarity, and its state. */
+    private void tile(DrawContext c, CosmeticFx.Entry e, boolean owned, boolean sel, boolean hov, int x, int y, int cw, float t, int i) {
+        int tc = CosmeticFx.TIER_COLORS[e.tier()];
+        int outline = sel ? Ui.GOLD : hov ? (0xC0 << 24) | (tc & 0xFFFFFF) : (0x50 << 24) | (tc & 0xFFFFFF);
+        Smooth.card(c, x, y, x + cw, y + TILE_H, hov ? 0xF01A1F1C : 0xE0111513, owned ? outline : 0x30FFFFFF);
+        // A soft wash of rarity along the bottom.
+        c.fillGradient(x + 2, y + TILE_H - 14, x + cw - 2, y + TILE_H - 1, 0x00000000, (owned ? 0x30 : 0x10) << 24 | (tc & 0xFFFFFF));
+        // The swatch: an orb in its two colours (turning, for the rarer ones).
+        float ox = x + 22, oy = y + TILE_H / 2f;
+        int c1 = e.color(), c2 = e.color2();
+        if (e.id().contains("rainbow")) {
+            c1 = MathHelper.hsvToRgb(t * 0.2f % 1f, 0.7f, 1f);
+            c2 = MathHelper.hsvToRgb((t * 0.2f + 0.4f) % 1f, 0.7f, 1f);
         }
+        int a = owned ? 0xFF : 0x60;
+        if (e.tier() >= 2 && owned) Smooth.glow(c, ox, oy, 20, (0x50 << 24) | (c1 & 0xFFFFFF));
+        Smooth.disc(c, ox, oy, 12, (a << 24) | (c2 & 0xFFFFFF));
+        double sw = e.tier() >= 1 ? t * (0.6 + e.tier() * 0.3) + i : 0.8;
+        Smooth.arc(c, ox, oy, 0, 12, sw, sw + Math.PI, (a << 24) | (c1 & 0xFFFFFF));
+        Smooth.disc(c, ox - 4, oy - 4, 3, owned ? 0x50FFFFFF : 0x20FFFFFF);
+        Smooth.ring(c, ox, oy, 12.5f, 1, 0x60000000);
         if (!owned) {
-            // A padlock on the banner.
-            int lx = x + cw / 2 - 4, ly = y + 6;
-            c.fill(lx + 1, ly, lx + 7, ly + 2, 0xC0101010);
-            c.fill(lx + 1, ly, lx + 2, ly + 5, 0xC0101010);
-            c.fill(lx + 6, ly, lx + 7, ly + 5, 0xC0101010);
-            c.fill(lx, ly + 5, lx + 8, ly + 12, 0xE0101010);
-            c.fill(lx + 3, ly + 7, lx + 5, ly + 10, 0xFF8F8A7A);
+            // A small lock over the orb.
+            Smooth.pill(c, ox - 5, oy - 1, ox + 5, oy + 7, 0xF0101010);
+            Smooth.ring(c, ox, oy - 2, 3.5f, 1.4f, 0xF0101010);
+        }
+        float tx = x + 42;
+        Ui.text(c, Ui.heading(fit(e.title(), cw - 50, 0.78f)), tx, y + 16, 0.78f, owned ? Ui.CREAM : Ui.DIM, false);
+        Ui.text(c, Text.literal(CosmeticFx.TIERS[e.tier()]), tx, y + 28, 0.56f, owned ? tc : Ui.DIM, false);
+        if (sel) {
+            String eq = "\u2714 EQUIPPED";
+            float ew = Ui.font().getWidth(eq) * 0.5f;
+            Smooth.pill(c, tx - 2, y + 38, tx + ew + 4, y + 47, 0x40E0B96A);
+            Ui.text(c, Text.literal(eq), tx + 1, y + 40, 0.5f, Ui.GOLD, false);
+        } else if (!owned) Ui.text(c, Text.literal("LOCKED"), tx, y + 40, 0.5f, Ui.DIM, false);
+        if (e.tier() == 4 && owned) {
+            int pa = (int) (60 + 50 * Math.sin(t * 3 + i));
+            Smooth.card(c, x - 1, y - 1, x + cw + 1, y + 1, (pa << 24) | 0xE02A2A, 0);
         }
     }
 
@@ -432,7 +543,7 @@ public final class CosmeticsScreen extends Screen {
     private static void dot(DrawContext c, int x, int y, int rgb, float alpha, int size) {
         int a = (int) (Math.max(0, Math.min(1, alpha)) * 255);
         if (a < 6) return;
-        c.fill(x, y, x + size, y + size, (a << 24) | (rgb & 0xFFFFFF));
+        Smooth.disc(c, x + size / 2f, y + size / 2f, size * 0.62f, (a << 24) | (rgb & 0xFFFFFF));
     }
 
     private static void ellipse(DrawContext c, int cx, int cy, int rx, int ry, int rgb, float alpha) {

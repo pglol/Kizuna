@@ -200,7 +200,14 @@ public final class CosmeticFx {
         worn.put(msg.player(), m);
     }
 
+    /** While the cosmetics screen draws your character: this slot shows this piece (try before you wear). */
+    static String previewSlot, previewId;
+
     public static String worn(UUID id, String slot) {
+        if (previewSlot != null && previewSlot.equals(slot)) {
+            var mc = MinecraftClient.getInstance();
+            if (mc.player != null && mc.player.getUuid().equals(id)) return previewId;
+        }
         Map<String, String> m = worn.get(id);
         return m == null ? "" : m.getOrDefault(slot, "");
     }
