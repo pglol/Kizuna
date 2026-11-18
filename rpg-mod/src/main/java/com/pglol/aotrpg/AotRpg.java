@@ -145,8 +145,8 @@ public final class AotRpg implements ModInitializer {
         Elites.register();
         Delves.register();
         Contracts.register();
-        ServerPlayNetworking.registerGlobalReceiver(Net.ContractAction.ID, (payload, ctx) -> Contracts.action(ctx.player(), payload.action(), payload.arg()));
         Net.register();
+        ServerPlayNetworking.registerGlobalReceiver(Net.ContractAction.ID, (payload, ctx) -> Contracts.action(ctx.player(), payload.action(), payload.arg()));
         SatchelHandler.register();
         Crafting.register();
         Harvest.register();
