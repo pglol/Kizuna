@@ -101,6 +101,22 @@ public final class ActorRenderer extends EntityRenderer<VillagerEntity> {
                 @Override
                 public void setAngles(VillagerEntity e, float limbAngle, float limbDistance, float age, float headYaw, float headPitch) {
                     super.setAngles(e, limbAngle, limbDistance, age, headYaw, headPitch);
+                    // Running flat out: blades swept back, long strides (the lean comes from Motion).
+                    if (e.isSprinting() && limbDistance > 0.35f) {
+                        float k = Math.min(1, (limbDistance - 0.35f) * 3), sw = net.minecraft.util.math.MathHelper.cos(limbAngle * 0.6662f) * Math.min(1, limbDistance);
+                        boolean armed = !e.getMainHandStack().isEmpty();
+                        float rp = armed ? 1.05f + sw * 0.12f : -sw * 1.6f, lp = armed ? 1.05f - sw * 0.12f : sw * 1.6f;
+                        rightArm.pitch = net.minecraft.util.math.MathHelper.lerp(k, rightArm.pitch, rp);
+                        leftArm.pitch = net.minecraft.util.math.MathHelper.lerp(k, leftArm.pitch, lp);
+                        rightArm.roll = net.minecraft.util.math.MathHelper.lerp(k, rightArm.roll, armed ? 0.55f : 0.08f);
+                        leftArm.roll = net.minecraft.util.math.MathHelper.lerp(k, leftArm.roll, armed ? -0.55f : -0.08f);
+                        rightLeg.pitch *= 1 + 0.35f * k;
+                        leftLeg.pitch *= 1 + 0.35f * k;
+                        rightSleeve.copyTransform(rightArm);
+                        leftSleeve.copyTransform(leftArm);
+                        rightPants.copyTransform(rightLeg);
+                        leftPants.copyTransform(leftLeg);
+                    }
                     // Troops act out their moves (wind-ups, cuts, guard, aiming).
                     TroopPoses.apply(this, e, headPitch);
                 }

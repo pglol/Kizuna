@@ -22,6 +22,7 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
@@ -740,6 +741,8 @@ public final class Troops {
 
     private static void think(ServerWorld w, VillagerEntity v, Troop t, Squad sq, List<ServerPlayerEntity> players, int ticks) {
         if (t.swapCool > 0) t.swapCool--;
+        // Running only while they're moving fast (walk() sets it again this tick if so).
+        if (v.isSprinting() && v.getVelocity().horizontalLengthSquared() < 0.01 && v.isOnGround()) v.setSprinting(false);
         if (t.knockT > 0 && t.knock != null) {
             // Rocked back by a hit: a real shove, off their feet if it's a big one.
             if (t.knock != t.knockDone) {
@@ -863,7 +866,7 @@ public final class Troops {
                 gun(v, t);
                 Vec3d flat0 = target.getPos().subtract(v.getPos()).multiply(1, 0, 1);
                 if (dist < 8) walk(w, v, flat0.multiply(-1), 0.12);
-                else if (dist > 12) walk(w, v, flat0, 0.16);
+                else if (dist > 12) walk(w, v, flat0, 0.3);
                 else walk(w, v, new Vec3d(-flat0.z, 0, flat0.x).multiply(t.strafe), 0.05);
                 face(v, target.getEyePos());
                 return;
@@ -893,7 +896,7 @@ public final class Troops {
             t.windup = 0;
             t.burst = 0;
             face(v, target.getEyePos());
-            walk(w, v, flat, 0.22);
+            walk(w, v, flat, 0.34);
             return;
         }
         Vec3d move;
@@ -1181,11 +1184,11 @@ public final class Troops {
                 t.stepT = 3;
                 return;
             }
-            if (dist > 2.4) walk(w, v, to, 0.2);
+            if (dist > 2.4) walk(w, v, to, dist > 5 ? 0.32 : 0.2);
             return;
         }
         if (dist > 5) {
-            walk(w, v, to, 0.26);
+            walk(w, v, to, 0.36 + 0.01 * sq.skill);
             return;
         }
         if (dist > 2.6) {
@@ -1334,7 +1337,7 @@ public final class Troops {
             return;
         }
         if (dist > 2.6) {
-            walk(w, v, to, 0.17 + 0.012 * sq.skill);
+            walk(w, v, to, dist > 7 ? 0.3 : 0.2 + 0.012 * sq.skill);
             return;
         }
         // Up close: reach for you (the more you turtle, the likelier), a pound where he stands, or the haymaker.
@@ -2160,6 +2163,7 @@ public final class Troops {
      * gave them carries them, with collisions, until they settle.
      */
     private static void physics(VillagerEntity v) {
+        if (v.age % 10 == 0 && v.getWorld() instanceof ServerWorld sw) unstick(sw, v);
         Vec3d vel = v.getVelocity();
         // Standing (or walking: walk() places them itself) with nothing pushing: nothing to do.
         if (v.isOnGround() && vel.horizontalLengthSquared() < 0.0025 && Math.abs(vel.y) < 0.01) {
@@ -2178,24 +2182,76 @@ public final class Troops {
         v.fallDistance = Math.min(v.fallDistance, 4);
     }
 
+    /**
+     * On foot, for real: moved through the world with its collisions (no more clipping into walls
+     * or freezing on a block), steering round what's in the way, vaulting up anything a jump will
+     * clear, never walking off a long drop or into water; sprinting when they move fast.
+     */
     private static void walk(ServerWorld w, VillagerEntity v, Vec3d dir, double speed) {
         if (dir.lengthSquared() < 1e-4) return;
-        // Really in the air (thrown, leaping, falling): no footing to walk on.
-        if (!v.isOnGround() && Math.abs(v.getVelocity().y) > 0.1) return;
-        Vec3d d = dir.normalize();
-        for (int k = 0; k < 5; k++) {
-            double ang = new double[] {0, 0.6, -0.6, 1.2, -1.2}[k];
+        Vec3d d = dir.multiply(1, 0, 1);
+        if (d.lengthSquared() < 1e-4) return;
+        d = d.normalize();
+        v.setSprinting(speed >= 0.3);
+        // In the air (a jump, a vault, thrown): a little steering, no footing.
+        if (!v.isOnGround()) {
+            Vec3d vel = v.getVelocity();
+            if (Math.abs(vel.y) > 0.1 || vel.horizontalLengthSquared() > 0.01) {
+                v.setVelocity(vel.add(d.x * speed * 0.12, 0, d.z * speed * 0.12));
+                return;
+            }
+        }
+        Box box = v.getBoundingBox();
+        for (double ang : new double[] {0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6}) {
             double c = Math.cos(ang), s = Math.sin(ang);
-            double dx = d.x * c - d.z * s, dz = d.x * s + d.z * c;
-            double nx = v.getX() + dx * speed, nz = v.getZ() + dz * speed;
-            int top = w.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, MathHelper.floor(nx), MathHelper.floor(nz));
-            if (top - v.getY() > 1.2 || v.getY() - top > 3) continue;
-            BlockPos under = BlockPos.ofFloored(nx, top - 1, nz);
-            if (!w.getFluidState(under).isEmpty()) continue;
-            double ny = MathHelper.lerp(0.5, v.getY(), top);
-            if (Math.abs(top - v.getY()) < 0.05) ny = top;
-            v.refreshPositionAndAngles(nx, ny, nz, v.getYaw(), v.getPitch());
+            double dx = (d.x * c - d.z * s) * speed, dz = (d.x * s + d.z * c) * speed;
+            Box moved = box.offset(dx, 0, dz);
+            boolean clear = w.isSpaceEmpty(v, moved);
+            // Not clear at foot height: can it be jumped (a block, a fence-high step)?
+            boolean vault = !clear && w.isSpaceEmpty(v, moved.offset(0, 1.2, 0)) && w.isSpaceEmpty(v, box.offset(0, 1.2, 0));
+            if (!clear && !vault) continue;
+            // Ground ahead within a few blocks, and not water.
+            double nx = v.getX() + dx * 2.5, nz = v.getZ() + dz * 2.5;
+            boolean ground = false;
+            for (int k = 0; k <= 4 && !ground; k++) {
+                BlockPos b = BlockPos.ofFloored(nx, v.getY() + (vault ? 1 : 0) - 0.5 - k, nz);
+                if (!w.getFluidState(b).isEmpty()) break;
+                if (!w.getBlockState(b).getCollisionShape(w, b).isEmpty()) ground = true;
+            }
+            if (!ground) continue;
+            if (vault) {
+                // A running jump up and over.
+                v.setVelocity(dx * 0.9, 0.45, dz * 0.9);
+                v.velocityModified = true;
+                return;
+            }
+            v.move(net.minecraft.entity.MovementType.SELF, new Vec3d(dx, -0.08, dz));
+            // Turned to where they're going when not squared up to someone.
+            float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+            v.bodyYaw = v.bodyYaw + MathHelper.wrapDegrees(yaw - v.bodyYaw) * 0.35f;
             return;
+        }
+        // Boxed in: jump at it.
+        if (v.isOnGround()) {
+            v.setVelocity(d.x * 0.18, 0.42, d.z * 0.18);
+            v.velocityModified = true;
+        }
+    }
+
+    /** Stuck inside a block (pushed, spawned badly): out and up into the open. */
+    private static void unstick(ServerWorld w, VillagerEntity v) {
+        if (w.isSpaceEmpty(v, v.getBoundingBox())) return;
+        for (int up = 1; up <= 4; up++) {
+            if (w.isSpaceEmpty(v, v.getBoundingBox().offset(0, up, 0))) {
+                v.refreshPositionAndAngles(v.getX(), v.getY() + up, v.getZ(), v.getYaw(), v.getPitch());
+                return;
+            }
+        }
+        for (Direction dirn : Direction.Type.HORIZONTAL) {
+            if (w.isSpaceEmpty(v, v.getBoundingBox().offset(dirn.getOffsetX(), 0, dirn.getOffsetZ()))) {
+                v.refreshPositionAndAngles(v.getX() + dirn.getOffsetX(), v.getY(), v.getZ() + dirn.getOffsetZ(), v.getYaw(), v.getPitch());
+                return;
+            }
         }
     }
 
