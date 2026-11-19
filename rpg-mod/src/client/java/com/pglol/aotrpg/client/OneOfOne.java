@@ -66,7 +66,7 @@ public final class OneOfOne {
                     lift = (float) Math.max(0, 1 - (pos.y - gy) / 12);
                 }
             }
-            VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
+            VertexConsumer glow = Glow.buffer(vc);
             boolean firstPerson = p == mc.player && mc.options.getPerspective().isFirstPerson();
             if (field && lift > 0.02f) {
                 // Faint on the ground under it: the air there is thick with it.
@@ -551,7 +551,7 @@ public final class OneOfOne {
         // face), just in front of the hat layer so nothing covers them.
         float px = 1 / 16f, zf = -4.6f * px, y0 = -4 * px, y1 = -3 * px;
         int core = red ? 0xFFE81A1A : 0xFF000000 | lighter(tint, 0.35f);
-        VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
+        VertexConsumer glow = Glow.buffer(vc);
         VertexConsumer solid = vc.getBuffer(RenderLayer.getDebugQuads());
         for (int s = -1; s <= 1; s += 2) {
             float x0 = s < 0 ? -3 * px : px, x1 = x0 + 2 * px;
@@ -575,7 +575,7 @@ public final class OneOfOne {
      */
     public static void back(MatrixStack ms, VertexConsumerProvider vc, float time, String id, int tint, double speed) {
         Matrix4f m = ms.peek().getPositionMatrix();
-        VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
+        VertexConsumer glow = Glow.buffer(vc);
         if (id.equals("back_sp")) {
             int ribbons = 9;
             float blow = (float) Math.min(0.5, speed * 1.4);

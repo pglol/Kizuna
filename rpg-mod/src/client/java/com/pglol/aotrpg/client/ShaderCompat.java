@@ -12,6 +12,20 @@ public final class ShaderCompat {
     private static java.lang.reflect.Method shadowPass;
     private static boolean looked;
 
+    private static java.lang.reflect.Method packInUse;
+
+    /** A shader pack is on (false without Iris). */
+    public static boolean packInUse() {
+        shadowPass();
+        if (api == null) return false;
+        try {
+            if (packInUse == null) packInUse = api.getClass().getMethod("isShaderPackInUse");
+            return (Boolean) packInUse.invoke(api);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
     /** Iris is drawing its shadow map right now (false without Iris). */
     public static boolean shadowPass() {
         if (!looked) {

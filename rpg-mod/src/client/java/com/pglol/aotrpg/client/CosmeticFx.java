@@ -582,7 +582,7 @@ public final class CosmeticFx {
             ms.push();
             ms.translate(pos.x - cam.x, top - cam.y, pos.z - cam.z);
             switch (head) {
-                case "head_halo" -> ring(vc.getBuffer(RenderLayer.getLightning()), ms.peek().getPositionMatrix(), 0.1f + (float) Math.sin(time * 2) * 0.03f,
+                case "head_halo" -> ring(Glow.buffer(vc), ms.peek().getPositionMatrix(), 0.1f + (float) Math.sin(time * 2) * 0.03f,
                     0.28f, 0.06f, 0xE0FFE08A);
                 case "head_crown" -> crown(vc.getBuffer(RenderLayer.getDebugQuads()), ms, bodyYaw(p, td));
                 case "head_laurel" -> laurel(vc.getBuffer(RenderLayer.getDebugQuads()), ms, bodyYaw(p, td));
@@ -594,7 +594,7 @@ public final class CosmeticFx {
                     ms.translate(0, -0.25, -0.3);
                     ms.multiply(RotationAxis.POSITIVE_Z.rotation(time * 0.4f));
                     Matrix4f m = ms.peek().getPositionMatrix();
-                    VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
+                    VertexConsumer glow = Glow.buffer(vc);
                     for (int k = 0; k < 12; k++) {
                         double a = k * Math.PI * 2 / 12;
                         float len = k % 2 == 0 ? 0.62f : 0.45f, wd = 0.05f;
@@ -638,7 +638,7 @@ public final class CosmeticFx {
                                 mc.world, p.getId() * 5 + i);
                         } else {
                             ms.multiply(mc.getEntityRenderDispatcher().getRotation());
-                            orb(vc.getBuffer(RenderLayer.getLightning()), ms.peek().getPositionMatrix(), 0.07f, 0xC09FE3FF);
+                            orb(Glow.buffer(vc), ms.peek().getPositionMatrix(), 0.07f, 0xC09FE3FF);
                         }
                         ms.pop();
                     }
@@ -701,7 +701,7 @@ public final class CosmeticFx {
                 default -> { a = 0xD05A8FD8; b = 0x50FFFFFF; }
             }
             float flap = (float) Math.sin(time * (speed > 0.3 ? 5 : 2.2)) * 0.18f;
-            VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
+            VertexConsumer glow = Glow.buffer(vc);
             for (int s = -1; s <= 1; s += 2) {
                 for (int f = 0; f < 7; f++) {
                     double ang = Math.toRadians(-30 + f * 15) + flap;
@@ -729,7 +729,7 @@ public final class CosmeticFx {
     /** Worn head pieces, drawn by CosmeticLayer on the head (the matrix at the top of the head, +Y up, +Z forward). */
     static void headShape(MatrixStack ms, VertexConsumerProvider vc, float time, String head) {
         switch (head) {
-            case "head_halo" -> ring(vc.getBuffer(RenderLayer.getLightning()), ms.peek().getPositionMatrix(), 0.14f + (float) Math.sin(time * 2) * 0.03f,
+            case "head_halo" -> ring(Glow.buffer(vc), ms.peek().getPositionMatrix(), 0.14f + (float) Math.sin(time * 2) * 0.03f,
                 0.28f, 0.06f, 0xE0FFE08A);
             case "head_crown" -> crown(vc.getBuffer(RenderLayer.getDebugQuads()), ms, 0);
             case "head_laurel" -> laurel(vc.getBuffer(RenderLayer.getDebugQuads()), ms, 0);
@@ -739,7 +739,7 @@ public final class CosmeticFx {
                 ms.translate(0, -0.25, -0.34);
                 ms.multiply(RotationAxis.POSITIVE_Z.rotation(time * 0.4f));
                 Matrix4f m = ms.peek().getPositionMatrix();
-                VertexConsumer glow = vc.getBuffer(RenderLayer.getLightning());
+                VertexConsumer glow = Glow.buffer(vc);
                 for (int k = 0; k < 12; k++) {
                     double a = k * Math.PI * 2 / 12;
                     float len = k % 2 == 0 ? 0.62f : 0.45f, wd = 0.05f;

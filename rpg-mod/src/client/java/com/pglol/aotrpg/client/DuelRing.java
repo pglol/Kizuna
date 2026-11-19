@@ -63,7 +63,7 @@ public final class DuelRing {
         ms.push();
         ms.translate(center.x - cam.x, center.y - cam.y, center.z - cam.z);
         Matrix4f m = ms.peek().getPositionMatrix();
-        VertexConsumer vc = vcp.getBuffer(RenderLayer.getLightning());
+        VertexConsumer vc = Glow.buffer(vcp);
         int seg = 96;
         float h = 9 * grow, base = -2;
         for (int i = 0; i < seg; i++) {

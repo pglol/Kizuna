@@ -92,6 +92,8 @@ public final class FxParticle extends SpriteBillboardParticle {
                 alpha = (1 - f) * (1 - f);
             }
         }
+        // Shader packs wash translucent particles out: a little more body under them.
+        if (ShaderCompat.packInUse()) alpha = Math.min(1f, alpha * 1.35f);
         Vec3d v = new Vec3d(velocityX, velocityY, velocityZ);
         if (v.lengthSquared() > 1e-5) dir = v.normalize();
     }

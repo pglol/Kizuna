@@ -98,7 +98,7 @@ final class BladeMotes {
             int[] c = color(inf, i, p);
             boolean bright = c[3] == 1;
             if (bright) {
-                if (glow == null) glow = base.getBuffer(RenderLayer.getLightning());
+                if (glow == null) glow = Glow.buffer(base);
                 quad(glow, x, y, z, right, up, size, c, (int) (230 * fade));
             } else {
                 if (dark == null) dark = base.getBuffer(RenderLayer.getDebugQuads());
