@@ -19,5 +19,9 @@
   "key.aot_rpg.technique": "Mentor technique",
   "block.aot_rpg.gas_refueler": "Gas Refueler",
   "key.aot_rpg.shoulder_swap": "Swap shoulders (combat camera)",
-  "subtitles.aot_rpg.hit": "Blade strikes"
+  "subtitles.aot_rpg.hit": "Blade strikes",
+  "subtitles.aot_rpg.shot": "Gunshot",
+  "subtitles.aot_rpg.impact": "Round strikes",
+  "subtitles.aot_rpg.whoosh": "Blade swings",
+  "subtitles.aot_rpg.clash": "Steel rings"
 }

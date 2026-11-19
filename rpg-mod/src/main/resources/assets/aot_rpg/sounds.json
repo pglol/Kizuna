@@ -1,10 +1,62 @@
 {
   "hit": {
     "subtitle": "subtitles.aot_rpg.hit",
-    "sounds": ["aot_rpg:hit1", "aot_rpg:hit2", "aot_rpg:hit3"]
+    "sounds": [
+      "aot_rpg:hit1",
+      "aot_rpg:hit2",
+      "aot_rpg:hit3"
+    ]
   },
   "hit_heavy": {
     "subtitle": "subtitles.aot_rpg.hit",
-    "sounds": ["aot_rpg:hit_heavy1", "aot_rpg:hit_heavy2"]
+    "sounds": [
+      "aot_rpg:hit_heavy1",
+      "aot_rpg:hit_heavy2"
+    ]
+  },
+  "apg_shot": {
+    "subtitle": "subtitles.aot_rpg.shot",
+    "sounds": [
+      {
+        "name": "aot_rpg:apg_shot1",
+        "attenuation_distance": 64
+      },
+      {
+        "name": "aot_rpg:apg_shot2",
+        "attenuation_distance": 64
+      },
+      {
+        "name": "aot_rpg:apg_shot3",
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "bullet_impact": {
+    "subtitle": "subtitles.aot_rpg.impact",
+    "sounds": [
+      "aot_rpg:bullet_impact1",
+      "aot_rpg:bullet_impact2"
+    ]
+  },
+  "ricochet": {
+    "subtitle": "subtitles.aot_rpg.impact",
+    "sounds": [
+      "aot_rpg:ricochet1"
+    ]
+  },
+  "whoosh": {
+    "subtitle": "subtitles.aot_rpg.whoosh",
+    "sounds": [
+      "aot_rpg:whoosh1",
+      "aot_rpg:whoosh2",
+      "aot_rpg:whoosh3"
+    ]
+  },
+  "steel_clash": {
+    "subtitle": "subtitles.aot_rpg.clash",
+    "sounds": [
+      "aot_rpg:steel_clash1",
+      "aot_rpg:steel_clash2"
+    ]
   }
 }

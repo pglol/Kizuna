@@ -158,6 +158,8 @@ public final class Guard {
     }
 
     private static void fx(ServerWorld w, int kind, Vec3d at, ServerPlayerEntity by) {
+        w.playSound(null, at.x, at.y, at.z, HitSounds.CLASH, net.minecraft.sound.SoundCategory.PLAYERS, kind == FX_CLASH ? 1.3f : 0.8f,
+            (kind == FX_CLASH ? 1f : 1.25f) + w.random.nextFloat() * 0.1f);
         String slot = kind == FX_CLASH ? "clash" : "block";
         String style = by == null ? "" : AotRpg.COSMETICS.styled(by, slot);
         Net.GuardFx msg = new Net.GuardFx(kind, at.x, at.y, at.z, style);

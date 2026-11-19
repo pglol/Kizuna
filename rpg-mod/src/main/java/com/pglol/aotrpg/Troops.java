@@ -739,7 +739,11 @@ public final class Troops {
         return e != null && e.isAlive() && !(e instanceof ServerPlayerEntity sp && (sp.isSpectator() || sp.isCreative() || AotRpg.DOWNED.isDowned(sp)));
     }
 
+    /** Who the troop thinking right now is after (for walk()'s parkour). */
+    private static LivingEntity chasing;
+
     private static void think(ServerWorld w, VillagerEntity v, Troop t, Squad sq, List<ServerPlayerEntity> players, int ticks) {
+        chasing = null;
         if (t.swapCool > 0) t.swapCool--;
         // Running only while they're moving fast (walk() sets it again this tick if so).
         if (v.isSprinting() && v.getVelocity().horizontalLengthSquared() < 0.01 && v.isOnGround()) v.setSprinting(false);
@@ -833,6 +837,7 @@ public final class Troops {
         }
         if (target == null || !target.getUuid().equals(t.target)) t.windup = 0;
         t.target = target == null ? null : target.getUuid();
+        chasing = target;
 
         // Only a leaderless squad nearly dead on its feet falls back, and not for long.
         if (!t.officer && t.flee <= 0 && target != null && sq.broken && v.getHealth() < v.getMaxHealth() * 0.2f && w.random.nextInt(200) == 0) t.flee = 40;
@@ -1131,7 +1136,7 @@ public final class Troops {
             anim(v, 2, 5, t.offhand ? 1 : 0);
             t.swingShown = false;
             t.offhand = !t.offhand;
-            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.HOSTILE, 1f, 0.9f + t.combo * 0.12f);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), HitSounds.WHOOSH, SoundCategory.HOSTILE, 1f, 0.9f + t.combo * 0.08f);
             Vec3d look = v.getRotationVec(1f).multiply(1, 0, 1).normalize();
             // The cut itself, seen from anywhere near: a crescent of steel.
             Vec3d arc = v.getEyePos().add(look.multiply(1.2)).add(0, -0.4, 0);
@@ -1603,7 +1608,7 @@ public final class Troops {
                     Vec3d p = from.lerp(at, i / 10.0);
                     AotParticles.one(w, AotParticles.fx(AotParticles.STREAK, 0xE8E8F0, 0.6f), p.x, p.y, p.z, at.x - from.x, at.y - from.y, at.z - from.z);
                 }
-                w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_TRIDENT_THROW, SoundCategory.HOSTILE, 1f, 1.6f);
+                w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_TRIDENT_THROW.value(), SoundCategory.HOSTILE, 1f, 1.6f);
                 if (target.getPos().add(0, 1, 0).squaredDistanceTo(at) < 1.5 * 1.5) {
                     target.damage(w.getDamageSources().mobAttack(v), 6 + lv * 0.18f + sk);
                     target.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SLOWNESS, 30, 1, false, false, true));
@@ -2209,7 +2214,11 @@ public final class Troops {
             boolean clear = w.isSpaceEmpty(v, moved);
             // Not clear at foot height: can it be jumped (a block, a fence-high step)?
             boolean vault = !clear && w.isSpaceEmpty(v, moved.offset(0, 1.2, 0)) && w.isSpaceEmpty(v, box.offset(0, 1.2, 0));
-            if (!clear && !vault) continue;
+            if (!clear && !vault) {
+                // A wall, with the one they're after up above: up it, hand over hand.
+                if (ang == 0 && parkourClimb(w, v, d, dx, dz)) return;
+                continue;
+            }
             // Ground ahead within a few blocks, and not water.
             double nx = v.getX() + dx * 2.5, nz = v.getZ() + dz * 2.5;
             boolean ground = false;
@@ -2218,7 +2227,11 @@ public final class Troops {
                 if (!w.getFluidState(b).isEmpty()) break;
                 if (!w.getBlockState(b).getCollisionShape(w, b).isEmpty()) ground = true;
             }
-            if (!ground) continue;
+            if (!ground) {
+                // A gap or a drop, with the one they're after across it or below: jump for it.
+                if (ang == 0 && parkourLeap(w, v, d)) return;
+                continue;
+            }
             if (vault) {
                 // A running jump up and over.
                 v.setVelocity(dx * 0.9, 0.45, dz * 0.9);
@@ -2236,6 +2249,47 @@ public final class Troops {
             v.setVelocity(d.x * 0.18, 0.42, d.z * 0.18);
             v.velocityModified = true;
         }
+    }
+
+    /** Climbing a wall toward someone above (up to eight blocks of it). */
+    private static boolean parkourClimb(ServerWorld w, VillagerEntity v, Vec3d d, double dx, double dz) {
+        LivingEntity c = chasing;
+        if (c == null || c.getY() < v.getY() + 1.5 || Math.hypot(c.getX() - v.getX(), c.getZ() - v.getZ()) > 14) return false;
+        Box ahead = v.getBoundingBox().offset(dx, 0, dz);
+        int top = -1;
+        for (int h = 1; h <= 8; h++) {
+            if (w.isSpaceEmpty(v, ahead.offset(0, h, 0))) {
+                top = h;
+                break;
+            }
+            if (!w.isSpaceEmpty(v, v.getBoundingBox().offset(0, h, 0))) return false;
+        }
+        if (top < 0) return false;
+        v.setVelocity(d.x * 0.06, 0.5, d.z * 0.06);
+        v.velocityModified = true;
+        if (v.age % 4 == 0) {
+            w.spawnParticles(ParticleTypes.POOF, v.getX() + d.x * 0.4, v.getY() + 0.8, v.getZ() + d.z * 0.4, 2, 0.1, 0.2, 0.1, 0.01);
+            w.playSound(null, v.getBlockPos(), SoundEvents.BLOCK_STONE_STEP, SoundCategory.HOSTILE, 0.6f, 1.3f);
+        }
+        return true;
+    }
+
+    /** A running leap across a gap toward someone (or down off the edge after someone below). */
+    private static boolean parkourLeap(ServerWorld w, VillagerEntity v, Vec3d d) {
+        LivingEntity c = chasing;
+        if (c == null || !v.isOnGround()) return false;
+        double hd = Math.hypot(c.getX() - v.getX(), c.getZ() - v.getZ()), dy = c.getY() - v.getY();
+        if (hd > 18) return false;
+        if (dy > -2.5) {
+            double push = MathHelper.clamp(0.45 + hd * 0.05, 0.5, 1.15);
+            v.setVelocity(d.x * push, 0.55 + Math.max(0, dy) * 0.05, d.z * push);
+        } else {
+            v.setVelocity(d.x * 0.35, 0.28, d.z * 0.35);
+        }
+        v.velocityModified = true;
+        afterimage(w, v, 0xE8E8F0);
+        w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_GOAT_LONG_JUMP, SoundCategory.HOSTILE, 0.9f, 1.2f);
+        return true;
     }
 
     /** Stuck inside a block (pushed, spawned badly): out and up into the open. */
@@ -2279,6 +2333,7 @@ public final class Troops {
         w.playSound(null, v.getX(), v.getY() + 1.5, v.getZ(), SoundEvents.ITEM_CROSSBOW_SHOOT, SoundCategory.HOSTILE, 0.8f, 1.8f);
         w.spawnParticles(ParticleTypes.SMOKE, muzzle.x, muzzle.y, muzzle.z, 3, 0.05, 0.05, 0.05, 0.01);
         Net.Trail trail = new Net.Trail("trail_troop", muzzle.x, muzzle.y, muzzle.z, stop.x, stop.y, stop.z);
+        HitSounds.shot(w, muzzle, stop, SoundCategory.HOSTILE);
         for (ServerPlayerEntity o : PlayerLookup.around(w, muzzle, 96)) if (ServerPlayNetworking.canSend(o, Net.Trail.ID)) ServerPlayNetworking.send(o, trail);
         if (!hit) {
             if (target instanceof ServerPlayerEntity p) p.playSoundToPlayer(SoundEvents.ENTITY_ARROW_SHOOT, SoundCategory.HOSTILE, 1f, 2f);
