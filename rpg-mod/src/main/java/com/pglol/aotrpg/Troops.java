@@ -90,6 +90,9 @@ public final class Troops {
         int holdT, grabCd;
         /** Brutes and headsmen: a signature move under way (2 leap slam, 4 grab reach, 5 head cut), its clock, its cooldown, how a grab ends (0 throw, 1 pummel). */
         int move, moveT, poundCd, holdMode, shrug;
+        /** Knocked off balance once at low health, and again near the end (a window to finish them). */
+        boolean reeled, reeled2;
+        Vec3d aim;
 
         Troop(UUID id, int squad, boolean officer, int role, int slot) {
             this.id = id;
@@ -286,7 +289,8 @@ public final class Troops {
             v.setCustomName(title);
             v.setCustomNameVisible(true);
             var hp = v.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
-            if (hp != null) hp.setBaseValue((officer ? arch.leaderHp : arch.hp) * (0.8 + 0.1 * sq.skill) + level * (officer ? 3.5 : 2.2));
+            // Sturdy: they take a real fight to put down.
+            if (hp != null) hp.setBaseValue((officer ? arch.leaderHp : arch.hp) * (0.8 + 0.1 * sq.skill) * 2.0 + level * (officer ? 7 : 4.5));
             if (arch.style == 1) {
                 // A head taller than anyone, and broad with it.
                 var size = v.getAttributeInstance(EntityAttributes.GENERIC_SCALE);
@@ -1056,6 +1060,7 @@ public final class Troops {
             return;
         }
         if (sq.arch.style == 2 && headsman(w, v, t, target, dist, sq)) return;
+        if (sq.arch.style == 0 && signature(w, v, t, target, dist, sq)) return;
         face(v, target.getEyePos());
         Vec3d to = target.getPos().subtract(v.getPos()).multiply(1, 0, 1);
         if (t.grabCd > 0) t.grabCd--;
@@ -1509,6 +1514,292 @@ public final class Troops {
         return false;
     }
 
+    // ------------------------------------------------------------------ signatures
+
+    private static void tell(ServerWorld w, VillagerEntity v, int rgb) {
+        Vec3d eye = v.getEyePos().add(v.getRotationVec(1f).multiply(0.5)).add(0, -0.3, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, rgb, 1.3f), eye.x, eye.y, eye.z, 0, 0, 0);
+    }
+
+    private static final int TELL_DODGE = 0xE02A2A, TELL_WAIT = 0xF4F0E6;
+
+    /**
+     * Every kind of fighter has a signature, each with its own tell and its own answer:
+     * <ul>
+     *   <li>Marleyans: a bayonet charge from range (side-step it and they stumble past, open);</li>
+     *   <li>Bandits: a fistful of sand in the eyes up close (back off from the crouch), and knives
+     *   thrown from range (keep moving);</li>
+     *   <li>Deserters: a riposte stance, blade held level and still (hit into it and you eat the
+     *   counter: wait it out, or go round);</li>
+     *   <li>Mercenaries: a whirling cleave that hits everything round them (red glint: get clear or
+     *   get over it);</li>
+     *   <li>Wandering swordsmen: a quickdraw from the sheath, through you and out the other side
+     *   (jump it);</li>
+     *   <li>Blade masters: all of those, and a flash-step behind you into a five-cut flurry.</li>
+     * </ul>
+     * True if it took the tick.
+     */
+    private static boolean signature(ServerWorld w, VillagerEntity v, Troop t, LivingEntity target, double dist, Squad sq) {
+        if (t.poundCd > 0) t.poundCd--;
+        Vec3d to = target.getPos().subtract(v.getPos()).multiply(1, 0, 1);
+        int lv = sq.level, sk = sq.skill;
+        switch (t.move) {
+            case 13 -> { // bayonet charge
+                face(v, target.getEyePos());
+                if (t.moveT > 0) {
+                    t.moveT--;
+                    if (t.moveT == 0) w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 0.8f, 1.6f);
+                    return true;
+                }
+                // Running straight at where they were: committed.
+                Vec3d dir = t.aim == null ? to.normalize() : t.aim;
+                walk(w, v, dir, 0.6);
+                AotParticles.burst(w, AotParticles.STREAK, 0xEAF4FF, 0.6f, v.getX(), v.getY() + 1, v.getZ(), 2, 0.2, 0.2);
+                if (dist < 1.8) {
+                    t.move = 0;
+                    anim(v, 2, 5, 0);
+                    target.damage(w.getDamageSources().mobAttack(v), 10 + lv * 0.25f + sk);
+                    Impact.launch(target, v, 1.3);
+                    w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, SoundCategory.HOSTILE, 1.2f, 0.8f);
+                    t.cool = 10;
+                } else if (--t.holdT <= 0) {
+                    // Missed: carried on past, stumbling.
+                    t.move = 0;
+                    t.stun = 24;
+                    w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_NODAMAGE, SoundCategory.HOSTILE, 1f, 0.7f);
+                }
+                return true;
+            }
+            case 6 -> { // sand toss
+                face(v, target.getEyePos());
+                if (--t.moveT > 0) return true;
+                t.move = 0;
+                anim(v, 5, 5, 0);
+                Vec3d look = v.getRotationVec(1f).multiply(1, 0, 1).normalize();
+                Vec3d c = v.getEyePos().add(look.multiply(1.2));
+                w.spawnParticles(new net.minecraft.particle.BlockStateParticleEffect(ParticleTypes.BLOCK, net.minecraft.block.Blocks.SAND.getDefaultState()),
+                    c.x, c.y, c.z, 40, 0.6, 0.4, 0.6, 0.1);
+                w.playSound(null, v.getBlockPos(), SoundEvents.BLOCK_SAND_BREAK, SoundCategory.HOSTILE, 1.4f, 0.8f);
+                if (dist < 4.6 && to.lengthSquared() > 1e-4 && look.dotProduct(to.normalize()) > 0.5) {
+                    target.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.BLINDNESS, 45, 0, false, false, false));
+                    target.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SLOWNESS, 35, 1, false, false, false));
+                    // ...and straight in while you can't see.
+                    t.swing = 3;
+                    t.cool = 0;
+                    t.combo = 0;
+                }
+                return true;
+            }
+            case 7 -> { // knife throw
+                face(v, target.getEyePos());
+                if (--t.moveT > 0) return true;
+                t.move = 0;
+                anim(v, 5, 5, 0);
+                Vec3d from = v.getEyePos().add(0, -0.2, 0), at = t.aim != null ? t.aim : target.getPos().add(0, 1, 0);
+                for (int i = 0; i <= 10; i++) {
+                    Vec3d p = from.lerp(at, i / 10.0);
+                    AotParticles.one(w, AotParticles.fx(AotParticles.STREAK, 0xE8E8F0, 0.6f), p.x, p.y, p.z, at.x - from.x, at.y - from.y, at.z - from.z);
+                }
+                w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_TRIDENT_THROW, SoundCategory.HOSTILE, 1f, 1.6f);
+                if (target.getPos().add(0, 1, 0).squaredDistanceTo(at) < 1.5 * 1.5) {
+                    target.damage(w.getDamageSources().mobAttack(v), 6 + lv * 0.18f + sk);
+                    target.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SLOWNESS, 30, 1, false, false, true));
+                }
+                t.cool = 6;
+                return true;
+            }
+            case 8 -> { // riposte stance (the counter itself is in struck)
+                face(v, target.getEyePos());
+                if (t.moveT % 4 == 0) {
+                    Vec3d g = v.getEyePos().add(v.getRotationVec(1f).multiply(0.6)).add(0, -0.3, 0);
+                    AotParticles.one(w, AotParticles.fx(AotParticles.SPARK, TELL_WAIT, 0.5f), g.x, g.y, g.z, 0, 0.02, 0);
+                }
+                if (--t.moveT > 0) return true;
+                t.move = 0;
+                // Nobody bit: out of the stance into a cut.
+                t.swing = 4;
+                t.cool = 0;
+                return true;
+            }
+            case 9 -> { // whirling cleave
+                if (--t.moveT > 0) {
+                    if (t.moveT % 3 == 0) tell(w, v, TELL_DODGE);
+                    return true;
+                }
+                t.move = 0;
+                anim(v, 9, 6, 0);
+                Vec3d c = v.getPos().add(0, 1.1, 0);
+                for (int i = 0; i < 3; i++) AotParticles.one(w, AotParticles.fx(AotParticles.ARC, 0xF4F0E6, 3.5f), c.x, c.y, c.z, Math.cos(i * 2.1), 0, Math.sin(i * 2.1));
+                AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xE8D8B8, 4f), v.getX(), v.getY() + 0.1, v.getZ(), 0, 0, 0);
+                w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.HOSTILE, 1.5f, 0.6f);
+                for (ServerPlayerEntity p : w.getPlayers()) {
+                    if (p.isSpectator() || p.squaredDistanceTo(v) > 3.8 * 3.8 || p.getY() - v.getY() > 1.4) continue;
+                    p.damage(w.getDamageSources().mobAttack(v), 11 + lv * 0.3f + sk);
+                    Impact.launch(p, v, 1.2);
+                }
+                t.cool = 12;
+                return true;
+            }
+            case 10 -> { // quickdraw
+                face(v, target.getEyePos());
+                if (--t.moveT > 0) {
+                    if (t.moveT == 3) tell(w, v, TELL_DODGE);
+                    return true;
+                }
+                t.move = 0;
+                Vec3d from = v.getPos();
+                Vec3d dn = to.lengthSquared() < 1e-4 ? v.getRotationVec(1f).multiply(1, 0, 1).normalize() : to.normalize();
+                Vec3d end = from.add(dn.multiply(Math.min(8, dist + 2)));
+                var wall = w.raycast(new RaycastContext(from.add(0, 1, 0), end.add(0, 1, 0), RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, v));
+                if (wall.getType() != HitResult.Type.MISS) end = wall.getPos().subtract(dn.multiply(0.6)).add(0, -1, 0);
+                for (int i = 0; i <= 8; i++) {
+                    Vec3d p = from.lerp(end, i / 8.0).add(0, 1.1, 0);
+                    AotParticles.one(w, AotParticles.fx(AotParticles.STREAK, 0xFFFFFF, 0.9f), p.x, p.y, p.z, dn.x, 0, dn.z);
+                }
+                afterimage(w, v, 0xFFFFFF);
+                v.refreshPositionAndAngles(end.x, from.y, end.z, v.getYaw(), v.getPitch());
+                anim(v, 9, 6, 0);
+                w.playSound(null, from.x, from.y, from.z, SoundEvents.ITEM_TRIDENT_THROW, SoundCategory.HOSTILE, 1.2f, 1.2f);
+                boolean jumped = target.getY() - from.y > 1.1;
+                if (!jumped && dist < 9) {
+                    target.damage(w.getDamageSources().mobAttack(v), 10 + lv * 0.28f + sk);
+                    Vec3d c = target.getPos().add(0, 1.1, 0);
+                    AotParticles.one(w, AotParticles.fx(AotParticles.ARC, 0xFFFFFF, 3f), c.x, c.y, c.z, -dn.z, 0, dn.x);
+                }
+                t.cool = 12;
+                return true;
+            }
+            case 11 -> { // flash-step flurry
+                face(v, target.getEyePos());
+                if (t.moveT > 0 && --t.moveT % 3 == 0) {
+                    int n = t.moveT / 3;
+                    anim(v, 2, 3, n % 2);
+                    v.swingHand(n % 2 == 0 ? net.minecraft.util.Hand.MAIN_HAND : net.minecraft.util.Hand.OFF_HAND);
+                    Vec3d c = target.getPos().add(0, 1.1, 0);
+                    AotParticles.one(w, AotParticles.fx(AotParticles.ARC, 0xFFE8B0, 2.4f), c.x, c.y, c.z, Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+                    w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, SoundCategory.HOSTILE, 1f, 1.2f + n * 0.1f);
+                    if (v.squaredDistanceTo(target) < 3.5 * 3.5) target.damage(w.getDamageSources().mobAttack(v), 5 + lv * 0.12f);
+                }
+                if (t.moveT <= 0) {
+                    t.move = 0;
+                    t.cool = 14;
+                }
+                return true;
+            }
+            default -> { }
+        }
+        // Start one?
+        if (t.swing > 0 || t.cool > 2 || t.guard > 0 || t.poundCd > 0 || !v.isOnGround() || w.random.nextInt(3) != 0) return false;
+        Arch a = sq.arch;
+        boolean master = a == Arch.MASTER;
+        int pick = -1;
+        if ((a == Arch.MARLEY || master) && dist > 5 && dist < 13) pick = 13;
+        else if ((a == Arch.BANDIT || master && w.random.nextBoolean()) && dist < 3.8) pick = 6;
+        else if ((a == Arch.BANDIT || master && w.random.nextBoolean()) && dist > 7 && dist < 17) pick = 7;
+        else if ((a == Arch.DESERTER || master || a == Arch.SWORDSMAN && w.random.nextBoolean()) && dist < 3.6) pick = 8;
+        else if ((a == Arch.MERCENARY || master) && dist < 3.6) pick = 9;
+        else if ((a == Arch.SWORDSMAN || master) && dist > 3 && dist < 9) pick = 10;
+        if (master && dist < 10 && w.random.nextInt(3) == 0) pick = 11;
+        if (pick < 0) return false;
+        t.move = pick;
+        switch (pick) {
+            case 13 -> {
+                t.moveT = Math.max(8, 14 - sk);
+                t.holdT = 16;
+                t.aim = to.lengthSquared() < 1e-4 ? null : to.normalize();
+                t.poundCd = 120 - sk * 8;
+                anim(v, 10, t.moveT, 0);
+                tell(w, v, TELL_DODGE);
+                w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PILLAGER_CELEBRATE, SoundCategory.HOSTILE, 1f, 0.9f);
+            }
+            case 6 -> {
+                t.moveT = Math.max(6, 10 - sk);
+                t.poundCd = 150;
+                anim(v, 8, t.moveT, 0);
+                w.playSound(null, v.getBlockPos(), SoundEvents.BLOCK_SAND_STEP, SoundCategory.HOSTILE, 1.2f, 0.7f);
+            }
+            case 7 -> {
+                t.moveT = Math.max(7, 12 - sk);
+                t.aim = target.getPos().add(target.getVelocity().multiply(6)).add(0, 1, 0);
+                t.poundCd = 70;
+                anim(v, 6, t.moveT, 0);
+                tell(w, v, 0xFFD24A);
+            }
+            case 8 -> {
+                t.moveT = 22 + sk * 2;
+                t.poundCd = 140 - sk * 10;
+                anim(v, 3, t.moveT, 0);
+                w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_ARMOR_EQUIP_CHAIN.value(), SoundCategory.HOSTILE, 1f, 0.6f);
+                w.playSound(null, v.getBlockPos(), SoundEvents.BLOCK_ANVIL_PLACE, SoundCategory.HOSTILE, 0.3f, 2f);
+            }
+            case 9 -> {
+                t.moveT = Math.max(10, 16 - sk);
+                t.poundCd = 120 - sk * 8;
+                anim(v, 1, t.moveT, 0);
+                w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_TRIDENT_RETURN, SoundCategory.HOSTILE, 1f, 0.5f);
+            }
+            case 10 -> {
+                t.moveT = Math.max(8, 14 - sk);
+                t.poundCd = 110 - sk * 8;
+                anim(v, 8, t.moveT, 0);
+                w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_ARMOR_EQUIP_IRON.value(), SoundCategory.HOSTILE, 1f, 0.6f);
+            }
+            case 11 -> {
+                // Gone, and behind you.
+                afterimage(w, v, 0xFFD24A);
+                Vec3d behind = target.getPos().subtract(target.getRotationVec(1f).multiply(1, 0, 1).normalize().multiply(1.4));
+                w.spawnParticles(ParticleTypes.CLOUD, v.getX(), v.getY() + 1, v.getZ(), 10, 0.3, 0.5, 0.3, 0.02);
+                v.refreshPositionAndAngles(behind.x, target.getY(), behind.z, v.getYaw(), v.getPitch());
+                w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.HOSTILE, 0.8f, 1.5f);
+                t.moveT = 15;
+                t.poundCd = 100;
+            }
+            default -> { }
+        }
+        return true;
+    }
+
+    /** Struck into a riposte stance: the blow is turned and the answer comes at once. */
+    private static void riposte(ServerWorld w, VillagerEntity v, Troop t, ServerPlayerEntity by, Squad sq) {
+        int lv = sq == null ? 30 : sq.level, sk = sq == null ? 3 : sq.skill;
+        Vec3d g = v.getEyePos().add(v.getRotationVec(1f).multiply(0.6)).add(0, -0.3, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFFFFF, 4f), g.x, g.y, g.z, 0, 0, 0);
+        AotParticles.burst(w, AotParticles.SPARK, 0xFFE8B0, 0.5f, g.x, g.y, g.z, 18, 0.2, 0.6);
+        anim(v, 2, 5, 0);
+        v.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+        by.damage(w.getDamageSources().mobAttack(v), 12 + lv * 0.3f + sk);
+        Stuns.stun(by, 22);
+        Impact.launch(by, v, 1.1);
+        Impact.frame(w, g, 0.8f, by);
+        w.playSound(null, v.getBlockPos(), SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.HOSTILE, 0.8f, 1.8f);
+        w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, SoundCategory.HOSTILE, 1.2f, 0.8f);
+        t.cool = 8;
+    }
+
+    /**
+     * Badly hurt, they're knocked off balance: once when they drop under a third of their health,
+     * and again under a sixth. Reeling, they're open to a finisher.
+     */
+    public static void register() {
+        net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.AFTER_DAMAGE.register((e, src, base, taken, blocked) -> {
+            Troop t = troops.get(e.getUuid());
+            if (t == null || !(e instanceof VillagerEntity v) || !(e.getWorld() instanceof ServerWorld w) || !v.isAlive()) return;
+            float f = v.getHealth() / v.getMaxHealth();
+            boolean now = !t.reeled && f < 0.34f || !t.reeled2 && f < 0.17f;
+            if (!now) return;
+            if (f < 0.17f) t.reeled2 = true;
+            t.reeled = true;
+            t.move = 0;
+            t.holding = null;
+            stagger(v, 45);
+            Stuns.stun(v, 45);
+            w.spawnParticles(ParticleTypes.CRIT, v.getX(), v.getY() + 2, v.getZ(), 14, 0.3, 0.2, 0.3, 0.05);
+            AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xE0B96A, 2.2f), v.getX(), v.getY() + 0.05, v.getZ(), 0, 0, 0);
+            w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.HOSTILE, 1.2f, 0.6f);
+            w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_PILLAGER_HURT, SoundCategory.HOSTILE, 1f, 0.7f);
+        });
+    }
+
     /** Shows everyone nearby what his body is doing (see Net.TroopAnim). */
     private static void anim(VillagerEntity v, int kind, int ticks, int hand) {
         Net.TroopAnim a = new Net.TroopAnim(v.getId(), (byte) kind, (byte) Math.min(127, Math.max(0, ticks)), (byte) hand);
@@ -1609,6 +1900,15 @@ public final class Troops {
         Squad hsq = squads.get(t.squad);
         if (hsq != null) provoke(w, hsq, by);
         int sk = skill(t);
+        // A riposte stance: strike into it and it's turned straight back on you.
+        if (t.move == 8 && t.stun <= 0) {
+            Vec3d toBy0 = by.getPos().subtract(v.getPos()).multiply(1, 0, 1), look0 = v.getRotationVec(1f).multiply(1, 0, 1);
+            if (toBy0.lengthSquared() > 1e-4 && look0.lengthSquared() > 1e-4 && look0.normalize().dotProduct(toBy0.normalize()) > 0.1) {
+                t.move = 0;
+                riposte(w, v, t, by, hsq);
+                return 0;
+            }
+        }
         if (hsq != null && hsq.arch.style == 1 && t.stun <= 0) {
             // A brute barely rocks: hits land, but he doesn't flinch. Three on him while he has
             // someone pinned and he lets go.

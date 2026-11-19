@@ -73,7 +73,7 @@ public final class Finishers {
     public static boolean finishable(LivingEntity e) {
         if (e == null || !e.isAlive() || AotRpg.isTitan(e) || inScene(e)) return false;
         if (!(Stuns.stunned(e) || Impact.pinned(e))) return false;
-        float limit = e instanceof ServerPlayerEntity ? 0.25f : 0.2f;
+        float limit = e instanceof ServerPlayerEntity ? 0.25f : 0.35f;
         return e.getHealth() <= e.getMaxHealth() * limit;
     }
 
