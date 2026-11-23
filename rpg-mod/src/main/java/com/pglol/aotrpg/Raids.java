@@ -270,7 +270,7 @@ public final class Raids {
             ServerPlayerEntity m = server.getPlayerManager().getPlayer(id);
             if (m != null) squad.add(m);
         }
-        int ticks = Cinematics.intro(squad, r.center, squad, boss.name().toUpperCase() + " RAID", DIFFS[diff] + " · clear the waves, then take its nape", 0xE04A3A);
+        int ticks = Cinematics.introChosen(squad, r.center, squad, boss.name().toUpperCase() + " RAID", DIFFS[diff] + " · clear the waves, then take its nape", 0xE04A3A);
         r.nextWave = r.started + Math.max(12_000, ticks * 50L + 3_000);
     }
 

@@ -25,9 +25,67 @@ public final class Cinematics {
 
     private static final int SMOOTH = 0, RAMP = 1, WHOOSH = 2, LINE = 0, ORBIT = 1;
 
-    /** Plays an intro to the viewers. Returns how long it runs, in ticks. */
+    /** Until when each player is watching something (ms). */
+    private static final java.util.Map<java.util.UUID, Long> busyUntil = new java.util.HashMap<>(), lastShown = new java.util.HashMap<>();
+    /** What each player has already been shown (by the threat's id, or the intro's title). */
+    private static final java.util.Map<java.util.UUID, java.util.Set<String>> seen = new java.util.HashMap<>();
+    /** The least time between two intros that take your camera. */
+    private static final long GAP = 75_000;
+
+    /** Already watching one: nothing else takes the camera until it's done. */
+    public static boolean busy(ServerPlayerEntity p) {
+        return busyUntil.getOrDefault(p.getUuid(), 0L) > System.currentTimeMillis();
+    }
+
+    /** Mid-fight, flying on the gear or falling: taking the camera now would cost you. */
+    private static boolean engaged(ServerPlayerEntity p) {
+        if (Classes.inCombat(p)) return true;
+        if (!p.isOnGround() && !p.isTouchingWater() && p.getVelocity().horizontalLength() > 0.45) return true;
+        return p.fallDistance > 3;
+    }
+
+    private static String key(List<? extends Entity> subjects, String title) {
+        for (Entity e : subjects) {
+            if (e == null || e instanceof ServerPlayerEntity) continue;
+            Entity root = TitanLevels.rootOf(e);
+            return (root == null ? e : root).getUuidAsString();
+        }
+        return "t:" + title;
+    }
+
+    /** Just the title card, while you keep playing. */
+    private static void glimpse(ServerPlayerEntity p, String title, String sub, int color) {
+        if (ServerPlayNetworking.canSend(p, Net.Cutscene.ID)) ServerPlayNetworking.send(p, new Net.Cutscene(List.of(), false, title, sub, color, true));
+    }
+
+    /**
+     * Plays an intro to the viewers who can take it: each threat once per player, never over another
+     * cutscene, never mid-fight or mid-flight, and not hard on the heels of the last one. Everyone
+     * else just gets the title card. Returns how long it runs, in ticks (0 if no one watches it).
+     */
     public static int intro(List<ServerPlayerEntity> viewers, Vec3d focus, List<? extends Entity> subjects, String title, String sub, int color) {
+        return intro(viewers, focus, subjects, title, sub, color, false);
+    }
+
+    /** As intro, for one the players set off themselves (starting a raid): only another cutscene holds it back. */
+    public static int introChosen(List<ServerPlayerEntity> viewers, Vec3d focus, List<? extends Entity> subjects, String title, String sub, int color) {
+        return intro(viewers, focus, subjects, title, sub, color, true);
+    }
+
+    private static int intro(List<ServerPlayerEntity> all, Vec3d focus, List<? extends Entity> subjects, String title, String sub, int color, boolean chosen) {
+        if (all.isEmpty()) return 0;
+        long now = System.currentTimeMillis();
+        String k = key(subjects, title);
+        List<ServerPlayerEntity> viewers = new ArrayList<>();
+        for (ServerPlayerEntity p : all) {
+            if (p.isSpectator()) continue;
+            if (!chosen && !seen.computeIfAbsent(p.getUuid(), x -> new java.util.HashSet<>()).add(k)) continue;
+            boolean free = !busy(p) && (chosen || !engaged(p) && now - lastShown.getOrDefault(p.getUuid(), 0L) > GAP);
+            if (free) viewers.add(p);
+            else glimpse(p, title, sub, color);
+        }
         if (viewers.isEmpty()) return 0;
+        for (ServerPlayerEntity p : viewers) lastShown.put(p.getUuid(), now);
         List<Net.Shot> shots = new ArrayList<>();
         ServerPlayerEntity v0 = viewers.get(0);
         Vec3d eye = v0.getEyePos();
@@ -95,9 +153,11 @@ public final class Cinematics {
         float secs = 0;
         for (Net.Shot s : shots) secs += s.seconds();
         // The glide back into your eyes takes a moment more.
-        int ticks = (int) (secs * 20) + (blendOut ? 14 : 4);
+        int ticks = (int) (secs * 20) + (blendOut ? 30 : 8);
         Net.Cutscene c = new Net.Cutscene(shots, false, title, sub, color, blendOut);
+        long until = System.currentTimeMillis() + ticks * 50L;
         for (ServerPlayerEntity p : viewers) {
+            busyUntil.put(p.getUuid(), Math.max(busyUntil.getOrDefault(p.getUuid(), 0L), until));
             if (ServerPlayNetworking.canSend(p, Net.Cutscene.ID)) ServerPlayNetworking.send(p, c);
             p.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, ticks + 20, 4, false, false, false));
         }
