@@ -98,6 +98,62 @@ public final class GameHints {
         return ammoZero ? 2 : 0;
     }
 
+    // ------------------------------------------------------------------ teaching, a few times each
+
+    /** How many times each lesson has been shown (kept between sessions, so they stop once learned). */
+    private static final java.util.Properties taught = new java.util.Properties();
+    private static boolean loaded;
+    private static final int TIMES = 3;
+
+    private static java.nio.file.Path file() {
+        return net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("aot_rpg_lessons.properties");
+    }
+
+    private static int taughtCount(String id) {
+        if (!loaded) {
+            loaded = true;
+            try (var in = java.nio.file.Files.newInputStream(file())) {
+                taught.load(in);
+            } catch (Exception ignored) {
+            }
+        }
+        try {
+            return Integer.parseInt(taught.getProperty(id, "0"));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static void markTaught(String id) {
+        taught.setProperty(id, String.valueOf(taughtCount(id) + 1));
+        try (var out = java.nio.file.Files.newOutputStream(file())) {
+            taught.store(out, "AoT RPG lessons seen");
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** A lesson that's still worth showing (fewer than three times so far, and not in the last few minutes). */
+    private static boolean lesson(String id) {
+        return id.equals(current) || taughtCount(id) < TIMES && ready(id, 180_000);
+    }
+
+    /** Someone close by is pinned to a wall or flying, out of reach: the moment for a pursuit. */
+    private static boolean pursuable(MinecraftClient mc) {
+        for (var e : mc.world.getOtherEntities(mc.player, mc.player.getBoundingBox().expand(30))) {
+            if (!(e instanceof net.minecraft.entity.LivingEntity le) || !le.isAlive() || e.squaredDistanceTo(mc.player) < 16) continue;
+            if (AdrenalineClient.pinned(e.getId()) || Ragdoll.active(e.getId())) return true;
+        }
+        return false;
+    }
+
+    /** A fighter close by in the middle of a fight (to explain the warning colours). */
+    private static boolean fightersNear(MinecraftClient mc) {
+        for (var e : mc.world.getOtherEntities(mc.player, mc.player.getBoundingBox().expand(14))) {
+            if (LockOn.npc(e) && e.isAlive()) return true;
+        }
+        return false;
+    }
+
     private static boolean ready(String id, long restMs) {
         return Util.getMeasuringTimeMs() - lastShown.getOrDefault(id, -restMs - 1) > restMs || current.equals(id);
     }
@@ -137,6 +193,26 @@ public final class GameHints {
         if (com.pglol.aotrpg.Loadout.isGrip(main) && ready("guard", 300_000)) {
             return new String[] {"guard", "Hold right click to block · Middle mouse to lock on"};
         }
+        // The moves, taught when they'd work (a few times each, then never again).
+        boolean blades = com.pglol.aotrpg.Loadout.isGrip(main) || com.pglol.aotrpg.Guard.melee(main) && !com.pglol.aotrpg.AotItems.isApgGun(main);
+        if (blades && Finish.target(mc) != null && lesson("l_finish")) {
+            return new String[] {"l_finish", "They're finished: strike now for a finisher"};
+        }
+        if (blades && OdmMoves.gear && pursuable(mc) && lesson("l_pursuit")) {
+            return new String[] {"l_pursuit", "Strike at them from range: your gear fires you after them (Pursuit)"};
+        }
+        if (fightersNear(mc) && ClientState.locked == false && lesson("l_tells")) {
+            return new String[] {"l_tells", "Flash colours: RED dodge · PURPLE step back (grab) · GOLD block · WHITE don't swing"};
+        }
+        if (blades && OdmMoves.gear && !pl.isOnGround() && !pl.isTouchingWater() && pl.getVelocity().y < 0.2 && lesson("l_slam")) {
+            return new String[] {"l_slam", "In the air: hold strike for a slam slash · jump again to dash (" + key(mc.options.jumpKey) + ")"};
+        }
+        if (blades && pl.isOnGround() && fightersNear(mc) && lesson("l_rise")) {
+            return new String[] {"l_rise", "Look up and strike to throw them into the air (Rising Cut)"};
+        }
+        if (blades && pl.isOnGround() && AdrenalineClient.build() == com.pglol.aotrpg.Builds.HEAVY && fightersNear(mc) && lesson("l_crush")) {
+            return new String[] {"l_crush", "Heavy build: hold strike on the ground for a Crushing Blow"};
+        }
         if (TitanPlates.near() && ready("nape", 240_000)) {
             return new String[] {"nape", "Aim for the nape: weak blades need several cuts"};
         }
@@ -154,13 +230,14 @@ public final class GameHints {
         String id = h == null ? "" : h[0];
         if (!id.equals(current)) {
             if (!current.isEmpty()) lastShown.put(current, now);
+            if (id.startsWith("l_")) markTaught(id);
             current = id;
             since = now;
         }
         if (h == null) return;
         long age = now - since;
         // Tips last 6 seconds; the reload prompt stays while it is true.
-        if (!id.equals("reload") && age > 6000) {
+        if (!id.equals("reload") && age > (id.startsWith("l_") ? 7500 : 6000)) {
             lastShown.put(id, now);
             return;
         }
