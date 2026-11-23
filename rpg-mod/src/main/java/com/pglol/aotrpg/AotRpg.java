@@ -147,6 +147,7 @@ public final class AotRpg implements ModInitializer {
         Locks.register();
         Cinematics.register();
         Director.register();
+        SwingMetrics.register();
         Delves.register();
         Contracts.register();
         Net.register();
