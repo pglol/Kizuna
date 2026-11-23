@@ -1142,6 +1142,12 @@ public final class Homes {
         enter(p, list.get(0));
     }
 
+    /** Inside someone's home (any home, not the lobby or open space in this world). */
+    public boolean isHomeSpace(BlockPos pos) {
+        int n = instanceAt(pos);
+        return n >= 0 && data.instances.get(n) != null;
+    }
+
     /** Only the owner builds and breaks inside their own home and yard. */
     public boolean canBuild(ServerPlayerEntity p, BlockPos pos) {
         int n = instanceAt(pos);

@@ -43,7 +43,8 @@ public final class Cooking {
         GRAIN("Wheat", Items.WHEAT, Set.of(Items.WHEAT)),
         SWEET("Sweetener", Items.SUGAR, Set.of(Items.SUGAR, Items.HONEY_BOTTLE, Items.SWEET_BERRIES, Items.APPLE, Items.GLOW_BERRIES)),
         EGG("Egg", Items.EGG, Set.of(Items.EGG)),
-        MUSHROOM("Mushroom", Items.BROWN_MUSHROOM, Set.of(Items.BROWN_MUSHROOM, Items.RED_MUSHROOM));
+        MUSHROOM("Mushroom", Items.BROWN_MUSHROOM, Set.of(Items.BROWN_MUSHROOM, Items.RED_MUSHROOM)),
+        PORK("Raw pork", Items.PORKCHOP, Set.of(Items.PORKCHOP));
 
         public final String title;
         public final Item icon;
@@ -79,6 +80,12 @@ public final class Cooking {
         HONEY_CAKE("Honey Cake", Items.PUMPKIN_PIE, 8, 0.6f,
             List.of(new Ingredient(Group.GRAIN, 2), new Ingredient(Group.SWEET, 1), new Ingredient(Group.EGG, 1)),
             List.of(new Buff(StatusEffects.JUMP_BOOST, 180, 0, "Jump Boost I"), new Buff(StatusEffects.ABSORPTION, 120, 0, "Absorption I"))),
+        PORK_ROAST("Spit-Roast Pork", Items.COOKED_PORKCHOP, 10, 1.0f,
+            List.of(new Ingredient(Group.PORK, 2)),
+            List.of(new Buff(StatusEffects.HEALTH_BOOST, 300, 0, "Health Boost I"))),
+        PORK_STEW("Pork and Bean Pot", Items.RABBIT_STEW, 14, 1.1f,
+            List.of(new Ingredient(Group.PORK, 1), new Ingredient(Group.VEGETABLE, 2), new Ingredient(Group.GRAIN, 1)),
+            List.of(new Buff(StatusEffects.RESISTANCE, 300, 0, "Resistance I"), new Buff(StatusEffects.SATURATION, 1, 0, "Full"))),
         MUSHROOM_BROTH("Mushroom Broth", Items.MUSHROOM_STEW, 6, 0.6f,
             List.of(new Ingredient(Group.MUSHROOM, 2)),
             List.of(new Buff(StatusEffects.NIGHT_VISION, 300, 0, "Night Vision")));

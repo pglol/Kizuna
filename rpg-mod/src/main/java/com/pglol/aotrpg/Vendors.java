@@ -482,6 +482,8 @@ public final class Vendors {
         if (s.isOf(Items.EMERALD)) return 40;
         if (s.isOf(Items.AMETHYST_SHARD) || s.isOf(Items.QUARTZ)) return 3;
         if (s.isOf(Items.LEATHER) || s.isOf(Items.STRING)) return 1;
+        // Odds and ends of every kind: worth a coin to someone who makes things.
+        if (!s.contains(DataComponentTypes.FOOD)) return 1;
         return 0;
     }
 

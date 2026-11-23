@@ -414,6 +414,19 @@ public final class Recipes {
             of(Items.IRON_NUGGET, 1), any("Any cooked meat", 2, Items.COOKED_BEEF, Items.COOKED_PORKCHOP, Items.COOKED_MUTTON, Items.COOKED_CHICKEN));
         add("officers_supper", K, "Rations", dish(Items.PUMPKIN_PIE, "Officer's Supper", "Meat, bread and a sweet: a rare night", 20, 1.4f), "schematic:2", 14,
             of(Items.COOKED_BEEF, 1), of(Items.BREAD, 1), of(Items.SUGAR, 1), of(Items.APPLE, 1));
+        // Pork, properly.
+        add("smoked_ham", K, "Rations", dish(Items.COOKED_PORKCHOP, "Smoked Ham", "Hung over the fire a whole night", 14, 1.2f), "", 4,
+            of(Items.PORKCHOP, 2), any("Charcoal or coal", 1, Items.CHARCOAL, Items.COAL));
+        add("pork_hash", K, "Rations", dish(Items.BAKED_POTATO, "Pork and Potato Hash", "Fried in its own fat, salted hard", 13, 1.3f), "", 4,
+            of(Items.PORKCHOP, 1), of(Items.POTATO, 1), any("A carrot or beetroot", 1, Items.CARROT, Items.BEETROOT));
+        add("pork_buns", K, "Baking", dish(Items.BREAD, "Pork Buns", "Soft bread round sweet pork, two to a cloth", 12, 1.1f), "skill:cooking:1", 4,
+            of(Items.WHEAT, 2), of(Items.COOKED_PORKCHOP, 1), of(Items.SUGAR, 1));
+        add("roast_with_apples", K, "Rations", dish(Items.COOKED_PORKCHOP, "Pork Roast with Apples", "A feast-day roast for the whole squad", 18, 1.4f),
+            "skill:cooking:2", 8, of(Items.PORKCHOP, 3), of(Items.APPLE, 2), of(Items.CARROT, 1));
+        add("cured_pork", K, "Rations", dish(Items.PORKCHOP, "Cured Pork", "Salted and sugared: it keeps on a long ride", 10, 0.9f), "", 3,
+            of(Items.PORKCHOP, 1), of(Items.SUGAR, 1));
+        add("mixed_grill", K, "Rations", dish(Items.COOKED_BEEF, "Mixed Grill", "Whatever was caught, all on one fire", 16, 1.2f), "", 5,
+            any("Raw meat", 3, Items.BEEF, Items.PORKCHOP, Items.MUTTON, Items.CHICKEN, Items.RABBIT));
         add("sweet_berry_jam", K, "Rations", dish(Items.HONEY_BOTTLE, "Berry Preserve", "Summer in a jar", 8, 1.1f), "skill:cooking:3", 4,
             of(Items.GLASS_BOTTLE, 1), of(Items.SWEET_BERRIES, 6), of(Items.SUGAR, 1));
     }

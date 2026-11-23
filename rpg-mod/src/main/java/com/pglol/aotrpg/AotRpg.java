@@ -168,6 +168,23 @@ public final class AotRpg implements ModInitializer {
         Finishers.register();
         Trades.register();
         Extraction.registerGuards();
+        // A guest in someone's home looks but doesn't touch: no chests, barrels, stations, levers or
+        // anything else, only the doors (which take them back out). Ahead of every other handler.
+        UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
+            if (world.isClient || !(player instanceof ServerPlayerEntity sp) || world.getRegistryKey() != Homes.WORLD) return ActionResult.PASS;
+            if (sp.isCreative() && sp.hasPermissionLevel(2) || Extraction.inLobby(sp)) return ActionResult.PASS;
+            if (!HOMES.isHomeSpace(hit.getBlockPos()) || HOMES.canBuild(sp, hit.getBlockPos())) return ActionResult.PASS;
+            if (Homes.isDoor(world.getBlockState(hit.getBlockPos()))) return ActionResult.PASS;
+            if (hand == net.minecraft.util.Hand.MAIN_HAND) sp.sendMessage(Text.literal("You're a guest here: that isn't yours to touch.").formatted(Formatting.GRAY), true);
+            return ActionResult.FAIL;
+        });
+        net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+            if (world.isClient || !(player instanceof ServerPlayerEntity sp) || world.getRegistryKey() != Homes.WORLD) return ActionResult.PASS;
+            if (sp.isCreative() && sp.hasPermissionLevel(2) || Extraction.inLobby(sp) || !HOMES.isHomeSpace(entity.getBlockPos())
+                || HOMES.canBuild(sp, entity.getBlockPos())) return ActionResult.PASS;
+            if (entity instanceof net.minecraft.entity.player.PlayerEntity) return ActionResult.PASS;
+            return ActionResult.FAIL;
+        });
         // The Extraction lobby's board and stash, and a run's supply barrels (ahead of the land protection).
         UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
             if (world.isClient || !(player instanceof ServerPlayerEntity sp) || hand != net.minecraft.util.Hand.MAIN_HAND) return ActionResult.PASS;
