@@ -656,6 +656,14 @@ public final class AotRpg implements ModInitializer {
             COSMETICS.sync(p);
             COSMETICS.sendAll(p);
             COSMETICS.broadcast(p);
+            // Again once the client has settled into the world: what's sent mid-login can be dropped
+            // as the client clears its state, leaving every worn piece (the 1 of 1s most of all) missing.
+            for (int d : new int[] {20, 80}) SCHEDULER.later(d, () -> {
+                if (p.isDisconnected()) return;
+                COSMETICS.sync(p);
+                COSMETICS.sendAll(p);
+                COSMETICS.broadcast(p);
+            });
             LOADOUT.sendAll(p);
             SCHEDULER.later(100, () -> { if (!p.isDisconnected()) INBOX.joined(p); });
             SCHEDULER.later(120, () -> { if (!p.isDisconnected()) BOUNTIES.joined(p); });
