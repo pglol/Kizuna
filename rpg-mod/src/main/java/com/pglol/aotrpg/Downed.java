@@ -348,6 +348,14 @@ public final class Downed {
     }
 
     /** Taken out of the fight (back aboard the balloon, say): quietly on their feet, no longer down. */
+    /** Out of the downed state without being helped up (a finisher is about to end them). */
+    public void drop(ServerPlayerEntity p) {
+        if (downed.remove(p.getUuid()) == null) return;
+        p.setInvulnerable(false);
+        untargetable(p, false);
+        sendClear(p);
+    }
+
     public void release(ServerPlayerEntity p) {
         if (downed.remove(p.getUuid()) == null) return;
         p.setInvulnerable(false);

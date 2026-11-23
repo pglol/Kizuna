@@ -46,6 +46,7 @@ public final class Finishers {
     }
 
     private static final List<Scene> pending = new ArrayList<>();
+    private static final java.util.Set<java.util.UUID> died = new java.util.HashSet<>();
     /** Our own killing blow is let through. */
     private static boolean striking;
 
@@ -53,6 +54,10 @@ public final class Finishers {
         ServerTickEvents.END_SERVER_TICK.register(s -> tick());
         // Nobody else gets a hand in: the two in a finisher can't be hurt until it's done.
         net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DAMAGE.register((e, src, amt) -> striking || !inScene(e));
+        // Which bodies really died under the killing blow (a cancelled death leaves them at zero, alive).
+        net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.AFTER_DEATH.register((e, src) -> {
+            if (striking) died.add(e.getUuid());
+        });
         // And the one finishing doesn't swing at anything else meanwhile.
         net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((pl, world, hand, target, hit) ->
             !world.isClient && inScene(pl) ? net.minecraft.util.ActionResult.FAIL : net.minecraft.util.ActionResult.PASS);
@@ -187,19 +192,30 @@ public final class Finishers {
                 // A beat too long on their feet, then it lets go.
                 Vec3d c = v.getPos().add(0, v.getHeight() * 0.6, 0);
                 v.timeUntilRegen = 0;
+                boolean round = v instanceof ServerPlayerEntity sp0 && (Arenas.decides(sp0, p) || AotRpg.DUELS.dueling(sp0.getUuid(), p.getUuid()));
+                if (v instanceof ServerPlayerEntity sp0 && !round) {
+                    // Nothing saves them now: not being down, a raised guard, a dodge or a ward.
+                    AotRpg.DOWNED.drop(sp0);
+                    sp0.setInvulnerable(false);
+                    sp0.stopUsingItem();
+                }
                 striking = true;
+                died.remove(v.getUuid());
                 try {
                     var src = w.getDamageSources().playerAttack(p);
                     v.damage(src, v.getHealth() + 60);
-                    // Anything that still kept them standing (a ward, a last stand, a mob's own
-                    // rules): the finisher finishes. In an arena or a duel the hit above already
-                    // ended their round, so they're left to that.
-                    if (v.isAlive() && !(v instanceof ServerPlayerEntity sp && (Arenas.decides(sp, p) || AotRpg.DUELS.dueling(sp.getUuid(), p.getUuid())))) {
+                    // Anything that still kept them standing (damage scaling, a cancelled death, a
+                    // mob's own rules): the finisher finishes. In an arena or a duel the hit above
+                    // already ended their round, so they're left to that; and someone already sent
+                    // to watch (an extraction or a war's fallen) has been dealt with.
+                    boolean spectating = v instanceof ServerPlayerEntity sp1 && sp1.isSpectator();
+                    if (!died.contains(v.getUuid()) && !round && !spectating && !v.isRemoved()) {
                         v.setHealth(0);
                         v.onDeath(src);
                     }
                 } finally {
                     striking = false;
+                    died.remove(v.getUuid());
                 }
                 AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFF3A2A, 6f), c.x, c.y, c.z, 0, 0, 0);
                 AotParticles.burst(w, AotParticles.SPARK, 0xFF5A3A, 0.6f, c.x, c.y, c.z, 30, 0.3, 0.9);
