@@ -46,7 +46,12 @@ public final class Finishers {
     }
 
     private static final List<Scene> pending = new ArrayList<>();
-    private static final java.util.Set<java.util.UUID> died = new java.util.HashSet<>();
+    private static final java.util.Set<java.util.UUID> died = new java.util.HashSet<>(), handled = new java.util.HashSet<>();
+
+    /** A death under the killing blow was turned into something else (an extraction's fall, a war's watch). */
+    public static void cancelled(ServerPlayerEntity p) {
+        handled.add(p.getUuid());
+    }
     /** Our own killing blow is let through. */
     private static boolean striking;
 
@@ -201,6 +206,7 @@ public final class Finishers {
                 }
                 striking = true;
                 died.remove(v.getUuid());
+                handled.remove(v.getUuid());
                 try {
                     var src = w.getDamageSources().playerAttack(p);
                     v.damage(src, v.getHealth() + 60);
@@ -209,13 +215,16 @@ public final class Finishers {
                     // already ended their round, so they're left to that; and someone already sent
                     // to watch (an extraction or a war's fallen) has been dealt with.
                     boolean spectating = v instanceof ServerPlayerEntity sp1 && sp1.isSpectator();
-                    if (!died.contains(v.getUuid()) && !round && !spectating && !v.isRemoved()) {
+                    // (A death something else took over and stood them back up is theirs to finish.)
+                    boolean takenOver = handled.contains(v.getUuid()) && v.getHealth() > 0;
+                    if (!died.contains(v.getUuid()) && !takenOver && !round && !spectating && !v.isRemoved()) {
                         v.setHealth(0);
                         v.onDeath(src);
                     }
                 } finally {
                     striking = false;
                     died.remove(v.getUuid());
+                    handled.remove(v.getUuid());
                 }
                 AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFF3A2A, 6f), c.x, c.y, c.z, 0, 0, 0);
                 AotParticles.burst(w, AotParticles.SPARK, 0xFF5A3A, 0.6f, c.x, c.y, c.z, 30, 0.3, 0.9);
