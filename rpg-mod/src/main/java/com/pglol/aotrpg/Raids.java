@@ -50,9 +50,10 @@ public final class Raids {
         new Boss("colossal", "Colossal Titan", "colossal", 64));
 
     /** Difficulty: nape strikes, waves before the boss, levels above the boss's own, reward multiplier. */
-    public static final String[] DIFFS = {"Normal", "Hard", "Nightmare"};
-    private static final int[] STRIKE_N = {6, 10, 15}, WAVES = {2, 3, 4}, LV_UP = {0, 10, 20};
-    private static final double[] PAY = {1, 2.2, 4};
+    /** Mythic: endgame, for squads where every member has prestiged. */
+    public static final String[] DIFFS = {"Normal", "Hard", "Nightmare", "Mythic"};
+    private static final int[] STRIKE_N = {6, 10, 15, 22}, WAVES = {2, 3, 4, 5}, LV_UP = {0, 10, 20, 35};
+    private static final double[] PAY = {1, 2.2, 4, 7.5};
 
     private static final class Raid {
         Boss boss;
@@ -243,6 +244,15 @@ public final class Raids {
         if (party != null && !party.leader.equals(p.getUuid())) {
             Notify.toast(p, Text.literal("Only your party leader can start a raid").formatted(Formatting.RED), null, 0xC0463A, null, null);
             return;
+        }
+        if (diff == 3) {
+            for (ServerPlayerEntity m : partyHere(p)) {
+                if (AotRpg.PROFILES.get(m.getUuid()).prestige < 1) {
+                    Notify.toast(p, Text.literal("Mythic is for the prestiged").formatted(Formatting.RED),
+                        Text.literal(AotRpg.PROFILES.get(m.getUuid()).name + " hasn't re-enlisted yet"), 0xC0463A, null, null);
+                    return;
+                }
+            }
         }
         ServerWorld w = server.getOverworld();
         Raid r = new Raid();
@@ -575,7 +585,7 @@ public final class Raids {
         AotRpg.WALLET.earn(m, marks, r.boss.name() + " raid");
         AotRpg.SEASON.xp(m, Math.round(600 * pay));
         AotRpg.REGIMENTS.gain(m, Math.round(250 * pay));
-        Gear.Rarity rar = r.diff == 2 ? Gear.Rarity.LEGENDARY : r.diff == 1 ? Gear.Rarity.EPIC : Gear.Rarity.RARE;
+        Gear.Rarity rar = r.diff == 3 ? Gear.Rarity.MYTHIC : r.diff == 2 ? Gear.Rarity.LEGENDARY : r.diff == 1 ? Gear.Rarity.EPIC : Gear.Rarity.RARE;
         AotRpg.SATCHEL.add(m, Gear.roll(m.getRandom(), rar, Gear.dropLevel(m, raidLevel(r), 2)));
         Reveal.show(m, "RAID CLEARED", r.boss.name() + " · +" + marks + " Marks · " + rar.title + " gear in your satchel", "minecraft:nether_star", rar.ordinal());
     }

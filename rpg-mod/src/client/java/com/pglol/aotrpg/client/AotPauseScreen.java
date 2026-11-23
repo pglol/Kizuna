@@ -209,6 +209,9 @@ public class AotPauseScreen extends Screen {
             c.fill(h[0] + 4 + (int) (Ui.font().getWidth(headerNames.get(i).toUpperCase(java.util.Locale.ROOT)) * 0.7f) + 6, h[1] + 4,
                 h[0] + gridW, h[1] + 5, 0x40E0B96A);
         }
+        // The world's numbers turning over on the left, when there's room.
+        int deckW = Math.min(180, gridX - 24);
+        if (deckW >= 120) StatDeck.render(c, 12, Math.max(20, height / 2 - 140), deckW, 0, Math.max(1, Math.min(3, (height - 40) / 94)));
         // Character card on the right (when there is room).
         int cw = 190, cx = gridX + gridW + 20, cy = height / 2 - 80;
         if (cx + cw > width - 8) return;
@@ -240,5 +243,8 @@ public class AotPauseScreen extends Screen {
         } else {
             c.drawCenteredTextWithShadow(textRenderer, Text.literal("No character yet"), cx + cw / 2, cy + 70, Ui.MUTED);
         }
+        // Your numbers and the boards, turning over under your card.
+        int below = height - (cy + 180) - 8;
+        if (below >= 90) StatDeck.render(c, cx, cy + 180, cw, 1, Math.max(1, Math.min(2, below / 94)));
     }
 }

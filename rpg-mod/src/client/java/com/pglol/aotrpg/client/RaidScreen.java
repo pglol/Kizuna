@@ -8,10 +8,10 @@ import net.minecraft.text.Text;
 
 /** The Raid Commander: pick a shifter to hunt and how hard, then lead your party out. */
 public final class RaidScreen extends Screen {
-    private static final String[] DIFFS = {"Normal", "Hard", "Nightmare"};
-    private static final int[] DIFF_COL = {0xFF5BD35B, 0xFFE0A040, 0xFFE04A3A};
+    private static final String[] DIFFS = {"Normal", "Hard", "Nightmare", "Mythic"};
+    private static final int[] DIFF_COL = {0xFF5BD35B, 0xFFE0A040, 0xFFE04A3A, 0xFFFFE8A8};
     private static final String[] DIFF_TXT = {"6 nape strikes · 2 waves · Rare gear", "10 strikes · 3 waves · +10 levels · Epic gear",
-        "15 strikes · 4 waves · +20 levels · Legendary gear"};
+        "15 strikes · 4 waves · +20 levels · Legendary gear", "\u2726 Prestiged squads only · 22 strikes · 5 waves · +35 levels · Mythic gear"};
     private static int pick, diff;
     private int left, top, w, h;
 
@@ -54,9 +54,9 @@ public final class RaidScreen extends Screen {
             if (y > top + h - 30) break;
         }
         int rx = left + lw + 8, rw = w - lw - 16;
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             int d = i;
-            AotButton b = addDrawableChild(new AotButton(rx + i * (rw / 3), top + 40, rw / 3 - 4, 20, Text.literal(DIFFS[i]), () -> {
+            AotButton b = addDrawableChild(new AotButton(rx + i * (rw / 4), top + 40, rw / 4 - 4, 20, Text.literal(DIFFS[i]), () -> {
                 diff = d;
                 refresh();
             }));

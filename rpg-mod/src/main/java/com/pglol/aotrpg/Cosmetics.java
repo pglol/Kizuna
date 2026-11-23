@@ -172,7 +172,11 @@ public final class Cosmetics {
         new Def("kill_rumbling", "kill", "The Rumbling", false),
         new Def("body_coordinate", "body", "The Coordinate", false),
         new Def("head_founder", "head", "Founder's Crown", false),
-        new Def("slash_moon", "slash", "Crimson Moon", false));
+        new Def("slash_moon", "slash", "Crimson Moon", false),
+        // Prestige: earned only by re-enlisting (I, V and X), never sold or dropped.
+        new Def("kill_prestige1", "kill", "Re-enlisted", false),
+        new Def("kill_prestige5", "kill", "Wall-Breaker", false),
+        new Def("kill_prestige10", "kill", "The Undying", false));
 
     public static final List<Def> ALL = defs();
 

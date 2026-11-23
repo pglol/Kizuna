@@ -71,6 +71,13 @@ public final class PlayerList {
         int colW = 190, cols = Math.max(1, Math.min(2, (total + 11) / 12)), w = colW * cols + 20;
         // Below the top bar (clock, level, Marks), never over it.
         int x0 = (sw - w) / 2, y0 = 46 - (int) ((1 - in) * 20);
+        // Either side of the list: the world's numbers on the left, yours and the boards on the right.
+        int side = Math.min(180, x0 - 24);
+        if (side >= 120) {
+            int slots = Math.max(1, Math.min(4, (c.getScaledWindowHeight() - y0 - 20) / 94));
+            StatDeck.render(c, 12, y0, side, 0, slots);
+            StatDeck.render(c, sw - 12 - side, y0, side, 1, slots);
+        }
         int rows = 0;
         for (var g : groups.values()) rows += g.size() + 1;
         int perCol = (rows + cols - 1) / cols;

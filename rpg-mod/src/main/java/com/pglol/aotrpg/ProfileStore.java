@@ -137,7 +137,11 @@ public final class ProfileStore {
                 try {
                     UUID id = UUID.fromString(m.group(1));
                     int slot = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
-                    out.add(slot == account(id).active && cache.containsKey(id) ? cache.get(id) : read(id, slot));
+                    Profile pr = slot == account(id).active && cache.containsKey(id) ? cache.get(id) : read(id, slot);
+                    if (pr != null) {
+                        pr.uuid = id.toString();
+                        out.add(pr);
+                    }
                 } catch (Exception ignored) {
                 }
             }

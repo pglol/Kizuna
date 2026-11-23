@@ -422,6 +422,6 @@ public final class Stash {
         if (n <= 0) return;
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         if (!pr.created) return;
-        pr.salvage += Math.round(n * Prestige.salvageMult(pr));
+        pr.salvage += Math.round(n * Prestige.salvageMult(pr) * Weekly.salvage());
     }
 }

@@ -244,7 +244,7 @@ public final class Store {
 
     /** Cloaks are uniform, not merchandise: never in the store or a crate. */
     static boolean notSold(Cosmetics.Def d) {
-        return d.id().contains("cloak") || d.exclusive();
+        return d.id().contains("cloak") || d.id().contains("prestige") || d.exclusive();
     }
 
     private static String randomCosmetic(ServerPlayerEntity p, Random r, boolean mythic) {

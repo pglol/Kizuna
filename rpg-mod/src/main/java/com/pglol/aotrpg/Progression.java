@@ -106,6 +106,9 @@ public final class Progression {
     public void award(ServerPlayerEntity p, long xp, String label) {
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         if (!pr.created || xp <= 0) return;
+        // Titan Hunt week: titan kills pay double.
+        String lab = label == null ? "" : label.toLowerCase(java.util.Locale.ROOT);
+        if (Weekly.now() == Weekly.Op.TITAN_HUNT && (lab.contains("titan") || lab.contains("nape") || lab.contains("ogre") || lab.contains("apex"))) xp *= 2;
         if (!Pops.send(p, "xp", xp, label)) p.sendMessage(Text.literal("+" + xp + " XP  ").formatted(Formatting.GOLD, Formatting.BOLD).append(Text.literal(label).formatted(Formatting.GRAY)), true);
         addXp(p, pr, xp);
     }
@@ -119,7 +122,7 @@ public final class Progression {
         if (!pr.created) return;
         if (pr.level >= MAX_LEVEL) {
             // At the cap the XP still counts: Veteran ranks, each paying out (and a new finisher every fifth).
-            pr.vetXp += Math.round(amount * (1 + Roles.bonus(pr)) * Prestige.xpMult(pr));
+            pr.vetXp += Math.round(amount * (1 + Roles.bonus(pr)) * Prestige.xpMult(pr) * Weekly.xp(false));
             while (pr.vetXp >= veteranNeed()) {
                 pr.vetXp -= veteranNeed();
                 pr.veteran++;
@@ -136,7 +139,7 @@ public final class Progression {
             AotRpg.sync(p, pr);
             return;
         }
-        amount = Math.round(amount * (1 + Roles.bonus(pr)) * Prestige.xpMult(pr));
+        amount = Math.round(amount * (1 + Roles.bonus(pr)) * Prestige.xpMult(pr) * Weekly.xp(false));
         pr.xp += amount;
         boolean up = false;
         while (pr.level < MAX_LEVEL && pr.xp >= Profile.xpForNext(pr.level)) {

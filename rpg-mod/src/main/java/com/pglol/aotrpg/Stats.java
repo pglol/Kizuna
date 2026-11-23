@@ -89,6 +89,9 @@ public final class Stats {
         if (pr.created) {
             Factions.Faction fa = Factions.of(pr);
             mine.add(new Net.StatLine("Character", pr.name + " · Level " + pr.level + (pr.discipline == null ? "" : " " + pr.discipline.title)));
+            if (pr.prestige > 0 || pr.veteran > 0) mine.add(new Net.StatLine("Standing", (pr.prestige > 0 ? "Prestige " + Prestige.roman(pr.prestige) : "No prestige")
+                + (pr.veteran > 0 ? " · Veteran " + pr.veteran : "")));
+            mine.add(new Net.StatLine("Arena", pr.pvpRating + " · " + Arenas.tier(pr.pvpRating) + " · " + pr.pvpWins + "W " + pr.pvpLosses + "L"));
             mine.add(new Net.StatLine("Time played", time(counter(pr, Tasks.MINUTES))));
             mine.add(new Net.StatLine("Titans slain", num(pr.titanKills)));
             mine.add(new Net.StatLine("Waves survived", num(counter(pr, Tasks.WAVES))));
@@ -130,8 +133,29 @@ public final class Stats {
         long ends = AotRpg.SEASON.endsAt();
         srv.add(new Net.StatLine("Season", AotRpg.SEASON.id() + (ends > 0 ? " · ends in " + Math.max(0, (ends - System.currentTimeMillis()) / 86_400_000L) + " days" : "")));
         srv.add(new Net.StatLine("Uptime", time(up)));
+        Weekly.Op op = Weekly.now();
+        srv.add(new Net.StatLine("This week", op.title + " · " + op.desc + " · " + Weekly.daysLeft() + "d left"));
+        srv.add(new Net.StatLine("Ranked season", "Season " + RankedSeasons.number() + " · ends in " + RankedSeasons.daysLeft() + " days"));
+        srv.add(new Net.StatLine("Prestiged", num(all.stream().filter(x -> x.prestige > 0).count()) + " characters · highest "
+            + Prestige.roman(all.stream().mapToInt(x -> x.prestige).max().orElse(0))));
 
         List<Net.StatBoard> boards = new ArrayList<>();
+        // The most decorated: prestige first, then Veteran rank, then level.
+        List<Net.StatLine> dec = new ArrayList<>();
+        all.stream().filter(x -> x.created).sorted((x, y) -> x.prestige != y.prestige ? y.prestige - x.prestige
+            : x.veteran != y.veteran ? y.veteran - x.veteran : y.level - x.level).limit(8)
+            .forEach(x -> dec.add(new Net.StatLine(x.name, (x.prestige > 0 ? "\u2726" + Prestige.roman(x.prestige) + " " : "")
+                + (x.veteran > 0 ? "V" + x.veteran + " " : "") + "Lv " + x.level)));
+        boards.add(new Net.StatBoard("Most decorated", dec));
+        boards.add(board(all, "Arena rating (Season " + RankedSeasons.number() + ")", x -> x.ratingSeason == RankedSeasons.number() ? x.pvpRating : 0, ""));
+        if (!RankedSeasons.hall().isEmpty()) {
+            List<Net.StatLine> hall = new ArrayList<>();
+            for (String h : RankedSeasons.hall().subList(0, Math.min(6, RankedSeasons.hall().size()))) {
+                int c = h.indexOf(':');
+                hall.add(new Net.StatLine(c > 0 ? h.substring(0, c) : h, c > 0 ? h.substring(c + 1).trim() : ""));
+            }
+            boards.add(new Net.StatBoard("Hall of Fame", hall));
+        }
         boards.add(board(all, "Highest level", x -> x.level, ""));
         boards.add(board(all, "Titan slayers", x -> x.titanKills, " kills"));
         boards.add(board(all, "Richest", x -> x.marks, " Marks"));

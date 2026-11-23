@@ -124,7 +124,7 @@ public final class TitanActivity {
     /** Now and then an ogre roams out beyond the walls, somewhere near whoever's out there. */
     private void tickOgre(ServerWorld w, long now) {
         if (now < nextOgre) return;
-        nextOgre = now + (7 + w.getRandom().nextInt(6)) * 60_000L;
+        nextOgre = now + (7 + w.getRandom().nextInt(6)) * 60_000L / (Weekly.now() == Weekly.Op.TITAN_HUNT ? 2 : 1);
         List<EntityType<?>> og = TitanTypes.ogres();
         List<ServerPlayerEntity> out = outside(w);
         if (og.isEmpty() || out.isEmpty()) return;

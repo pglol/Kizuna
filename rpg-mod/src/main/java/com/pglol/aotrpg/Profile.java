@@ -35,6 +35,10 @@ public final class Profile {
     public long vetXp;
     /** Prestige (New Game+) rank, and the perks taken along the way (id -> times). */
     public int prestige;
+    /** The ranked season this character's arena rating belongs to. */
+    public int ratingSeason;
+    /** Whose character this is (filled in when read for leaderboards; not saved). */
+    public transient String uuid;
     public java.util.Map<String, Integer> prestigePerks = new java.util.HashMap<>();
     /** Stash rows bought with Salvage (9 slots each), on top of the home's chests and barrels. */
     public int stashRows;

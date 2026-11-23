@@ -160,6 +160,13 @@ public final class Prestige {
         long pay = 5000L * pr.prestige;
         AotRpg.WALLET.addMarks(p, pay, null);
         AotRpg.COSMETICS.dropFinisher(p, p.getRandom());
+        // The milestones: a kill effect of their own, and the titles (via the achievement board).
+        AotRpg.TASKS.count(p, Tasks.PRESTIGE, 1);
+        String effect = pr.prestige == 1 ? "kill_prestige1" : pr.prestige == 5 ? "kill_prestige5" : pr.prestige == 10 ? "kill_prestige10" : null;
+        if (effect != null) {
+            AotRpg.COSMETICS.grant(p, effect, true);
+            AotRpg.COSMETICS.select(p, effect);
+        }
         AotRpg.PROFILES.save(p.getUuid());
         AotRpg.sync(p, pr);
         AotRpg.NAMETAGS.update(p, pr);

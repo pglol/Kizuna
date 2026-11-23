@@ -22,7 +22,8 @@ import java.util.Map;
 public final class Tasks {
     // Counters.
     public static final String TITANS = "titans", WAVES = "waves", QUESTS = "quests", ORDERS = "orders", COOK = "cook", FISH = "fish",
-        FORGE = "forge", MARKS = "marks", DEFEND = "defend", MINUTES = "minutes", PASS = "pass", FURNITURE = "furniture", SOLD = "sold";
+        FORGE = "forge", MARKS = "marks", DEFEND = "defend", MINUTES = "minutes", PASS = "pass", FURNITURE = "furniture", SOLD = "sold",
+        PRESTIGE = "prestige", CHAMPION = "champion";
 
     public enum Period { DAILY, WEEKLY, MONTHLY, SEASON }
 
@@ -75,7 +76,11 @@ public final class Tasks {
         new Achievement("marks_25k", "Merchant Prince", "Earn 25,000 Marks", MARKS, 25_000, "gold:25", 0xFFD54A),
         new Achievement("defend_5", "Hearth Keeper", "Defend your home 5 times", DEFEND, 5, "marks:600", 0xD07A4A),
         new Achievement("furniture_20", "Homemaker", "Place 20 pieces of furniture", FURNITURE, 20, "marks:250", 0xC77DFF),
-        new Achievement("veteran", "Veteran", "Play for 50 hours", MINUTES, 3000, "gold:50", 0xEDE3C8));
+        new Achievement("veteran", "Veteran", "Play for 50 hours", MINUTES, 3000, "gold:50", 0xEDE3C8),
+        new Achievement("prestige_1", "Re-enlisted", "Prestige for the first time", PRESTIGE, 1, "marks:1000", 0xFFE8A8),
+        new Achievement("prestige_5", "Wall-Breaker", "Reach Prestige V", PRESTIGE, 5, "gold:100", 0xFFB24A),
+        new Achievement("prestige_10", "The Undying", "Reach Prestige X", PRESTIGE, 10, "gold:300", 0xFFF4D0),
+        new Achievement("champion", "Season Champion", "Finish a ranked season in the top three", CHAMPION, 1, "gold:50", 0xE04A3A));
 
     public static Achievement achievement(String id) {
         for (Achievement a : ACHIEVEMENTS) if (a.id().equals(id)) return a;

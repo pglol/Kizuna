@@ -335,7 +335,7 @@ public final class Contracts {
         if (c.kind == Kind.PLAYER && killer != null && !paid.contains(killer)) paid.add(killer);
         for (List<String> l : taken.values()) l.remove(c.id);
         if (paid.isEmpty()) return;
-        long each = c.reward / paid.size();
+        long each = Math.round(c.reward * Weekly.contracts()) / paid.size();
         for (ServerPlayerEntity h : paid) {
             AotRpg.WALLET.earn(h, each, "Contract");
             AotRpg.PROGRESSION.award(h, 300 + c.level * 12L, "Contract");

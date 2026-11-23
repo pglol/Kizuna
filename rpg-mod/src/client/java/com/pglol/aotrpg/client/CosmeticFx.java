@@ -200,6 +200,9 @@ public final class CosmeticFx {
             new Entry("kill_lightning", "Thunder Spear", "A thunder spear's flash and crack.", 0xB9A8FF, 0xFFFFFF, 3),
             new Entry("kill_holy", "Ascension", "A pillar of light rises to the sky.", 0xFFE08A, 0xFFFFFF, 3),
             new Entry("kill_wings", "Wings Unfurled", "Great wings of light open over the body.", 0x5A8FD8, 0xFFFFFF, 3),
+            new Entry("kill_prestige1", "Re-enlisted", "A ring of pale gold, and the light climbing out of it. Prestige I.", 0xFFE8A8, 0xFFFFFF, 4),
+            new Entry("kill_prestige5", "Wall-Breaker", "The ground cracks in rings and the stones go up. Prestige V.", 0xFFB24A, 0x8A8070, 5),
+            new Entry("kill_prestige10", "The Undying", "A pillar into the sky and wings over it. Prestige X.", 0xFFF4D0, 0xE0B96A, 5),
             new Entry("kill_rumbling", "The Rumbling", "The ground shakes, rings of blasts roll out, a column of steam climbs to the sky.", 0xE02A2A, 0xF0F0F0, 4))),
         new Category("block", "Block Effects", "When you block a hit with your guard.", List.of(
             new Entry("block_steel", "Steel Sparks", "Sparks off steel.", 0xF4F0E6, 0xFFD24A),
@@ -427,6 +430,52 @@ public final class CosmeticFx {
                         x + Math.cos(a) * rr, bottom + (i / 160.0) * (h + 10), z + Math.sin(a) * rr, 0, 0.12, 0);
                 }
                 w.playSound(x, y, z, net.minecraft.sound.SoundEvents.BLOCK_BEACON_ACTIVATE, net.minecraft.sound.SoundCategory.PLAYERS, 1f, 1.4f, false);
+            }
+            case "kill_prestige1" -> {
+                // A crown of pale gold on the ground, light rising out of it in a slow spiral.
+                for (int i = 0; i < 48; i++) {
+                    double a = i / 48.0 * Math.PI * 2;
+                    w.addImportantParticle(Fxs.dot(0xFFE8A8, 1.8f), x + Math.cos(a) * r, bottom + 0.1, z + Math.sin(a) * r, 0, 0.02, 0);
+                }
+                for (int i = 0; i < 90; i++) {
+                    double a = i * 0.5, rr = r * 0.8 * (1 - i / 120.0);
+                    w.addImportantParticle(i % 3 == 0 ? Fxs.END_ROD : Fxs.dot(0xFFF4D0, 1.4f), x + Math.cos(a) * rr, bottom + i * 0.06, z + Math.sin(a) * rr, 0, 0.05, 0);
+                }
+                FxParticle.spawn(com.pglol.aotrpg.AotParticles.RING, 0xFFE8A8, (float) (r * 1.5), x, bottom + 0.05, z, 0, 0, 0);
+                w.playSound(x, y, z, net.minecraft.sound.SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, net.minecraft.sound.SoundCategory.PLAYERS, 1.2f, 0.8f, false);
+            }
+            case "kill_prestige5" -> {
+                // The ground breaks in three rings and the rubble goes up.
+                for (int ring = 1; ring <= 3; ring++) {
+                    double rr = r * 0.6 * ring;
+                    FxParticle.spawn(com.pglol.aotrpg.AotParticles.RING, ring == 1 ? 0xFFB24A : 0xD8C8A8, (float) (rr * 1.6), x, bottom + 0.05, z, 0, 0, 0);
+                    for (int i = 0; i < 26; i++) {
+                        double a = rnd.nextDouble() * Math.PI * 2;
+                        FxParticle.spawn(com.pglol.aotrpg.AotParticles.SHARD, 0x8A8070, 0.6f, x + Math.cos(a) * rr, bottom + 0.1, z + Math.sin(a) * rr,
+                            Math.cos(a) * 0.1, 0.35 + rnd.nextDouble() * 0.3, Math.sin(a) * 0.1);
+                    }
+                }
+                FxParticle.spawn(com.pglol.aotrpg.AotParticles.FLASH, 0xFFB24A, 5f, x, y, z, 0, 0, 0);
+                EffectFx.quake(0.35f, 10);
+                w.playSound(x, y, z, net.minecraft.sound.SoundEvents.ENTITY_GENERIC_EXPLODE.value(), net.minecraft.sound.SoundCategory.PLAYERS, 1.2f, 0.6f, false);
+            }
+            case "kill_prestige10" -> {
+                // A pillar of light into the sky, and wings opening over it.
+                for (int i = 0; i < 140; i++) {
+                    double a = rnd.nextDouble() * Math.PI * 2, rr = rnd.nextDouble() * 0.5;
+                    w.addImportantParticle(i % 2 == 0 ? Fxs.END_ROD : Fxs.dot(0xFFF4D0, 2f), x + Math.cos(a) * rr, bottom + i * 0.18, z + Math.sin(a) * rr, 0, 0.2, 0);
+                }
+                for (int s2 = -1; s2 <= 1; s2 += 2) {
+                    for (int f = 0; f < 8; f++) {
+                        double a = Math.toRadians(-15 + f * 15), len = (2.8 + (f % 3) * 0.4) * Math.max(1, r * 0.6);
+                        for (double u = 0.15; u <= 1; u += 0.05) {
+                            w.addImportantParticle(Fxs.dot(u > 0.75 ? 0xFFFFFF : 0xE0B96A, 1.7f), x + s2 * Math.cos(a) * len * u, top + 0.6 + Math.sin(a) * len * u, z, 0, 0.01, 0);
+                        }
+                    }
+                }
+                FxParticle.spawn(com.pglol.aotrpg.AotParticles.FLASH, 0xFFF4D0, 8f, x, top, z, 0, 0, 0);
+                w.playSound(x, y, z, net.minecraft.sound.SoundEvents.BLOCK_BEACON_POWER_SELECT, net.minecraft.sound.SoundCategory.PLAYERS, 1.4f, 0.6f, false);
+                w.playSound(x, y, z, net.minecraft.sound.SoundEvents.ENTITY_LIGHTNING_BOLT_THUNDER, net.minecraft.sound.SoundCategory.PLAYERS, 0.5f, 1.6f, false);
             }
             case "kill_wings" -> {
                 // Two great wings of light traced in the air over the body.
