@@ -70,9 +70,27 @@ public final class LockOn {
     private static boolean candidate(MinecraftClient mc, Entity e) {
         if (e == mc.player || !e.isAlive() || !(e instanceof LivingEntity) || e.isInvisible()) return false;
         if (titanPart(e)) return false;
-        // Marleyan troops too (drawn as people, named for their rank).
-        boolean troop = e instanceof net.minecraft.entity.passive.VillagerEntity && e.hasCustomName() && e.getCustomName().getString().contains("Marleyan");
-        return e instanceof PlayerEntity || e instanceof Monster || titan(e) || troop;
+        // Fighting NPCs too: every troop, bandit, brute and warden carries its level ("Lv 12 ...").
+        return e instanceof PlayerEntity || e instanceof Monster || titan(e) || npc(e);
+    }
+
+    /** A fighter drawn as a person: an NPC with a level over its head. */
+    static boolean npc(Entity e) {
+        if (!(e instanceof net.minecraft.entity.passive.VillagerEntity) || !e.hasCustomName()) return false;
+        String n = e.getCustomName().getString();
+        return n.startsWith("Lv ") || n.contains("Marleyan");
+    }
+
+    /** Can we see it (not through a wall)? */
+    private static boolean visible(MinecraftClient mc, Entity e) {
+        Vec3d eye = mc.player.getEyePos();
+        for (double f : new double[] {0.5, 0.85}) {
+            Vec3d at = e.getPos().add(0, e.getHeight() * f, 0);
+            var hit = mc.world.raycast(new net.minecraft.world.RaycastContext(eye, at, net.minecraft.world.RaycastContext.ShapeType.COLLIDER,
+                net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+            if (hit.getType() == net.minecraft.util.hit.HitResult.Type.MISS || hit.getPos().squaredDistanceTo(at) < 1) return true;
+        }
+        return false;
     }
 
     public static void pressed(MinecraftClient mc) {
@@ -85,7 +103,7 @@ public final class LockOn {
         Entity best = null;
         double bestScore = Double.MAX_VALUE;
         for (Entity e : mc.world.getEntities()) {
-            if (!candidate(mc, e)) continue;
+            if (!candidate(mc, e) || !visible(mc, e)) continue;
             Vec3d c = e.getBoundingBox().getCenter();
             double d = c.distanceTo(eye);
             if (d > RANGE + e.getWidth()) continue;
@@ -103,11 +121,18 @@ public final class LockOn {
         if (best != null) {
             lastYaw = mc.player.getYaw();
             lastPitch = mc.player.getPitch();
-            dragYaw = dragPitch = 0;
+            flick.clear();
+            switchedAt = Util.getMeasuringTimeMs();
         }
     }
 
-    private static float lastYaw, lastPitch, dragYaw, dragPitch;
+    private static float lastYaw, lastPitch;
+    /** Recent mouse movement while locked: {time ms, dYaw, dPitch}. Only a quick, deliberate flick switches. */
+    private static final java.util.ArrayDeque<double[]> flick = new java.util.ArrayDeque<>();
+    private static long switchedAt;
+    /** A flick is this many degrees within FLICK_MS (more when you're up close in a fight). */
+    private static final float FLICK_DEG = 26, FLICK_CLOSE_DEG = 38;
+    private static final long FLICK_MS = 170, SWITCH_GAP = 450;
 
     private record Aim(Entity entity, Part part) { }
 
@@ -138,7 +163,7 @@ public final class LockOn {
         java.util.List<Aim> options = new java.util.ArrayList<>();
         if (titan(target) && !wholeBody(target)) options.add(new Aim(target, part == Part.NAPE ? Part.EYE : Part.NAPE));
         for (Entity e : mc.world.getEntities()) {
-            if (e == target || !candidate(mc, e) || e.squaredDistanceTo(mc.player) > RANGE * RANGE) continue;
+            if (e == target || !candidate(mc, e) || e.squaredDistanceTo(mc.player) > RANGE * RANGE || !visible(mc, e)) continue;
             if (titan(e) && !wholeBody(e)) {
                 options.add(new Aim(e, Part.NAPE));
                 options.add(new Aim(e, Part.EYE));
@@ -154,7 +179,7 @@ public final class LockOn {
             double ol = Math.sqrt(oy * oy + op * op);
             if (ol < 0.5 || ol > 90) continue;
             double cos = (oy * dYaw + op * dPitch) / (ol * dl);
-            if (cos < 0.55) continue;
+            if (cos < 0.72) continue;
             double score = ol * (1.6 - cos);
             if (score < bestScore) {
                 bestScore = score;
@@ -165,6 +190,30 @@ public final class LockOn {
             target = best.entity();
             part = best.part();
         }
+    }
+
+    /** The nearest enemy in view after a kill (never one behind you). */
+    private static void next(MinecraftClient mc, Entity was) {
+        Vec3d eye = mc.player.getEyePos(), look = mc.player.getRotationVec(1f);
+        Entity best = null;
+        double bs = Double.MAX_VALUE;
+        for (Entity e : mc.world.getEntities()) {
+            if (e == was || !candidate(mc, e) || e instanceof PlayerEntity && !(was instanceof PlayerEntity)) continue;
+            Vec3d c = e.getBoundingBox().getCenter();
+            double d = c.distanceTo(eye);
+            if (d > 24) continue;
+            double dot = c.subtract(eye).normalize().dotProduct(look);
+            if (dot < 0.5 || !visible(mc, e)) continue;
+            double sc = d + (1 - dot) * 30;
+            if (sc < bs) {
+                bs = sc;
+                best = e;
+            }
+        }
+        target = best;
+        part = best != null && titan(best) && !wholeBody(best) ? Part.NAPE : Part.BODY;
+        flick.clear();
+        switchedAt = Util.getMeasuringTimeMs();
     }
 
     private static boolean wholeBody(Entity e) {
@@ -212,18 +261,31 @@ public final class LockOn {
         if (target == null || mc.player == null) return;
         if (!target.isAlive() || target.isRemoved() || target.getWorld() != mc.player.getWorld()
             || target.squaredDistanceTo(mc.player) > (RANGE + 16) * (RANGE + 16)) {
+            // Down: straight on to the next one close by in front of you, if there is one.
+            Entity was = target;
             target = null;
-            return;
+            if (was.squaredDistanceTo(mc.player) < 40 * 40) next(mc, was);
+            if (target == null) return;
         }
         if (mc.currentScreen != null) return;
         float td0 = ctx.tickCounter().getTickDelta(true);
-        // How far the mouse moved the camera since the lock last set it: that is a drag.
+        // How far the mouse moved the camera since the lock last set it. Small drift and nudges
+        // in a fight do nothing: only a sharp flick toward someone else moves the lock.
         float my = MathHelper.wrapDegrees(mc.player.getYaw() - lastYaw), mp = mc.player.getPitch() - lastPitch;
-        dragYaw = dragYaw * 0.9f + my;
-        dragPitch = dragPitch * 0.9f + mp;
-        if (Math.sqrt(dragYaw * dragYaw + dragPitch * dragPitch) > 9) {
-            lean(mc, dragYaw, dragPitch, td0);
-            dragYaw = dragPitch = 0;
+        if (Math.abs(my) > 0.01f || Math.abs(mp) > 0.01f) flick.add(new double[] {now, my, mp});
+        while (!flick.isEmpty() && now - (long) flick.peekFirst()[0] > FLICK_MS) flick.pollFirst();
+        float fy = 0, fp = 0;
+        for (double[] f : flick) {
+            fy += (float) f[1];
+            fp += (float) f[2];
+        }
+        boolean close = target.squaredDistanceTo(mc.player) < 8 * 8;
+        if (now - switchedAt > SWITCH_GAP && Math.sqrt(fy * fy + fp * fp) > (close ? FLICK_CLOSE_DEG : FLICK_DEG)) {
+            Entity was = target;
+            Part wasPart = part;
+            lean(mc, fy, fp, td0);
+            if (target != was || part != wasPart) switchedAt = now;
+            flick.clear();
         }
         Vec3d to = aim(mc, td0).subtract(mc.player.getCameraPosVec(td0));
         float yaw = (float) (MathHelper.atan2(to.z, to.x) * 180 / Math.PI) - 90;
