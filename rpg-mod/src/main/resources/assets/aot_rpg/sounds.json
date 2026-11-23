@@ -19,15 +19,19 @@
     "sounds": [
       {
         "name": "aot_rpg:apg_shot1",
-        "attenuation_distance": 64
+        "attenuation_distance": 72
       },
       {
         "name": "aot_rpg:apg_shot2",
-        "attenuation_distance": 64
+        "attenuation_distance": 72
       },
       {
         "name": "aot_rpg:apg_shot3",
-        "attenuation_distance": 64
+        "attenuation_distance": 72
+      },
+      {
+        "name": "aot_rpg:apg_shot4",
+        "attenuation_distance": 72
       }
     ]
   },

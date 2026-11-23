@@ -144,6 +144,7 @@ public final class AotRpg implements ModInitializer {
         Occupation.register();
         Elites.register();
         Troops.register();
+        Locks.register();
         Delves.register();
         Contracts.register();
         Net.register();

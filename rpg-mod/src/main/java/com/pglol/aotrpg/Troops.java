@@ -774,6 +774,14 @@ public final class Troops {
             }
             return;
         }
+        // Held, pinned or being finished: nothing at all, not even a twitch of the blade.
+        if (Locks.held(v)) {
+            t.swing = 0;
+            t.swingShown = false;
+            t.move = 0;
+            t.windup = 0;
+            return;
+        }
         LivingEntity target = find(w, t.target);
         if (!valid(target)) target = null;
         LivingEntity ordered = find(w, t.orders);
@@ -1087,7 +1095,7 @@ public final class Troops {
             held.fallDistance = 0;
             if (--t.holdT > 0) return;
             t.holding = null;
-            t.grabCd = 160;
+            t.grabCd = 100;
             anim(v, 5, 6, 0);
             Impact.launch(held, v, 2.0);
             held.damage(w.getDamageSources().mobAttack(v), 4 + sq.skill);
@@ -1097,9 +1105,8 @@ public final class Troops {
             return;
         }
         // The strongest close in and grab instead of cutting.
-        if ((sq.skill >= 4 || t.officer && sq.skill >= 3) && t.grabCd <= 0 && t.swing == 0 && t.cool == 0 && dist < 2.4
-            && !AotRpg.isTitan(target) && !Stuns.stunned(v) && w.random.nextInt(5) == 0
-            && !(target instanceof ServerPlayerEntity gp && AotRpg.GUARD_FIGHT.guarding(gp))) {
+        if ((sq.skill >= 2 || t.officer) && t.grabCd <= 0 && t.swing == 0 && t.cool <= 2 && dist < 2.6
+            && !AotRpg.isTitan(target) && !Stuns.stunned(v) && w.random.nextInt(3) == 0 && !Locks.locked(target)) {
             t.holding = target.getUuid();
             t.holdT = 14;
             anim(v, 1, 14, 0);
@@ -1346,7 +1353,7 @@ public final class Troops {
             return;
         }
         // Up close: reach for you (the more you turtle, the likelier), a pound where he stands, or the haymaker.
-        if (t.grabCd <= 0 && !AotRpg.isTitan(target) && w.random.nextInt(guarding(target) ? 2 : 4) == 0) {
+        if (t.grabCd <= 0 && !AotRpg.isTitan(target) && (guarding(target) || w.random.nextInt(2) == 0)) {
             t.move = 4;
             t.moveT = Math.max(6, 10 - sq.skill);
             anim(v, 10, t.moveT + 2, 0);
@@ -1384,7 +1391,7 @@ public final class Troops {
             if (t.holdT > 0) return;
             // ...and hurled.
             t.holding = null;
-            t.grabCd = 150;
+            t.grabCd = 90;
             t.cool = 14;
             anim(v, 5, 6, 0);
             Impact.launch(held, v, 2.6 + 0.2 * sq.skill);
@@ -1412,7 +1419,7 @@ public final class Troops {
         if (t.holdT > 0) return;
         // The last one, both fists: the earth caves in.
         t.holding = null;
-        t.grabCd = 180;
+        t.grabCd = 110;
         t.cool = 20;
         anim(v, 7, 8, 2);
         held.damage(w.getDamageSources().mobAttack(v), (5 + sq.skill) * power);
@@ -2239,6 +2246,7 @@ public final class Troops {
                 return;
             }
             v.move(net.minecraft.entity.MovementType.SELF, new Vec3d(dx, -0.08, dz));
+            footstep(w, v, speed);
             // Turned to where they're going when not squared up to someone.
             float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
             v.bodyYaw = v.bodyYaw + MathHelper.wrapDegrees(yaw - v.bodyYaw) * 0.35f;
@@ -2290,6 +2298,33 @@ public final class Troops {
         afterimage(w, v, 0xE8E8F0);
         w.playSound(null, v.getBlockPos(), SoundEvents.ENTITY_GOAT_LONG_JUMP, SoundCategory.HOSTILE, 0.9f, 1.2f);
         return true;
+    }
+
+    private static final Map<UUID, Double> strides = new HashMap<>();
+
+    /** Footfalls on whatever's underfoot, quicker and heavier at a run (brutes heaviest of all). */
+    private static void footstep(ServerWorld w, VillagerEntity v, double speed) {
+        double gone = strides.getOrDefault(v.getUuid(), 0.0) + speed;
+        double stride = speed >= 0.3 ? 1.5 : 1.15;
+        if (gone < stride) {
+            strides.put(v.getUuid(), gone);
+            return;
+        }
+        strides.put(v.getUuid(), 0.0);
+        if (strides.size() > 600) strides.clear();
+        BlockPos below = v.getBlockPos().down();
+        var st = w.getBlockState(below);
+        if (st.isAir()) return;
+        var g = st.getSoundGroup();
+        float size = (float) Math.max(1, v.getScale());
+        w.playSound(null, v.getX(), v.getY(), v.getZ(), g.getStepSound(), SoundCategory.HOSTILE,
+            g.getVolume() * (speed >= 0.3 ? 0.45f : 0.3f) * size, g.getPitch() * (0.95f + w.random.nextFloat() * 0.1f) / size);
+    }
+
+    /** Is someone in a troop's hands right now? */
+    public static boolean held(Entity e) {
+        for (Troop t : troops.values()) if (e.getUuid().equals(t.holding)) return true;
+        return false;
     }
 
     /** Stuck inside a block (pushed, spawned badly): out and up into the open. */

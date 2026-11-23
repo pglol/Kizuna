@@ -17,6 +17,8 @@ public final class ClientState {
     }
     public static float stamina = -1, maxStamina = 100;
     public static boolean exhausted;
+    /** The server says we can't swing right now (held, pinned, stunned, in a finisher). */
+    public static volatile boolean locked;
     /** The other members of our party (empty = no party). */
     public static java.util.List<Net.PartyMember> party = java.util.List.of();
 

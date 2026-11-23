@@ -90,6 +90,12 @@ public final class AotRpgClient implements ClientModInitializer {
         // Aboard the balloon: no fighting keys (ready, the menu and the map still work), and the
         // rest of the HUD steps aside for the lobby's own.
         ClientTickEvents.START_CLIENT_TICK.register(LobbyScreen::guardKeys);
+        // Held, pinned, stunned or mid-finisher: the click goes nowhere — no arm, no whoosh.
+        ClientTickEvents.START_CLIENT_TICK.register(mc -> {
+            if (mc.player == null || !(ClientState.locked || FinishScene.mine())) return;
+            while (mc.options.attackKey.wasPressed()) { }
+            mc.options.attackKey.setPressed(false);
+        });
         LockOn.key = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.lockon",
             InputUtil.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_MIDDLE, "category.aot_rpg"));
         ShoulderCam.swapKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.aot_rpg.shoulder_swap",
@@ -160,6 +166,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(WantedHud::render);
         HudRenderCallback.EVENT.register(OneOfOne::hud);
         ClientPlayNetworking.registerGlobalReceiver(Net.Wanted.ID, (payload, ctx) -> WantedHud.on(payload));
+        ClientPlayNetworking.registerGlobalReceiver(Net.Lock.ID, (payload, ctx) -> ClientState.locked = payload.on());
         ClientPlayNetworking.registerGlobalReceiver(Net.ContractView.ID, (payload, ctx) -> ContractsScreen.on(payload));
         HudRenderCallback.EVENT.register(BladeLock::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.ClashLock.ID, (payload, ctx) -> BladeLock.on(payload));
@@ -487,6 +494,7 @@ public final class AotRpgClient implements ClientModInitializer {
             if (ctx.client().currentScreen instanceof WorldMapScreen m) m.refresh();
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            ClientState.locked = false;
             // Nothing half-finished carries over to the next server or login.
             com.pglol.aotrpg.client.story.CutscenePlayer.reset();
             Autopilot.reset();

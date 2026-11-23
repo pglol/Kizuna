@@ -2029,6 +2029,13 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Server -> client: you can't swing right now (held, pinned, stunned, in a finisher), or you can again. */
+    public record Lock(boolean on) implements CustomPayload {
+        public static final Id<Lock> ID = id("lock");
+        public static final PacketCodec<RegistryByteBuf, Lock> CODEC = PacketCodec.of((v, b) -> b.writeBoolean(v.on), b -> new Lock(b.readBoolean()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Server -> client: how wanted you are in Marley (heat 0..100; level 0 unseen, 1 suspected, 2 hunted, 3 manhunt). */
     public record Wanted(int heat, int level) implements CustomPayload {
         public static final Id<Wanted> ID = id("wanted");
@@ -2797,6 +2804,7 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(Emote.ID, Emote.CODEC);
         PayloadTypeRegistry.playS2C().register(Pop.ID, Pop.CODEC);
         PayloadTypeRegistry.playS2C().register(Wanted.ID, Wanted.CODEC);
+        PayloadTypeRegistry.playS2C().register(Lock.ID, Lock.CODEC);
         PayloadTypeRegistry.playS2C().register(ContractView.ID, ContractView.CODEC);
         PayloadTypeRegistry.playC2S().register(ContractAction.ID, ContractAction.CODEC);
         PayloadTypeRegistry.playS2C().register(RunSummary.ID, RunSummary.CODEC);
