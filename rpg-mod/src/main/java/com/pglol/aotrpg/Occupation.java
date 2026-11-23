@@ -155,7 +155,9 @@ public final class Occupation {
         // Hunted: squads sent after you, closer together the hotter you are.
         if (inside && x.level >= 2 && now >= x.nextHunt) {
             x.nextHunt = now + (x.level >= 3 ? 40_000 : 75_000);
-            if (huntsFor(p) < (x.level >= 3 ? 3 : 2)) sendHunters(w, p, x.level);
+            // Not into the middle of a fight (or the breather after one): they'll come once it's over.
+            if (!Director.allow(p, Director.Kind.HUNT)) x.nextHunt = now + 15_000;
+            else if (huntsFor(p) < (x.level >= 3 ? 3 : 2)) sendHunters(w, p, x.level);
         }
         if (x.sent++ % 2 == 0 || x.lastSent != (int) x.heat) {
             x.lastSent = (int) x.heat;
@@ -295,7 +297,13 @@ public final class Occupation {
                     if (wiped) s.back = now + 10 * 60_000;
                 }
             } else if (near < 190 && now >= s.back && livingSpots() < 28) {
-                wake(w, s);
+                // Hostile camps wait until nobody close is mid-fight or catching their breath; homes and refugees are just there.
+                boolean hostile = s.kind != Kind.VILLAGE && s.kind != Kind.REFUGEES;
+                if (hostile && !Director.allowAt(w, Vec3d.ofCenter(s.at), 200, Director.Kind.HUNT)) s.back = now + 15_000;
+                else {
+                    wake(w, s);
+                    if (hostile) Director.spawned(w, Vec3d.ofCenter(s.at), 200);
+                }
             }
         }
     }

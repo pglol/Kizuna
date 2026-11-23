@@ -27,7 +27,8 @@ public final class WarParties {
     private static final List<Group> groups = new ArrayList<>();
     private static MinecraftServer server;
     private static int seq;
-    private static final int NEAR_EACH = 4, MAX = 32;
+    /** Groups kept around each player out in the wilds (fewer while fighting: the director holds new ones back). */
+    private static final int NEAR_EACH = 3, MAX = 32;
 
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(s -> {
@@ -94,7 +95,8 @@ public final class WarParties {
                 Vec3d c = at != null ? at : Vec3d.ofCenter(g.at());
                 if (p.squaredDistanceTo(c) < 200 * 200) around++;
             }
-            if (around < NEAR_EACH) spawn(w, p);
+            // The director decides when: not into a fight, not in the breather after it, and spaced out.
+            if (around < NEAR_EACH && Director.allow(p, Director.Kind.WILD)) spawn(w, p);
         }
     }
 
@@ -102,7 +104,8 @@ public final class WarParties {
         Random r = w.random;
         BlockPos at = null;
         for (int t = 0; t < 10 && at == null; t++) {
-            double a = r.nextDouble() * Math.PI * 2, d = 60 + r.nextInt(110);
+            // Ahead of you if you're travelling, so you meet them rather than outrun them.
+            double a = Director.aheadAngle(near, r), d = 70 + r.nextInt(100);
             int x = (int) (near.getX() + Math.cos(a) * d), z = (int) (near.getZ() + Math.sin(a) * d);
             if (AotRpg.PLACES.nearest(x, z, 90, "town", "village", "city", "capital", "camp") != null) continue;
             if (!w.isChunkLoaded(x >> 4, z >> 4)) continue;
@@ -118,7 +121,7 @@ public final class WarParties {
         int made;
         if (roll < 0.30f) {
             // A Marleyan patrol: they hunt.
-            made = Troops.hunters(w, at, 3 + r.nextInt(3), level + 1, session, at, 400, r);
+            made = Troops.hunters(w, at, 3 + r.nextInt(3), level + 1, session, at, 220, r);
         } else if (roll < 0.48f) {
             made = Troops.group(w, at, 2 + r.nextInt(3), level, session, at, 140, r, Troops.Arch.BANDIT, 1 + r.nextInt(2));
         } else if (roll < 0.60f) {
@@ -136,6 +139,9 @@ public final class WarParties {
         } else {
             made = Troops.group(w, at, 1, level + 8, session, at, 200, r, Troops.Arch.MASTER, 5);
         }
-        if (made > 0) groups.add(new Group(session, at));
+        if (made > 0) {
+            groups.add(new Group(session, at));
+            Director.spawned(w, Vec3d.ofCenter(at), 200);
+        }
     }
 }

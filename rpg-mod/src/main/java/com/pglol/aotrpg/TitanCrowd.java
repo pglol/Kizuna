@@ -63,9 +63,11 @@ public final class TitanCrowd {
             // Nor where wave titans would only be cleared away: on a property, in a home, in protected land.
             boolean sheltered = AotRpg.RAIDS.guarded(p.getX(), p.getZ()) || HomePlots.ownedAt(p.getBlockPos())
                 || AotRpg.GUARD.safeAt(server, p.getX(), p.getZ());
-            if (waves != null && (afk || liveWave > 0 || sheltered)) server.getScoreboard().getOrCreateScore(ScoreHolder.fromName(p.getNameForScoreboard()), waves).setScore(0);
+            if (waves != null && (afk || liveWave > 0 || sheltered || !Director.allow(p, Director.Kind.WAVE))) server.getScoreboard().getOrCreateScore(ScoreHolder.fromName(p.getNameForScoreboard()), waves).setScore(0);
 
             int keep = afk ? MAX_NEAR_AFK : MAX_NEAR + Math.min(liveWave, 8);
+            // Fighting people: idle titans drift off rather than wander into it (any already in the fight stay).
+            if (Director.fightingPeople(p)) keep = Math.min(keep, 2);
             if (near.size() <= keep) continue;
             // Titans that are hurt (in a fight) stay; the idle ones farthest away go first.
             near.sort(Comparator.comparingDouble((Entity e) -> -e.squaredDistanceTo(p)));

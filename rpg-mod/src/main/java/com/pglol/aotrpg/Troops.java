@@ -2322,6 +2322,18 @@ public final class Troops {
             (speed >= 0.3 ? 0.6f : 0.4f) * size, (0.94f + w.random.nextFloat() * 0.12f) / (float) Math.sqrt(size));
     }
 
+    /** How many troops within r are after this player right now. */
+    public static int engaging(ServerPlayerEntity p, double r) {
+        if (!(p.getWorld() instanceof ServerWorld w)) return 0;
+        int n = 0;
+        for (var en : troops.entrySet()) {
+            if (!p.getUuid().equals(en.getValue().target)) continue;
+            Entity e = w.getEntity(en.getKey());
+            if (e != null && e.isAlive() && e.squaredDistanceTo(p) < r * r) n++;
+        }
+        return n;
+    }
+
     /** Is someone in a troop's hands right now? */
     public static boolean held(Entity e) {
         for (Troop t : troops.values()) if (e.getUuid().equals(t.holding)) return true;

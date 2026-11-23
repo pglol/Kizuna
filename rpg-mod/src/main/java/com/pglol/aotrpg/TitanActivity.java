@@ -141,7 +141,9 @@ public final class TitanActivity {
     private List<ServerPlayerEntity> outside(ServerWorld w) {
         List<ServerPlayerEntity> out = new ArrayList<>();
         for (ServerPlayerEntity p : new java.util.ArrayList<>(w.getPlayers())) {
-            if (!p.isSpectator() && AotRpg.PROFILES.get(p.getUuid()).created && beyondWalls(p.getX(), p.getZ()) && !AotRpg.CROWD.afk(p)) out.add(p);
+            // Only players the director says are ready for something big (not mid-fight, not just after one).
+            if (!p.isSpectator() && AotRpg.PROFILES.get(p.getUuid()).created && beyondWalls(p.getX(), p.getZ()) && !AotRpg.CROWD.afk(p)
+                && Director.allow(p, Director.Kind.BIG)) out.add(p);
         }
         return out;
     }
