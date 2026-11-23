@@ -1050,6 +1050,13 @@ public final class Net {
     }
 
     /** Client -> server: an ODM double jump just fired (kind: 0 dash, 1 straight up, 2 flip; yaw of travel). */
+    /** Client -> server: zip after someone stuck in a wall or flying (by entity id). */
+    public record Pursue(int entity) implements CustomPayload {
+        public static final Id<Pursue> ID = id("pursue");
+        public static final PacketCodec<RegistryByteBuf, Pursue> CODEC = PacketCodec.of((v, b) -> b.writeVarInt(v.entity), b -> new Pursue(b.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     public record OdmJump(int kind, float yaw) implements CustomPayload {
         public static final Id<OdmJump> ID = id("odm_jump");
         public static final PacketCodec<RegistryByteBuf, OdmJump> CODEC = PacketCodec.of((v, b) -> { b.writeVarInt(v.kind); b.writeFloat(v.yaw); },
@@ -2835,6 +2842,7 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(CharacterAction.ID, CharacterAction.CODEC);
         PayloadTypeRegistry.playC2S().register(Struggle.ID, Struggle.CODEC);
         PayloadTypeRegistry.playC2S().register(OdmJump.ID, OdmJump.CODEC);
+        PayloadTypeRegistry.playC2S().register(Pursue.ID, Pursue.CODEC);
         PayloadTypeRegistry.playS2C().register(OdmMove.ID, OdmMove.CODEC);
         PayloadTypeRegistry.playS2C().register(OdmState.ID, OdmState.CODEC);
         PayloadTypeRegistry.playS2C().register(Chatter.ID, Chatter.CODEC);

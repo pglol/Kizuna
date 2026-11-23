@@ -114,6 +114,7 @@ public final class Poses {
     public static void apply(PlayerEntityModel<?> m, LivingEntity e, float limbAngle, float limbDistance, float age) {
         if (!(e instanceof PlayerEntity pl)) return;
         long now = Util.getMeasuringTimeMs();
+        if (Ragdoll.pose(m, e, age)) return;
         // Slammed into a wall: limp, arms and legs thrown wide, head lolling.
         // Face down in the dirt: limbs flung out flat, cheek to the ground.
         if (AdrenalineClient.faceplant(e.getId()) > 0) {

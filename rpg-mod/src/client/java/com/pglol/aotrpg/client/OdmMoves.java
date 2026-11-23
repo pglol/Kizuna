@@ -76,6 +76,44 @@ public final class OdmMoves {
         return false;
     }
 
+    private static long pursueAt;
+
+    /** Open to a chase: stuck in a wall, smashed through one, or off the ground. */
+    private static boolean open(net.minecraft.entity.LivingEntity e) {
+        return AdrenalineClient.pinned(e.getId()) || Ragdoll.active(e.getId()) || !e.isOnGround() && e.hurtTime > 0;
+    }
+
+    /**
+     * Strike at someone stuck in a wall or flying, out of reach, with your gear on: a burst of gas
+     * fires you at them (the server checks it all and does the zip and the cut).
+     */
+    private static boolean pursueTick(MinecraftClient mc, ClientPlayerEntity pl, long now) {
+        if (!gear || now - pursueAt < 300) return false;
+        if (mc.crosshairTarget != null && mc.crosshairTarget.getType() == net.minecraft.util.hit.HitResult.Type.ENTITY) return false;
+        var held = pl.getMainHandStack();
+        if (!com.pglol.aotrpg.Guard.melee(held) || com.pglol.aotrpg.AotItems.isApgGun(held)) return false;
+        Vec3d eye = pl.getEyePos(), look = pl.getRotationVec(1f);
+        net.minecraft.entity.LivingEntity best = null;
+        double bestDot = 0.955;
+        for (var en : mc.world.getOtherEntities(pl, pl.getBoundingBox().expand(34))) {
+            if (!(en instanceof net.minecraft.entity.LivingEntity le) || !le.isAlive() || en instanceof net.minecraft.entity.decoration.ArmorStandEntity) continue;
+            Vec3d to = en.getBoundingBox().getCenter().subtract(eye);
+            double d = to.length();
+            if (d < 3 || d > 34 || !open(le)) continue;
+            double dot = to.normalize().dotProduct(look);
+            if (dot > bestDot) {
+                bestDot = dot;
+                best = le;
+            }
+        }
+        if (best == null) return false;
+        pursueAt = now;
+        ClientPlayNetworking.send(new Net.Pursue(best.getId()));
+        MovesHud.popup("PURSUIT", 0xFFEAF4FF);
+        ImpactFrames.rush(0.5f, 160);
+        return true;
+    }
+
     /** Strike at someone down and nearly done: a finisher. */
     private static boolean finishTick(MinecraftClient mc, ClientPlayerEntity pl, boolean press) {
         if (FinishScene.mine()) return press;
@@ -90,6 +128,7 @@ public final class OdmMoves {
         boolean press = down && !attackWas;
         attackWas = down;
         if (finishTick(mc, pl, press)) return;
+        if (press && pursueTick(mc, pl, now)) return;
         if (!press || !onGround || pl.getPitch() > -30 || now < riseUntil) return;
         var held = pl.getMainHandStack();
         if (!com.pglol.aotrpg.Guard.melee(held) || com.pglol.aotrpg.AotItems.isApgGun(held)) return;

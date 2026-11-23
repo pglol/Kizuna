@@ -162,7 +162,13 @@ public final class AdrenalineClient {
                     MovesHud.popup("STUNNED", 0xFFE04A3A);
                 }
             }
+            case Adrenaline.FX_RAGDOLL -> {
+                Ragdoll.start(f.entity(), f.yaw(), f.arg());
+                if (e != null) streaks(mc, e, f.yaw() + 180, 12, false);
+                if (mc.player != null && f.entity() == mc.player.getId()) EffectFx.quake(0.6f, 10);
+            }
             case Adrenaline.FX_PINNED -> {
+                Ragdoll.stop(f.entity());
                 pinned.put(f.entity(), Util.getMeasuringTimeMs() + f.arg() * 50L);
                 if (mc.player != null && f.entity() == mc.player.getId()) EffectFx.quake(0.7f, 10);
             }

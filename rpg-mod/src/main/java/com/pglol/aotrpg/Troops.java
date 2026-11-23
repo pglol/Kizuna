@@ -1915,6 +1915,8 @@ public final class Troops {
         Squad hsq = squads.get(t.squad);
         if (hsq != null) provoke(w, hsq, by);
         int sk = skill(t);
+        // Stuck in a wall, held down or tumbling through the air: no guard, no dodge, no counter.
+        if (Locks.held(v) || Impact.ragdolled(v)) return 1;
         // A riposte stance: strike into it and it's turned straight back on you.
         if (t.move == 8 && t.stun <= 0) {
             Vec3d toBy0 = by.getPos().subtract(v.getPos()).multiply(1, 0, 1), look0 = v.getRotationVec(1f).multiply(1, 0, 1);

@@ -22,12 +22,12 @@ public final class Locks {
 
     public static boolean locked(LivingEntity e) {
         if (e == null) return false;
-        return Stuns.stunned(e) || Impact.pinned(e) || Throws.holding(e) || Troops.held(e) || Finishers.inScene(e);
+        return Stuns.stunned(e) || Impact.pinned(e) || Impact.ragdolled(e) || Throws.holding(e) || Troops.held(e) || Finishers.inScene(e);
     }
 
     /** In someone's hands, pinned, or on the losing end of a finisher. */
     public static boolean held(LivingEntity e) {
-        return e != null && (Impact.pinned(e) || Throws.holding(e) || Troops.held(e) || Finishers.inScene(e));
+        return e != null && (Impact.pinned(e) || Impact.ragdolled(e) || Throws.holding(e) || Troops.held(e) || Finishers.inScene(e));
     }
 
     public static void register() {

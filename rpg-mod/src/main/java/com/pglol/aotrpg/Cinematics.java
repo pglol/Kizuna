@@ -32,6 +32,21 @@ public final class Cinematics {
     /** The least time between two intros that take your camera. */
     private static final long GAP = 75_000;
 
+    /** Watching for this many ticks: untouchable meanwhile. */
+    public static void markBusy(ServerPlayerEntity p, int ticks) {
+        long until = System.currentTimeMillis() + ticks * 50L;
+        busyUntil.put(p.getUuid(), Math.max(busyUntil.getOrDefault(p.getUuid(), 0L), until));
+    }
+
+    /** Nothing hurts you while a cutscene has your camera (and you can't hurt anyone either). */
+    public static void register() {
+        net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DAMAGE.register((e, src, amt) -> {
+            if (e instanceof ServerPlayerEntity p && busy(p)) return false;
+            return !(src.getAttacker() instanceof ServerPlayerEntity a && busy(a));
+        });
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((h, s) -> busyUntil.remove(h.player.getUuid()));
+    }
+
     /** Already watching one: nothing else takes the camera until it's done. */
     public static boolean busy(ServerPlayerEntity p) {
         return busyUntil.getOrDefault(p.getUuid(), 0L) > System.currentTimeMillis();

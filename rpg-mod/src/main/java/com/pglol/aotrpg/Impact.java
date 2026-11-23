@@ -35,14 +35,50 @@ public final class Impact {
     /** In the air from a blow; power: thrown hard enough to break the wall they hit. */
     private record Flight(LivingEntity e, Vec3d dir, long at, long until, boolean power) { }
 
-    private record Pin(LivingEntity e, Vec3d at, long until) { }
+    /** dir: into the wall they hit (null when driven into the ground). */
+    private record Pin(LivingEntity e, Vec3d at, long until, Vec3d dir) { }
+
+    /** Smashed on through: travelling, how fast, how many more walls it can break, since when. */
+    private static final class Rag {
+        final LivingEntity e;
+        final Vec3d dir;
+        double speed, vy;
+        int walls;
+        final long at;
+        final net.minecraft.entity.Entity by;
+
+        Rag(LivingEntity e, Vec3d dir, double speed, int walls, long at, net.minecraft.entity.Entity by) {
+            this.e = e;
+            this.dir = dir;
+            this.speed = speed;
+            this.walls = walls;
+            this.at = at;
+            this.by = by;
+        }
+    }
+
+    private static final Map<UUID, Rag> rags = new HashMap<>();
 
     private static final Map<UUID, Flight> flying = new HashMap<>();
     private static final Map<UUID, Pin> pinned = new HashMap<>();
     private static final Map<UUID, Long> knocked = new HashMap<>();
     public static final int PIN_TICKS = 30;
 
+    /** Tumbling through the air after being smashed on through a wall. */
+    public static boolean ragdolled(net.minecraft.entity.Entity e) {
+        return rags.containsKey(e.getUuid());
+    }
+
     public static void register() {
+        // Stuck in a wall and hit again: the blow carries them on, through it and whatever's behind.
+        ServerLivingEntityEvents.AFTER_DAMAGE.register((e, src, base, taken, blocked) -> {
+            if (blocked || taken <= 0 || !Combat.melee(src)) return;
+            net.minecraft.entity.Entity by = src.getAttacker();
+            if (by == null || by == e || AotRpg.isTitan(e)) return;
+            Pin p = pinned.get(e.getUuid());
+            if (p == null || p.dir() == null || !(e.getWorld() instanceof ServerWorld w)) return;
+            smash(w, e, by, p.dir(), taken);
+        });
         // Pinned to a wall: no swinging back until you peel off it.
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
             !world.isClient && pinned.containsKey(player.getUuid()) ? ActionResult.FAIL : ActionResult.PASS);
@@ -60,13 +96,14 @@ public final class Impact {
         });
         ServerLivingEntityEvents.AFTER_DEATH.register((e, src) -> {
             flying.remove(e.getUuid());
+            rags.remove(e.getUuid());
             pinned.remove(e.getUuid());
         });
     }
 
     /** In the air from a throw (their own legs don't move them until they land). */
     public static boolean thrown(net.minecraft.entity.Entity e) {
-        return flying.containsKey(e.getUuid());
+        return flying.containsKey(e.getUuid()) || rags.containsKey(e.getUuid());
     }
 
     public static boolean pinned(LivingEntity e) {
@@ -75,7 +112,7 @@ public final class Impact {
 
     /** Throws someone (away from `from`) with this much force; watched for a wall for the next ~0.6s. */
     public static void launch(LivingEntity e, net.minecraft.entity.Entity from, double strength) {
-        if (e == null || from == null || pinned(e)) return;
+        if (e == null || from == null || pinned(e) || ragdolled(e)) return;
         Vec3d d = e.getPos().subtract(from.getPos()).multiply(1, 0, 1);
         if (d.lengthSquared() < 1e-4) d = from.getRotationVec(1f).multiply(1, 0, 1);
         if (d.lengthSquared() < 1e-4) return;
@@ -87,6 +124,7 @@ public final class Impact {
         e.setOnGround(false);
         long now = e.getWorld().getTime();
         if (strength >= 0.7) flying.put(e.getUuid(), new Flight(e, d, now, now + 40, strength >= 1.5));
+        if (strength >= 1.4 && e.getWorld() instanceof ServerWorld tw) tumble(tw, e, d, 12 + (int) (strength * 4));
         // A big one cuts to an impact frame for the two of them.
         if (strength >= 1.1 && e.getWorld() instanceof ServerWorld w) {
             Vec3d at = e.getPos().add(from.getPos()).multiply(0.5).add(0, 1.2, 0);
@@ -106,7 +144,143 @@ public final class Impact {
         for (ServerPlayerEntity o : to) if (ServerPlayNetworking.canSend(o, Net.ImpactFx.ID)) ServerPlayNetworking.send(o, fx);
     }
 
+    /** Everyone near sees the body go limp and tumble (ticks: for how long at most). */
+    private static void tumble(ServerWorld w, LivingEntity e, Vec3d dir, int ticks) {
+        float yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
+        Net.RushFx fx = new Net.RushFx(e.getId(), Adrenaline.FX_RAGDOLL, yaw, ticks);
+        for (ServerPlayerEntity o : PlayerLookup.around(w, e.getPos(), 96)) if (ServerPlayNetworking.canSend(o, Net.RushFx.ID)) ServerPlayNetworking.send(o, fx);
+    }
+
+    /** How hard this one hits, as walls it can put someone through (1-4). */
+    private static int walls(net.minecraft.entity.Entity by, float taken) {
+        double k = 1 + taken / 8.0;
+        if (by instanceof LivingEntity le) {
+            var atk = le.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_ATTACK_DAMAGE);
+            if (atk != null) k += atk.getValue() / 14.0;
+            k += Math.max(0, le.getScale() - 1) * 2;
+        }
+        if (by instanceof ServerPlayerEntity sp) {
+            if (Builds.of(AotRpg.PROFILES.get(sp.getUuid())) == Builds.HEAVY) k += 1;
+            if (Adrenaline.titanSurge(sp)) k += 1;
+        }
+        return (int) Math.max(1, Math.min(4, Math.floor(k)));
+    }
+
+    /**
+     * Hit while stuck in a wall: through it. The body goes limp and is driven on the way it was
+     * going, bursting through the wall and the next ones behind it, as many as the blow has in it,
+     * until it runs out of force or meets something it can't break (and sticks in that instead).
+     */
+    public static void smash(ServerWorld w, LivingEntity e, net.minecraft.entity.Entity by, Vec3d dir, float taken) {
+        pinned.remove(e.getUuid());
+        flying.remove(e.getUuid());
+        int n = walls(by, taken);
+        Vec3d d = dir.multiply(1, 0, 1).normalize();
+        Rag r = new Rag(e, d, 1.35 + 0.18 * n, n, w.getTime(), by);
+        rags.put(e.getUuid(), r);
+        e.removeStatusEffect(StatusEffects.SLOWNESS);
+        tumble(w, e, d, 16 + n * 6);
+        Vec3d at = e.getPos().add(0, e.getHeight() * 0.55, 0);
+        frame(w, at, 1.3f, e, by);
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, 0xFFFFFF, 7f), at.x, at.y, at.z, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFF0D0, 6f), at.x, at.y, at.z, 0, 0, 0);
+        AotParticles.burst(w, AotParticles.STREAK, 0xFFFFFF, 0.9f, at.x, at.y, at.z, 16, 0.2, 1.2);
+        w.playSound(null, e.getBlockPos(), HitSounds.HEAVY, SoundCategory.PLAYERS, 1.4f, 0.8f);
+        w.playSound(null, e.getBlockPos(), SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.PLAYERS, 0.9f, 0.9f);
+        for (ServerPlayerEntity o : PlayerLookup.around(w, at, 28)) {
+            if (ServerPlayNetworking.canSend(o, Net.Quake.ID)) ServerPlayNetworking.send(o, new Net.Quake(o == e || o == by ? 0.8f : 0.35f, 10));
+        }
+    }
+
+    /** The first solid block in the body's way over the next step, or null. */
+    private static BlockPos blocking(ServerWorld w, LivingEntity e, Vec3d from, Vec3d to) {
+        double len = from.distanceTo(to) + e.getWidth() * 0.5 + 0.3;
+        Vec3d d = to.subtract(from).normalize();
+        for (double s = 0.2; s <= len; s += 0.35) {
+            for (double h = 0.15; h < e.getHeight(); h += 0.6) {
+                BlockPos b = BlockPos.ofFloored(from.add(d.multiply(s)).add(0, h, 0));
+                BlockState st = w.getBlockState(b);
+                if (!st.isAir() && !st.getCollisionShape(w, b).isEmpty()) return b;
+            }
+        }
+        return null;
+    }
+
+    private static void ragTick(ServerWorld w, Rag r) {
+        LivingEntity e = r.e;
+        Vec3d pos = e.getPos();
+        r.vy = Math.max(-0.6, r.vy - 0.035);
+        Vec3d step = r.dir.multiply(r.speed).add(0, r.vy, 0);
+        Vec3d next = pos.add(step);
+        // The floor: skim along it rather than through it.
+        BlockPos under = BlockPos.ofFloored(next.x, next.y - 0.05, next.z);
+        if (r.vy < 0 && !w.getBlockState(under).getCollisionShape(w, under).isEmpty()) {
+            next = new Vec3d(next.x, under.getY() + 1, next.z);
+            r.vy = 0;
+            r.speed *= 0.86;
+        }
+        BlockPos wall = blocking(w, e, pos, next);
+        if (wall != null) {
+            BlockState ws = w.getBlockState(wall);
+            boolean breaks = r.walls > 0 && ws.getHardness(w, wall) >= 0 && ws.getHardness(w, wall) <= 6;
+            if (breaks) {
+                // Through it: a hole the size of a body, and on.
+                r.walls--;
+                BlockPos mid = BlockPos.ofFloored(wall.getX() + 0.5, pos.y + e.getHeight() * 0.5, wall.getZ() + 0.5);
+                crater(w, mid, 1);
+                Vec3d at = Vec3d.ofCenter(mid);
+                w.spawnParticles(new BlockStateParticleEffect(ParticleTypes.BLOCK, ws), at.x, at.y, at.z, 60, 0.6, 0.8, 0.6, 0.35);
+                AotParticles.one(w, AotParticles.fx(AotParticles.BURST, 0xFFFFFF, 5f), at.x, at.y, at.z, 0, 0, 0);
+                AotParticles.burst(w, AotParticles.SHARD, 0x9A9080, 0.6f, at.x, at.y, at.z, 22, 0.4, 0.7);
+                w.playSound(null, mid, SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.BLOCKS, 1.0f, 1.1f);
+                w.playSound(null, mid, SoundEvents.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, SoundCategory.BLOCKS, 1.0f, 0.7f);
+                e.timeUntilRegen = 0;
+                e.damage(w.getDamageSources().flyIntoWall(), 2.5f);
+                r.speed *= 0.9;
+                frame(w, at, 0.8f, e, r.by);
+                for (ServerPlayerEntity o : PlayerLookup.around(w, at, 24)) {
+                    if (ServerPlayNetworking.canSend(o, Net.Quake.ID)) ServerPlayNetworking.send(o, new Net.Quake(0.3f, 6));
+                }
+                // Cleared now? Carry on this tick; if not, next tick tries again.
+                if (blocking(w, e, pos, next) != null) return;
+            } else {
+                // Out of force, or something that won't give: stuck in this one.
+                rags.remove(e.getUuid());
+                if (e instanceof ServerPlayerEntity sp) sp.setVelocity(Vec3d.ZERO);
+                slam(w, e, ws, r.dir);
+                return;
+            }
+        }
+        if (e instanceof ServerPlayerEntity sp) {
+            sp.setVelocity(step);
+            sp.velocityModified = true;
+        } else {
+            e.setVelocity(step);
+            e.refreshPositionAndAngles(next.x, next.y, next.z, e.getYaw(), e.getPitch());
+        }
+        e.fallDistance = 0;
+        if (w.getTime() % 2 == 0) AotParticles.burst(w, AotParticles.STREAK, 0xEAF4FF, 0.5f, e.getX(), e.getY() + 1, e.getZ(), 3, 0.3, 0.3);
+        r.speed *= 0.955;
+        // Spent: down it comes, the ordinary way.
+        if (r.speed < 0.45 || w.getTime() - r.at > 60) {
+            rags.remove(e.getUuid());
+            long now = w.getTime();
+            flying.put(e.getUuid(), new Flight(e, r.dir, now, now + 30, false));
+            e.setVelocity(r.dir.multiply(r.speed).add(0, r.vy, 0));
+            e.velocityModified = true;
+        }
+    }
+
     public static void tick(MinecraftServer server) {
+        if (!rags.isEmpty()) {
+            for (Rag r : new ArrayList<>(rags.values())) {
+                if (r.e.isRemoved() || !r.e.isAlive() || !(r.e.getWorld() instanceof ServerWorld w)) {
+                    rags.remove(r.e.getUuid());
+                    continue;
+                }
+                ragTick(w, r);
+            }
+        }
         if (!flying.isEmpty()) {
             for (var en : new ArrayList<>(flying.entrySet())) {
                 Flight f = en.getValue();
@@ -191,7 +365,7 @@ public final class Impact {
         e.setVelocity(Vec3d.ZERO);
         e.velocityModified = true;
         e.fallDistance = 0;
-        pinned.put(e.getUuid(), new Pin(e, e.getPos(), w.getTime() + ticks));
+        pinned.put(e.getUuid(), new Pin(e, e.getPos(), w.getTime() + ticks, null));
         e.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, ticks, 6, false, false, false));
         if (Troops.is(e)) Troops.stagger(e, ticks);
         Net.RushFx fx = new Net.RushFx(e.getId(), kind, e.getYaw(), ticks);
@@ -201,7 +375,7 @@ public final class Impact {
     private static void slam(ServerWorld w, LivingEntity e, BlockState wall, Vec3d dir) {
         e.setVelocity(Vec3d.ZERO);
         e.velocityModified = true;
-        pinned.put(e.getUuid(), new Pin(e, e.getPos(), w.getTime() + PIN_TICKS));
+        pinned.put(e.getUuid(), new Pin(e, e.getPos(), w.getTime() + PIN_TICKS, dir));
         e.damage(w.getDamageSources().flyIntoWall(), 3);
         e.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, PIN_TICKS, 6, false, false, false));
         e.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, PIN_TICKS, 2, false, false, false));

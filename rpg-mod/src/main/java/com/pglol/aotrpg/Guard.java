@@ -240,6 +240,8 @@ public final class Guard {
             }
             // Block: a guarding fighter facing the hit.
             if (!(entity instanceof ServerPlayerEntity def) || !guarding(def)) return true;
+            // Slammed into a wall, tumbling through the air or dazed: the guard's gone.
+            if (Impact.pinned(def) || Impact.ragdolled(def) || Stuns.stunned(def)) return true;
             // A hook's hit is turned from any side, and the hook falls away.
             if (source.getSource() != null && hook(source.getSource(), def)) {
                 source.getSource().discard();

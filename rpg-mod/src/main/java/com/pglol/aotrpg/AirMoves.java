@@ -299,7 +299,7 @@ public final class AirMoves {
         Adrenaline.gain(by, 20);
     }
 
-    private static boolean foe(ServerPlayerEntity p, LivingEntity e) {
+    static boolean foe(ServerPlayerEntity p, LivingEntity e) {
         if (e == p || !e.isAlive() || e.isSpectator()) return false;
         if (e instanceof ServerPlayerEntity o) return !AotRpg.PARTIES.same(p.getUuid(), o.getUuid()) && !o.isCreative();
         return e instanceof HostileEntity || AotRpg.isTitan(e) || Troops.is(e);

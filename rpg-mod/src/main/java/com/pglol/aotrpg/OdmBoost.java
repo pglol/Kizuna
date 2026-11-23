@@ -71,6 +71,11 @@ public final class OdmBoost {
         return infiniteAll || infinite.contains(p.getUuid());
     }
 
+    /** One burst of gas for a move (free when the gear's infinite or the class gives it): false when empty. */
+    public boolean burst(ServerPlayerEntity p) {
+        return infinite(p) || AotRpg.CLASSES.freeGas(p) || spend(p);
+    }
+
     /** Towns, villages, camps and HQs are where the gear gets refilled. */
     public static boolean refuelPoint(ServerPlayerEntity p) {
         return AotRpg.PLACES.nearest(p.getX(), p.getZ(), 70, "town", "village", "city", "capital", "camp") != null;

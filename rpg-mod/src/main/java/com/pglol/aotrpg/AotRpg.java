@@ -145,9 +145,11 @@ public final class AotRpg implements ModInitializer {
         Elites.register();
         Troops.register();
         Locks.register();
+        Cinematics.register();
         Delves.register();
         Contracts.register();
         Net.register();
+        Pursuit.register();
         ServerPlayNetworking.registerGlobalReceiver(Net.ContractAction.ID, (payload, ctx) -> Contracts.action(ctx.player(), payload.action(), payload.arg()));
         SatchelHandler.register();
         Crafting.register();

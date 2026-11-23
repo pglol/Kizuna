@@ -1165,6 +1165,7 @@ public final class Story {
         boolean fade = !o.has("fade") || o.get("fade").getAsBoolean();
         for (ServerPlayerEntity x : mem) {
             if (ServerPlayNetworking.canSend(x, Net.Cutscene.ID)) ServerPlayNetworking.send(x, new Net.Cutscene(shots, fade));
+            Cinematics.markBusy(x, (int) (at / 50) + 40);
         }
     }
 

@@ -119,6 +119,7 @@ public final class ActorRenderer extends EntityRenderer<VillagerEntity> {
                     }
                     // Troops act out their moves (wind-ups, cuts, guard, aiming).
                     TroopPoses.apply(this, e, headPitch);
+                    com.pglol.aotrpg.client.Ragdoll.pose(this, e, age);
                 }
             }, 0.5f);
             // What they wear and hold, drawn like a player's: uniform, harness, boots and blades.

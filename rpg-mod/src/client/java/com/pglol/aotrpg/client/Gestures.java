@@ -70,7 +70,7 @@ public final class Gestures {
     private static boolean blocked(LivingEntity e) {
         if (e.deathTime > 0 || e.isSleeping() || e.hasVehicle() || e.isSwimming() || e.isFallFlying() || e.isClimbing() || e.isTouchingWater()) return true;
         int id = e.getId();
-        if (FinishScene.in(id) || AdrenalineClient.pinned(id) || AdrenalineClient.faceplant(id) > 0 || OdmMoves.anim(id) != null || Emotes.active(id)) return true;
+        if (FinishScene.in(id) || Ragdoll.active(id) || AdrenalineClient.pinned(id) || AdrenalineClient.faceplant(id) > 0 || OdmMoves.anim(id) != null || Emotes.active(id)) return true;
         if (e instanceof PlayerEntity p && p.getAbilities().flying) return true;
         MinecraftClient mc = MinecraftClient.getInstance();
         // Your own arms in first person are left alone.
