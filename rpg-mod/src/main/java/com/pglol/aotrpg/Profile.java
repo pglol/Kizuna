@@ -30,6 +30,9 @@ public final class Profile {
     public String mode = "story";
     /** Salvage: earned only by grinding (titan kills, extractions), spent on more stash space. */
     public long salvage;
+    /** Past the level cap: Veteran ranks (rewards and standing only, never more power), and the XP toward the next. */
+    public int veteran;
+    public long vetXp;
     /** Stash rows bought with Salvage (9 slots each), on top of the home's chests and barrels. */
     public int stashRows;
     /** Where this character stood in the open world before going down to the Extraction lobby. */

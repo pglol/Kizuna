@@ -746,7 +746,7 @@ final class Commands {
         m.button(4, Menu.glow(Menu.icon(Items.PLAYER_HEAD, Menu.line(pr.name, Formatting.GOLD, Formatting.BOLD),
             Menu.line("Level " + pr.level + " " + pr.discipline.title, Formatting.YELLOW),
             Menu.line("Origin: " + pr.origin.title, Formatting.GRAY),
-            Menu.line(pr.level >= Progression.MAX_LEVEL ? "Max level" : "XP: " + pr.xp + " / " + Profile.xpForNext(pr.level), Formatting.GRAY),
+            Menu.line(pr.level >= Progression.MAX_LEVEL ? "Veteran " + pr.veteran + " · " + pr.vetXp + " / " + Progression.veteranNeed() : "XP: " + pr.xp + " / " + Profile.xpForNext(pr.level), Formatting.GRAY),
             Menu.line("Titans slain: " + pr.titanKills, Formatting.RED),
             Menu.line("Chapter " + pr.chapter, Formatting.DARK_GRAY))), null);
         int[] cols = {1, 3, 5, 7};

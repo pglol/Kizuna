@@ -109,8 +109,32 @@ public final class Progression {
         addXp(p, pr, xp);
     }
 
+    /** XP for each Veteran rank past the cap. */
+    public static long veteranNeed() {
+        return Profile.xpForNext(MAX_LEVEL);
+    }
+
     public void addXp(ServerPlayerEntity p, Profile pr, long amount) {
-        if (!pr.created || pr.level >= MAX_LEVEL) return;
+        if (!pr.created) return;
+        if (pr.level >= MAX_LEVEL) {
+            // At the cap the XP still counts: Veteran ranks, each paying out (and a new finisher every fifth).
+            pr.vetXp += Math.round(amount * (1 + Roles.bonus(pr)));
+            while (pr.vetXp >= veteranNeed()) {
+                pr.vetXp -= veteranNeed();
+                pr.veteran++;
+                long pay = 1500 + 100L * pr.veteran;
+                AotRpg.WALLET.addMarks(p, pay, null);
+                if (pr.veteran % 5 == 0) AotRpg.COSMETICS.dropFinisher(p, p.getRandom());
+                var w = p.getServerWorld();
+                AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xE0B96A, 3.5f), p.getX(), p.getY() + 0.05, p.getZ(), 0, 0, 0);
+                w.playSound(null, p.getBlockPos(), SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1f, 0.5f);
+                Reveal.show(p, "Veteran " + pr.veteran, "+" + pay + " Marks" + (pr.veteran % 5 == 0 ? " · a new finisher" : "") + " · " + (5 - pr.veteran % 5) % 5 + " ranks to the next finisher",
+                    "levelup", pr.veteran % 5 == 0 ? 4 : 3);
+            }
+            AotRpg.PROFILES.save(p.getUuid());
+            AotRpg.sync(p, pr);
+            return;
+        }
         amount = Math.round(amount * (1 + Roles.bonus(pr)));
         pr.xp += amount;
         boolean up = false;
@@ -152,7 +176,7 @@ public final class Progression {
         long need = Profile.xpForNext(pr.level);
         bar.setName(Text.literal("Lv " + pr.level + "  ").formatted(Formatting.GOLD, Formatting.BOLD)
             .append(Text.literal(pr.name + " the " + pr.discipline.title).formatted(Formatting.WHITE))
-            .append(Text.literal(pr.level >= MAX_LEVEL ? "   MAX" : "   " + pr.xp + " / " + need + " XP").formatted(Formatting.GRAY)));
+            .append(Text.literal(pr.level >= MAX_LEVEL ? "   Veteran " + pr.veteran + "  " + pr.vetXp + " / " + veteranNeed() : "   " + pr.xp + " / " + need + " XP").formatted(Formatting.GRAY)));
         bar.setPercent(pr.level >= MAX_LEVEL ? 1f : Math.min(1f, (float) pr.xp / need));
         bar.setColor(switch (pr.discipline) {
             case SCOUT -> BossBar.Color.GREEN;
