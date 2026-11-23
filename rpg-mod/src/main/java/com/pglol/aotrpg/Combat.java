@@ -71,6 +71,9 @@ public final class Combat {
             // Levels mean something: every level hits harder (half as much on titans, whose own
             // levels already set their toughness).
             int lv = AotRpg.PROFILES.get(attacker.getUuid()).level;
+            // Against a player, a level lead counts for at most ten levels' worth: a veteran
+            // still wins on skill and gear, but can't simply flatten someone far below them.
+            if (entity instanceof ServerPlayerEntity d0) lv = Math.min(lv, AotRpg.PROFILES.get(d0.getUuid()).level + 10);
             mult *= AotRpg.isTitan(entity) ? 1 + 0.01 * (lv - 1) : power(lv);
             if (entity instanceof ServerPlayerEntity def) mult *= pvp(def, amount * mult);
         }

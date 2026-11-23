@@ -56,6 +56,8 @@ public final class Troops {
         /** 0 leads, 1 rifleman (holds and fires), 2 flanker (works round the side). */
         final int role, slot;
         UUID target;
+        /** Reaching for a grab (ticks left): telegraphed, so it can be stepped out of. */
+        int grabWind;
         int burst, cool, retarget, strafe = 1, strafeFlip, flee, grabbed = -1;
         /** A volley being aimed (ticks left), and where it will go: dodge it by moving. */
         int windup;
@@ -776,6 +778,7 @@ public final class Troops {
         }
         // Held, pinned or being finished: nothing at all, not even a twitch of the blade.
         if (Locks.held(v)) {
+            t.grabWind = 0;
             t.swing = 0;
             t.swingShown = false;
             t.move = 0;
@@ -843,7 +846,10 @@ public final class Troops {
                 AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xD8C8A8, 2.5f), v.getX(), v.getY() + 0.05, v.getZ(), 0, 0, 0);
             }
         }
-        if (target == null || !target.getUuid().equals(t.target)) t.windup = 0;
+        if (target == null || !target.getUuid().equals(t.target)) {
+            t.windup = 0;
+            t.grabWind = 0;
+        }
         t.target = target == null ? null : target.getUuid();
         chasing = target;
 
@@ -1000,6 +1006,7 @@ public final class Troops {
         t.windup = titan ? 8 : t.officer ? 13 : 16;
         t.aimAt = at;
         anim(v, 4, t.windup + (titan ? 4 : t.officer ? 3 : 2) * 3 + 4, 0);
+        tell(w, v, TELL_PARRY);
         if (target instanceof ServerPlayerEntity p) p.playSoundToPlayer(SoundEvents.ITEM_CROSSBOW_LOADING_MIDDLE.value(), SoundCategory.HOSTILE, 1f, 1.4f);
     }
 
@@ -1104,14 +1111,31 @@ public final class Troops {
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_IRON_GOLEM_ATTACK, SoundCategory.HOSTILE, 1.2f, 0.7f);
             return;
         }
-        // The strongest close in and grab instead of cutting.
-        if ((sq.skill >= 2 || t.officer) && t.grabCd <= 0 && t.swing == 0 && t.cool <= 2 && dist < 2.6
-            && !AotRpg.isTitan(target) && !Stuns.stunned(v) && w.random.nextInt(3) == 0 && !Locks.locked(target)) {
+        // The reach: committed once started, and it closes on whoever's still in range when it lands.
+        if (t.grabWind > 0) {
+            walk(w, v, to, 0.12);
+            if (--t.grabWind > 0) return;
+            if (dist > 3.0 || Locks.locked(target) || Stuns.stunned(v) || AotRpg.isTitan(target)) {
+                // Stepped out of it: a lunge at nothing, and he's open for a beat.
+                t.grabCd = 60;
+                t.cool = 10;
+                w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_NODAMAGE, SoundCategory.HOSTILE, 1f, 0.7f);
+                return;
+            }
             t.holding = target.getUuid();
             t.holdT = 14;
             anim(v, 1, 14, 0);
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, SoundCategory.HOSTILE, 1f, 0.6f);
             if (target instanceof ServerPlayerEntity gp) gp.sendMessage(Text.literal("Grabbed!").formatted(Formatting.RED, Formatting.BOLD), true);
+            return;
+        }
+        // The strongest close in and reach for you instead of cutting (purple: step back or roll out of it).
+        if ((sq.skill >= 2 || t.officer) && t.grabCd <= 0 && t.swing == 0 && t.cool <= 2 && dist < 2.6
+            && !AotRpg.isTitan(target) && !Stuns.stunned(v) && w.random.nextInt(3) == 0 && !Locks.locked(target)) {
+            t.grabWind = Math.max(5, 9 - sq.skill);
+            anim(v, 10, t.grabWind + 2, 0);
+            tell(w, v, TELL_GRAB);
+            w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_ATTACK, SoundCategory.HOSTILE, 0.6f, 1.3f);
             return;
         }
         if (t.guard > 0) {
@@ -1344,6 +1368,7 @@ public final class Troops {
             t.moveT = 0;
             t.poundCd = 150 - sq.skill * 12;
             anim(v, 6, 22, 1);
+            tell(w, v, TELL_DODGE);
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 1.2f, 1.1f);
             AotParticles.one(w, AotParticles.fx(AotParticles.RING, 0xD8C8A8, 3f), v.getX(), v.getY() + 0.05, v.getZ(), 0, 0, 0);
             return;
@@ -1357,6 +1382,7 @@ public final class Troops {
             t.move = 4;
             t.moveT = Math.max(6, 10 - sq.skill);
             anim(v, 10, t.moveT + 2, 0);
+            tell(w, v, TELL_GRAB);
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_ATTACK, SoundCategory.HOSTILE, 1f, 0.8f);
             return;
         }
@@ -1366,6 +1392,7 @@ public final class Troops {
             t.moveT = 0;
             t.poundCd = 120 - sq.skill * 10;
             anim(v, 6, 14, 1);
+            tell(w, v, TELL_DODGE);
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ENTITY_RAVAGER_ROAR, SoundCategory.HOSTILE, 1f, 1.2f);
             return;
         }
@@ -1522,6 +1549,7 @@ public final class Troops {
             t.moveT = Math.max(9, 16 - sq.skill);
             t.poundCd = 100 - sq.skill * 8;
             anim(v, 8, t.moveT, 0);
+            tell(w, v, TELL_DODGE);
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.BLOCK_GRINDSTONE_USE, SoundCategory.HOSTILE, 1f, 1.4f);
             w.playSound(null, v.getX(), v.getY() + 1, v.getZ(), SoundEvents.ITEM_TRIDENT_RETURN, SoundCategory.HOSTILE, 1f, 0.6f);
             return true;
@@ -1531,12 +1559,19 @@ public final class Troops {
 
     // ------------------------------------------------------------------ signatures
 
+    /**
+     * The warning before a big move, the same language for every enemy: a flash at the eyes and a
+     * ring at the feet in the move's colour. Red: can't be blocked, get out of the way. Purple: a
+     * grab, step back (raising your guard only invites it). Gold: block or parry it. White: a
+     * counter stance, don't swing into it.
+     */
     private static void tell(ServerWorld w, VillagerEntity v, int rgb) {
         Vec3d eye = v.getEyePos().add(v.getRotationVec(1f).multiply(0.5)).add(0, -0.3, 0);
-        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, rgb, 1.3f), eye.x, eye.y, eye.z, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.FLASH, rgb, 1.7f), eye.x, eye.y, eye.z, 0, 0, 0);
+        AotParticles.one(w, AotParticles.fx(AotParticles.RING, rgb, 2.2f * (float) Math.max(1, v.getScale())), v.getX(), v.getY() + 0.06, v.getZ(), 0, 0, 0);
     }
 
-    private static final int TELL_DODGE = 0xE02A2A, TELL_WAIT = 0xF4F0E6;
+    private static final int TELL_DODGE = 0xE02A2A, TELL_WAIT = 0xF4F0E6, TELL_GRAB = 0xB04AE0, TELL_PARRY = 0xFFD24A;
 
     /**
      * Every kind of fighter has a signature, each with its own tell and its own answer:
@@ -1731,6 +1766,7 @@ public final class Troops {
                 t.moveT = Math.max(6, 10 - sk);
                 t.poundCd = 150;
                 anim(v, 8, t.moveT, 0);
+                tell(w, v, TELL_PARRY);
                 w.playSound(null, v.getBlockPos(), SoundEvents.BLOCK_SAND_STEP, SoundCategory.HOSTILE, 1.2f, 0.7f);
             }
             case 7 -> {
@@ -1738,12 +1774,13 @@ public final class Troops {
                 t.aim = target.getPos().add(target.getVelocity().multiply(6)).add(0, 1, 0);
                 t.poundCd = 70;
                 anim(v, 6, t.moveT, 0);
-                tell(w, v, 0xFFD24A);
+                tell(w, v, TELL_PARRY);
             }
             case 8 -> {
                 t.moveT = 22 + sk * 2;
                 t.poundCd = 140 - sk * 10;
                 anim(v, 3, t.moveT, 0);
+                tell(w, v, TELL_WAIT);
                 w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_ARMOR_EQUIP_CHAIN.value(), SoundCategory.HOSTILE, 1f, 0.6f);
                 w.playSound(null, v.getBlockPos(), SoundEvents.BLOCK_ANVIL_PLACE, SoundCategory.HOSTILE, 0.3f, 2f);
             }
@@ -1751,12 +1788,14 @@ public final class Troops {
                 t.moveT = Math.max(10, 16 - sk);
                 t.poundCd = 120 - sk * 8;
                 anim(v, 1, t.moveT, 0);
+                tell(w, v, TELL_DODGE);
                 w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_TRIDENT_RETURN, SoundCategory.HOSTILE, 1f, 0.5f);
             }
             case 10 -> {
                 t.moveT = Math.max(8, 14 - sk);
                 t.poundCd = 110 - sk * 8;
                 anim(v, 8, t.moveT, 0);
+                tell(w, v, TELL_PARRY);
                 w.playSound(null, v.getBlockPos(), SoundEvents.ITEM_ARMOR_EQUIP_IRON.value(), SoundCategory.HOSTILE, 1f, 0.6f);
             }
             case 11 -> {

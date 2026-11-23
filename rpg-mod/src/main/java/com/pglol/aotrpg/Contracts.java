@@ -394,6 +394,8 @@ public final class Contracts {
                 long now = System.currentTimeMillis();
                 List<Long> l = pks.computeIfAbsent(killer.getUuid(), k -> new ArrayList<>());
                 l.add(now);
+                // Preying on someone far below you counts double: one such kill is enough to be posted.
+                if (AotRpg.PROFILES.get(dead.getUuid()).level <= AotRpg.PROFILES.get(killer.getUuid()).level - 20) l.add(now);
                 l.removeIf(t -> now - t > 30 * 60_000);
                 boolean already = false;
                 for (Contract c : board) if (c.kind == Kind.PLAYER && c.poster == null && killer.getUuid().equals(c.target)) already = true;
