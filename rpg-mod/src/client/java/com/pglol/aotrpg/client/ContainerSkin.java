@@ -85,9 +85,9 @@ public final class ContainerSkin {
         var h = s.getScreenHandler();
         if (h instanceof AbstractFurnaceScreenHandler f) {
             // The flame (fuel left) between the two inputs, the arrow (cooking) to the output.
-            int fuel = f.isBurning() ? f.getFuelProgress() : 0;
-            flame(c, x + 57, y + 37, fuel / 13f);
-            arrow(c, x + 80, y + 35, 24, f.getCookProgress() / 24f);
+            float fuel = f.isBurning() ? (float) f.getFuelProgress() : 0;
+            flame(c, x + 57, y + 37, fuel);
+            arrow(c, x + 80, y + 35, 24, (float) f.getCookProgress());
         } else if (h instanceof BrewingStandScreenHandler b) {
             // Blaze fuel under its slot, and the brew running down beside the ingredient.
             int fx = x + 60, fy = y + 44;
