@@ -62,5 +62,105 @@
       "aot_rpg:steel_clash1",
       "aot_rpg:steel_clash2"
     ]
+  },
+  "step_stone": {
+    "subtitle": "subtitles.aot_rpg.footsteps",
+    "sounds": [
+      {
+        "name": "aot_rpg:step_stone1",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_stone2",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_stone3",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_stone4",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_stone5",
+        "attenuation_distance": 20
+      }
+    ]
+  },
+  "step_wood": {
+    "subtitle": "subtitles.aot_rpg.footsteps",
+    "sounds": [
+      {
+        "name": "aot_rpg:step_wood1",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_wood2",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_wood3",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_wood4",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_wood5",
+        "attenuation_distance": 20
+      }
+    ]
+  },
+  "step_soft": {
+    "subtitle": "subtitles.aot_rpg.footsteps",
+    "sounds": [
+      {
+        "name": "aot_rpg:step_soft1",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_soft2",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_soft3",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_soft4",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_soft5",
+        "attenuation_distance": 20
+      }
+    ]
+  },
+  "step_gravel": {
+    "subtitle": "subtitles.aot_rpg.footsteps",
+    "sounds": [
+      {
+        "name": "aot_rpg:step_gravel1",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_gravel2",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_gravel3",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_gravel4",
+        "attenuation_distance": 20
+      },
+      {
+        "name": "aot_rpg:step_gravel5",
+        "attenuation_distance": 20
+      }
+    ]
   }
 }

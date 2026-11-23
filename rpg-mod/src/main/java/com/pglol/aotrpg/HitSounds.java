@@ -16,7 +16,20 @@ import net.minecraft.util.Identifier;
 public final class HitSounds {
     private HitSounds() { }
 
-    public static SoundEvent HIT, HEAVY, SHOT, IMPACT, RICOCHET, WHOOSH, CLASH;
+    public static SoundEvent HIT, HEAVY, SHOT, IMPACT, RICOCHET, WHOOSH, CLASH, STEP_STONE, STEP_WOOD, STEP_SOFT, STEP_GRAVEL;
+
+    /** A boot on this block: stone and anything hard, timber, earth and grass, or gravel and sand. */
+    public static SoundEvent step(net.minecraft.block.BlockState st) {
+        if (st.isIn(net.minecraft.registry.tag.BlockTags.DIRT) || st.isIn(net.minecraft.registry.tag.BlockTags.WOOL_CARPETS)
+            || st.isIn(net.minecraft.registry.tag.BlockTags.LEAVES)) return STEP_SOFT;
+        String k = Registries.SOUND_EVENT.getId(st.getSoundGroup().getStepSound()) instanceof Identifier id ? id.getPath() : "";
+        if (k.contains("wood") || k.contains("ladder") || k.contains("bamboo") || k.contains("scaffold")) return STEP_WOOD;
+        if (k.contains("gravel") || k.contains("sand") || k.contains("powder_snow") || k.contains("suspicious")) return STEP_GRAVEL;
+        if (k.contains("grass") || k.contains("moss") || k.contains("wool") || k.contains("root") || k.contains("azalea")
+            || k.contains("snow") || k.contains("mud") || k.contains("leaves") || k.contains("vine") || k.contains("crop")
+            || k.contains("nylium") || k.contains("wart") || k.contains("fungus") || k.contains("sculk") || k.contains("lily")) return STEP_SOFT;
+        return STEP_STONE;
+    }
 
     private static SoundEvent reg(String name) {
         Identifier id = Identifier.of("aot_rpg", name);
@@ -41,6 +54,10 @@ public final class HitSounds {
         RICOCHET = reg("ricochet");
         WHOOSH = reg("whoosh");
         CLASH = reg("steel_clash");
+        STEP_STONE = reg("step_stone");
+        STEP_WOOD = reg("step_wood");
+        STEP_SOFT = reg("step_soft");
+        STEP_GRAVEL = reg("step_gravel");
         ServerLivingEntityEvents.AFTER_DAMAGE.register((victim, source, base, taken, blocked) -> {
             if (blocked || taken <= 0 || !Combat.melee(source) || source.getAttacker() == null || source.getAttacker() == victim) return;
             boolean person = victim instanceof ServerPlayerEntity || Troops.is(victim) || AotRpg.isTitan(victim)

@@ -90,6 +90,7 @@ public final class AotRpgClient implements ClientModInitializer {
         // Aboard the balloon: no fighting keys (ready, the menu and the map still work), and the
         // rest of the HUD steps aside for the lobby's own.
         ClientTickEvents.START_CLIENT_TICK.register(LobbyScreen::guardKeys);
+        ClientTickEvents.END_CLIENT_TICK.register(Footsteps::tick);
         // Held, pinned, stunned or mid-finisher: the click goes nowhere — no arm, no whoosh.
         ClientTickEvents.START_CLIENT_TICK.register(mc -> {
             if (mc.player == null || !(ClientState.locked || FinishScene.mine())) return;
@@ -495,6 +496,7 @@ public final class AotRpgClient implements ClientModInitializer {
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientState.locked = false;
+            Footsteps.reset();
             // Nothing half-finished carries over to the next server or login.
             com.pglol.aotrpg.client.story.CutscenePlayer.reset();
             Autopilot.reset();

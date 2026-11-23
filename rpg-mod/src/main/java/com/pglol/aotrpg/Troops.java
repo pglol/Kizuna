@@ -2315,10 +2315,9 @@ public final class Troops {
         BlockPos below = v.getBlockPos().down();
         var st = w.getBlockState(below);
         if (st.isAir()) return;
-        var g = st.getSoundGroup();
         float size = (float) Math.max(1, v.getScale());
-        w.playSound(null, v.getX(), v.getY(), v.getZ(), g.getStepSound(), SoundCategory.HOSTILE,
-            g.getVolume() * (speed >= 0.3 ? 0.45f : 0.3f) * size, g.getPitch() * (0.95f + w.random.nextFloat() * 0.1f) / size);
+        w.playSound(null, v.getX(), v.getY(), v.getZ(), HitSounds.step(st), SoundCategory.HOSTILE,
+            (speed >= 0.3 ? 0.6f : 0.4f) * size, (0.94f + w.random.nextFloat() * 0.12f) / (float) Math.sqrt(size));
     }
 
     /** Is someone in a troop's hands right now? */
