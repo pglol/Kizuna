@@ -334,26 +334,44 @@ public final class LobbyScreen extends Screen {
                 if (!st.isEmpty()) hits.add(sx, sy, 38, 38, () -> ClientPlayNetworking.send(new Net.StashAction("unequip", target)));
             }
         }
-        // The loadout bar: what each of the nine places is for.
+        // The loadout bar: right hand and left hand first (sheathed grips show there, marked), then the rest.
         int by = top + mh + 26;
         Ui.text(c, Text.literal("Loadout"), lx + 8, by, 0.62f, 0xFF9A958A, false);
         by += 9;
-        int cw = (lw - 16 - 8 * 2) / 9;
-        for (int k = 0; k < 9; k++) {
+        int[] places = {0, com.pglol.aotrpg.Satchel.OFF, 1, 2, 3, 4, 5, 6, 7, 8};
+        int cw = (lw - 16 - 9 * 2) / 10;
+        Net.SheathState shs = ClientState.sheaths.get(p.getUuid());
+        for (int k = 0; k < places.length; k++) {
             int sx = lx + 8 + k * (cw + 2);
-            ItemStack st = p.getInventory().getStack(k);
-            int slot = k;
-            cell(c, sx, by, cw, st, "", tip);
-            if (!st.isEmpty()) hits.add(sx, by, cw, cw, () -> ClientPlayNetworking.send(new Net.StashAction("unequip", slot)));
-            if (Sleek.over(sx, by, cw, cw) && st.isEmpty()) {
-                var kind = com.pglol.aotrpg.Loadout.SLOTS[k];
-                c.drawTooltip(Ui.font(), java.util.List.of(Text.literal(kind.title).withColor(Sleek.GOLD), Text.literal(kind.hint).withColor(0xFF9A958A)), mouseX, mouseY);
+            int place = places[k];
+            ItemStack st = place == com.pglol.aotrpg.Satchel.OFF ? p.getOffHandStack() : p.getInventory().getStack(place);
+            boolean sheathed = false;
+            if (st.isEmpty() && shs != null && (place == 0 || place == com.pglol.aotrpg.Satchel.OFF)) {
+                // Grips on your back still belong to these two hands.
+                ItemStack a0 = shs.a(), b0 = shs.b();
+                ItemStack g = place == 0 ? (a0.isEmpty() ? b0 : a0) : (a0.isEmpty() ? ItemStack.EMPTY : b0);
+                if (!g.isEmpty()) {
+                    st = g;
+                    sheathed = true;
+                }
             }
-        }
-        for (int k = 0; k < 9; k++) {
-            String n = com.pglol.aotrpg.Loadout.SLOTS[k].title;
+            cell(c, sx, by, cw, st, "", tip);
+            if (sheathed) {
+                c.getMatrices().push();
+                c.getMatrices().translate(0, 0, 200);
+                c.fill(sx + 1, by + 1, sx + cw - 1, by + cw - 1, 0x40000000);
+                Ui.text(c, Text.literal("\u2694"), sx + cw - 5, by + 2, 0.55f, Ui.GOLD, true);
+                c.getMatrices().pop();
+            }
+            if (!st.isEmpty()) hits.add(sx, by, cw, cw, () -> ClientPlayNetworking.send(new Net.StashAction("unequip", place)));
+            if (Sleek.over(sx, by, cw, cw) && st.isEmpty()) {
+                String title = place == com.pglol.aotrpg.Satchel.OFF ? "Left hand" : com.pglol.aotrpg.Loadout.SLOTS[place].title;
+                String hint = place == com.pglol.aotrpg.Satchel.OFF ? "Your second grip, or what you hold beside it" : com.pglol.aotrpg.Loadout.SLOTS[place].hint;
+                c.drawTooltip(Ui.font(), java.util.List.of(Text.literal(title).withColor(Sleek.GOLD), Text.literal(hint).withColor(0xFF9A958A)), mouseX, mouseY);
+            }
+            String n = place == com.pglol.aotrpg.Satchel.OFF ? "Left" : com.pglol.aotrpg.Loadout.SLOTS[place].title;
             String sh = n.length() > 5 ? n.substring(0, 5) : n;
-            Ui.text(c, Text.literal(sh), lx + 8 + k * (cw + 2) + cw / 2f, by + cw + 2, 0.42f, 0xFF7A766C, true);
+            Ui.text(c, Text.literal(sh), sx + cw / 2f, by + cw + 2, 0.42f, sheathed ? Sleek.GOLD : 0xFF7A766C, true);
         }
         // Your numbers.
         int ny = by + cw + 14;
