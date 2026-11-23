@@ -40,7 +40,7 @@ public final class Wallet {
     public void earn(ServerPlayerEntity p, long n, String why) {
         double b = Roles.bonus(AotRpg.PROFILES.get(p.getUuid())) + AotRpg.FACTIONS.earnBonus(AotRpg.PROFILES.get(p.getUuid()))
             + AotRpg.REGIMENTS.bonus(p.getUuid());
-        long got = Math.round(n * (1 + b));
+        long got = Math.round(n * (1 + b) * Prestige.marksMult(AotRpg.PROFILES.get(p.getUuid())));
         addMarks(p, got, why);
         AotRpg.TASKS.count(p, Tasks.MARKS, got);
     }

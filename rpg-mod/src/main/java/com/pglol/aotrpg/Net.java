@@ -435,7 +435,7 @@ public final class Net {
     }
 
     public record RosterEntry(java.util.UUID id, String name, int level, int discipline, String tag, int tagColor, boolean rp, int faction, String regiment, int regimentColor, int cls,
-                              String title, int titleColor) { }
+                              String title, int titleColor, int prestige) { }
 
     /** Server -> client: character names of everyone online, for name plates. */
     public record Roster(java.util.List<RosterEntry> players) implements CustomPayload {
@@ -456,11 +456,12 @@ public final class Net {
                 b.writeVarInt(e.cls());
                 b.writeString(e.title());
                 b.writeInt(e.titleColor());
+                b.writeVarInt(e.prestige());
             }
         }, b -> {
             int n = Math.min(b.readVarInt(), 1000);
             java.util.List<RosterEntry> l = new java.util.ArrayList<>(n);
-            for (int i = 0; i < n; i++) l.add(new RosterEntry(b.readUuid(), b.readString(), b.readVarInt(), b.readVarInt(), b.readString(), b.readInt(), b.readBoolean(), b.readVarInt() - 1, b.readString(), b.readInt(), b.readVarInt(), b.readString(), b.readInt()));
+            for (int i = 0; i < n; i++) l.add(new RosterEntry(b.readUuid(), b.readString(), b.readVarInt(), b.readVarInt(), b.readString(), b.readInt(), b.readBoolean(), b.readVarInt() - 1, b.readString(), b.readInt(), b.readVarInt(), b.readString(), b.readInt(), b.readVarInt()));
             return new Roster(l);
         });
         @Override public Id<? extends CustomPayload> getId() { return ID; }
@@ -1050,6 +1051,34 @@ public final class Net {
     }
 
     /** Client -> server: an ODM double jump just fired (kind: 0 dash, 1 straight up, 2 flip; yaw of travel). */
+    /** Server -> client: your prestige: rank, level, whether you can re-enlist now, the perks ("id|title|desc|have|max"). */
+    public record PrestigeView(int rank, int level, boolean eligible, java.util.List<String> perks, boolean open) implements CustomPayload {
+        public static final Id<PrestigeView> ID = id("prestige_view");
+        public static final PacketCodec<RegistryByteBuf, PrestigeView> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.rank);
+            b.writeVarInt(v.level);
+            b.writeBoolean(v.eligible);
+            b.writeVarInt(v.perks.size());
+            for (String s : v.perks) b.writeString(s);
+            b.writeBoolean(v.open);
+        }, b -> {
+            int r = b.readVarInt(), lv = b.readVarInt();
+            boolean el = b.readBoolean();
+            int n = Math.min(b.readVarInt(), 64);
+            java.util.List<String> l = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) l.add(b.readString());
+            return new PrestigeView(r, lv, el, l, b.readBoolean());
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Client -> server: "open", or "confirm:PERK" to re-enlist taking that perk. */
+    public record PrestigeAction(String action) implements CustomPayload {
+        public static final Id<PrestigeAction> ID = id("prestige_action");
+        public static final PacketCodec<RegistryByteBuf, PrestigeAction> CODEC = PacketCodec.of((v, b) -> b.writeString(v.action), b -> new PrestigeAction(b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Client -> server: zip after someone stuck in a wall or flying (by entity id). */
     public record Pursue(int entity) implements CustomPayload {
         public static final Id<Pursue> ID = id("pursue");
@@ -2843,6 +2872,8 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(Struggle.ID, Struggle.CODEC);
         PayloadTypeRegistry.playC2S().register(OdmJump.ID, OdmJump.CODEC);
         PayloadTypeRegistry.playC2S().register(Pursue.ID, Pursue.CODEC);
+        PayloadTypeRegistry.playC2S().register(PrestigeAction.ID, PrestigeAction.CODEC);
+        PayloadTypeRegistry.playS2C().register(PrestigeView.ID, PrestigeView.CODEC);
         PayloadTypeRegistry.playS2C().register(OdmMove.ID, OdmMove.CODEC);
         PayloadTypeRegistry.playS2C().register(OdmState.ID, OdmState.CODEC);
         PayloadTypeRegistry.playS2C().register(Chatter.ID, Chatter.CODEC);

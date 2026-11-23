@@ -33,6 +33,9 @@ public final class Profile {
     /** Past the level cap: Veteran ranks (rewards and standing only, never more power), and the XP toward the next. */
     public int veteran;
     public long vetXp;
+    /** Prestige (New Game+) rank, and the perks taken along the way (id -> times). */
+    public int prestige;
+    public java.util.Map<String, Integer> prestigePerks = new java.util.HashMap<>();
     /** Stash rows bought with Salvage (9 slots each), on top of the home's chests and barrels. */
     public int stashRows;
     /** Where this character stood in the open world before going down to the Extraction lobby. */

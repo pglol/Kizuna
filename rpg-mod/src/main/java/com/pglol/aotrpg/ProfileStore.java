@@ -123,6 +123,30 @@ public final class ProfileStore {
         return cache.computeIfAbsent(id, k -> read(k, account(k).active));
     }
 
+    /** Every saved character (each account's every slot), for leaderboards. */
+    public java.util.List<Profile> all() {
+        java.util.List<Profile> out = new java.util.ArrayList<>();
+        if (dir == null) return out;
+        try (var files = Files.list(dir)) {
+            for (Path f : (Iterable<Path>) files::iterator) {
+                String n = f.getFileName().toString();
+                if (!n.endsWith(".json") || n.endsWith(".account.json")) continue;
+                String stem = n.substring(0, n.length() - 5);
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9a-f-]{36})(?:\\.(\\d+))?").matcher(stem);
+                if (!m.matches()) continue;
+                try {
+                    UUID id = UUID.fromString(m.group(1));
+                    int slot = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+                    out.add(slot == account(id).active && cache.containsKey(id) ? cache.get(id) : read(id, slot));
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (IOException e) {
+            AotRpg.LOG.error("Could not list characters", e);
+        }
+        return out;
+    }
+
     /** Reads any slot's character without making it active (for the character list). */
     public Profile peek(UUID id, int slot) {
         if (slot == account(id).active) return get(id);

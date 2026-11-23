@@ -115,7 +115,8 @@ public final class WarParties {
             at = b;
         }
         if (at == null) return;
-        int level = Math.max(3, AotRpg.PLACES.levelAt(at.getX(), at.getZ()));
+        // New Game+: around a prestiged player they come harder (and pay in better loot).
+        int level = Math.max(3, AotRpg.PLACES.levelAt(at.getX(), at.getZ())) + Prestige.enemyBonus(w, Vec3d.ofCenter(at), 220);
         String session = "wild:" + (seq++);
         float roll = r.nextFloat();
         int made;

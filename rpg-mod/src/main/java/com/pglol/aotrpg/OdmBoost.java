@@ -231,6 +231,7 @@ public final class OdmBoost {
         double cost = Math.max(1, m * 0.05) * (AotRpg.PROFILES.get(p.getUuid()).has(Skill.ENG_VALVES) ? 0.8 : 1);
         // A titan surge: the gear runs on almost nothing.
         if (Adrenaline.titanSurge(p)) cost *= 0.25;
+        cost *= Prestige.gasMult(AotRpg.PROFILES.get(p.getUuid()));
         v.set().accept(Math.max(0, v.value() - cost));
         return true;
     }

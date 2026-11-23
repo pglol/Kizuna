@@ -168,6 +168,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(OneOfOne::hud);
         ClientPlayNetworking.registerGlobalReceiver(Net.Wanted.ID, (payload, ctx) -> WantedHud.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.Lock.ID, (payload, ctx) -> ClientState.locked = payload.on());
+        ClientPlayNetworking.registerGlobalReceiver(Net.PrestigeView.ID, (payload, ctx) -> PrestigeScreen.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.ContractView.ID, (payload, ctx) -> ContractsScreen.on(payload));
         HudRenderCallback.EVENT.register(BladeLock::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.ClashLock.ID, (payload, ctx) -> BladeLock.on(payload));

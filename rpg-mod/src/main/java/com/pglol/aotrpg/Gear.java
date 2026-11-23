@@ -451,7 +451,7 @@ public final class Gear {
     }
 
     public static boolean canUse(ServerPlayerEntity p, ItemStack s) {
-        return !isGear(s) || AotRpg.PROFILES.get(p.getUuid()).level >= requiredLevel(s);
+        return !isGear(s) || Prestige.gearLevel(AotRpg.PROFILES.get(p.getUuid())) >= requiredLevel(s);
     }
 
     /**
@@ -459,7 +459,8 @@ public final class Gear {
      * higher for bosses, and now and then a rare find well above it (locked until they grow into it).
      */
     public static int dropLevel(ServerPlayerEntity p, int source, int bonus) {
-        int lv = AotRpg.PROFILES.get(p.getUuid()).level;
+        // Prestiged players find gear for the level they're treated as (New Game+ pays better).
+        int lv = Prestige.gearLevel(AotRpg.PROFILES.get(p.getUuid()));
         // Harder places pay better: up to a few levels past you (or your party's best), locked until you catch up.
         int ref = lv;
         Parties.Party party = AotRpg.PARTIES.of(p.getUuid());

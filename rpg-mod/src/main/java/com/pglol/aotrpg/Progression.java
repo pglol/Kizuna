@@ -45,6 +45,7 @@ public final class Progression {
         set(p, EntityAttributes.GENERIC_MAX_HEALTH, "stat_endurance", 2.0 * pr.total(Stat.ENDURANCE), add);
         // Every level makes you a little tougher too (and hits harder: see Combat.power).
         set(p, EntityAttributes.GENERIC_MAX_HEALTH, "level_health", Math.max(0, pr.level - 1), add);
+        set(p, EntityAttributes.GENERIC_MAX_HEALTH, "prestige_health", Prestige.health(pr), add);
         set(p, EntityAttributes.GENERIC_ARMOR, "stat_resolve", pr.total(Stat.RESOLVE), add);
 
         Discipline d = pr.discipline;
@@ -118,7 +119,7 @@ public final class Progression {
         if (!pr.created) return;
         if (pr.level >= MAX_LEVEL) {
             // At the cap the XP still counts: Veteran ranks, each paying out (and a new finisher every fifth).
-            pr.vetXp += Math.round(amount * (1 + Roles.bonus(pr)));
+            pr.vetXp += Math.round(amount * (1 + Roles.bonus(pr)) * Prestige.xpMult(pr));
             while (pr.vetXp >= veteranNeed()) {
                 pr.vetXp -= veteranNeed();
                 pr.veteran++;
@@ -135,7 +136,7 @@ public final class Progression {
             AotRpg.sync(p, pr);
             return;
         }
-        amount = Math.round(amount * (1 + Roles.bonus(pr)));
+        amount = Math.round(amount * (1 + Roles.bonus(pr)) * Prestige.xpMult(pr));
         pr.xp += amount;
         boolean up = false;
         while (pr.level < MAX_LEVEL && pr.xp >= Profile.xpForNext(pr.level)) {

@@ -62,6 +62,13 @@ public class CharacterScreen extends Screen {
         addDrawableChild(new AotButton(left + tabs.length * 104, top - 22, 100, 20, Ui.heading("Cosmetics"),
             () -> client.setScreen(new CosmeticsScreen())));
         addDrawableChild(new AotButton(left + w - 20, top - 22, 20, 20, Text.literal("✕"), this::close));
+        // Prestige (New Game+): shown once there's something to see (level 100, or already prestiged).
+        if (p.level() >= com.pglol.aotrpg.Progression.MAX_LEVEL || ClientState.prestige() > 0) {
+            AotButton pb = addDrawableChild(new AotButton(left + w - 124, top - 22, 100, 20, Ui.heading(ClientState.prestige() > 0
+                ? "\u2726 " + com.pglol.aotrpg.Prestige.roman(ClientState.prestige()) : "Prestige"),
+                () -> ClientPlayNetworking.send(new Net.PrestigeAction("open"))));
+            pb.accent = 0xFFFFE8A8;
+        }
 
         if (tab == 0) {
             for (Stat s : Stat.values()) {

@@ -40,7 +40,7 @@ public final class GearUi {
     /** Gear above your level: it does nothing for you until you grow into it. */
     public static boolean locked(ItemStack s) {
         if (s == null || s.isEmpty() || !com.pglol.aotrpg.Gear.isGear(s) || ClientState.profile == null) return false;
-        return com.pglol.aotrpg.Gear.requiredLevel(s) > ClientState.profile.level();
+        return com.pglol.aotrpg.Gear.requiredLevel(s) > ClientState.gearLevel();
     }
 
     /** Over a slot holding locked gear: a red wash, a red frame and the level it needs. */

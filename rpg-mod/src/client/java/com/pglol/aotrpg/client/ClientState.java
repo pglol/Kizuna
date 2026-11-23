@@ -19,6 +19,19 @@ public final class ClientState {
     public static boolean exhausted;
     /** The server says we can't swing right now (held, pinned, stunned, in a finisher). */
     public static volatile boolean locked;
+
+    /** Your own prestige rank (from the roster). */
+    public static int prestige() {
+        var mc = net.minecraft.client.MinecraftClient.getInstance();
+        if (mc.player == null) return 0;
+        Net.RosterEntry r = roster.get(mc.player.getUuid());
+        return r == null ? 0 : r.prestige();
+    }
+
+    /** The level your gear checks against (prestige brings old kit back to hand sooner). */
+    public static int gearLevel() {
+        return profile == null ? 1 : Math.min(com.pglol.aotrpg.Progression.MAX_LEVEL, profile.level() + 15 * prestige());
+    }
     /** The other members of our party (empty = no party). */
     public static java.util.List<Net.PartyMember> party = java.util.List.of();
 

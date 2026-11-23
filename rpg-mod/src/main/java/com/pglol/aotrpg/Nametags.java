@@ -61,7 +61,7 @@ public final class Nametags {
                 Factions.of(pr) == null ? -1 : Factions.of(pr).ordinal(),
                 AotRpg.REGIMENTS.of(p.getUuid()) == null ? "" : AotRpg.REGIMENTS.of(p.getUuid()).tag,
                 AotRpg.REGIMENTS.of(p.getUuid()) == null ? 0 : AotRpg.REGIMENTS.of(p.getUuid()).color, pr.cls().ordinal(),
-                Tasks.worn(pr) == null ? "" : Tasks.worn(pr).title(), Tasks.worn(pr) == null ? 0 : Tasks.worn(pr).color()));
+                Tasks.worn(pr) == null ? "" : Tasks.worn(pr).title(), Tasks.worn(pr) == null ? 0 : Tasks.worn(pr).color(), pr.prestige));
         }
         Net.Roster roster = new Net.Roster(list);
         for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {

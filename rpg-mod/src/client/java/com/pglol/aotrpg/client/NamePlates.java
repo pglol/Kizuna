@@ -47,6 +47,8 @@ public final class NamePlates {
             sub.append(Ui.heading(new String[] {"SC", "GAR", "MP"}[r.faction()]).withColor(FactionScreen.COLORS[r.faction()]))
                 .append(Text.literal(" · ").withColor(0xFF8F8A7A));
         }
+        // Prestige: the rank's emblem before the level.
+        if (r.prestige() > 0) sub.append(Text.literal("\u2726" + com.pglol.aotrpg.Prestige.roman(r.prestige()) + " ").withColor(0xFFFFE8A8));
         sub.append(Text.literal("Lv " + r.level() + "  ").withColor(Ui.GOLD)).append(role == null ? Text.empty() : Text.literal(role.tag() + " " + role.title).withColor(role.color));
         // The title they wear, on its own line (whatever their role or rank tag says).
         boolean showTitle = !r.title().isEmpty() && !r.title().equals(r.tag());
