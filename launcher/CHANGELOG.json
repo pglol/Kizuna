@@ -1,4 +1,7 @@
 {
+  "1.2.3": [
+    "Builds can come with preset settings and controls; they're set up once and your own changes are kept"
+  ],
   "1.2.2": [
     "Updates arrive again: fixes the update check getting stuck on older versions",
     "Server tab icons no longer flash letters when switching servers"

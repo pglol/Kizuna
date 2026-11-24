@@ -55,8 +55,17 @@ public final class HelpCards {
         return seen.containsKey(k.name());
     }
 
+    private static boolean seenIntro() {
+        seen(Card.ODM);
+        return seen.containsKey("INTRO");
+    }
+
     private static void mark(Card k) {
         seen.setProperty(k.name(), "1");
+        save();
+    }
+
+    private static void save() {
         try (var out = java.nio.file.Files.newOutputStream(file())) {
             seen.store(out, "AoT RPG help cards seen");
         } catch (Exception ignored) {
@@ -92,6 +101,14 @@ public final class HelpCards {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null || mc.options.hudHidden || ClientState.profile == null || !Settings.hints) return;
         long now = Util.getMeasuringTimeMs();
+        // The very first time you're out in the world with a character: your controls, once.
+        if (current == null && mc.currentScreen == null && mc.player.age > 100 && !seenIntro()
+            && !ClientState.profile.name().isEmpty() && !com.pglol.aotrpg.client.story.CutscenePlayer.active()) {
+            seen.setProperty("INTRO", "1");
+            save();
+            mc.setScreen(new ControlsScreen(null, true));
+            return;
+        }
         if (current == null) {
             if (mc.currentScreen != null || now - lastCheck < 500) return;
             lastCheck = now;

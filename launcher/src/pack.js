@@ -1,6 +1,8 @@
 // Brings a server's game folder in line with its packwiz pack: downloads what's new or changed,
 // checks every hash, and removes files an earlier version of the pack installed but this one dropped.
 // Files the player added themselves (screenshots, options, extra resource packs) are never touched.
+// Files under defaults/ in the pack (like defaults/options.txt: the pack's preset settings and keys)
+// are put in place once per game folder; after that they're the player's, and changes are kept.
 const fs = require('fs');
 const path = require('path');
 const TOML = require('smol-toml');
@@ -27,7 +29,7 @@ async function sync(packUrl, gameDir, progress) {
   const files = index.files || [];
 
   // Work out every file the pack wants, reading the metafiles for mods.
-  const want = [];
+  const want = [], defaults = [];
   await net.pool(files, 8, async (f) => {
     if (f.metafile) {
       const meta = TOML.parse(await net.text(join(indexBase, f.file)));
@@ -36,6 +38,8 @@ async function sync(packUrl, gameDir, progress) {
       const d = meta.download || {};
       if (!d.url) throw new Error(`${meta.name || f.file} has no direct download`);
       want.push({ rel: (dir === '.' ? '' : dir + '/') + meta.filename, url: d.url, hash: d.hash, algo: ALGO[d['hash-format']] });
+    } else if (f.file.startsWith('defaults/')) {
+      defaults.push({ rel: f.file.slice('defaults/'.length), url: join(indexBase, f.file), hash: f.hash, algo: ALGO[f['hash-format'] || index['hash-format']] });
     } else {
       want.push({ rel: f.file, url: join(indexBase, f.file), hash: f.hash, algo: ALGO[f['hash-format'] || index['hash-format']] });
     }
@@ -43,9 +47,11 @@ async function sync(packUrl, gameDir, progress) {
 
   fs.mkdirSync(gameDir, { recursive: true });
   const ledger = path.join(gameDir, '.kizuna-pack.json');
-  let before = [];
+  let before = [], applied = [];
   try {
-    before = JSON.parse(fs.readFileSync(ledger, 'utf8')).files || [];
+    const l = JSON.parse(fs.readFileSync(ledger, 'utf8'));
+    before = l.files || [];
+    applied = l.defaults || [];
   } catch {}
   const now = new Set(want.map((w) => w.rel));
   for (const rel of before) {
@@ -63,7 +69,16 @@ async function sync(packUrl, gameDir, progress) {
     done++;
     progress && progress(`Updating ${pack.name || 'pack'} (${done}/${want.length})`, done / Math.max(1, want.length));
   });
-  fs.writeFileSync(ledger, JSON.stringify({ version: pack.version || '', files: [...now] }, null, 2));
+  for (const d of defaults) {
+    if (applied.includes(d.rel)) continue;
+    try {
+      const dest = inside(gameDir, d.rel);
+      fs.rmSync(dest, { force: true });
+      await net.file(d.url, dest, d.hash, d.algo || 'sha256');
+      applied.push(d.rel);
+    } catch {}
+  }
+  fs.writeFileSync(ledger, JSON.stringify({ version: pack.version || '', files: [...now], defaults: applied }, null, 2));
   return { name: pack.name, version: pack.version, files: want.length, fetched, minecraft: pack.versions && pack.versions.minecraft, fabric: pack.versions && pack.versions.fabric };
 }
 

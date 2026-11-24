@@ -142,7 +142,7 @@ public final class BoardScreen extends Screen {
         Row you = first("you");
         Ui.text(c, Ui.title("THE BOARD"), x0, y0 - (1 - hk) * 8, 1.4f, a(0xFF, 0xEDE3C8, hk), false);
         if (you != null) {
-            String s = "Welcome back, " + you.title + " · " + you.text;
+            String s = you.title + " · " + you.text;
             Ui.text(c, Text.literal(s), x0 + W - Ui.font().getWidth(s) * 0.65f, y0 + 4, 0.65f, a(0xFF, 0x8F8A7A, hk), false);
         }
         int y = y0 + 22;

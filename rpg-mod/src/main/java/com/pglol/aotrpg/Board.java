@@ -145,7 +145,9 @@ public final class Board {
         for (Entry e : data.news) rows.add("news|" + clean(e.date) + "|" + clean(e.text) + "|" + 0xE8C36F);
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         int online = p.getServer().getPlayerManager().getCurrentPlayerCount();
-        rows.add("you|" + clean(p.getName().getString()) + "|" + (pr == null ? "" : "Level " + pr.level + (pr.prestige > 0 ? " · Prestige " + pr.prestige : "")) + " · " + online + " online|" + 0xEDE3C8);
+        // New players (no character made yet) are welcomed; everyone else is welcomed back.
+        String hello = (pr == null || !pr.created ? "Welcome, " : "Welcome back, ") + clean(p.getName().getString());
+        rows.add("you|" + hello + "|" + (pr == null ? "" : "Level " + pr.level + (pr.prestige > 0 ? " · Prestige " + pr.prestige : "")) + " · " + online + " online|" + 0xEDE3C8);
         ServerPlayNetworking.send(p, new Net.Board(rows, open));
     }
 
