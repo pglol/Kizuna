@@ -175,6 +175,8 @@ public final class SwingSites {
                     if (AotRpg.PLACES.nearest(x, z, 180, "town", "village", "city", "capital", "camp") != null) continue;
                     boolean near = false;
                     for (Site s : data.sites) if (Math.hypot(s.x - x, s.z - z) < 420) near = true;
+                    // Never over or beside anyone's house.
+                    for (int[] h : AotRpg.PLACES.homes) if (Math.hypot((h[0] + h[2]) / 2.0 - x, (h[1] + h[3]) / 2.0 - z) < 130) near = true;
                     if (near) continue;
                     Site s = new Site();
                     s.id = "s" + (++n);
@@ -256,7 +258,7 @@ public final class SwingSites {
             BlockPos b = (BlockPos) q[0];
             BlockState st = (BlockState) q[1];
             BlockState was = w.getBlockState(b);
-            if (was.equals(st) || w.getBlockEntity(b) != null) continue;
+            if (was.equals(st) || w.getBlockEntity(b) != null || AotRpg.HOMES.homeAt(b) >= 0) continue;
             undo.add(b.getX() + " " + b.getY() + " " + b.getZ() + " " + BlockArgumentParser.stringifyBlockState(was));
             w.setBlockState(b, st, 2);
         }
