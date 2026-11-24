@@ -194,6 +194,7 @@ pre { max-height: 300px; overflow: auto; font-size: 11px; background: #fff; bord
 .hstate.running { background: #2e7d32; color: #fff; }
 .hstate.busy { background: #f2c14e; }
 .htabs { display: flex; gap: 6px; margin: 0 0 8px; }
+.htabs .grow { flex: 1; }
 .htab { font: 700 13px var(--body); padding: 6px 12px; border: 2px solid var(--ink); border-radius: 6px; background: #fff; color: var(--ink); cursor: pointer; }
 .htab.on { background: var(--ink); color: var(--page); }
 #host-log { height: clamp(140px, calc(100vh - 380px), 360px); margin: 0 0 8px; padding: 10px; overflow: auto; background: #15120f; color: #e9e1cf; font: 11.5px/1.45 Consolas, 'Courier New', monospace; border: 2.5px solid var(--ink); border-radius: 8px; white-space: pre-wrap; word-break: break-word; user-select: text; }

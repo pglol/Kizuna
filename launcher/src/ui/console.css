@@ -1,0 +1,20 @@
+:root { --ink: #15120f; --paper: #efe9dc; --red: #c4372a; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; flex-direction: column; background: var(--ink); color: #e9e1cf; font: 13px 'Zen Kaku Gothic New', system-ui, sans-serif; }
+header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--paper); color: var(--ink); border-bottom: 2.5px solid #000; }
+header b { font-family: 'Dela Gothic One', sans-serif; font-weight: 400; font-size: 15px; }
+.grow { flex: 1; }
+.state { font: 12px 'Pixelify Sans', monospace; padding: 2px 9px; border: 2px solid var(--ink); border-radius: 6px; background: #fff; }
+.state.running { background: #2e7d32; color: #fff; }
+.state.busy { background: #f2c14e; }
+.players { font-size: 12px; font-weight: 700; color: #5a5249; }
+button { height: 28px; padding: 0 14px; border: 2px solid var(--ink); border-radius: 6px; background: #fff; color: var(--ink); font: 700 12px inherit; font-family: inherit; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); }
+button.go { background: var(--red); color: #fff; }
+button:disabled { opacity: 0.4; cursor: default; }
+#log { flex: 1; overflow: auto; padding: 10px 12px; font: 12px/1.45 Consolas, 'Courier New', monospace; white-space: pre-wrap; word-break: break-word; user-select: text; }
+#log .warn { color: #f2c14e; }
+#log .err { color: #ff7a6a; }
+#log .me { color: #8fc7ff; }
+form { display: flex; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid #2b2620; }
+#cmd { flex: 1; height: 32px; border: 2px solid #3a332b; border-radius: 6px; background: #1d1915; color: #f3ecdf; padding: 0 10px; font: 13px Consolas, monospace; outline: none; }
+#cmd:focus { border-color: var(--red); }

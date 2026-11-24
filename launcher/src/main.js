@@ -41,8 +41,41 @@ function notify(title, body) {
 
 ipcMain.handle('notify', (_e, title, body) => notify(String(title).slice(0, 80), String(body).slice(0, 200)));
 
+const consoles = new Map(); // host key -> its console window
+
 function send(ch, data) {
   if (win && !win.isDestroyed()) win.webContents.send(ch, data);
+  if (ch === 'host' && data && consoles.has(data.key)) {
+    const c = consoles.get(data.key);
+    if (!c.isDestroyed()) c.webContents.send(ch, data);
+  }
+}
+
+/** A server's console in a window of its own: stays up while the launcher hides for the game. */
+function openConsole(id, channel, k, name) {
+  const old = consoles.get(k);
+  if (old && !old.isDestroyed()) {
+    old.show();
+    old.focus();
+    return;
+  }
+  const c = new BrowserWindow({
+    width: 900,
+    height: 560,
+    minWidth: 560,
+    minHeight: 320,
+    title: `Server console · ${name}`,
+    backgroundColor: '#15120f',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    autoHideMenuBar: true,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  c.removeMenu();
+  c.loadFile(path.join(__dirname, 'ui', 'console.html'), { query: { id, channel } });
+  c.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  c.webContents.on('will-navigate', (e) => e.preventDefault());
+  consoles.set(k, c);
+  c.on('closed', () => consoles.delete(k));
 }
 
 function create() {
@@ -384,9 +417,15 @@ ipcMain.handle('host-set', (_e, id, channel, patch) => {
   }
   return true;
 });
+ipcMain.handle('host-console', (_e, id, channel) => {
+  if (!hostAllowed()) return;
+  const t = hostTarget(id, channel);
+  openConsole(id, channel, t.k, t.name);
+});
 ipcMain.handle('host-start', (_e, id, channel) => {
   if (!hostAllowed()) return false;
   const t = hostTarget(id, channel);
+  openConsole(id, channel, t.k, t.name);
   const s = store.settings.get();
   host.start(t.k, { packUrl: t.pack, folder: t.folder, root: path.join(store.dir(), 'minecraft'), ram: (s.hostRam || {})[t.k] || 6, mode: (s.hostMode || {})[t.k] || 'mod', eula: !!s.hostEula, hubUrl: config.hubUrl }, {
     line: (l) => send('host', { key: t.k, line: l }),

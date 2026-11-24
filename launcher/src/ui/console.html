@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'">
+  <title>Server console</title>
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="console.css">
+</head>
+<body>
+  <header>
+    <b id="name">Server</b>
+    <span class="state" id="state">Stopped</span>
+    <span class="grow"></span>
+    <span class="players" id="players"></span>
+    <button id="stop">Stop</button>
+    <button class="go" id="start">Start</button>
+  </header>
+  <div id="log"></div>
+  <form id="cmd-form">
+    <input id="cmd" placeholder="Command, e.g. op Name · whitelist add Name · say Hello · list" autocomplete="off" spellcheck="false">
+    <button>Send</button>
+  </form>
+  <script src="console.js"></script>
+</body>
+</html>

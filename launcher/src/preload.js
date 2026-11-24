@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('kizuna', {
   hostOpen: (id, ch) => ipcRenderer.invoke('host-open', id, ch),
   hostSet: (id, ch, patch) => ipcRenderer.invoke('host-set', id, ch, patch),
   hostPropsFile: (id, ch) => ipcRenderer.invoke('host-props-file', id, ch),
+  hostConsole: (id, ch) => ipcRenderer.invoke('host-console', id, ch),
   hostStart: (id, ch) => ipcRenderer.invoke('host-start', id, ch),
   hostStop: (id, ch) => ipcRenderer.invoke('host-stop', id, ch),
   hostCmd: (id, ch, text) => ipcRenderer.invoke('host-cmd', id, ch, text),

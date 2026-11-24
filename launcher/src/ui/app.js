@@ -633,8 +633,9 @@
     if (d.state) setHostState(d.state);
   });
   $('host-btn').addEventListener('click', openHost);
-  document.querySelectorAll('.htab').forEach((b) => b.addEventListener('click', () => {
-    document.querySelectorAll('.htab').forEach((x) => x.classList.toggle('on', x === b));
+  $('host-popout').addEventListener('click', () => K.hostConsole(hostView.id, hostView.ch));
+  document.querySelectorAll('.htab[data-htab]').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.htab[data-htab]').forEach((x) => x.classList.toggle('on', x === b));
     $('host-pane-console').hidden = b.dataset.htab !== 'console';
     $('host-pane-props').hidden = b.dataset.htab !== 'props';
   }));
