@@ -4,3 +4,18 @@ hash-format = "sha256"
 file = "mods/aot-rpg.pw.toml"
 hash = "0845c8c647c2764e87edf37d30ca1dfa28e1e397db8c3b861881f2b127974612"
 metafile = true
+
+[[files]]
+file = "mods/fabric-api.pw.toml"
+hash = "9e884d3ed93f3309077173c94a551b9cce6a0809ca668fc4a0b5aa94c89815c4"
+metafile = true
+
+[[files]]
+file = "mods/iris.pw.toml"
+hash = "693373dcf37ffab41d09b6ac56568559d32599484c3efcb970c2342a45403ae8"
+metafile = true
+
+[[files]]
+file = "mods/sodium.pw.toml"
+hash = "d95a99d6b0374341ee8dec69c9967c84bd6b67427fc2012a069d21ab9620239e"
+metafile = true

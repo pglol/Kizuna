@@ -1,0 +1,44 @@
+{
+  "servers": [
+    {
+      "id": "aot",
+      "name": "Attack on Titan RPG",
+      "short": "AOT",
+      "tagline": "Open world. Titans. Extraction runs.",
+      "description": "Paradis and Marley, wall to coast. Swing through cities and giant forests, hunt titans with your squad, run the story, prestige past level 100, and when you're invited, take on extraction.",
+      "features": [
+        "ODM gear swinging",
+        "Story and side quests",
+        "Squads, raids and ranked duels"
+      ],
+      "status": "public",
+      "address": "CHANGE_ME:25565",
+      "minecraft": "1.21.1",
+      "fabric": "0.16.10",
+      "theme": "aot",
+      "accent": "#e8c36f",
+      "art": "",
+      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml"
+    },
+    {
+      "id": "stance",
+      "name": "Stancebound",
+      "short": "SB",
+      "tagline": "Martial arts duels in a ruined kingdom.",
+      "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
+      "features": [
+        "Stance-based melee",
+        "Build your own combo deck",
+        "Duels and schools"
+      ],
+      "status": "soon",
+      "address": "",
+      "minecraft": "1.21.1",
+      "fabric": "0.16.10",
+      "theme": "duel",
+      "accent": "#9ad0ff",
+      "art": "",
+      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml"
+    }
+  ]
+}

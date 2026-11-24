@@ -1,3 +1,12 @@
 {
-  "servers": []
+  "servers": [
+    {
+      "id": "aot",
+      "name": "Attack on Titan RPG",
+      "tagline": "Open world. Titans. Extraction runs.",
+      "status": "public",
+      "instance": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/dist/instances/aot.zip",
+      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml"
+    }
+  ]
 }
