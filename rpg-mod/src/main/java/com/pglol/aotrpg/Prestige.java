@@ -106,6 +106,7 @@ public final class Prestige {
     public static void register() {
         ServerPlayNetworking.registerGlobalReceiver(Net.PrestigeAction.ID, (payload, ctx) -> {
             String a = payload.action();
+            if (!RateLimit.allow(ctx.player(), "prestige", 1000)) return;
             if (a.equals("open")) send(ctx.player(), true);
             else if (a.startsWith("confirm:")) confirm(ctx.player(), a.substring(8));
         });

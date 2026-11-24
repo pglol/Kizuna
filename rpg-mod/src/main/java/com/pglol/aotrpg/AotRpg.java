@@ -157,6 +157,8 @@ public final class AotRpg implements ModInitializer {
         Weekly.register();
         RankedSeasons.register();
         WorldActivities.register();
+        Reports.register();
+        Backups.register();
         ServerPlayNetworking.registerGlobalReceiver(Net.ContractAction.ID, (payload, ctx) -> Contracts.action(ctx.player(), payload.action(), payload.arg()));
         SatchelHandler.register();
         Crafting.register();
@@ -214,10 +216,16 @@ public final class AotRpg implements ModInitializer {
             return ActionResult.SUCCESS;
         });
         ServerPlayNetworking.registerGlobalReceiver(Net.ExtractionAction.ID, (payload, ctx) -> EXTRACT.action(ctx.player(), payload.action(), payload.arg()));
-        ServerPlayNetworking.registerGlobalReceiver(Net.StashAction.ID, (payload, ctx) -> Stash.action(ctx.player(), payload.action(), payload.slot()));
-        ServerPlayNetworking.registerGlobalReceiver(Net.LootAction.ID, (payload, ctx) -> LootBox.action(ctx.player(), payload.action(), payload.slot()));
+        // Inventory and money actions: a handful a second at most each (a modified client can't flood them).
+        ServerPlayNetworking.registerGlobalReceiver(Net.StashAction.ID, (payload, ctx) -> {
+            if (RateLimit.allow(ctx.player(), "stash", 40, 400)) Stash.action(ctx.player(), payload.action(), payload.slot());
+        });
+        ServerPlayNetworking.registerGlobalReceiver(Net.LootAction.ID, (payload, ctx) -> {
+            if (RateLimit.allow(ctx.player(), "loot", 40, 200)) LootBox.action(ctx.player(), payload.action(), payload.slot());
+        });
         ServerPlayNetworking.registerGlobalReceiver(Net.MarketAction.ID, (payload, ctx) -> {
             ServerPlayerEntity p = ctx.player();
+            if (!RateLimit.allow(p, "market", 120, 20)) return;
             if (!PROFILES.get(p.getUuid()).created) return;
             switch (payload.action()) {
                 case "open" -> MARKET.open(p);
@@ -462,6 +470,7 @@ public final class AotRpg implements ModInitializer {
             }
         });
         ServerPlayNetworking.registerGlobalReceiver(Net.BagAction.ID, (payload, ctx) -> {
+            if (!RateLimit.allow(ctx.player(), "bag", 40, 400)) return;
             if (PROFILES.get(ctx.player().getUuid()).created) SATCHEL.action(ctx.player(), payload.action(), payload.slot(), payload.arg());
         });
         ServerPlayNetworking.registerGlobalReceiver(Net.RegimentAction.ID, (payload, ctx) -> REGIMENTS.action(ctx.player(), payload.action(), payload.arg()));
@@ -805,8 +814,12 @@ public final class AotRpg implements ModInitializer {
         Infusions.register();
         DREAMS.register();
         ServerPlayNetworking.registerGlobalReceiver(Net.DreamDone.ID, (payload, ctx) -> DREAMS.done(ctx.player(), payload));
-        ServerPlayNetworking.registerGlobalReceiver(Net.VendorBuy.ID, (payload, ctx) -> VENDORS.buy(ctx.player(), payload.entity(), payload.index(), payload.qty()));
-        ServerPlayNetworking.registerGlobalReceiver(Net.VendorSell.ID, (payload, ctx) -> VENDORS.sell(ctx.player(), payload.entity(), payload.addr(), payload.qty()));
+        ServerPlayNetworking.registerGlobalReceiver(Net.VendorBuy.ID, (payload, ctx) -> {
+            if (RateLimit.allow(ctx.player(), "vendor", 80, 30)) VENDORS.buy(ctx.player(), payload.entity(), payload.index(), payload.qty());
+        });
+        ServerPlayNetworking.registerGlobalReceiver(Net.VendorSell.ID, (payload, ctx) -> {
+            if (RateLimit.allow(ctx.player(), "vendor", 80, 30)) VENDORS.sell(ctx.player(), payload.entity(), payload.addr(), payload.qty());
+        });
         ServerPlayNetworking.registerGlobalReceiver(Net.TalkChoice.ID, (payload, ctx) -> {
             if (!ESCORTS.choose(ctx.player(), payload.entity(), payload.option())) DIALOGUE.choose(ctx.player(), payload.entity(), payload.option());
         });

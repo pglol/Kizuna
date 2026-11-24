@@ -84,6 +84,7 @@ public final class StatDeck {
      * next card in turn, a beat after the one above it.
      */
     public static void render(DrawContext c, int x, int y, int w, int stream, int slots) {
+        if (!Settings.statCards) return;
         request();
         List<Card> cs = cards(stream);
         if (cs.isEmpty()) {

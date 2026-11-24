@@ -59,7 +59,9 @@ public final class Pursuit {
     }
 
     public static void register() {
-        ServerPlayNetworking.registerGlobalReceiver(Net.Pursue.ID, (payload, ctx) -> start(ctx.player(), payload.entity()));
+        ServerPlayNetworking.registerGlobalReceiver(Net.Pursue.ID, (payload, ctx) -> {
+            if (RateLimit.allow(ctx.player(), "pursue", 250)) start(ctx.player(), payload.entity());
+        });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             if (chasing.isEmpty()) return;
             for (var en : new ArrayList<>(chasing.entrySet())) {

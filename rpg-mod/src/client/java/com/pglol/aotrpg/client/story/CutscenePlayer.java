@@ -75,6 +75,8 @@ public final class CutscenePlayer {
     }
 
     public static void play(Net.Cutscene c) {
+        // Intros switched off: just the title card (story scenes, which fade in, always play).
+        if (!Settings.cutscenes && !c.fade() && !c.title().isEmpty() && c.blendOut()) c = new Net.Cutscene(java.util.List.of(), false, c.title(), c.sub(), c.color(), true);
         if (c.shots().isEmpty()) {
             if (!c.title().isEmpty()) {
                 gTitle = c.title();

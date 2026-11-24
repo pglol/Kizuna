@@ -70,6 +70,7 @@ public final class EffectFx {
     private static long quakeUntil, quakeFrom;
 
     public static void quake(float strength, int ticks) {
+        if (!Settings.screenShake) return;
         long now = net.minecraft.util.Util.getMeasuringTimeMs();
         quake = Math.max(quake, strength);
         quakeFrom = now;

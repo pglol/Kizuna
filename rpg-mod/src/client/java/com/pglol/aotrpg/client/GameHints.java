@@ -224,7 +224,7 @@ public final class GameHints {
 
     public static void render(DrawContext c, RenderTickCounter tick) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.options.hudHidden || mc.currentScreen != null || ClientState.profile == null) return;
+        if (mc.player == null || mc.options.hudHidden || mc.currentScreen != null || ClientState.profile == null || !Settings.hints) return;
         long now = Util.getMeasuringTimeMs();
         String[] h = pick(mc);
         String id = h == null ? "" : h[0];

@@ -8,7 +8,11 @@ import net.minecraft.text.Text;
 
 /** A dark, gold-trimmed button. Can carry an item icon and a second line. */
 public class AotButton extends PressableWidget {
-    private final Runnable action;
+    private Runnable action;
+
+    public void setAction(Runnable r) {
+        action = r;
+    }
     public boolean selected;
     public ItemStack icon;
     public Text sub;

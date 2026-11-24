@@ -48,6 +48,7 @@ public final class ImpactFrames {
 
     /** Speed lines closing in from the edges for a moment. */
     public static void rush(float s, long ms) {
+        if (!Settings.impactFrames) return;
         linesUntil = Util.getMeasuringTimeMs() + ms;
         lines = s;
     }
