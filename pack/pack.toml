@@ -1,1 +1,13 @@
+name = "AoT RPG"
+author = "pglol"
+version = "1.0.0"
+pack-format = "packwiz:1.1.0"
 
+[index]
+file = "index.toml"
+hash-format = "sha256"
+hash = "6099be0ef25b776451cc10b140854b46b899874dcdf749c5d5c7f9ffed7a3734"
+
+[versions]
+minecraft = "1.21.1"
+fabric = "0.16.10"

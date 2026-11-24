@@ -6,6 +6,8 @@ on:
       - 'rpg-mod/**'
       - '.github/workflows/rpg-mod.yml'
       - 'servers/**'
+      - 'pack/**'
+      - 'packs/**'
   workflow_dispatch:
 
 permissions:
@@ -77,9 +79,10 @@ jobs:
           cd ..
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 servers/resolve_mods.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
           python3 pack/update.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
           python3 servers/make_instances.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
-          git add dist/aot-rpg.jar dist/instances pack/ $(ls -d packs 2>/dev/null)
+          git add dist/aot-rpg.jar dist/instances dist/launcher.json pack/ $(ls -d packs 2>/dev/null)
           git diff --cached --quiet && exit 0
           git commit -m "Update dist/aot-rpg.jar [skip ci]"
           # Another build may have pushed first: catch up and try again.
@@ -88,7 +91,7 @@ jobs:
             git pull --rebase -X theirs origin "${{ github.ref_name }}" || true
             python3 pack/update.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
             python3 servers/make_instances.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
-            git add dist/aot-rpg.jar dist/instances pack/ $(ls -d packs 2>/dev/null)
+            git add dist/aot-rpg.jar dist/instances dist/launcher.json pack/ $(ls -d packs 2>/dev/null)
             git commit --amend --no-edit || true
             sleep $((i * 5))
           done

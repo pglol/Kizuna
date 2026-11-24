@@ -41,7 +41,7 @@ def update(root):
         for f in sorted(files):
             p = os.path.join(dirpath, f)
             rel = os.path.relpath(p, root).replace(os.sep, "/")
-            if rel in ("pack.toml", "index.toml", "update.py", "README.md"):
+            if rel in ("pack.toml", "index.toml", "update.py", "README.md", "mods.txt"):
                 continue
             lines += ["[[files]]", f'file = "{rel}"', f'hash = "{sha(p)}"']
             if rel.endswith(".pw.toml"):
@@ -49,7 +49,8 @@ def update(root):
             lines.append("")
     open(os.path.join(root, "index.toml"), "w").write("\n".join(lines))
     pack = os.path.join(root, "pack.toml")
-    open(pack, "w").write(set_field(open(pack).read(), "index", "hash", sha(os.path.join(root, "index.toml"))))
+    text = set_field(open(pack).read(), "index", "hash", sha(os.path.join(root, "index.toml")))
+    open(pack, "w").write(text)
     print("pack updated:", os.path.relpath(root, repo))
 
 folders = sys.argv[2:]

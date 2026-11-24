@@ -1,15 +1,43 @@
 {
-  "_comment": "Every server we run, one entry each. CI builds dist/instances/<id>.zip for each one (a Prism Launcher instance that updates itself and joins the server). status: public (anyone), beta (testers only: set /aotrpg access mode beta on that server), private (friends: hand the zip out yourself; also gate it on the server). pack: the packwiz folder in this repo. address: what the launcher joins; on Hamachi that's the host's Hamachi IPv4 and port.",
+  "_comment": "Every server we run. The launcher shows these (dist/launcher.json is built from this file). status: public (everyone sees and plays), beta (shown with a BETA tag; the server's /aotrpg access mode beta decides who gets in), private (hidden until a player enters the server's access code in the launcher; set code to the plain code, only its hash is published), soon (shown as coming soon, no Play). pack: the packwiz folder. address: what Play joins; on Hamachi, the host's 25.x.x.x address and port. theme: the launcher's painted backdrop (aot, duel, or any other word for a plain one). art: optional image URL to use instead.",
   "servers": [
     {
       "id": "aot",
-      "name": "AoT RPG",
-      "tagline": "Attack on Titan: open world and extraction",
-      "status": "private",
+      "name": "Attack on Titan RPG",
+      "tagline": "Open world. Titans. Extraction runs.",
+      "description": "Paradis and Marley, wall to coast. Swing through cities and giant forests, hunt titans with your squad, run the story, prestige past level 100, and when you're invited, take on extraction.",
+      "features": [
+        "ODM gear swinging",
+        "Story and side quests",
+        "Squads, raids and ranked duels"
+      ],
+      "status": "public",
       "pack": "pack",
       "address": "CHANGE_ME:25565",
       "minecraft": "1.21.1",
-      "fabric": "0.16.10"
+      "fabric": "0.16.10",
+      "theme": "aot",
+      "accent": "#e8c36f",
+      "short": "AOT"
+    },
+    {
+      "id": "stance",
+      "name": "Stancebound",
+      "tagline": "Martial arts duels in a ruined kingdom.",
+      "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
+      "features": [
+        "Stance-based melee",
+        "Build your own combo deck",
+        "Duels and schools"
+      ],
+      "status": "soon",
+      "pack": "packs/stance",
+      "address": "",
+      "minecraft": "1.21.1",
+      "fabric": "0.16.10",
+      "theme": "duel",
+      "accent": "#9ad0ff",
+      "short": "SB"
     }
   ]
 }

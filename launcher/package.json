@@ -1,0 +1,35 @@
+{
+  "name": "warfront-launcher",
+  "productName": "Warfront Launcher",
+  "version": "1.0.0",
+  "description": "Sign in, pick a server, press Play.",
+  "main": "src/main.js",
+  "author": "pglol",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check src/main.js && node --check src/auth.js && node --check src/java.js && node --check src/pack.js && node --check src/game.js && node --check src/store.js && node --check src/net.js && node --check src/preload.js && node --check src/ui/app.js && node --check src/ui/scene.js && node src/selftest.js",
+    "dist": "electron-builder --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11",
+    "minecraft-launcher-core": "3.18.2",
+    "smol-toml": "1.9.1"
+  },
+  "devDependencies": {
+    "electron": "38.8.4",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "net.pglol.warfront",
+    "productName": "Warfront Launcher",
+    "files": ["src/**", "config.json", "package.json"],
+    "directories": { "buildResources": "build", "output": "out" },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.png" },
+    "nsis": { "oneClick": true, "perMachine": false, "artifactName": "Warfront-Setup-${version}.${ext}" },
+    "mac": { "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }], "icon": "build/icon.png", "category": "public.app-category.games", "artifactName": "Warfront-${version}-${arch}.${ext}" },
+    "linux": { "target": ["AppImage"], "icon": "build/icon.png", "category": "Game", "artifactName": "Warfront-${version}.${ext}" },
+    "publish": [{ "provider": "github", "owner": "pglol", "repo": "minecraft", "releaseType": "release" }]
+  }
+}

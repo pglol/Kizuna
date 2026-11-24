@@ -9,7 +9,7 @@ from then on. Run from the repo root:
 
 <raw-base-url> is where this repo's files are served (the same one pack/update.py uses).
 """
-import io, json, os, sys, urllib.request, zipfile
+import hashlib, io, json, os, sys, urllib.request, zipfile
 
 BOOTSTRAP = "https://github.com/packwiz/packwiz-installer-bootstrap/releases/download/v0.0.3/packwiz-installer-bootstrap.jar"
 
@@ -30,7 +30,23 @@ except Exception as e:
     print("could not fetch packwiz-installer-bootstrap:", e)
 
 listing = []
+launcher = []
 for s in hub["servers"]:
+    pack_url = f"{base}/{s['pack'].strip('/')}/pack.toml"
+    # What the Warfront launcher shows and uses.
+    e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "features", "status", "address", "minecraft", "fabric", "theme", "accent", "art")}
+    e["pack"] = pack_url
+    if s["status"] == "private":
+        code = str(s.get("code", ""))
+        if not code:
+            print("private server without a code, left out of the launcher:", s["id"])
+            e = None
+        else:
+            e["codeHash"] = hashlib.sha256(code.strip().upper().encode()).hexdigest()
+    if e:
+        launcher.append(e)
+    if s["status"] == "soon":
+        continue
     pack_url = f"{base}/{s['pack'].strip('/')}/pack.toml"
     cfg = "\n".join([
         "[General]",
@@ -73,6 +89,8 @@ for s in hub["servers"]:
     })
     print("instance", s["id"], "->", path, "" if jar else "(no bootstrap jar inside!)")
 
+open(os.path.join(repo, "dist", "launcher.json"), "w").write(json.dumps({"servers": launcher}, indent=2) + "\n")
+
 # A public listing without addresses: what a future launcher (or a website) reads to show the servers.
-public = [l for l in listing if l["status"] != "private"]
+public = [l for l in listing if l["status"] not in ("private", "soon")]
 open(os.path.join(out, "hub.json"), "w").write(json.dumps({"servers": public}, indent=2) + "\n")
