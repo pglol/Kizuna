@@ -7,11 +7,12 @@
       "tagline": "Open world. Titans. Extraction runs.",
       "description": "Paradis and Marley, wall to coast. Swing through cities and giant forests, hunt titans with your squad, run the story, prestige past level 100, and when you're invited, take on extraction.",
       "status": "public",
-      "address": "CHANGE_ME:25565",
+      "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "accent": "#a8432a",
       "kanji": "\u5de8",
+      "theme": "wall",
       "icon": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/servers/art/aot-icon.png",
       "logo": "",
       "background": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/servers/art/aot-cover.webp",
@@ -38,23 +39,35 @@
           "id": "public",
           "name": "Public",
           "note": "",
-          "address": "CHANGE_ME:25565",
-          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml"
+          "address": "25.52.234.232:25565",
+          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml",
+          "addresses": []
         },
         {
           "id": "early",
           "name": "Early Access",
           "note": "Patreon supporters",
-          "address": "CHANGE_ME:25566",
+          "address": "CHANGE_ME_EARLY:25565",
           "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/aot-early/pack.toml",
+          "addresses": [],
           "codeHash": "e3d986e4ed5f96609cacc590982f4e40186043a8e3dff9f07e87ab6d66f9dca1"
         },
         {
           "id": "dev",
           "name": "Development",
           "note": "Team builds",
-          "address": "CHANGE_ME:25567",
+          "address": "25.52.234.232:25565",
           "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/aot-dev/pack.toml",
+          "addresses": [
+            {
+              "label": "Hamachi",
+              "address": "25.52.234.232:25565"
+            },
+            {
+              "label": "Public",
+              "address": "CHANGE_ME_DEV:25565"
+            }
+          ],
           "codeHash": "9b59c51cd4be035633b299245a9151bffca3f772370251179f63d5f16981d898"
         }
       ]
@@ -66,11 +79,12 @@
       "tagline": "Martial arts duels in a ruined kingdom.",
       "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
       "status": "soon",
-      "address": "",
+      "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "accent": "#2f5d8a",
       "kanji": "\u6b66",
+      "theme": "peaks",
       "icon": "",
       "logo": "",
       "background": "",
@@ -82,8 +96,9 @@
           "id": "public",
           "name": "Public",
           "note": "",
-          "address": "",
-          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml"
+          "address": "25.52.234.232:25565",
+          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml",
+          "addresses": []
         }
       ]
     }
