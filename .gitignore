@@ -5,3 +5,4 @@ target/
 rpg-mod/build/
 rpg-mod/.gradle/
 rpg-mod/run/
+servers/.bootstrap.jar

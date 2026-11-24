@@ -3,7 +3,12 @@
 Players install once; after that the game updates itself every time they press Play, then drops
 them straight onto the server.
 
-## One-time setup (Prism Launcher)
+**Easiest:** CI builds a ready Prism instance for every server in `servers/hub.json`, at
+`dist/instances/<id>.zip`. Players import it (Add Instance → Import) and press Play; the steps
+below are what that zip already has set up. Running several servers (other packs, betas, who gets
+in): see `servers/README.md`.
+
+## One-time setup by hand (Prism Launcher)
 
 1. Install [Prism Launcher](https://prismlauncher.org) and create an instance: Minecraft **1.21.1**, **Fabric** loader.
 2. Download `packwiz-installer-bootstrap.jar` from

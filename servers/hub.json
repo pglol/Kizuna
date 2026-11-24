@@ -1,0 +1,15 @@
+{
+  "_comment": "Every server we run, one entry each. CI builds dist/instances/<id>.zip for each one (a Prism Launcher instance that updates itself and joins the server). status: public (anyone), beta (testers only: set /aotrpg access mode beta on that server), private (friends: hand the zip out yourself; also gate it on the server). pack: the packwiz folder in this repo. address: what the launcher joins; on Hamachi that's the host's Hamachi IPv4 and port.",
+  "servers": [
+    {
+      "id": "aot",
+      "name": "AoT RPG",
+      "tagline": "Attack on Titan: open world and extraction",
+      "status": "private",
+      "pack": "pack",
+      "address": "CHANGE_ME:25565",
+      "minecraft": "1.21.1",
+      "fabric": "0.16.10"
+    }
+  ]
+}
