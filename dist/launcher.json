@@ -16,7 +16,7 @@
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "theme": "aot",
-      "accent": "#e8c36f",
+      "accent": "#a8432a",
       "art": "",
       "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml"
     },
@@ -36,7 +36,7 @@
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "theme": "duel",
-      "accent": "#9ad0ff",
+      "accent": "#2f5d8a",
       "art": "",
       "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml"
     }
