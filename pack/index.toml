@@ -10,7 +10,7 @@ hash = "c109e7462994c27881fa9ce4fcf664e22fbdbcb71642696b642cd8da1135ebaa"
 
 [[files]]
 file = "mods/aot-rpg.pw.toml"
-hash = "739e6925ba395cb06d9637cc48fb89012649f2990f4824396609887ec83d0ce4"
+hash = "8faeaccd078a89feb5343d2c448da16acd854aaa8271eb70b231e02c852a77a4"
 metafile = true
 
 [[files]]
