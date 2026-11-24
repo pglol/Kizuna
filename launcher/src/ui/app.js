@@ -4,6 +4,7 @@
   const $ = (id) => document.getElementById(id);
   const state = { account: null, settings: {}, servers: [], selected: null, busy: false, playing: false, test: false, testMode: false, offline: false, friends: [] };
   const pings = {};
+  const loadedIcons = new Set();
 
   function toast(msg) {
     const t = $('toast');
@@ -81,14 +82,20 @@
       t.title = s.name;
       const ic = document.createElement('span');
       ic.className = 'ic';
-      ic.textContent = (s.short || initials(s.name)).slice(0, 3);
-      if (s.icon) {
-        const im = new Image();
-        im.onload = () => {
-          ic.textContent = '';
-          ic.style.backgroundImage = `url("${s.icon}")`;
-        };
-        im.src = s.icon;
+      if (s.icon && loadedIcons.has(s.icon)) {
+        // Already loaded once: show it straight away (no letters flashing while the tabs redraw).
+        ic.style.backgroundImage = `url("${s.icon}")`;
+      } else {
+        ic.textContent = (s.short || initials(s.name)).slice(0, 3);
+        if (s.icon) {
+          const im = new Image();
+          im.onload = () => {
+            loadedIcons.add(s.icon);
+            ic.textContent = '';
+            ic.style.backgroundImage = `url("${s.icon}")`;
+          };
+          im.src = s.icon;
+        }
       }
       const name = document.createElement('span');
       name.textContent = s.name;

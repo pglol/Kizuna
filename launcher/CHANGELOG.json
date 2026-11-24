@@ -1,4 +1,7 @@
 {
+  "1.2.1": [
+    "Server tab icons no longer flash letters when switching servers"
+  ],
   "1.2.0": [
     "Friends you add inside Attack on Titan RPG now show in the launcher, with which server they're on",
     "Desktop notifications for launcher updates and server news",
