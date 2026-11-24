@@ -7,3 +7,28 @@ hash = "4646d3d4b293e717d5c02fdff41801c3e605e78642802151da12fdff13b66896"
 [[files]]
 file = "config/kizuna/logo.png"
 hash = "c109e7462994c27881fa9ce4fcf664e22fbdbcb71642696b642cd8da1135ebaa"
+
+[[files]]
+file = "mods/aot-rpg.pw.toml"
+hash = "348eed5ab3c1fff9378684db98d7d3e7cff7346efe6acd4c9299c5a82741718b"
+metafile = true
+
+[[files]]
+file = "mods/fabric-api.pw.toml"
+hash = "9e884d3ed93f3309077173c94a551b9cce6a0809ca668fc4a0b5aa94c89815c4"
+metafile = true
+
+[[files]]
+file = "mods/iris.pw.toml"
+hash = "693373dcf37ffab41d09b6ac56568559d32599484c3efcb970c2342a45403ae8"
+metafile = true
+
+[[files]]
+file = "mods/kizuna-brand.pw.toml"
+hash = "eaffa4d123e298e2f81b0a729992a9481959e2c57bd909053901e1d390a2bb5b"
+metafile = true
+
+[[files]]
+file = "mods/sodium.pw.toml"
+hash = "d95a99d6b0374341ee8dec69c9967c84bd6b67427fc2012a069d21ab9620239e"
+metafile = true

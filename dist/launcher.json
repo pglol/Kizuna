@@ -32,7 +32,32 @@
           "url": ""
         }
       ],
-      "gallery": []
+      "gallery": [],
+      "channels": [
+        {
+          "id": "public",
+          "name": "Public",
+          "note": "",
+          "address": "CHANGE_ME:25565",
+          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml"
+        },
+        {
+          "id": "early",
+          "name": "Early Access",
+          "note": "Patreon supporters",
+          "address": "CHANGE_ME:25566",
+          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/aot-early/pack.toml",
+          "codeHash": "e3d986e4ed5f96609cacc590982f4e40186043a8e3dff9f07e87ab6d66f9dca1"
+        },
+        {
+          "id": "dev",
+          "name": "Development",
+          "note": "Team builds",
+          "address": "CHANGE_ME:25567",
+          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/aot-dev/pack.toml",
+          "codeHash": "9b59c51cd4be035633b299245a9151bffca3f772370251179f63d5f16981d898"
+        }
+      ]
     },
     {
       "id": "stance",
@@ -51,7 +76,16 @@
       "background": "",
       "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml",
       "news": [],
-      "gallery": []
+      "gallery": [],
+      "channels": [
+        {
+          "id": "public",
+          "name": "Public",
+          "note": "",
+          "address": "",
+          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml"
+        }
+      ]
     }
   ]
 }

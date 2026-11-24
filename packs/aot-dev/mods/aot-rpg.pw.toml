@@ -1,0 +1,9 @@
+# managed by mods.txt
+name = "aot-rpg.jar"
+filename = "aot-rpg.jar"
+side = "both"
+
+[download]
+url = "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/dist/aot-rpg.jar"
+hash-format = "sha256"
+hash = "9415869160c7cee9fa5e7154f5e14aa47d0887b528dd941ff613128ad0b1b3ab"
