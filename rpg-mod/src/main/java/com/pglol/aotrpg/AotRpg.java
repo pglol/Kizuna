@@ -159,6 +159,7 @@ public final class AotRpg implements ModInitializer {
         WorldActivities.register();
         Reports.register();
         GameModes.register();
+        SwingSites.register();
         Backups.register();
         ServerPlayNetworking.registerGlobalReceiver(Net.ContractAction.ID, (payload, ctx) -> Contracts.action(ctx.player(), payload.action(), payload.arg()));
         SatchelHandler.register();

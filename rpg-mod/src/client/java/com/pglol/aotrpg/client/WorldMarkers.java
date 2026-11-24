@@ -63,6 +63,8 @@ public final class WorldMarkers {
         if (mc.world == null || mc.player == null || mc.world.getRegistryKey() != net.minecraft.world.World.OVERWORLD) return out;
         for (Net.Marker m : ClientState.markers) {
             if (m.kind().equals("home") || m.kind().equals("ferry") || m.kind().equals("giver")) continue;
+            // Swing sites are for the map; on screen only once you're close enough to see them anyway.
+            if (m.kind().equals("swing") && Math.hypot(m.x() - mc.player.getX(), m.z() - mc.player.getZ()) > 260) continue;
             double g = Beams.groundY(mc, m);
             boolean big = m.kind().equals("quest") || m.kind().equals("activity");
             out.add(new Pin(m.label().isEmpty() ? "Waypoint" : m.label(), new Vec3d(m.x() + 0.5, g + LIFT, m.z() + 0.5), m.color(), big));
