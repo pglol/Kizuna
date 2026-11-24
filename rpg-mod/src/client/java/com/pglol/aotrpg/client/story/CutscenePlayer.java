@@ -443,6 +443,172 @@ public final class CutscenePlayer {
             float a = t < 0.8f ? 1 : t < 1.2f ? 1 - (t - 0.8f) / 0.4f * 0.7f : t < 1.5f ? 0.3f + (t - 1.2f) / 0.3f * 0.5f : 0.8f * (1 - (t - 1.5f) / 0.7f);
             c.fill(0, 0, w, h, (int) (255 * MathHelper.clamp(a, 0, 1)) << 24);
         }
+        // Cutting away somewhere else: hold the last frame while it closes to black.
+                Want end = want(shots.get(shots.size() - 1), 1);
+                tp = end.pos();
+                tl = end.look();
+                tf = end.fov() > 0 ? end.fov() : vanillaFov;
+                tr = end.roll();
+                w = 6;
+            } else {
+                // Home: your own eyes, wherever they are now, looking where you look.
+                tp = mc.player.getCameraPosVec(td);
+                tl = tp.add(mc.player.getRotationVec(td).multiply(10));
+                tf = vanillaFov;
+                tr = 0;
+                w = MathHelper.lerp(MathHelper.clamp((t - homeAt) / 0.6f, 0, 1), 5.0, 9.0);
+            }
+        }
+        // Integrate in small steps so a long frame can't overshoot.
+        int n = Math.max(1, (int) Math.ceil(dt / (1 / 120.0)));
+        double h = dt / n;
+        for (int k = 0; k < n; k++) {
+            Vec3d[] a = spring(pos, vel, tp, w, h);
+            pos = a[0];
+            vel = a[1];
+            Vec3d[] b = spring(look, lookVel, tl, w * 1.15, h);
+            look = b[0];
+            lookVel = b[1];
+            float[] c = spring(fovNow, fovVel, tf, w, h);
+            fovNow = c[0];
+            fovVel = c[1];
+            float[] d = spring(rollNow, rollVel, tr, w, h);
+            rollNow = d[0];
+            rollVel = d[1];
+        }
+        Vec3d d = look.subtract(pos);
+        double hz = Math.sqrt(d.x * d.x + d.z * d.z);
+        float yaw = (float) (MathHelper.atan2(d.z, d.x) * MathHelper.DEGREES_PER_RADIAN) - 90f;
+        float pitch = (float) -(MathHelper.atan2(d.y, hz) * MathHelper.DEGREES_PER_RADIAN);
+        // A held camera: the faintest drift, gone as it settles back into your eyes.
+        float hand = home() ? (float) MathHelper.clamp(1 - (t - homeAt) / 0.4f, 0, 1) : (float) MathHelper.clamp(t / 0.8f, 0, 1);
+        yaw += hand * (float) (0.22 * Math.sin(t * 0.83) + 0.11 * Math.sin(t * 2.17 + 1.3));
+        pitch += hand * (float) (0.16 * Math.sin(t * 1.21 + 0.4) + 0.07 * Math.sin(t * 2.9));
+        out = new Cam(pos.x, pos.y, pos.z, yaw, pitch);
+    }
+
+    /** Where the camera is right now, or null when no cutscene is playing. */
+    public static Cam camera() {
+        return camera(1f);
+    }
+
+    public static Cam camera(float td) {
+        if (!active || shots.isEmpty() || MinecraftClient.getInstance().player == null) return null;
+        advance(td);
+        return out;
+    }
+
+    /** The lens a cutscene wants, or 0. */
+    public static float fov() {
+        return active ? fovNow : 0;
+    }
+
+    /** Tilts the view for a shot's roll. */
+    public static void roll(MatrixStack m) {
+        if (active && Math.abs(rollNow) > 0.01f) m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(rollNow));
+    }
+
+    /** Settled back into your eyes: close enough that letting go can't be seen. */
+    private static boolean landed(MinecraftClient mc) {
+        if (out == null) return false;
+        Vec3d eye = mc.player.getCameraPosVec(1f);
+        float dy = Math.abs(MathHelper.wrapDegrees(out.yaw() - mc.player.getYaw())), dp = Math.abs(out.pitch() - mc.player.getPitch());
+        return pos.distanceTo(eye) < 0.04 && dy < 0.6f && dp < 0.6f && Math.abs(fovNow - vanillaFov) < 0.4f && Math.abs(rollNow) < 0.2f;
+    }
+
+    /** Controls are held while it plays; it lets go once the camera is home. */
+    public static void tick(MinecraftClient mc) {
+        if (!active) {
+            if (!queue.isEmpty() && mc.player != null && (Util.getMeasuringTimeMs() - endedAt) > 400) start(queue.poll());
+            return;
+        }
+        float t = elapsed();
+        boolean done = mc.player == null
+            || home() && (blendOut ? landed(mc) || t - homeAt > HOME_MAX : t - homeAt > 0.32f);
+        if (done) {
+            active = false;
+            out = null;
+            closedBlack = !blendOut;
+            endedAt = Util.getMeasuringTimeMs();
+            com.pglol.aotrpg.client.HudHide.show("cutscene");
+            return;
+        }
+        // Hold jump to skip.
+        boolean holding = InputUtil.isKeyPressed(mc.getWindow().getHandle(), InputUtil.fromTranslationKey(mc.options.jumpKey.getBoundKeyTranslationKey()).getCode());
+        if (holding && !skipped && t > 0.4f) {
+            if (skipFrom == 0) skipFrom = Util.getMeasuringTimeMs();
+            else if ((Util.getMeasuringTimeMs() - skipFrom) / 1000f > SKIP_HOLD) skipped = true;
+        } else skipFrom = 0;
+        mc.options.forwardKey.setPressed(false);
+        mc.options.backKey.setPressed(false);
+        mc.options.leftKey.setPressed(false);
+        mc.options.rightKey.setPressed(false);
+        mc.options.jumpKey.setPressed(false);
+        mc.options.sprintKey.setPressed(false);
+        mc.options.attackKey.setPressed(false);
+        mc.options.useKey.setPressed(false);
+        // Stop walking, but never yank you to a halt in mid-air.
+        if (mc.player.isOnGround()) mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
+    }
+
+    /** Where the next shot is far from the last: a real cut, hidden in a quick blink. */
+    private static float cutDip(float t) {
+        float at = 0, a = 0;
+        for (int i = 0; i < shots.size() - 1; i++) {
+            at += shots.get(i).seconds();
+            if (want(shots.get(i), 1).pos().distanceTo(want(shots.get(i + 1), 0).pos()) <= FAR) continue;
+            float d = Math.abs(t - at);
+            if (d < 0.11f) a = Math.max(a, 1 - d / 0.11f);
+        }
+        return a;
+    }
+
+    public static void render(DrawContext c, RenderTickCounter tick) {
+        int w = c.getScaledWindowWidth(), h = c.getScaledWindowHeight();
+        if (!active) {
+            // After a cut away (a drop, a lift-off): open back up from black.
+            if (closedBlack) {
+                float since = (Util.getMeasuringTimeMs() - endedAt) / 1000f;
+                if (since > 0.45f) closedBlack = false;
+                else c.fill(0, 0, w, h, (int) (255 * (1 - since / 0.45f)) << 24);
+            }
+            glimpse(c, w, h);
+            return;
+        }
+        c.getMatrices().push();
+        c.getMatrices().translate(0, 0, 900);
+        drawBars(c, w, h);
+        c.getMatrices().pop();
+    }
+
+    /** The bars, and how far they're in (they leave as the camera heads home). */
+    private static float barK(float t) {
+        float in = (float) smooth(t / 0.6f);
+        if (!home()) return in;
+        return in * (float) smooth(1 - (t - homeAt) / 0.5f);
+    }
+
+    private static void drawBars(DrawContext c, int w, int h) {
+        float t = elapsed();
+        float k = barK(t);
+        int bar = (int) (h * 0.085f * k);
+        c.fill(0, 0, w, bar, 0xFF000000);
+        c.fill(0, h - bar, w, h, 0xFF000000);
+        // A soft darkening toward the frame's edges while the bars are in.
+        int vig = (int) (70 * k);
+        if (vig > 2) {
+            for (int i = 0; i < 6; i++) {
+                int a = vig * (6 - i) / 6 / 3;
+                int e = i * 6;
+                c.fill(0, bar + e, 6, h - bar - e, a << 24);
+                c.fill(w - 6, bar + e, w, h - bar - e, a << 24);
+            }
+        }
+        if (fade && t < 2.2f) {
+            // Waking up: black, a slow blink, then the world.
+            float a = t < 0.8f ? 1 : t < 1.2f ? 1 - (t - 0.8f) / 0.4f * 0.7f : t < 1.5f ? 0.3f + (t - 1.2f) / 0.3f * 0.5f : 0.8f * (1 - (t - 1.5f) / 0.7f);
+            c.fill(0, 0, w, h, (int) (255 * MathHelper.clamp(a, 0, 1)) << 24);
+        }
         // In flight: the edges darken and streak with speed.
         if (flyStart >= 0 && t - flyStart < flyDur && !home()) {
             float k = (float) Math.sin(Math.PI * MathHelper.clamp((t - flyStart) / flyDur, 0, 1));
