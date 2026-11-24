@@ -6,19 +6,31 @@
       "short": "AOT",
       "tagline": "Open world. Titans. Extraction runs.",
       "description": "Paradis and Marley, wall to coast. Swing through cities and giant forests, hunt titans with your squad, run the story, prestige past level 100, and when you're invited, take on extraction.",
-      "features": [
-        "ODM gear swinging",
-        "Story and side quests",
-        "Squads, raids and ranked duels"
-      ],
       "status": "public",
       "address": "CHANGE_ME:25565",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
-      "theme": "aot",
-      "accent": "#a8432a",
-      "art": "",
-      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml"
+      "accent": "#c8553a",
+      "icon": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/servers/art/aot-icon.png",
+      "logo": "",
+      "background": "",
+      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml",
+      "news": [
+        {
+          "title": "Swing sites: ruins, spires, groves and wall breaches in every region",
+          "date": "Nov 2026",
+          "tag": "Update",
+          "image": "",
+          "url": ""
+        },
+        {
+          "title": "Cutscenes fly between shots and conversations got a new look",
+          "date": "Nov 2026",
+          "tag": "Update",
+          "image": "",
+          "url": ""
+        }
+      ]
     },
     {
       "id": "stance",
@@ -26,19 +38,16 @@
       "short": "SB",
       "tagline": "Martial arts duels in a ruined kingdom.",
       "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
-      "features": [
-        "Stance-based melee",
-        "Build your own combo deck",
-        "Duels and schools"
-      ],
       "status": "soon",
       "address": "",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
-      "theme": "duel",
-      "accent": "#2f5d8a",
-      "art": "",
-      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml"
+      "accent": "#3d7fc4",
+      "icon": "",
+      "logo": "",
+      "background": "",
+      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml",
+      "news": []
     }
   ]
 }
