@@ -270,6 +270,7 @@ public final class Quests {
         WarParties.markers(p, list);
         Occupation.markers(p, list);
         Contracts.markers(p, list);
+        WorldActivities.markers(p, list);
         AotRpg.ESCORTS.markers(p, list);
         AotRpg.STORY.markers(p, list);
         Parties.Party party = AotRpg.PARTIES.of(p.getUuid());

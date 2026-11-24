@@ -24,6 +24,11 @@ public final class TopBar {
 
     /** Where the bar ends, for anything that stacks under it (boss bars). */
     public static int bottom() {
+        return barBottom() + (Compass.visible() ? Compass.H + 12 : 0);
+    }
+
+    /** Where the bar itself ends (the compass hangs under it). */
+    public static int barBottom() {
         return visible() ? TOP + H + 3 : 4;
     }
 

@@ -95,7 +95,6 @@ public final class PrestigeScreen extends Screen {
             ClientPlayNetworking.send(new Net.PrestigeAction("confirm:" + chosen));
             chosen = "";
         }
-        super.render(c, mouseX, mouseY, delta);
     }
 
     private boolean overButton(double mx, double my) {

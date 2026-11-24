@@ -41,26 +41,37 @@ public final class Beams {
         Vec3d cam = ctx.camera().getPos();
         float td = ctx.tickCounter().getTickDelta(true);
         long time = mc.world.getTime();
+        if (!Settings.beams) return;
+        // A column of light over each quest or activity: drawn as glow, so it stays bright under shaders.
+        VertexConsumer glow = Glow.buffer(vc);
+        Matrix4f m4 = ms.peek().getPositionMatrix();
+        float spin = (time + td) * 0.02f;
         for (Net.Marker m : ClientState.markers) {
-            if (mapOnly(m)) continue; // homes and ferry stations are on the map, not beams
+            if (mapOnly(m) || !(m.kind().equals("quest") || m.kind().equals("activity") || m.kind().equals("mark"))) continue;
             double dx = m.x() + 0.5 - cam.x, dz = m.z() + 0.5 - cam.z;
             double dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist < 3) continue; // standing in it: do not blind the player
-            int alpha = (int) Math.min(235, 150 + dist / 3);
-            int color = (alpha << 24) | (m.color() & 0xFFFFFF);
-            ms.push();
-            ms.translate(m.x() - cam.x, groundY(mc, m) - cam.y, m.z() - cam.z);
-            BeaconBlockEntityRenderer.renderBeam(ms, vc, BeaconBlockEntityRenderer.BEAM_TEXTURE, td, 1f, time, 0, 320,
-                color, 0.22f, 0.34f);
-            ms.pop();
+            if (dist < 6 || dist > 900) continue;
+            float near = (float) Math.min(1, (dist - 6) / 20);
+            float y0 = (float) (groundY(mc, m) - cam.y);
+            int rgb = m.color() & 0xFFFFFF;
+            // Wider far away so it can still be picked out on the horizon.
+            float wdt = (float) (0.25 + Math.min(1.6, dist / 300));
+            for (int face = 0; face < 2; face++) {
+                double a = spin + face * Math.PI / 2;
+                float ox = (float) (Math.cos(a) * wdt), oz = (float) (Math.sin(a) * wdt);
+                float x = (float) dx, z = (float) dz;
+                int base = ((int) (200 * near) << 24) | rgb;
+                int topc = rgb;
+                glow.vertex(m4, x - ox, y0, z - oz).color(base);
+                glow.vertex(m4, x + ox, y0, z + oz).color(base);
+                glow.vertex(m4, x + ox, y0 + 140, z + oz).color(topc);
+                glow.vertex(m4, x - ox, y0 + 140, z - oz).color(topc);
+                glow.vertex(m4, x - ox, y0 + 140, z - oz).color(topc);
+                glow.vertex(m4, x + ox, y0 + 140, z + oz).color(topc);
+                glow.vertex(m4, x + ox, y0, z + oz).color(base);
+                glow.vertex(m4, x - ox, y0, z - oz).color(base);
+            }
         }
-
-        // Icons go through their own buffer so they draw on top, through walls.
-        VertexConsumerProvider.Immediate icons = mc.getBufferBuilders().getEntityVertexConsumers();
-        for (Net.Marker m : ClientState.markers) if (!mapOnly(m)) icon(mc, ms, icons, cam, m);
-        float td2 = ctx.tickCounter().getTickDelta(true);
-        for (Net.PartyMember pm : ClientState.party) partyIcon(mc, ms, icons, cam, pm, td2);
-        icons.draw();
     }
 
     private static void icon(MinecraftClient mc, MatrixStack ms, VertexConsumerProvider.Immediate vc, Vec3d cam, Net.Marker m) {

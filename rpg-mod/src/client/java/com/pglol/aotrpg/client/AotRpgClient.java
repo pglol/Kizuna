@@ -289,6 +289,17 @@ public final class AotRpgClient implements ClientModInitializer {
             else if (payload.open()) ctx.client().setScreen(new FurnitureScreen());
         });
         WorldRenderEvents.AFTER_ENTITIES.register(Beams::render);
+        // The AR layer: markers, compass and tracker, drawn on the screen (no shader can wash them out).
+        WorldRenderEvents.LAST.register(WorldMarkers::capture);
+        HudRenderCallback.EVENT.register(WorldMarkers::render);
+        HudRenderCallback.EVENT.register(Compass::render);
+        HudRenderCallback.EVENT.register(QuestTracker::render);
+        ClientPlayNetworking.registerGlobalReceiver(Net.Activities.ID, (payload, ctx) -> QuestTracker.on(payload));
+        Settings.load();
+        // Tell the server which build we are (an out-of-date client is turned away with a clear message).
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((h, sender, mc) -> {
+            if (ClientPlayNetworking.canSend(Net.Hello.ID)) ClientPlayNetworking.send(new Net.Hello(com.pglol.aotrpg.BuildId.id()));
+        });
         WorldRenderEvents.AFTER_ENTITIES.register(SheathRender::render);
         net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, ctx) -> {
             if (renderer instanceof net.minecraft.client.render.entity.PlayerEntityRenderer pr) helper.register(new SheathRender.Feature(pr));

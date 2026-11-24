@@ -1079,6 +1079,28 @@ public final class Net {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Client -> server: which build of the mod this client runs (see BuildId). */
+    public record Hello(String build) implements CustomPayload {
+        public static final Id<Hello> ID = id("hello");
+        public static final PacketCodec<RegistryByteBuf, Hello> CODEC = PacketCodec.of((v, b) -> b.writeString(v.build), b -> new Hello(b.readString()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Server -> client: your world activities ("title|task|x|z|color" each), for the tracker. */
+    public record Activities(java.util.List<String> rows) implements CustomPayload {
+        public static final Id<Activities> ID = id("activities");
+        public static final PacketCodec<RegistryByteBuf, Activities> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.rows.size());
+            for (String s : v.rows) b.writeString(s);
+        }, b -> {
+            int n = Math.min(b.readVarInt(), 16);
+            java.util.List<String> l = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) l.add(b.readString());
+            return new Activities(l);
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Client -> server: zip after someone stuck in a wall or flying (by entity id). */
     public record Pursue(int entity) implements CustomPayload {
         public static final Id<Pursue> ID = id("pursue");
@@ -2874,6 +2896,8 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(Pursue.ID, Pursue.CODEC);
         PayloadTypeRegistry.playC2S().register(PrestigeAction.ID, PrestigeAction.CODEC);
         PayloadTypeRegistry.playS2C().register(PrestigeView.ID, PrestigeView.CODEC);
+        PayloadTypeRegistry.playS2C().register(Activities.ID, Activities.CODEC);
+        PayloadTypeRegistry.playC2S().register(Hello.ID, Hello.CODEC);
         PayloadTypeRegistry.playS2C().register(OdmMove.ID, OdmMove.CODEC);
         PayloadTypeRegistry.playS2C().register(OdmState.ID, OdmState.CODEC);
         PayloadTypeRegistry.playS2C().register(Chatter.ID, Chatter.CODEC);

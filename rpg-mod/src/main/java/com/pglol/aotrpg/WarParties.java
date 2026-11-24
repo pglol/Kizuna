@@ -28,7 +28,7 @@ public final class WarParties {
     private static MinecraftServer server;
     private static int seq;
     /** Groups kept around each player out in the wilds (fewer while fighting: the director holds new ones back). */
-    private static final int NEAR_EACH = 3, MAX = 32;
+    private static final int NEAR_EACH = 4, MAX = 40;
 
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(s -> {

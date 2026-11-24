@@ -39,9 +39,9 @@ public final class Director {
     /** A fight is over once nothing's happened for this long. */
     private static final long FIGHT_OVER = 8_000;
     /** Quiet this long and something comes looking. */
-    private static final long CALM_FOR = 50_000;
+    private static final long CALM_FOR = 25_000;
     /** At least this long between new groups near the same player. */
-    private static final long SPAWN_GAP = 25_000;
+    private static final long SPAWN_GAP = 14_000;
 
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(s -> {
@@ -85,7 +85,7 @@ public final class Director {
                 if (now - s.lastFight < FIGHT_OVER) return;
                 // A breather that grows with the fight: half a minute after a skirmish, a minute and a half after a battle.
                 long lasted = s.lastFight - s.fightStart;
-                s.relaxUntil = now + Math.max(30_000, Math.min(90_000, 30_000 + lasted / 2));
+                s.relaxUntil = now + Math.max(18_000, Math.min(60_000, 18_000 + lasted / 3));
                 s.phase = Phase.RELAX;
                 s.phaseAt = now;
             }
