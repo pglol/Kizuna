@@ -67,9 +67,11 @@ button:disabled { cursor: default; }
 @keyframes ink-in { from { opacity: 0; clip-path: inset(0 100% 0 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
 .cover { grid-row: 1 / 3; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
 .cover canvas, .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.cover img { filter: grayscale(1) contrast(1.35) brightness(1.05); }
-.cover .tone { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(rgba(21, 18, 15, 0.35) 0.9px, transparent 1.2px) 0 0 / 4px 4px; mix-blend-mode: multiply; opacity: 0; }
+.cover img { filter: grayscale(1) contrast(1.06); mix-blend-mode: multiply; }
+/* The paper's grain over the picture, so artwork looks printed on the page rather than pasted on. */
+.cover .tone { position: absolute; inset: 0; pointer-events: none; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08  0 0 0 0 0.07  0 0 0 0 0.06  0 0 0 0.12 0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>"); opacity: 0; }
 .cover img:not([hidden]) ~ .tone { opacity: 1; }
+.cover:has(img:not([hidden])) { background: #f4efe4; }
 .vol { position: absolute; left: 0; top: 0; padding: 6px 12px 5px; background: var(--ink); color: var(--paper); font-family: var(--head); font-size: 13px; }
 .stamp-status { position: absolute; right: 14px; bottom: 14px; padding: 6px 12px 5px; border: 3px solid var(--sc, var(--red)); color: var(--sc, var(--red)); font-family: var(--head); font-size: 14px; background: rgba(250, 247, 240, 0.85); transform: rotate(-6deg); letter-spacing: 0.04em; }
 .stamp-status small { display: block; font-family: var(--body); font-weight: 700; font-size: 9px; letter-spacing: 0.2em; }
