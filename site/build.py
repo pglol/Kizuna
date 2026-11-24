@@ -1,7 +1,7 @@
 """Builds the website (GitHub Pages) from servers/hub.json: a page for the launcher, one per
 server, and a privacy page. Run from the repo root: python3 site/build.py <out-folder>
 """
-import html, json, os, shutil, sys
+import hashlib, html, json, os, shutil, sys
 
 repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(repo, "_site")
@@ -30,14 +30,17 @@ def art(path):
 
 STAMP = {"public": ("OPEN", "#2f7d4a"), "beta": ("BETA", "#6b3fa0"), "soon": ("COMING SOON", "#7a7064")}
 
+# A fingerprint of the stylesheet, so browsers fetch the new one after every change instead of a stale copy.
+VER = hashlib.sha1((open(os.path.join(repo, "site", "style.css"), "rb").read() + open(os.path.join(repo, "site", "build.py"), "rb").read())).hexdigest()[:10]
+
 def page(title, body, depth=0, desc=""):
     up = "../" * depth
     nav = "".join(f'<a class="tag" href="{up}servers/{e(s["id"])}.html">{e(s["name"])}</a>' for s in servers)
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(title)}</title><meta name="description" content="{e(desc)}">
-<link rel="icon" type="image/png" href="{up}favicon.png"><link rel="apple-touch-icon" href="{up}icon.png"><meta property="og:image" content="{up}icon.png"><link rel="stylesheet" href="{up}fonts.css"><link rel="stylesheet" href="{up}style.css"></head>
-<body><header><a class="brand" href="{up}index.html"><img src="{up}icon.png" alt=""><b>KIZUNA</b></a><nav>{nav}<a class="tag red" data-dl href="{RELEASES}">Download</a></nav></header>
+<link rel="icon" type="image/png" href="{up}favicon.png"><link rel="apple-touch-icon" href="{up}icon.png"><meta property="og:image" content="{up}icon.png"><link rel="stylesheet" href="{up}fonts.css?v={VER}"><link rel="stylesheet" href="{up}style.css?v={VER}"></head>
+<body><header><a class="brand" href="{up}index.html"><img src="{up}icon.png" width="40" height="40" alt=""><b>KIZUNA</b></a><nav>{nav}<a class="tag red" data-dl href="{RELEASES}">Download</a></nav></header>
 {body}
 <footer><a href="{up}index.html">Kizuna</a><a href="{up}privacy.html">Privacy</a><a href="{REPO_URL}">GitHub</a><br>
 Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</footer>
@@ -82,7 +85,7 @@ for s in servers:
     for n in s.get("news", []):
         posts.append(f'<div class="post" style="--accent:{e(s.get("accent", "#c4372a"))}"><small>{e(s.get("short") or s["name"])} · {e(" · ".join(x for x in (n.get("tag", ""), n.get("date", "")) if x))}</small><b>{e(n.get("title", ""))}</b></div>')
 index = f"""<section class="splash"{hero_style}><div class="splash-ink">
-<div class="seal"><img src="icon.png" alt=""></div>
+<div class="seal"><img src="icon.png" width="64" height="64" alt=""></div>
 <h1>Our anime servers.<br>One launcher.</h1>
 <a class="cta" data-dl href="{RELEASES}">DOWNLOAD</a><span class="small light">Kizuna <span data-ver>launcher</span> · Windows, Mac, Linux</span>
 </div></section>
