@@ -34,11 +34,14 @@ launcher = []
 for s in hub["servers"]:
     pack_url = f"{base}/{s['pack'].strip('/')}/pack.toml"
     # What the Kizuna launcher shows and uses.
-    e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "features", "status", "address", "minecraft", "fabric", "theme", "accent", "art")}
+    e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "status", "address", "minecraft", "fabric", "accent", "icon", "logo", "background")}
     e["pack"] = pack_url
-    # A picture kept in the repo (e.g. servers/art/aot.png): served from the same place as the packs.
-    if e.get("art") and not e["art"].startswith("http"):
-        e["art"] = f"{base}/{e['art'].lstrip('/')}"
+    # Pictures kept in the repo (e.g. servers/art/aot-bg.png) are served from the same place as the packs.
+    def url(v):
+        return v if not v or v.startswith("http") else f"{base}/{v.lstrip('/')}"
+    for k in ("icon", "logo", "background"):
+        e[k] = url(e.get(k, ""))
+    e["news"] = [dict(n, image=url(n.get("image", ""))) for n in s.get("news", [])]
     if s["status"] == "private":
         code = str(s.get("code", ""))
         if not code:

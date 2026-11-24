@@ -7,6 +7,7 @@ const auth = require('./auth');
 const game = require('./game');
 const net = require('./net');
 const store = require('./store');
+const status = require('./status');
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json'), 'utf8'));
 let win = null;
@@ -68,9 +69,11 @@ app.on('window-all-closed', () => {
 
 const pub = (a) => (a ? { name: a.name, uuid: a.uuid } : null);
 
+ipcMain.handle('ping', (_e, address) => (address && !String(address).includes('CHANGE_ME') ? status.ping(address) : null));
+
 ipcMain.handle('open-logs', () => shell.openPath(store.dir()));
 
-ipcMain.handle('init', () => ({ testMode: !!config.testMode, brand: config.brand || 'KIZUNA', name: config.name || 'Kizuna', version: app.getVersion(), account: pub(store.account.get()), settings: store.settings.get(), platform: process.platform }));
+ipcMain.handle('init', () => ({ mark: config.mark || '', testMode: !!config.testMode, brand: config.brand || 'KIZUNA', name: config.name || 'Kizuna', version: app.getVersion(), account: pub(store.account.get()), settings: store.settings.get(), platform: process.platform }));
 
 ipcMain.handle('hub', async () => {
   let hub;

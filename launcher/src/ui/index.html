@@ -2,101 +2,96 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; media-src 'self' https:; style-src 'self' 'unsafe-inline'; script-src 'self'">
   <title>Kizuna</title>
-  <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="bar">
-    <div class="brand">
-      <span class="kanji" id="logo">絆</span>
-      <span class="word"><b id="brand">KIZUNA</b><i>servers, bound together</i></span>
-      <span class="testtag" id="testtag" hidden>TEST BUILD</span>
+  <div class="bg" id="bg"><img id="bg-img" alt="" hidden><video id="bg-video" muted loop playsinline hidden></video></div>
+
+  <nav class="rail">
+    <div class="mark" id="mark" title="Kizuna"></div>
+    <div class="servers" id="rail"></div>
+    <div class="rail-end">
+      <button class="rail-btn" id="open-settings" title="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7 7 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+      </button>
+      <button class="avatar" id="account" title="Account"></button>
     </div>
+  </nav>
+
+  <div class="titlebar">
     <div class="drag"></div>
-    <button class="tag" id="account" title="Account"></button>
-    <button class="ink" id="open-settings" title="Settings">設定</button>
-    <button class="ink win" data-win="min" title="Minimise">—</button>
-    <button class="ink win" data-win="max" title="Maximise">□</button>
-    <button class="ink win close" data-win="close" title="Close">✕</button>
-  </header>
+    <span class="testtag" id="testtag" hidden>Test build</span>
+    <button class="wc" data-win="min" title="Minimise"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.3"/></svg></button>
+    <button class="wc" data-win="max" title="Maximise"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>
+    <button class="wc close" data-win="close" title="Close"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.3"/></svg></button>
+  </div>
 
-  <nav class="shelf" id="rail" aria-label="Servers"></nav>
-
-  <main class="page" id="hero">
-    <section class="panel cover">
-      <canvas id="scene"></canvas>
-      <img id="art" alt="" hidden>
-      <div class="tone"></div>
-      <span class="vol" id="vol">VOL.1</span>
-      <span class="stamp-status" id="chips"></span>
-    </section>
-    <section class="panel head">
-      <span class="no" id="no">#01</span>
-      <h1 id="title"></h1>
-      <p class="bubble" id="tagline"></p>
-    </section>
-    <section class="panel story">
-      <p class="caption" id="desc"></p>
-      <ol class="chapters" id="features"></ol>
-    </section>
+  <main class="hero" id="hero">
+    <img class="logo" id="logo" alt="" hidden>
+    <h1 id="title"></h1>
+    <p class="tagline" id="tagline"></p>
+    <div class="actions">
+      <button class="play" id="play"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 4.5v15l12-7.5z"/></svg><span>Play</span></button>
+      <div class="meta">
+        <span class="online" id="online"></span>
+        <button class="link" id="folder">Open game folder</button>
+      </div>
+    </div>
+    <div class="progress" id="progress" hidden>
+      <div class="ptext" id="ptext"></div>
+      <div class="ptrack"><div class="pfill" id="pfill"></div></div>
+    </div>
   </main>
 
-  <footer class="dock">
-    <div class="ptext" id="ptext">Ready</div>
-    <div class="ptrack"><div class="pfill" id="pfill"></div></div>
-    <button class="plain" id="folder">game folder</button>
-  </footer>
+  <section class="news" id="news"></section>
 
-  <button class="hanko" id="play" aria-label="Play"><em>遊</em><span>PLAY</span></button>
-
-  <div class="update" id="update" hidden></div>
   <div class="toast" id="toast" hidden></div>
+  <div class="update" id="update" hidden></div>
 
   <section class="overlay" id="signin" hidden>
-    <div class="sheet signin">
-      <div class="big">絆</div>
-      <p class="say">Sign in with the Microsoft account you play Minecraft on.<br>That's it. We download everything and drop you on the server.</p>
-      <button class="box red" id="login">Sign in with Microsoft</button>
-      <button class="box" id="test-go" hidden>Test without signing in (test build)</button>
+    <div class="dialog">
+      <h2>Sign in</h2>
+      <p>Use the Microsoft account you play Minecraft with. You only do this once.</p>
+      <button class="ms" id="login"><i></i><i></i><i></i><i></i><span>Sign in with Microsoft</span></button>
+      <button class="secondary" id="test-go" hidden>Continue without signing in (test build)</button>
       <p class="fine" id="signin-err"></p>
     </div>
   </section>
 
   <section class="overlay" id="settings" hidden>
-    <div class="sheet">
-      <h2>設定 <small>settings</small></h2>
-      <label class="row">Memory for the game <b id="ram-label"></b></label>
+    <div class="dialog">
+      <h2>Settings</h2>
+      <label class="row">Memory <b id="ram-label"></b></label>
       <input type="range" id="ram" min="2" max="16" step="1">
-      <label class="row toggle"><input type="checkbox" id="close-on-play"> Hide the launcher while playing</label>
-      <div class="row split"><span id="who"></span><button class="box small" id="logout">Sign out</button></div>
-      <div class="row split"><span>Something went wrong?</span><button class="box small" id="logs">Open logs</button></div>
+      <label class="row check"><input type="checkbox" id="close-on-play"> Hide the launcher while the game is open</label>
+      <div class="row split"><span id="who"></span><button class="secondary small" id="logout">Sign out</button></div>
+      <div class="row split"><span>Launcher logs</span><button class="secondary small" id="logs">Open</button></div>
       <p class="fine" id="about"></p>
-      <button class="box small" data-close>Done</button>
+      <div class="row end"><button class="secondary small" data-close>Done</button></div>
     </div>
   </section>
 
   <section class="overlay" id="code" hidden>
-    <div class="sheet">
-      <h2>合言葉 <small>access code</small></h2>
-      <p>Got a code for a private server or a playtest?</p>
-      <input class="field" id="code-input" maxlength="40" placeholder="CODE" autocomplete="off" spellcheck="false">
+    <div class="dialog">
+      <h2>Access code</h2>
+      <p>Enter the code you were given for a private server or a playtest.</p>
+      <input class="field" id="code-input" maxlength="40" autocomplete="off" spellcheck="false">
       <p class="fine" id="code-err"></p>
-      <div class="row split"><button class="box small" data-close>Cancel</button><button class="box red small" id="code-go">Unlock</button></div>
+      <div class="row end"><button class="secondary small" data-close>Cancel</button><button class="primary small" id="code-go">Unlock</button></div>
     </div>
   </section>
 
   <section class="overlay" id="crash" hidden>
-    <div class="sheet wide">
-      <h2>The game closed <small>unexpectedly</small></h2>
+    <div class="dialog wide">
+      <h2>The game closed unexpectedly</h2>
       <p>Send this to an admin if it keeps happening.</p>
       <pre id="crash-log"></pre>
-      <div class="row split"><button class="box small" id="crash-copy">Copy</button><button class="box small" data-close>Close</button></div>
+      <div class="row end"><button class="secondary small" id="crash-copy">Copy</button><button class="secondary small" data-close>Close</button></div>
     </div>
   </section>
 
-  <script src="scene.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

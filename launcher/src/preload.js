@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('kizuna', {
   logout: () => ipcRenderer.invoke('logout'),
   play: (id, test) => ipcRenderer.invoke('play', id, !!test),
   openLogs: () => ipcRenderer.invoke('open-logs'),
+  ping: (address) => ipcRenderer.invoke('ping', address),
+  openUrl: (url) => window.open(url),
   settings: (patch) => ipcRenderer.invoke('settings', patch),
   openFolder: (id) => ipcRenderer.invoke('open-folder', id),
   win: (what) => ipcRenderer.invoke('win', what),

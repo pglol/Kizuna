@@ -1,9 +1,10 @@
-// The launcher's screen: the server rail, the hero, the Play dock, and the small dialogs.
+// The launcher screen. Everything visible about a server (background, logo, icon, news) comes from
+// servers/hub.json; nothing is drawn or invented here.
 (function () {
-  const W = window.kizuna;
+  const K = window.kizuna;
   const $ = (id) => document.getElementById(id);
-  let state = { test: false, testMode: false, account: null, settings: {}, servers: [], selected: null, busy: false, playing: false };
-
+  const state = { account: null, settings: {}, servers: [], selected: null, busy: false, playing: false, test: false, testMode: false, offline: false };
+  const pings = {};
 
   function toast(msg) {
     const t = $('toast');
@@ -12,71 +13,51 @@
     clearTimeout(toast.h);
     toast.h = setTimeout(() => (t.hidden = true), 6000);
   }
-
-  function show(id, on) {
-    $(id).hidden = !on;
-  }
+  const show = (id, on) => ($(id).hidden = !on);
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => (b.closest('.overlay').hidden = true)));
-  document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => W.win(b.dataset.win)));
+  document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => K.win(b.dataset.win)));
 
-  function initials(name) {
+  const current = () => state.servers.find((s) => s.id === state.selected);
+  const initials = (name) => {
     const w = name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean);
     return (w.length > 1 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)).toUpperCase();
-  }
+  };
 
   function renderAccount() {
     const a = state.account, b = $('account');
-    b.innerHTML = '';
-    b.classList.toggle('none', !a);
-    if (!a) {
-      b.textContent = 'Sign in';
-      return;
+    b.style.backgroundImage = '';
+    b.textContent = '';
+    if (a) {
+      b.style.backgroundImage = `url("https://mc-heads.net/avatar/${a.uuid}/72")`;
+      b.title = a.name;
+    } else {
+      b.textContent = state.test ? 'TEST' : '?';
+      b.title = 'Sign in';
     }
-    const img = document.createElement('img');
-    img.src = `https://mc-heads.net/avatar/${a.uuid}/44`;
-    img.alt = '';
-    img.onerror = () => img.remove();
-    b.append(img, document.createTextNode(a.name));
   }
-
-  const STAMP = {
-    public: ['連載中', 'OPEN NOW', '#c42b1f'],
-    beta: ['試読', 'PLAYTEST', '#6b3fa0'],
-    private: ['秘密', 'PRIVATE', '#15120f'],
-    soon: ['近日', 'COMING SOON', '#7a7064'],
-  };
 
   function renderRail() {
     const rail = $('rail');
     rail.innerHTML = '';
-    state.servers.forEach((s, i) => {
+    for (const s of state.servers) {
       const t = document.createElement('button');
-      t.className = 'spine' + (s.id === state.selected ? ' on' : '');
-      t.style.setProperty('--tc', s.accent || '#c42b1f');
+      t.className = 'srv' + (s.id === state.selected ? ' on' : '');
       t.title = s.name;
-      const band = document.createElement('span');
-      band.className = 'band';
-      band.textContent = (s.short || initials(s.name)).slice(0, 4);
-      const name = document.createElement('span');
-      name.className = 'name';
-      name.textContent = s.name;
-      const num = document.createElement('span');
-      num.className = 'num';
-      num.innerHTML = `${i + 1}<small>巻</small>`;
-      t.append(band, name, num);
-      if (s.status === 'soon') {
-        const soon = document.createElement('i');
-        soon.className = 'soon';
-        soon.textContent = '近日';
-        t.append(soon);
+      if (s.icon) t.style.backgroundImage = `url("${s.icon}")`;
+      else t.textContent = (s.short || initials(s.name)).slice(0, 3);
+      if (s.status === 'soon' || s.status === 'private') {
+        const l = document.createElement('span');
+        l.className = 'lock';
+        l.innerHTML = '<svg viewBox="0 0 24 24" width="11" height="11"><path fill="#9b9ca3" d="M7 10V8a5 5 0 0 1 10 0v2h1v11H6V10h1zm2 0h6V8a3 3 0 0 0-6 0v2z"/></svg>';
+        t.append(l);
       }
       t.addEventListener('click', () => select(s.id));
       rail.append(t);
-    });
+    }
     const add = document.createElement('button');
-    add.className = 'spine add';
+    add.className = 'srv add';
     add.title = 'Enter an access code';
-    add.innerHTML = '+<span>code</span>';
+    add.textContent = '+';
     add.addEventListener('click', () => {
       $('code-input').value = '';
       $('code-err').textContent = '';
@@ -86,156 +67,189 @@
     rail.append(add);
   }
 
-  function renderHero() {
-    const idx = state.servers.findIndex((x) => x.id === state.selected);
-    const s = state.servers[idx];
-    // Ink the panels in again.
-    for (const c of $('hero').children) {
-      c.style.animation = 'none';
-      void c.offsetWidth;
-      c.style.animation = '';
+  function setBackground(s) {
+    const img = $('bg-img'), vid = $('bg-video');
+    const src = s && s.background;
+    const isVideo = src && /\.(mp4|webm)(\?|$)/i.test(src);
+    vid.hidden = !isVideo;
+    img.hidden = !src || isVideo;
+    if (isVideo) {
+      if (vid.getAttribute('src') !== src) vid.src = src;
+      vid.play().catch(() => {});
+    } else {
+      vid.pause();
+      vid.removeAttribute('src');
+      if (src) img.src = src;
     }
-    const f = $('features');
-    f.innerHTML = '';
+  }
+
+  function renderNews(s) {
+    const box = $('news');
+    box.innerHTML = '';
+    for (const n of (s && s.news) || []) {
+      const c = document.createElement('button');
+      c.className = 'card';
+      if (n.image) c.style.backgroundImage = `url("${n.image}")`;
+      if (n.tag) {
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = n.tag;
+        c.append(tag);
+      }
+      const txt = document.createElement('div');
+      txt.className = 'txt';
+      const b = document.createElement('b');
+      b.textContent = n.title || '';
+      const sm = document.createElement('small');
+      sm.textContent = n.date || '';
+      txt.append(b, sm);
+      c.append(txt);
+      if (n.url) c.addEventListener('click', () => K.openUrl(n.url));
+      else c.style.cursor = 'default';
+      box.append(c);
+    }
+    box.hidden = !box.children.length;
+  }
+
+  function renderHero() {
+    const s = current();
+    const hero = $('hero');
+    hero.style.animation = 'none';
+    void hero.offsetWidth;
+    hero.style.animation = '';
+    setBackground(s);
+    renderNews(s);
     if (!s) {
-      $('title').textContent = state.offline ? 'Offline' : 'Nothing on the shelf yet';
-      $('tagline').textContent = state.offline ? "Can't reach the server list. Check your connection." : '';
-      $('desc').textContent = '';
-      $('chips').hidden = true;
-      $('vol').textContent = 'VOL.—';
-      $('no').textContent = '';
-      Scene.set('none');
+      $('logo').hidden = true;
+      $('title').hidden = false;
+      $('title').textContent = state.offline ? "Can't reach the server list" : 'No servers yet';
+      $('tagline').textContent = state.offline ? 'Check your internet connection and reopen the launcher.' : '';
+      $('online').textContent = '';
       updateDock();
       return;
     }
-    document.documentElement.style.setProperty('--accent', s.accent || '#c42b1f');
-    Scene.set(s.theme || 'none', s.accent, s.art);
-    const n = String(idx + 1).padStart(2, '0');
-    $('vol').textContent = `VOL.${idx + 1}`;
-    $('no').textContent = `#${n}${s.minecraft ? ' · MINECRAFT ' + s.minecraft : ''}`;
-    const [kanji, label, color] = STAMP[s.status] || STAMP.public;
-    const st = $('chips');
-    st.hidden = false;
-    st.style.setProperty('--sc', color);
-    st.innerHTML = '';
-    st.append(document.createTextNode(kanji));
-    const sm = document.createElement('small');
-    sm.textContent = label;
-    st.append(sm);
-    $('title').textContent = s.name;
+    document.documentElement.style.setProperty('--accent', s.accent || '#d0603a');
+    const logo = $('logo');
+    if (s.logo) {
+      logo.src = s.logo;
+      logo.alt = s.name;
+      logo.hidden = false;
+      $('title').hidden = true;
+    } else {
+      logo.hidden = true;
+      $('title').hidden = false;
+      $('title').textContent = s.name;
+    }
     $('tagline').textContent = s.tagline || '';
-    $('desc').textContent = s.description || '';
-    (s.features || []).forEach((x, i) => {
-      const li = document.createElement('li');
-      const b = document.createElement('b');
-      b.textContent = `第${i + 1}話`;
-      li.append(b, document.createTextNode(x));
-      f.append(li);
-    });
+    renderOnline(s);
+    refreshPing(s);
     updateDock();
   }
 
+  function renderOnline(s) {
+    const el = $('online');
+    el.classList.remove('up');
+    if (s.status === 'soon') {
+      el.textContent = 'Coming soon';
+      return;
+    }
+    const p = pings[s.id];
+    if (p === undefined) el.textContent = '';
+    else if (p === null) el.textContent = 'Server offline';
+    else {
+      el.classList.add('up');
+      el.textContent = `${p.online} playing now`;
+    }
+  }
+
+  async function refreshPing(s) {
+    if (!s || s.status === 'soon') return;
+    pings[s.id] = await K.ping(s.address);
+    if (current() === s) renderOnline(s);
+  }
+  setInterval(() => current() && refreshPing(current()), 30000);
+
   function updateDock() {
-    const s = state.servers.find((x) => x.id === state.selected);
-    const play = $('play');
-    const label = play.querySelector('span');
+    const s = current();
+    const play = $('play'), label = play.querySelector('span');
     $('folder').hidden = !s || s.status === 'soon';
-    play.classList.toggle('busy', !!state.busy);
+    $('progress').hidden = !(state.busy || state.playing);
     if (state.playing) {
       play.disabled = true;
-      label.textContent = 'PLAYING';
-      return;
-    }
-    if (state.busy) {
+      label.textContent = 'Playing';
+    } else if (state.busy) {
       play.disabled = true;
-      label.textContent = 'LOADING';
-      return;
-    }
-    if (!s) {
+      label.textContent = 'Starting';
+    } else if (!s || s.status === 'soon') {
       play.disabled = true;
-      label.textContent = 'PLAY';
-      return;
+      label.textContent = s ? 'Coming soon' : 'Play';
+    } else {
+      play.disabled = false;
+      label.textContent = state.account || state.test ? 'Play' : 'Sign in';
     }
-    if (s.status === 'soon') {
-      play.disabled = true;
-      label.textContent = 'SOON';
-      $('ptext').textContent = `${s.name} isn't out yet. Keep an eye on the shelf.`;
-      $('pfill').style.width = '0';
-      return;
-    }
-    play.disabled = false;
-    label.textContent = state.account ? 'PLAY' : state.test ? 'TEST' : 'SIGN IN';
-    $('ptext').textContent = state.account ? `Ready when you are · ${s.name}` : state.test ? 'Test mode: installs everything and opens the game at the title screen' : 'Sign in with Microsoft to play';
-    $('pfill').style.width = '0';
   }
 
   function select(id) {
     state.selected = id;
-    W.settings({ selected: id });
+    K.settings({ selected: id });
     renderRail();
     renderHero();
   }
 
   async function loadHub() {
-    const hub = await W.hub();
+    const hub = await K.hub();
     state.servers = hub.servers || [];
     state.offline = !!hub.offline;
-    if (!state.servers.find((s) => s.id === state.selected)) {
+    if (!current()) {
       const first = state.servers.find((s) => s.status !== 'soon') || state.servers[0];
       state.selected = first ? first.id : null;
     }
     renderRail();
     renderHero();
-    if (hub.offline && state.servers.length) toast("Couldn't refresh the server list; showing the last one.");
+    if (hub.offline && state.servers.length) toast("Couldn't refresh the server list, showing the last one.");
   }
 
   async function login() {
-    $('signin-err').textContent = '';
-    $('signin-err').classList.remove('err');
-    const r = await W.login();
+    const err = $('signin-err');
+    err.textContent = '';
+    err.classList.remove('err');
+    const r = await K.login();
     if (r.ok) {
       state.account = r.account;
       show('signin', false);
       renderAccount();
       updateDock();
-      return true;
+    } else if (r.code !== 'cancelled') {
+      err.textContent = r.code === 'appid' || r.code === 'noclient' ? r.error + ' Tell the server admin.' : r.error;
+      err.classList.add('err');
     }
-    if (r.code !== 'cancelled') {
-      const msg = r.code === 'appid' || r.code === 'noclient' ? r.error + ' Tell the server admin.' : r.error;
-      $('signin-err').textContent = msg;
-      $('signin-err').classList.add('err');
-      if ($('signin').hidden) toast(msg);
-    }
-    return false;
   }
 
   async function play() {
-    const s = state.servers.find((x) => x.id === state.selected);
+    const s = current();
     if (!s || state.busy || state.playing) return;
     if (!state.account && !state.test) {
       show('signin', true);
       return;
     }
     state.busy = true;
+    $('ptext').textContent = 'Getting ready';
+    $('pfill').style.width = '0';
     updateDock();
-    const r = await W.play(s.id, !state.account && state.test);
+    const r = await K.play(s.id, !state.account && state.test);
     state.busy = false;
     if (!r.ok) {
-      $('pfill').style.width = '0';
       if (r.code === 'signin') {
         state.account = null;
         renderAccount();
         show('signin', true);
       }
-      $('ptext').textContent = r.error;
       toast(r.error);
-    } else {
-      state.playing = true;
-    }
+    } else state.playing = true;
     updateDock();
   }
 
-  W.on('status', (d) => {
+  K.on('status', (d) => {
     $('ptext').textContent = d.text;
     $('pfill').style.width = Math.round((d.fraction || 0) * 100) + '%';
     if (d.playing) {
@@ -243,27 +257,24 @@
       updateDock();
     }
   });
-  W.on('exited', (d) => {
+  K.on('exited', (d) => {
     state.playing = false;
     state.busy = false;
     updateDock();
-    if (d.code && d.code !== 0) {
+    if (d.code) {
       $('crash-log').textContent = d.log || '(no log)';
       show('crash', true);
     }
   });
-  W.on('update', (d) => {
+  K.on('update', (d) => {
     const u = $('update');
     u.hidden = false;
-    u.innerHTML = '';
+    u.textContent = d.state === 'ready' ? `Update ${d.version} ready.` : `Downloading update ${d.version}…`;
     if (d.state === 'ready') {
-      u.append(document.createTextNode(`Launcher ${d.version} is ready.`));
       const b = document.createElement('button');
       b.textContent = 'Restart';
-      b.onclick = () => W.installUpdate();
+      b.onclick = () => K.installUpdate();
       u.append(b);
-    } else {
-      u.textContent = `Downloading launcher ${d.version}…`;
     }
   });
 
@@ -272,12 +283,13 @@
   $('test-go').addEventListener('click', () => {
     state.test = true;
     show('signin', false);
+    renderAccount();
     updateDock();
   });
-  $('logs').addEventListener('click', () => W.openLogs());
-  $('folder').addEventListener('click', () => state.selected && W.openFolder(state.selected));
+  $('folder').addEventListener('click', () => state.selected && K.openFolder(state.selected));
   $('account').addEventListener('click', () => (state.account ? openSettings() : show('signin', true)));
   $('open-settings').addEventListener('click', openSettings);
+  $('logs').addEventListener('click', () => K.openLogs());
   $('crash-copy').addEventListener('click', () => navigator.clipboard.writeText($('crash-log').textContent));
 
   function openSettings() {
@@ -291,11 +303,11 @@
   }
   $('ram').addEventListener('input', async (e) => {
     $('ram-label').textContent = e.target.value + ' GB';
-    state.settings = await W.settings({ ram: Number(e.target.value) });
+    state.settings = await K.settings({ ram: Number(e.target.value) });
   });
-  $('close-on-play').addEventListener('change', async (e) => (state.settings = await W.settings({ closeOnPlay: e.target.checked })));
+  $('close-on-play').addEventListener('change', async (e) => (state.settings = await K.settings({ closeOnPlay: e.target.checked })));
   $('logout').addEventListener('click', async () => {
-    await W.logout();
+    await K.logout();
     state.account = null;
     renderAccount();
     updateDock();
@@ -303,7 +315,7 @@
   });
 
   async function unlock() {
-    const r = await W.unlock($('code-input').value);
+    const r = await K.unlock($('code-input').value);
     if (!r.ok) {
       $('code-err').textContent = "That code doesn't match any server.";
       $('code-err').classList.add('err');
@@ -321,17 +333,16 @@
   });
 
   (async () => {
-    const init = await W.init();
-    $('brand').textContent = init.brand;
+    const init = await K.init();
     document.title = init.name;
-    state.testMode = !!init.testMode;
-    $('test-go').hidden = !state.testMode;
-    $('testtag').hidden = !state.testMode;
-    $('about').textContent = `${init.brand} Launcher ${init.version}`;
+    if (init.mark) $('mark').style.backgroundImage = `url("${init.mark}")`;
+    $('about').textContent = `${init.name} Launcher ${init.version}`;
     state.account = init.account;
     state.settings = init.settings;
     state.selected = init.settings.selected;
-    $('ram').max = 16;
+    state.testMode = !!init.testMode;
+    $('test-go').hidden = !state.testMode;
+    $('testtag').hidden = !state.testMode;
     renderAccount();
     await loadHub();
     if (!state.account) show('signin', true);
