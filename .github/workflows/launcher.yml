@@ -16,6 +16,10 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: launcher-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -24,7 +28,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        # Windows only for now; add macos-latest / ubuntu-latest back when needed.
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     defaults:
