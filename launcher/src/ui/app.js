@@ -60,52 +60,86 @@
     b.append(face(state.account.name), document.createTextNode(state.account.name));
   }
 
+  const LOCK = '<svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2h1v11H6V10h1zm2 0h6V8a3 3 0 0 0-6 0v2z"/></svg>';
+
+  function openCode(forWhat) {
+    $('code-input').value = '';
+    $('code-err').textContent = '';
+    $('code-for').textContent = forWhat ? `Enter the code for ${forWhat}.` : 'For Early Access, Development or a private server.';
+    show('code', true);
+    setTimeout(() => $('code-input').focus(), 50);
+  }
+
+  /** Servers as bookmark tabs along the top of the page. */
   function renderRail() {
     const rail = $('rail');
     rail.innerHTML = '';
-    state.servers.forEach((s, i) => {
+    for (const s of state.servers) {
       const t = document.createElement('button');
-      t.className = 'spine' + (s.id === state.selected ? ' on' : '');
-      t.style.setProperty('--tc', s.accent || '#c42b1f');
+      t.className = 'tab' + (s.id === state.selected ? ' on' : '');
+      t.style.setProperty('--tc', s.accent || '#c4372a');
       t.title = s.name;
-      const band = document.createElement('span');
-      band.className = 'band';
-      band.textContent = (s.short || initials(s.name)).slice(0, 4);
+      const ic = document.createElement('span');
+      ic.className = 'ic';
+      ic.textContent = (s.short || initials(s.name)).slice(0, 3);
       if (s.icon) {
-        const ic = new Image();
-        ic.onload = () => {
-          band.textContent = '';
-          band.style.background = `var(--tc) url("${s.icon}") center / 70% no-repeat`;
+        const im = new Image();
+        im.onload = () => {
+          ic.textContent = '';
+          ic.style.backgroundImage = `url("${s.icon}")`;
         };
-        ic.src = s.icon;
+        im.src = s.icon;
       }
       const name = document.createElement('span');
-      name.className = 'name';
       name.textContent = s.name;
-      const num = document.createElement('span');
-      num.className = 'num';
-      num.textContent = `${i + 1}`;
-      t.append(band, name, num);
+      t.append(ic, name);
       if (s.status === 'soon') {
-        const soon = document.createElement('i');
+        const soon = document.createElement('span');
         soon.className = 'soon';
-        soon.textContent = 'SOON';
+        soon.textContent = 'soon';
         t.append(soon);
       }
       t.addEventListener('click', () => select(s.id));
       rail.append(t);
-    });
+    }
     const add = document.createElement('button');
-    add.className = 'spine add';
-    add.title = 'Access code';
+    add.className = 'tab add';
+    add.title = 'Enter an access code';
     add.textContent = '+';
-    add.addEventListener('click', () => {
-      $('code-input').value = '';
-      $('code-err').textContent = '';
-      show('code', true);
-      setTimeout(() => $('code-input').focus(), 50);
-    });
+    add.addEventListener('click', () => openCode());
     rail.append(add);
+  }
+
+  /** The build the player picked for a server (Public unless they chose another they can use). */
+  function channelOf(s) {
+    const list = (s && s.channels) || [];
+    const want = (state.settings.channels || {})[s && s.id];
+    const c = list.find((x) => x.id === want && !x.locked);
+    return c || list.find((x) => !x.locked) || list[0] || { id: 'public', name: 'Public' };
+  }
+
+  function renderChannels(s) {
+    const box = $('chans');
+    box.innerHTML = '';
+    const list = (s && s.channels) || [];
+    $('chans').closest('.builds').hidden = !s || s.status === 'soon' || list.length < 2;
+    const cur = channelOf(s);
+    for (const c of list) {
+      const b = document.createElement('button');
+      b.className = 'chan' + (c.id === cur.id ? ' on' : '') + (c.locked ? ' locked' : '');
+      b.innerHTML = c.locked ? LOCK : '';
+      b.append(document.createTextNode(c.name));
+      b.title = c.note || c.name;
+      b.addEventListener('click', async () => {
+        if (state.busy || state.playing) return;
+        if (c.locked) return openCode(`${s.name}: ${c.name}`);
+        state.settings = await K.settings({ channels: { ...(state.settings.channels || {}), [s.id]: c.id } });
+        renderChannels(s);
+        refreshPing(s);
+      });
+      box.append(b);
+    }
+    $('chan-note').textContent = cur.note || '';
   }
 
   function renderNews(s) {
@@ -137,7 +171,11 @@
   function renderHero() {
     const idx = state.servers.findIndex((x) => x.id === state.selected);
     const s = state.servers[idx];
-    for (const c of $('hero').children) {
+    const book = $('hero');
+    book.classList.remove('turn');
+    void book.offsetWidth;
+    book.classList.add('turn');
+    for (const c of document.querySelectorAll('.side > *')) {
       c.style.animation = 'none';
       void c.offsetWidth;
       c.style.animation = '';
@@ -148,6 +186,8 @@
       $('no').textContent = '';
       $('online').textContent = '';
       $('chips').hidden = true;
+      $('tagline').textContent = '';
+      renderChannels(null);
       Scene.set('絆');
       updateDock();
       return;
@@ -162,6 +202,8 @@
     st.style.setProperty('--sc', color);
     st.textContent = kanji;
     $('title').textContent = s.name;
+    $('tagline').textContent = s.tagline || '';
+    renderChannels(s);
     renderOnline(s);
     refreshPing(s);
     updateDock();
@@ -181,8 +223,9 @@
   }
 
   async function refreshPing(s) {
-    if (!s || s.status === 'soon' || !s.address) return;
-    pings[s.id] = await K.ping(s.address);
+    const addr = s && (channelOf(s).address || s.address);
+    if (!s || s.status === 'soon' || !addr) return;
+    pings[s.id] = await K.ping(addr);
     if (current() === s) renderOnline(s);
     renderFriends();
   }
@@ -315,7 +358,7 @@
     state.busy = true;
     updateDock();
     $('ptext').textContent = 'Getting ready';
-    const r = await K.play(s.id, !state.account && state.test);
+    const r = await K.play(s.id, !state.account && state.test, channelOf(s).id);
     state.busy = false;
     if (!r.ok) {
       if (r.code === 'signin') {
@@ -365,10 +408,14 @@
     renderAccount();
     updateDock();
   });
-  $('folder').addEventListener('click', () => state.selected && K.openFolder(state.selected));
+  $('folder').addEventListener('click', () => current() && K.openFolder(current().id, channelOf(current()).id));
   $('account').addEventListener('click', () => (state.account ? openSettings() : show('signin', true)));
   $('open-settings').addEventListener('click', openSettings);
   $('logs').addEventListener('click', () => K.openLogs());
+  $('enter-code').addEventListener('click', () => {
+    show('settings', false);
+    openCode();
+  });
   $('crash-copy').addEventListener('click', () => navigator.clipboard.writeText($('crash-log').textContent));
 
   function openSettings() {
@@ -402,7 +449,9 @@
     }
     show('code', false);
     state.selected = r.id;
+    state.settings = await K.settings({});
     await loadHub();
+    toast(`Unlocked ${r.name}`);
   }
   $('code-go').addEventListener('click', unlock);
   $('code-input').addEventListener('keydown', (e) => e.key === 'Enter' && unlock());

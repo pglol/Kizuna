@@ -23,9 +23,14 @@ async function fabric(root, mc, loader) {
  */
 async function play(dataDir, server, session, settings, on) {
   const root = path.join(dataDir, 'minecraft');
-  const gameDir = path.join(dataDir, 'instances', server.id);
+  const gameDir = path.join(dataDir, 'instances', server.dir || server.id);
   // The pack first: it says which Minecraft and Fabric it wants.
   const p = await pack.sync(server.pack, gameDir, (t, f) => on.status(t, 0.05 + f * 0.25));
+  // Tell the in-game title screen which server this channel's Play button joins.
+  try {
+    fs.mkdirSync(path.join(gameDir, 'config', 'kizuna'), { recursive: true });
+    fs.writeFileSync(path.join(gameDir, 'config', 'kizuna', 'address.txt'), (server.address || '').trim());
+  } catch {}
   const mc = p.minecraft || server.minecraft;
   const loader = p.fabric || server.fabric;
   on.status('Preparing Java', 0.3);

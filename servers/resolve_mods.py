@@ -37,7 +37,7 @@ def modrinth(slug, mc):
 
 problems = 0
 hub = json.load(open(os.path.join(repo, "servers", "hub.json")))
-packs = sorted({"pack"} | {s["pack"] for s in hub["servers"]})
+packs = sorted({"pack"} | {s["pack"] for s in hub["servers"]} | {c["pack"] for s in hub["servers"] for c in s.get("channels", [])})
 for p in packs:
     pack = os.path.join(repo, p)
     lst = os.path.join(pack, "mods.txt")

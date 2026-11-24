@@ -136,6 +136,27 @@ Nobody installs anything by hand:
 Change `name` and `brand` in `launcher/config.json` (and `appId` in `launcher/package.json` only
 if you want it treated as a different app), then publish a new version.
 
+## Build channels: Public, Early Access, Development
+
+Each server can offer several builds. Players pick one under **Build** in the launcher; each gets its
+own game folder and its own server address.
+
+```json
+"channels": [
+  {"id": "public", "name": "Public",       "pack": "pack",            "address": "host:25565"},
+  {"id": "early",  "name": "Early Access", "pack": "packs/aot-early", "address": "host:25566", "code": "PATREON-CODE", "note": "Patreon supporters"},
+  {"id": "dev",    "name": "Development",  "pack": "packs/aot-dev",   "address": "host:25567", "code": "TEAM-CODE",    "note": "Team builds"}
+]
+```
+
+- A channel with a `code` is locked. Players unlock it with **+ → access code** (or Settings → Enter code).
+  Give the Early Access code to Patreon supporters and the Development code to the team; change a
+  code in hub.json and push to cut off old ones (players who already unlocked keep access until you
+  also gate the server with `/aotrpg access mode beta`).
+- Each channel's pack (`packs/aot-early`, `packs/aot-dev`) has its own `mods.txt`. To ship a different
+  build there, point its `file dist/aot-rpg.jar` line at another jar (e.g. `dist/dev/aot-rpg.jar`).
+- Run a separate server for each channel (different port), with that channel's mods.
+
 ## Who gets in: public, beta, private
 
 The pack and the zip only get people to the door. **The server decides who comes in**, so a leaked

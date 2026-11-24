@@ -57,6 +57,12 @@ public final class Brand implements ClientModInitializer {
             logo = str(j, "logo");
             title = str(j, "title");
             active = true;
+            // The launcher writes the address of the build channel that was started (Public, Early Access, Development).
+            Path a = DIR.resolve("address.txt");
+            if (Files.exists(a)) {
+                String v = Files.readString(a, StandardCharsets.UTF_8).trim();
+                if (!v.isEmpty()) address = v;
+            }
         } catch (Exception e) {
             System.err.println("[kizuna] could not read brand.json: " + e);
         }

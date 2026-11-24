@@ -43,6 +43,15 @@ for s in hub["servers"]:
         e[k] = url(e.get(k, ""))
     e["news"] = [dict(n, image=url(n.get("image", ""))) for n in s.get("news", [])]
     e["gallery"] = [url(g) for g in s.get("gallery", []) if g]
+    # Build channels (Public / Early Access / Development): each its own pack and server; codes go out only as hashes.
+    chans = []
+    for c in s.get("channels") or [{"id": "public", "name": "Public", "pack": s["pack"], "address": s.get("address", "")}]:
+        ce = {"id": c["id"], "name": c.get("name", c["id"]), "note": c.get("note", ""), "address": c.get("address", ""),
+              "pack": f"{base}/{c['pack'].strip('/')}/pack.toml"}
+        if c.get("code"):
+            ce["codeHash"] = hashlib.sha256(str(c["code"]).strip().upper().encode()).hexdigest()
+        chans.append(ce)
+    e["channels"] = chans
     if s["status"] == "private":
         code = str(s.get("code", ""))
         if not code:

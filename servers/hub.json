@@ -1,5 +1,5 @@
 {
-  "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. icon: square, 128x128+. logo: transparent PNG wordmark, about 900x350. background: the main picture (cover panel). gallery: optional extra pictures; with any, the cover becomes a slideshow. news: newest first, each {title, date, image, tag, url}. status: public | beta | private (needs code) | soon. address: what Play joins (host:port).",
+  "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. background: the main picture; gallery: extra pictures (slideshow). news: newest first, each {title, date, image, tag, url}. status: public | private (needs code) | soon. channels: the builds players can pick, each {id, name, pack, address, code?, note?}; a channel with a code is locked until the player enters it (Early Access codes for Patreon supporters, Development codes for the team). Only the hash of each code is published.",
   "servers": [
     {
       "id": "aot",
@@ -33,7 +33,32 @@
         }
       ],
       "kanji": "\u5de8",
-      "gallery": []
+      "gallery": [],
+      "channels": [
+        {
+          "id": "public",
+          "name": "Public",
+          "pack": "pack",
+          "address": "CHANGE_ME:25565",
+          "note": ""
+        },
+        {
+          "id": "early",
+          "name": "Early Access",
+          "pack": "packs/aot-early",
+          "address": "CHANGE_ME:25566",
+          "code": "CHANGE-ME-EARLY",
+          "note": "Patreon supporters"
+        },
+        {
+          "id": "dev",
+          "name": "Development",
+          "pack": "packs/aot-dev",
+          "address": "CHANGE_ME:25567",
+          "code": "CHANGE-ME-DEV",
+          "note": "Team builds"
+        }
+      ]
     },
     {
       "id": "stance",
@@ -51,7 +76,16 @@
       "logo": "",
       "background": "",
       "news": [],
-      "kanji": "\u6b66"
+      "kanji": "\u6b66",
+      "channels": [
+        {
+          "id": "public",
+          "name": "Public",
+          "pack": "packs/stance",
+          "address": "",
+          "note": ""
+        }
+      ]
     }
   ]
 }

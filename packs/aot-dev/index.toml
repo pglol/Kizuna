@@ -1,0 +1,9 @@
+hash-format = "sha256"
+
+[[files]]
+file = "config/kizuna/brand.json"
+hash = "4646d3d4b293e717d5c02fdff41801c3e605e78642802151da12fdff13b66896"
+
+[[files]]
+file = "config/kizuna/logo.png"
+hash = "c109e7462994c27881fa9ce4fcf664e22fbdbcb71642696b642cd8da1135ebaa"

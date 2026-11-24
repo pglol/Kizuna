@@ -93,6 +93,13 @@ ipcMain.handle('hub', async () => {
   }
   const unlocked = new Set(store.settings.get().unlocked || []);
   hub.servers = (hub.servers || []).filter((s) => s.status !== 'private' || unlocked.has(s.codeHash));
+  // Build channels: a coded one stays locked until its code has been entered on this computer.
+  for (const s of hub.servers) {
+    s.channels = (s.channels && s.channels.length ? s.channels : [{ id: 'public', name: 'Public', pack: s.pack, address: s.address }]).map((c) => ({
+      ...c,
+      locked: !!c.codeHash && !unlocked.has(c.codeHash),
+    }));
+  }
   return hub;
 });
 
@@ -102,7 +109,8 @@ ipcMain.handle('hub', async () => {
  * is running. Servers paused as "soon" or hidden as "private" are still on the list, so they stay.
  */
 function removeDropped(hub) {
-  const listed = new Set((hub.servers || []).map((s) => s.id));
+  const listed = new Set();
+  for (const s of hub.servers || []) for (const c of s.channels && s.channels.length ? s.channels : [{ id: 'public' }]) listed.add(dirName(s.id, c.id));
   if (!listed.size) return;
   const dir = path.join(store.dir(), 'instances');
   let names = [];
@@ -121,14 +129,30 @@ function removeDropped(hub) {
   if (s.selected && !listed.has(s.selected)) store.settings.set({ selected: null });
 }
 
+/** Where a server's channel keeps its game files: instances/aot, instances/aot-dev, ... */
+function dirName(id, channel) {
+  const safe = (x) => String(x).replace(/[^a-z0-9_-]/gi, '');
+  return !channel || channel === 'public' ? safe(id) : `${safe(id)}-${safe(channel)}`;
+}
+
 ipcMain.handle('unlock', async (_e, code) => {
   const h = crypto.createHash('sha256').update(String(code || '').trim().toUpperCase()).digest('hex');
   const hub = store.read('hub-cache.json', { servers: [] });
-  const hit = (hub.servers || []).find((s) => s.codeHash === h);
-  if (!hit) return { ok: false };
   const s = store.settings.get();
-  store.settings.set({ unlocked: [...new Set([...(s.unlocked || []), h])], selected: hit.id });
-  return { ok: true, id: hit.id, name: hit.name };
+  const save = (patch) => store.settings.set({ unlocked: [...new Set([...(s.unlocked || []), h])], ...patch });
+  const server = (hub.servers || []).find((x) => x.codeHash === h);
+  if (server) {
+    save({ selected: server.id });
+    return { ok: true, id: server.id, name: server.name };
+  }
+  for (const x of hub.servers || []) {
+    const c = (x.channels || []).find((ch) => ch.codeHash === h);
+    if (c) {
+      save({ selected: x.id, channels: { ...(s.channels || {}), [x.id]: c.id } });
+      return { ok: true, id: x.id, channel: c.id, name: `${x.name}: ${c.name}` };
+    }
+  }
+  return { ok: false };
 });
 
 ipcMain.handle('login', async () => {
@@ -148,8 +172,8 @@ ipcMain.handle('logout', () => {
 
 ipcMain.handle('settings', (_e, patch) => store.settings.set(patch || {}));
 
-ipcMain.handle('open-folder', (_e, id) => {
-  const dir = path.join(store.dir(), 'instances', String(id).replace(/[^a-z0-9_-]/gi, ''));
+ipcMain.handle('open-folder', (_e, id, channel) => {
+  const dir = path.join(store.dir(), 'instances', dirName(id, channel));
   fs.mkdirSync(dir, { recursive: true });
   shell.openPath(dir);
 });
@@ -179,12 +203,16 @@ function logLine(...a) {
   } catch {}
 }
 
-ipcMain.handle('play', async (_e, id, test) => {
+ipcMain.handle('play', async (_e, id, test, channelId) => {
   if (playing) return { ok: false, error: 'A game is already running.' };
   const hub = store.read('hub-cache.json', { servers: [] });
-  const server = (hub.servers || []).find((s) => s.id === id);
-  if (!server) return { ok: false, error: 'That server is not available right now.' };
-  if (server.status === 'soon') return { ok: false, error: `${server.name} isn't open yet.` };
+  const found = (hub.servers || []).find((s) => s.id === id);
+  if (!found) return { ok: false, error: 'That server is not available right now.' };
+  if (found.status === 'soon') return { ok: false, error: `${found.name} isn't open yet.` };
+  const chans = found.channels && found.channels.length ? found.channels : [{ id: 'public', pack: found.pack, address: found.address }];
+  const ch = chans.find((c) => c.id === channelId) || chans[0];
+  if (ch.codeHash && !(store.settings.get().unlocked || []).includes(ch.codeHash)) return { ok: false, error: `${ch.name} needs an access code.`, code: 'locked' };
+  const server = { ...found, pack: ch.pack || found.pack, address: ch.address || found.address, dir: dirName(found.id, ch.id), channel: ch.id };
   const acct = store.account.get();
   const testing = !!(test && config.testMode);
   if (!acct && !testing) return { ok: false, error: 'Sign in first.', code: 'signin' };

@@ -59,8 +59,9 @@ if not folders:
     hub = os.path.join(repo, "servers", "hub.json")
     if os.path.exists(hub):
         for s in json.load(open(hub))["servers"]:
-            if s["pack"] not in folders:
-                folders.append(s["pack"])
+            for f in [s["pack"]] + [c["pack"] for c in s.get("channels", [])]:
+                if f not in folders:
+                    folders.append(f)
 for f in folders:
     root = os.path.join(repo, f)
     if os.path.exists(os.path.join(root, "pack.toml")):

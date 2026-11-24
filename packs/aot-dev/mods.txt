@@ -1,0 +1,17 @@
+# What goes in this pack besides the AoT RPG mod itself. CI looks each one up and writes the
+# exact download (with its hash) into mods/ for the pack's Minecraft and Fabric versions.
+#
+#   modrinth <slug> [both|client|server]      a mod on modrinth.com (the slug is in its page URL)
+#   url <filename> <download-url> [side]       any direct download
+#   file <path-in-repo> [side]                 a jar kept in this repo (served from the raw URL)
+#
+modrinth fabric-api both
+modrinth sodium client
+modrinth iris client
+# Danny's AoT (titans, ODM gear): add the line for wherever it's published, e.g.
+#   modrinth <its-slug> both
+# or, if you have permission to host the jar yourself:
+#   file dist/mods/dannys-aot.jar both
+file dist/kizuna-brand.jar client
+# This channel's own AoT RPG build: by default the same jar as Public. Point it at another jar to ship a separate build.
+file dist/aot-rpg.jar both
