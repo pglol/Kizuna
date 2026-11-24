@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'rpg-mod/**'
+      - 'branding-mod/**'
       - '.github/workflows/rpg-mod.yml'
       - 'servers/**'
       - 'pack/**'
@@ -30,6 +31,12 @@ jobs:
           gradle-version: '8.12'
       - name: Build
         run: gradle build --no-daemon --stacktrace
+      - name: Build the branding mod
+        working-directory: branding-mod
+        run: |
+          gradle build --no-daemon --stacktrace
+          mkdir -p ../dist
+          cp $(ls build/libs/kizuna-brand-*.jar | grep -v sources | head -1) ../dist/kizuna-brand.jar
       - name: Check HUD mixin targets
         continue-on-error: true
         run: |
@@ -57,6 +64,10 @@ jobs:
               javap -p -cp "$j" net.minecraft.block.entity.BlockEntity | grep -E " (read|createNbt)\("
               javap -p -cp "$j" net.minecraft.entity.projectile.FishingBobberEntity | grep -E "hookCountdown|waitCountdown| use\(| tick\("
               javap -p -cp "$j" net.minecraft.client.gui.hud.InGameHud | grep -E " setTitle| setSubtitle"
+              javap -p -cp "$j" net.minecraft.client.gui.screen.SplashOverlay | grep -E "withAlpha| init\("
+              javap -p -cp "$j" net.minecraft.client.MinecraftClient | grep -E "getWindowTitle"
+              javap -p -cp "$j" net.minecraft.server.MinecraftServer | grep -E "createMetadataPlayers|hideOnlinePlayers"
+              javap -p -cp "$j" net.minecraft.client.gui.screen.multiplayer.ConnectScreen | grep -E " connect\("
               javap -p -cp "$j" net.minecraft.client.gui.hud.BossBarHud | grep -E " render\(|bossBars"
               javap -p -cp "$j" net.minecraft.client.network.ClientPlayNetworkHandler | grep -E " onItemPickupAnimation"
               javap -p -cp "$j" net.minecraft.entity.passive.AbstractHorseEntity | grep -E " openInventory"
@@ -82,7 +93,7 @@ jobs:
           python3 servers/resolve_mods.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
           python3 pack/update.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
           python3 servers/make_instances.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
-          git add dist/aot-rpg.jar dist/instances dist/launcher.json pack/ $(ls -d packs 2>/dev/null)
+          git add dist/aot-rpg.jar dist/kizuna-brand.jar dist/instances dist/launcher.json pack/ $(ls -d packs 2>/dev/null)
           git diff --cached --quiet && exit 0
           git commit -m "Update dist/aot-rpg.jar [skip ci]"
           # Another build may have pushed first: catch up and try again.
@@ -91,7 +102,7 @@ jobs:
             git pull --rebase -X theirs origin "${{ github.ref_name }}" || true
             python3 pack/update.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
             python3 servers/make_instances.py "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}"
-            git add dist/aot-rpg.jar dist/instances dist/launcher.json pack/ $(ls -d packs 2>/dev/null)
+            git add dist/aot-rpg.jar dist/kizuna-brand.jar dist/instances dist/launcher.json pack/ $(ls -d packs 2>/dev/null)
             git commit --amend --no-edit || true
             sleep $((i * 5))
           done

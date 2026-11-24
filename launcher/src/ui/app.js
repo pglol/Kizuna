@@ -23,10 +23,10 @@
   const head = (name) => `https://mc-heads.net/avatar/${encodeURIComponent(name)}/64`;
 
   const STAMP = {
-    public: ['連載中', '#c42b1f'],
-    beta: ['試読', '#6b3fa0'],
-    private: ['秘密', '#15120f'],
-    soon: ['近日', '#7a7064'],
+    public: ['OPEN', '#2f7d4a'],
+    beta: ['BETA', '#6b3fa0'],
+    private: ['PRIVATE', '#15120f'],
+    soon: ['COMING SOON', '#7a7064'],
   };
 
   function renderAccount() {
@@ -60,12 +60,12 @@
       name.textContent = s.name;
       const num = document.createElement('span');
       num.className = 'num';
-      num.innerHTML = `${i + 1}<small>巻</small>`;
+      num.textContent = `${i + 1}`;
       t.append(band, name, num);
       if (s.status === 'soon') {
         const soon = document.createElement('i');
         soon.className = 'soon';
-        soon.textContent = '近日';
+        soon.textContent = 'SOON';
         t.append(soon);
       }
       t.addEventListener('click', () => select(s.id));

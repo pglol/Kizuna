@@ -11,9 +11,9 @@
   <header class="bar">
     <div class="brand"><span class="kanji">絆</span><b>KIZUNA</b><span class="testtag" id="testtag" hidden>TEST</span></div>
     <div class="drag"></div>
-    <button class="tag" id="friends-btn" title="Friends"><span class="k">友</span><span id="friends-count">0</span></button>
+    <button class="tag" id="friends-btn" title="Friends">Friends <span class="count" id="friends-count">0</span></button>
     <button class="tag" id="account" title="Account"></button>
-    <button class="wbtn" id="open-settings" title="Settings">設定</button>
+    <button class="wbtn" id="open-settings" title="Settings">Settings</button>
     <div class="wctl">
       <button class="wbtn" data-win="min" title="Minimise"><svg viewBox="0 0 12 12"><path d="M2 6.5h8"/></svg></button>
       <button class="wbtn" data-win="max" title="Maximise"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7"/></svg></button>
@@ -42,13 +42,13 @@
   <footer class="dock">
     <div class="ptext" id="ptext"></div>
     <div class="ptrack"><div class="pfill" id="pfill"></div></div>
-    <button class="plain" id="folder">game folder</button>
+    <button class="plain" id="folder">Open game folder</button>
   </footer>
 
-  <button class="hanko" id="play" aria-label="Play"><em>遊</em><span>PLAY</span></button>
+  <button class="hanko" id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg><span>PLAY</span></button>
 
   <aside class="drawer" id="friends" hidden>
-    <div class="drawer-head"><h2><span class="k">友</span> Friends</h2><button class="wbtn" id="friends-close" title="Close"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></button></div>
+    <div class="drawer-head"><h2>Friends</h2><button class="wbtn" id="friends-close" title="Close"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></button></div>
     <form class="add" id="friend-form"><input class="field small" id="friend-input" placeholder="Minecraft name" maxlength="16" autocomplete="off" spellcheck="false"><button class="box red small">Add</button></form>
     <div class="flist" id="flist"></div>
   </aside>
@@ -67,7 +67,7 @@
 
   <section class="overlay" id="settings" hidden>
     <div class="sheet">
-      <h2>設定</h2>
+      <h2>Settings</h2>
       <label class="row">Memory <b id="ram-label"></b></label>
       <input type="range" id="ram" min="2" max="16" step="1">
       <label class="row toggle"><input type="checkbox" id="close-on-play"> Hide launcher while playing</label>

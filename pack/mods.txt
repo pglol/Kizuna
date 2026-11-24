@@ -12,3 +12,4 @@ modrinth iris client
 #   modrinth <its-slug> both
 # or, if you have permission to host the jar yourself:
 #   file dist/mods/dannys-aot.jar both
+file dist/kizuna-brand.jar client

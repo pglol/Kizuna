@@ -1,6 +1,14 @@
 hash-format = "sha256"
 
 [[files]]
+file = "config/kizuna/brand.json"
+hash = "32dc207f95895bd620ab07f4318b74f41b2beaa2934dfdcd29522f942c4f17a7"
+
+[[files]]
+file = "config/kizuna/logo.png"
+hash = "c109e7462994c27881fa9ce4fcf664e22fbdbcb71642696b642cd8da1135ebaa"
+
+[[files]]
 file = "mods/aot-rpg.pw.toml"
 hash = "0845c8c647c2764e87edf37d30ca1dfa28e1e397db8c3b861881f2b127974612"
 metafile = true
