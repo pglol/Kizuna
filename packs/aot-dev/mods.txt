@@ -1,17 +1,44 @@
-# What goes in this pack besides the AoT RPG mod itself. CI looks each one up and writes the
-# exact download (with its hash) into mods/ for the pack's Minecraft and Fabric versions.
+# Development build: the exact files from the team's own instance (the "mod-files" release).
 #
-#   modrinth <slug> [both|client|server]      a mod on modrinth.com (the slug is in its page URL)
-#   url <filename> <download-url> [side]       any direct download
-#   file <path-in-repo> [side]                 a jar kept in this repo (served from the raw URL)
+#   modrinth <slug> [both|client|server]       a mod on modrinth.com, newest build for 1.21.1
+#   url <filename> <download-url> [side]        any direct download
+#   file <path-in-repo> [side]                  a jar kept in this repo (served from the raw URL)
+#   exact <sha1> <folder> <side> <name> [link]  this exact file: taken from Modrinth when Modrinth has it,
+#                                               otherwise from the link. folder: mods, resourcepacks, shaderpacks
 #
-modrinth fabric-api both
-modrinth sodium client
-modrinth iris client
-# Danny's AoT (titans, ODM gear): add the line for wherever it's published, e.g.
-#   modrinth <its-slug> both
-# or, if you have permission to host the jar yourself:
-#   file dist/mods/dannys-aot.jar both
-file dist/kizuna-brand.jar client
-# This channel's own AoT RPG build: by default the same jar as Public. Point it at another jar to ship a separate build.
+# Get a file's sha1 with:  certutil -hashfile <file> SHA1   (Windows)  or  sha1sum <file>
+#
+# Libraries
+exact 810b2b0195371a012906241d8b85a32a1d6de53c mods both fabric-api https://github.com/pglol/minecraft/releases/download/mod-files/fabric-api-0.116.17%2B1.21.1.jar
+exact b3a6aff6ffff34d20ffde1faa640bcf17ff4b646 mods both geckolib https://github.com/pglol/minecraft/releases/download/mod-files/geckolib-fabric-1.21.1-4.9.3.jar
+exact f33384448a9d3271b77ba61d658dc90f40949578 mods both player-animation-lib https://github.com/pglol/minecraft/releases/download/mod-files/PlayerAnimationLibFabric-1.1.6%2Bmc.1.21.1.jar
+exact 5d82342a2df53fd6df712bfdd583a811572918a4 mods both cloth-config https://github.com/pglol/minecraft/releases/download/mod-files/cloth-config-15.0.140-fabric.jar
+exact 6213120772192040a0aeb5c7cfe330c068605b1f mods client modmenu https://github.com/pglol/minecraft/releases/download/mod-files/modmenu-11.0.3.jar
+# Gameplay
+exact d60b3b29d3101378f68218100b7efe4880b52d87 mods both dannys-aot https://github.com/pglol/minecraft/releases/download/mod-files/dannys-aot-2.4.3.jar
 file dist/aot-rpg.jar both
+file dist/kizuna-brand.jar client
+# Performance
+exact 7a94dda82ffd1fe24cd1cacad70eb89dbe564ea6 mods client sodium https://github.com/pglol/minecraft/releases/download/mod-files/sodium-fabric-0.6.0-beta.2%2Bmc1.21.1.jar
+exact d5ad3bbc8a75fc2e8f3d957a85aa05f3e8b95fd0 mods client sodium-extra https://github.com/pglol/minecraft/releases/download/mod-files/sodium-extra-fabric-0.6.0-beta.3%2Bmc1.21.1.jar
+exact 7a2b9b23d3d05939f70244401e9c0a796942d13c mods client reeses-sodium-options https://github.com/pglol/minecraft/releases/download/mod-files/reeses-sodium-options-fabric-1.8.0-beta.4%2Bmc1.21.1.jar
+exact 46c17639a7c0bfec1f9fb4aae53f9163994a3a4e mods client immediatelyfast https://github.com/pglol/minecraft/releases/download/mod-files/ImmediatelyFast-Fabric-1.2.21%2B1.21.1.jar
+exact 821e7fce47749c662a37b58a2fc598fb9d709cd5 mods both c2me https://github.com/pglol/minecraft/releases/download/mod-files/c2me-fabric-mc1.21.1-0.3.0%2Balpha.0.291.jar
+exact cb76b60adedbcf1515c62b3614068fdc28a0e325 mods both vmp https://github.com/pglol/minecraft/releases/download/mod-files/vmp-fabric-mc1.21.1-0.2.0%2Bbeta.7.168-all.jar
+exact d18b0829416ec6948102524b6e913e5bc73ae402 mods client distanthorizons https://github.com/pglol/minecraft/releases/download/mod-files/DistantHorizons-3.3.2-1.21.1-fabric-neoforge.jar
+# Visuals
+exact 6481f2b12ec0d4040424b5f78d4b56faaf862ad5 mods client iris https://github.com/pglol/minecraft/releases/download/mod-files/iris-fabric-1.8.0-beta.4%2Bmc1.21.1.jar
+exact 5ab53a8fdc23e2da2bd6bcccab56358c711c4bc2 mods client entity-texture-features https://github.com/pglol/minecraft/releases/download/mod-files/entity_texture_features-7.2.4-1.21-fabric.jar
+exact 5071631eaba8866e0eb323e5145375e7aaa3a157 mods client entity-model-features https://github.com/pglol/minecraft/releases/download/mod-files/entity_model_features-3.3.9-1.21-fabric.jar
+exact 30ed540777c6fdd313a521820238eeb7c7da5676 mods client skinlayers3d https://github.com/pglol/minecraft/releases/download/mod-files/skinlayers3d-fabric-1.11.3-mc1.21.1.jar
+exact 62fce6c3a4aa278d19fb774a1e21c7439d5e88a0 mods client 3d-hands https://github.com/pglol/minecraft/releases/download/mod-files/3d-hands-1.0.1-mod.jar
+exact f69ffda0e58d9d5a182bd9b2296ee674e31aef5e mods client concentration https://github.com/pglol/minecraft/releases/download/mod-files/concentration-fabric-1.21-2.3.0.jar
+# Resource packs and shaders: these don't allow re-uploads, so they're only linked from Modrinth.
+exact 73db740a6868e043c5e615c036fca2c912615b6e resourcepacks client fresh-animations
+exact d39eefcb1d3a24debc979bbf7aa3e42b92cc5a80 resourcepacks client fresh-animations-extensions
+exact 7049cc12935ff4be20173c908ad946f530861a4c resourcepacks client fresh-moves
+exact b560f646a124d5204b1fb7321fec373b9c346fa5 shaderpacks client complementary-reimagined
+exact d975d25c9686de5f10e8b86c8518613cdf3f040a shaderpacks client photon
+exact bb3e9a75c77171ca97698b02d7b497468a7b512e shaderpacks client fantasy-shaders-reimagined
+exact dcf1d699eee388c08dedc5eaef039d58a8e0849d shaderpacks client fastpbr
+exact 3ed816e8bca19e6216ec1fcbcf7aa145628a9874 shaderpacks client voyager

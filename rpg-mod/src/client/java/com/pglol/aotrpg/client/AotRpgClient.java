@@ -461,6 +461,7 @@ public final class AotRpgClient implements ClientModInitializer {
         });
         ClientPlayNetworking.registerGlobalReceiver(Net.CharacterList.ID, (payload, ctx) -> {
             ClientState.characters = payload;
+            if (LauncherProfile.onList(payload)) return;
             if (ctx.client().currentScreen instanceof CharacterSelectScreen s) s.refresh();
             else if (payload.open()) ctx.client().setScreen(new CharacterSelectScreen());
         });

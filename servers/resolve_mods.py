@@ -35,6 +35,15 @@ def modrinth(slug, mc):
     proj = json.loads(get(f"https://api.modrinth.com/v2/project/{slug}"))
     return proj["title"], f["filename"], f["url"], f["hashes"]["sha512"], v["project_id"], v["id"]
 
+def exact(sha1):
+    """The Modrinth file with this SHA-1, if Modrinth has it (so we link to the original, not a copy)."""
+    try:
+        v = json.loads(get(f"https://api.modrinth.com/v2/version_file/{sha1}?algorithm=sha1"))
+    except Exception:
+        return None
+    f = next(x for x in v["files"] if x["hashes"]["sha1"] == sha1)
+    return f["filename"], f["url"], f["hashes"]["sha512"], v["project_id"], v["id"]
+
 problems = 0
 hub = json.load(open(os.path.join(repo, "servers", "hub.json")))
 packs = sorted({"pack"} | {s["pack"] for s in hub["servers"]} | {c["pack"] for s in hub["servers"] for c in s.get("channels", [])})
@@ -81,15 +90,46 @@ for p in packs:
                 wanted.add(out)
                 h = hashlib.sha256(open(src, "rb").read()).hexdigest()
                 open(out, "w").write(entry(fn, fn, side, f"{base}/{rel}", "sha256", h))
+            elif kind == "exact":
+                # exact <sha1> <mods|resourcepacks|shaderpacks> <side> <name> [fallback-url]
+                h1, folder, side, name = parts[1], parts[2], parts[3], parts[4]
+                fallback = parts[5] if len(parts) > 5 else ""
+                if folder not in ("mods", "resourcepacks", "shaderpacks"):
+                    raise RuntimeError(f"unknown folder {folder}")
+                d = os.path.join(pack, folder)
+                os.makedirs(d, exist_ok=True)
+                out = os.path.join(d, re.sub(r"[^A-Za-z0-9._+-]", "-", name) + ".pw.toml")
+                wanted.add(out)
+                tag = f"# sha1 {h1}\n"
+                if os.path.exists(out) and not upgrade and tag in open(out).read() and f'side = "{side}"' in open(out).read():
+                    continue
+                hit = exact(h1)
+                if hit:
+                    fn, url, h, pid, vid = hit
+                    body = entry(name, fn, side, url, "sha512", h,
+                        f'\n[update]\n[update.modrinth]\nmod-id = "{pid}"\nversion = "{vid}"\n')
+                    print(f"{p}: {name} -> modrinth {fn}")
+                elif fallback:
+                    data = get(fallback)
+                    if hashlib.sha1(data).hexdigest() != h1:
+                        raise RuntimeError(f"{fallback} does not match its sha1")
+                    fn = urllib.parse.unquote(fallback.rsplit("/", 1)[1])
+                    body = entry(name, fn, side, fallback, "sha256", hashlib.sha256(data).hexdigest())
+                    print(f"{p}: {name} -> {fallback} (not on Modrinth)")
+                else:
+                    raise RuntimeError(f"{name}: not on Modrinth and no fallback link")
+                open(out, "w").write(body.replace(MARK + "\n", MARK + "\n" + tag, 1))
             else:
                 raise RuntimeError(f"unknown line: {line}")
         except Exception as e:
             problems += 1
             print(f"WARNING {p}: {line}: {e}")
     # Drop entries this script wrote that are no longer listed.
-    for f in os.listdir(mods):
-        fp = os.path.join(mods, f)
-        if f.endswith(".pw.toml") and fp not in wanted and open(fp).read().startswith(MARK):
-            os.remove(fp)
-            print(f"{p}: removed {f}")
+    for folder in ("mods", "resourcepacks", "shaderpacks"):
+        d = os.path.join(pack, folder)
+        for f in (os.listdir(d) if os.path.isdir(d) else []):
+            fp = os.path.join(d, f)
+            if f.endswith(".pw.toml") and fp not in wanted and open(fp).read().startswith(MARK):
+                os.remove(fp)
+                print(f"{p}: removed {folder}/{f}")
 print("mods resolved" + (f" with {problems} warning(s)" if problems else ""))
