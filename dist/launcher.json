@@ -14,7 +14,7 @@
       "kanji": "\u5de8",
       "icon": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/servers/art/aot-icon.png",
       "logo": "",
-      "background": "",
+      "background": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/servers/art/aot-cover.webp",
       "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml",
       "news": [
         {
@@ -31,7 +31,8 @@
           "image": "",
           "url": ""
         }
-      ]
+      ],
+      "gallery": []
     },
     {
       "id": "stance",
@@ -49,7 +50,8 @@
       "logo": "",
       "background": "",
       "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml",
-      "news": []
+      "news": [],
+      "gallery": []
     }
   ]
 }
