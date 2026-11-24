@@ -1,0 +1,12 @@
+{
+  "1.1.1": [
+    "New icon: the Kizuna seal",
+    "This version is the first one delivered by the launcher's own update prompt"
+  ],
+  "1.1.0": [
+    "Build channels: Public, Early Access and Development",
+    "Hamachi / Public switch for Development",
+    "Each game's own scene along the bottom",
+    "The launcher now updates itself"
+  ]
+}

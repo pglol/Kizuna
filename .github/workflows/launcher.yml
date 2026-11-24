@@ -76,7 +76,8 @@ jobs:
           v=$(node -p "require('./launcher/package.json').version")
           id=$(gh api repos/${{ github.repository }}/releases --jq ".[] | select(.tag_name==\"v$v\" and .draft) | .id" | head -1)
           if [ -n "$id" ]; then
-            gh api -X PATCH repos/${{ github.repository }}/releases/$id -f draft=false -f name="Kizuna Launcher $v" >/dev/null
+            notes=$(node -e "const c=require('./launcher/CHANGELOG.json')['$v']||[];console.log(c.map(x=>'- '+x).join('\n'))")
+            gh api -X PATCH repos/${{ github.repository }}/releases/$id -f draft=false -f name="Kizuna Launcher $v" -f body="$notes" >/dev/null
             echo "published v$v"
           else
             echo "v$v already published (or nothing new)"

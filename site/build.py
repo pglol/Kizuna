@@ -13,7 +13,7 @@ e = html.escape
 
 shutil.rmtree(out, ignore_errors=True)
 os.makedirs(os.path.join(out, "servers"))
-for f in ("style.css", "fonts.css", "favicon.png"):
+for f in ("style.css", "fonts.css", "favicon.png", "icon.png"):
     shutil.copy(os.path.join(repo, "site", f), out)
 shutil.copytree(os.path.join(repo, "site", "fonts"), os.path.join(out, "fonts"))
 os.makedirs(os.path.join(out, "art"))
@@ -36,8 +36,8 @@ def page(title, body, depth=0, desc=""):
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(title)}</title><meta name="description" content="{e(desc)}">
-<link rel="icon" href="{up}favicon.png"><link rel="stylesheet" href="{up}fonts.css"><link rel="stylesheet" href="{up}style.css"></head>
-<body><header><a class="k" href="{up}index.html">絆</a><b>KIZUNA</b><nav>{nav}<a class="tag" href="{RELEASES}">Download</a></nav></header>
+<link rel="icon" type="image/png" href="{up}favicon.png"><link rel="apple-touch-icon" href="{up}icon.png"><meta property="og:image" content="{up}icon.png"><link rel="stylesheet" href="{up}fonts.css"><link rel="stylesheet" href="{up}style.css"></head>
+<body><header><a class="brand" href="{up}index.html"><img src="{up}icon.png" alt=""><b>KIZUNA</b></a><nav>{nav}<a class="tag red" data-dl href="{RELEASES}">Download</a></nav></header>
 {body}
 <footer><a href="{up}index.html">Kizuna</a><a href="{up}privacy.html">Privacy</a><a href="{REPO_URL}">GitHub</a><br>
 Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</footer>
@@ -46,6 +46,21 @@ Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Syne
 fetch('https://api.github.com/repos/pglol/minecraft/releases/latest').then(r => r.ok ? r.json() : null).then(r => {{
   const a = r && (r.assets || []).find(x => /\\.exe$/i.test(x.name));
   if (a) document.querySelectorAll('[data-dl]').forEach(el => el.href = a.browser_download_url);
+  if (r && r.tag_name) document.querySelectorAll('[data-ver]').forEach(el => el.textContent = r.tag_name);
+}}).catch(() => {{}});
+// Launcher release notes, newest first.
+const box = document.getElementById('releases');
+if (box) fetch('https://api.github.com/repos/pglol/minecraft/releases?per_page=4').then(r => r.ok ? r.json() : []).then(list => {{
+  for (const r of list.filter(x => !x.draft)) {{
+    const d = document.createElement('div');
+    d.className = 'post';
+    const when = new Date(r.published_at).toLocaleDateString(undefined, {{ month: 'short', day: 'numeric', year: 'numeric' }});
+    d.innerHTML = '<small style="color:#1c1712">LAUNCHER · ' + when + '</small>';
+    const b = document.createElement('b'); b.textContent = r.name || r.tag_name; d.append(b);
+    const notes = (r.body || '').split('\n').map(x => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
+    if (notes.length) {{ const ul = document.createElement('ul'); for (const n of notes) {{ const li = document.createElement('li'); li.textContent = n; ul.append(li); }} d.append(ul); }}
+    box.append(d);
+  }}
 }}).catch(() => {{}});
 </script></body></html>"""
 
@@ -56,19 +71,24 @@ def cover(s, up, cls=""):
     label, color = STAMP.get(s.get("status", "public"), STAMP["public"])
     return f'<div class="panel cover {cls}"{style}>{inner}<span class="stamp" style="--sc:{color}">{label}</span></div>'
 
-# The launcher's page.
-cards = "".join(f'''<a class="card" href="servers/{e(s["id"])}.html"><div class="panel">{cover(s, "")}
-<div class="cap"><b>{e(s["name"])}</b>{e(s.get("tagline", ""))}</div></div></a>''' for s in servers)
-index = f"""<main class="page">
-<section class="hero"><div class="panel cover" style="background:#fffdf8"><div class="kanji">絆</div><span class="vol">KIZUNA</span></div>
-<div class="text"><span class="no">LAUNCHER</span><h1>One launcher for all our servers.</h1>
-<p class="lead">Sign in with your Microsoft account, pick a server, press Play. Kizuna installs Minecraft, the right Java, mods and updates for you, then drops you straight into the server.</p>
-<a class="cta" data-dl href="{RELEASES}">DOWNLOAD</a><span class="small">Windows · also on Mac and Linux from the releases page</span></div></section>
-<h2>Servers</h2><div class="grid">{cards}</div>
-<h2>How it works</h2><ol class="steps"><li>Download and install Kizuna.</li><li>Sign in with the Microsoft account you play Minecraft on.</li>
-<li>Choose a server and a build (Public, or Early Access and Development with a code).</li><li>Press Play. Updates download by themselves every time.</li></ol>
-</main>"""
-open(os.path.join(out, "index.html"), "w").write(page("Kizuna Launcher", index, 0, "One launcher for all our modded Minecraft servers."))
+# The launcher's page: the servers first, then everything new.
+feat = servers[0] if servers else None
+feat_bg = art(feat.get("background", "")) if feat else ""
+hero_style = f' style="background-image:url(\'{feat_bg}\')"' if feat_bg else ""
+cards = "".join(f'''<a class="card" href="servers/{e(s["id"])}.html" style="--accent:{e(s.get("accent", "#c4372a"))}"><div class="panel">{cover(s, "")}
+<div class="cap"><span class="no">VOL.{i + 1}</span><b>{e(s["name"])}</b>{e(s.get("tagline", ""))}</div></div></a>''' for i, s in enumerate(servers))
+posts = []
+for s in servers:
+    for n in s.get("news", []):
+        posts.append(f'<div class="post" style="--accent:{e(s.get("accent", "#c4372a"))}"><small>{e(s.get("short") or s["name"])} · {e(" · ".join(x for x in (n.get("tag", ""), n.get("date", "")) if x))}</small><b>{e(n.get("title", ""))}</b></div>')
+index = f"""<section class="splash"{hero_style}><div class="splash-ink">
+<div class="seal"><img src="icon.png" alt=""></div>
+<h1>Our anime servers.<br>One launcher.</h1>
+<a class="cta" data-dl href="{RELEASES}">DOWNLOAD</a><span class="small light">Kizuna <span data-ver>launcher</span> · Windows, Mac, Linux</span>
+</div></section>
+<h2 id="servers">Servers</h2><div class="grid big">{cards}</div>
+<h2 id="news">What's new</h2><div class="feed"><div class="col">{"".join(posts) or '<div class="post"><b>Nothing yet.</b></div>'}</div><div class="col" id="releases"></div></div>"""
+open(os.path.join(out, "index.html"), "w").write(page("Kizuna", index, 0, "Our anime Minecraft servers, one launcher."))
 
 # One page per server.
 for i, s in enumerate(servers):
@@ -83,7 +103,6 @@ for i, s in enumerate(servers):
 <p class="lead">{e(s.get("tagline", ""))}</p><p>{e(s.get("description", ""))}</p>{play}</div></section>
 {f'<h2>Builds</h2><div class="builds">{builds}</div>' if builds else ''}
 {f'<h2>News</h2><div class="news">{news}</div>' if news else ''}
-<h2>How to join</h2><ol class="steps"><li>Get the Kizuna launcher.</li><li>Sign in with Microsoft.</li><li>Pick <b>{e(s["name"])}</b> and press Play.</li></ol>
 </main>"""
     open(os.path.join(out, "servers", f"{s['id']}.html"), "w").write(page(f"{s['name']} · Kizuna", body, 1, s.get("tagline", "")))
 

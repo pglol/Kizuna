@@ -47,3 +47,27 @@ ul.points li:last-child { border: 0; }
 footer { margin-top: 40px; text-align: center; font-size: 13px; color: var(--soft); }
 footer a { margin: 0 8px; }
 @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .cover { min-height: 240px; } header nav { display: none; } }
+
+/* Revision: brand mark, a full-bleed splash, bigger server cards, a news feed. */
+header .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+header .brand img { width: 40px; height: 40px; }
+.tag.red { background: var(--accent); color: #fff; }
+.splash { position: relative; min-height: 420px; border: 2.5px solid var(--ink); border-radius: 14px; box-shadow: 6px 6px 0 rgba(28, 23, 18, 0.85); background: #1c1712 center 30% / cover no-repeat; overflow: hidden; display: flex; align-items: flex-end; }
+.splash::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20, 16, 12, 0.92) 0%, rgba(20, 16, 12, 0.55) 45%, rgba(20, 16, 12, 0.05) 80%); }
+.splash-ink { position: relative; padding: 34px; display: flex; flex-direction: column; gap: 16px; color: #fbf7ee; max-width: 560px; }
+.splash h1 { color: #fbf7ee; font-size: clamp(34px, 5.4vw, 60px); }
+.seal img { width: 64px; height: 64px; animation: wobble 4s ease-in-out infinite; }
+@keyframes wobble { 50% { transform: rotate(4deg) translateY(-3px); } }
+.small.light { color: #d8cdb8; }
+.grid.big { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+.grid.big .cover { min-height: 260px; }
+.card .cap .no { display: block; font-size: 11px; }
+.card .panel { transition: transform 0.15s, box-shadow 0.15s; }
+.feed { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; align-items: start; }
+.feed .col { display: grid; gap: 10px; }
+.post { padding: 12px 14px; border: 2px solid var(--ink); border-radius: 8px; background: #fffdf8; box-shadow: 3px 3px 0 var(--ink); }
+.post small { display: block; font-family: var(--head); font-size: 11px; color: var(--accent); margin-bottom: 2px; }
+.post b { display: block; }
+.post ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink2); font-size: 14px; }
+body > main.page { margin-top: 0; }
+@media (max-width: 760px) { .feed { grid-template-columns: 1fr; } .grid.big { grid-template-columns: 1fr; } .splash { min-height: 360px; } }
