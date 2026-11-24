@@ -140,6 +140,34 @@
       box.append(b);
     }
     $('chan-note').textContent = cur.note || '';
+    renderHosts(s, cur);
+  }
+
+  /** A build with more than one address (e.g. Hamachi and Public) gets a switch. */
+  function hostOf(s, c) {
+    const list = (c && c.addresses) || [];
+    const want = (state.settings.hosts || {})[`${s.id}:${c.id}`];
+    return list.find((a) => a.label === want) || list[0] || null;
+  }
+  function renderHosts(s, c) {
+    const box = $('hosts');
+    box.innerHTML = '';
+    const list = (c && c.addresses) || [];
+    if (!s || list.length < 2) return;
+    const cur = hostOf(s, c);
+    for (const a of list) {
+      const b = document.createElement('button');
+      b.className = 'host' + (cur && a.label === cur.label ? ' on' : '');
+      b.textContent = a.label;
+      b.title = a.address;
+      b.addEventListener('click', async () => {
+        if (state.busy || state.playing) return;
+        state.settings = await K.settings({ hosts: { ...(state.settings.hosts || {}), [`${s.id}:${c.id}`]: a.label } });
+        renderHosts(s, c);
+        refreshPing(s);
+      });
+      box.append(b);
+    }
   }
 
   function renderNews(s) {
@@ -194,6 +222,7 @@
     }
     document.documentElement.style.setProperty('--accent', s.accent || '#c42b1f');
     Scene.set(s.kanji || '絆', s.accent, [s.background, ...(s.gallery || [])]);
+    Ground.set(s.theme, s.accent);
     $('vol').textContent = `VOL.${idx + 1}`;
     $('no').textContent = `#${String(idx + 1).padStart(2, '0')}`;
     const [kanji, color] = STAMP[s.status] || STAMP.public;
@@ -223,7 +252,8 @@
   }
 
   async function refreshPing(s) {
-    const addr = s && (channelOf(s).address || s.address);
+    const ch = s && channelOf(s), h = s && hostOf(s, ch);
+    const addr = s && ((h && h.address) || ch.address || s.address);
     if (!s || s.status === 'soon' || !addr) return;
     pings[s.id] = await K.ping(addr);
     if (current() === s) renderOnline(s);
@@ -233,6 +263,8 @@
     await Promise.all(state.servers.map(refreshPing));
   }
   setInterval(pingAll, 30000);
+  // News, art and builds change on GitHub without a launcher update: re-read the list now and then.
+  setInterval(() => !state.busy && !state.playing && loadHub(), 10 * 60 * 1000);
 
   // ---- friends: added by Minecraft name; online when they're on one of our servers.
   function whereIs(name) {
@@ -304,6 +336,7 @@
     const play = $('play'), label = play.querySelector('span');
     $('folder').hidden = !s || s.status === 'soon';
     play.classList.toggle('busy', !!state.busy);
+    document.querySelector('.xp').classList.toggle('idle', !(state.busy || state.playing));
     if (!state.busy && !state.playing) {
       $('ptext').textContent = '';
       $('pfill').style.width = '0';
@@ -358,7 +391,8 @@
     state.busy = true;
     updateDock();
     $('ptext').textContent = 'Getting ready';
-    const r = await K.play(s.id, !state.account && state.test, channelOf(s).id);
+    const ch = channelOf(s), h = hostOf(s, ch);
+    const r = await K.play(s.id, !state.account && state.test, ch.id, h ? h.label : '');
     state.busy = false;
     if (!r.ok) {
       if (r.code === 'signin') {
@@ -388,17 +422,38 @@
       show('crash', true);
     }
   });
+  // Launcher updates: ask, then show the download, then restart into the new version.
+  let updDismissed = '';
   K.on('update', (d) => {
-    const u = $('update');
-    u.hidden = false;
-    u.textContent = d.state === 'ready' ? `Update ${d.version}` : `Updating to ${d.version}…`;
-    if (d.state === 'ready') {
-      const b = document.createElement('button');
-      b.textContent = 'Restart';
-      b.onclick = () => K.installUpdate();
-      u.append(b);
+    if (d.state === 'available') {
+      if (updDismissed === d.version) return;
+      $('upd-text').textContent = `Version ${d.version} of the launcher is out.`;
+      $('upd-bar').hidden = true;
+      $('upd-go').textContent = 'Update now';
+      $('upd-go').disabled = false;
+      $('upd-go').onclick = () => {
+        $('upd-go').disabled = true;
+        $('upd-go').textContent = 'Downloading…';
+        $('upd-bar').hidden = false;
+        K.downloadUpdate();
+      };
+      $('upd-later').onclick = () => {
+        updDismissed = d.version;
+        show('update', false);
+      };
+      show('update', true);
+    } else if (d.state === 'downloading') {
+      $('upd-fill').style.width = (d.percent || 0) + '%';
+    } else if (d.state === 'ready') {
+      $('upd-text').textContent = state.playing ? 'Update downloaded. It installs when you close the game.' : 'Update downloaded.';
+      $('upd-bar').hidden = true;
+      $('upd-go').disabled = !!state.playing;
+      $('upd-go').textContent = 'Restart';
+      $('upd-go').onclick = () => K.installUpdate();
+      show('update', true);
     }
   });
+
 
   $('play').addEventListener('click', play);
   $('login').addEventListener('click', login);

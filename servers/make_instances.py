@@ -34,7 +34,7 @@ launcher = []
 for s in hub["servers"]:
     pack_url = f"{base}/{s['pack'].strip('/')}/pack.toml"
     # What the Kizuna launcher shows and uses.
-    e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "status", "address", "minecraft", "fabric", "accent", "kanji", "icon", "logo", "background")}
+    e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "status", "address", "minecraft", "fabric", "accent", "kanji", "theme", "icon", "logo", "background")}
     e["pack"] = pack_url
     # Pictures kept in the repo (e.g. servers/art/aot-bg.png) are served from the same place as the packs.
     def url(v):
@@ -47,7 +47,8 @@ for s in hub["servers"]:
     chans = []
     for c in s.get("channels") or [{"id": "public", "name": "Public", "pack": s["pack"], "address": s.get("address", "")}]:
         ce = {"id": c["id"], "name": c.get("name", c["id"]), "note": c.get("note", ""), "address": c.get("address", ""),
-              "pack": f"{base}/{c['pack'].strip('/')}/pack.toml"}
+              "pack": f"{base}/{c['pack'].strip('/')}/pack.toml",
+              "addresses": c.get("addresses", [])}
         if c.get("code"):
             ce["codeHash"] = hashlib.sha256(str(c["code"]).strip().upper().encode()).hexdigest()
         chans.append(ce)

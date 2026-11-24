@@ -53,13 +53,24 @@ function create() {
 app.whenReady().then(() => {
   create();
   if (app.isPackaged) {
+    // Launcher updates: check now and every 30 minutes; ask the player, then download and restart.
     try {
       const { autoUpdater } = require('electron-updater');
-      autoUpdater.on('update-available', (i) => send('update', { state: 'downloading', version: i.version }));
+      autoUpdater.autoDownload = false;
+      autoUpdater.autoInstallOnAppQuit = true;
+      autoUpdater.on('update-available', (i) => send('update', { state: 'available', version: i.version }));
+      autoUpdater.on('download-progress', (p) => send('update', { state: 'downloading', percent: Math.round(p.percent || 0) }));
       autoUpdater.on('update-downloaded', (i) => send('update', { state: 'ready', version: i.version }));
-      autoUpdater.on('error', () => {});
-      autoUpdater.checkForUpdates().catch(() => {});
-      ipcMain.handle('update-install', () => autoUpdater.quitAndInstall());
+      autoUpdater.on('error', (e) => logLine('update error:', e && e.message));
+      const check = () => autoUpdater.checkForUpdates().catch(() => {});
+      check();
+      setInterval(check, 30 * 60 * 1000);
+      ipcMain.handle('update-download', () => autoUpdater.downloadUpdate().catch((e) => logLine('update download failed:', e && e.message)));
+      ipcMain.handle('update-install', () => {
+        if (playing) return false;
+        autoUpdater.quitAndInstall(false, true);
+        return true;
+      });
     } catch {}
   }
 });
@@ -203,7 +214,7 @@ function logLine(...a) {
   } catch {}
 }
 
-ipcMain.handle('play', async (_e, id, test, channelId) => {
+ipcMain.handle('play', async (_e, id, test, channelId, hostLabel) => {
   if (playing) return { ok: false, error: 'A game is already running.' };
   const hub = store.read('hub-cache.json', { servers: [] });
   const found = (hub.servers || []).find((s) => s.id === id);
@@ -212,7 +223,8 @@ ipcMain.handle('play', async (_e, id, test, channelId) => {
   const chans = found.channels && found.channels.length ? found.channels : [{ id: 'public', pack: found.pack, address: found.address }];
   const ch = chans.find((c) => c.id === channelId) || chans[0];
   if (ch.codeHash && !(store.settings.get().unlocked || []).includes(ch.codeHash)) return { ok: false, error: `${ch.name} needs an access code.`, code: 'locked' };
-  const server = { ...found, pack: ch.pack || found.pack, address: ch.address || found.address, dir: dirName(found.id, ch.id), channel: ch.id };
+  const host = (ch.addresses || []).find((a) => a.label === hostLabel);
+  const server = { ...found, pack: ch.pack || found.pack, address: (host && host.address) || ch.address || found.address, dir: dirName(found.id, ch.id), channel: ch.id };
   const acct = store.account.get();
   const testing = !!(test && config.testMode);
   if (!acct && !testing) return { ok: false, error: 'Sign in first.', code: 'signin' };

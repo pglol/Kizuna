@@ -1,5 +1,5 @@
 {
-  "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. background: the main picture; gallery: extra pictures (slideshow). news: newest first, each {title, date, image, tag, url}. status: public | private (needs code) | soon. channels: the builds players can pick, each {id, name, pack, address, code?, note?}; a channel with a code is locked until the player enters it (Early Access codes for Patreon supporters, Development codes for the team). Only the hash of each code is published.",
+  "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. background: the main picture; gallery: extra pictures (slideshow). news: newest first, each {title, date, image, tag, url}. status: public | private (needs code) | soon. channels: the builds players can pick, each {id, name, pack, address, code?, note?}; a channel with a code is locked until the player enters it (Early Access codes for Patreon supporters, Development codes for the team). Only the hash of each code is published. A channel can list several addresses (e.g. Hamachi and a public host); players switch between them. theme: the scene along the bottom of the launcher (wall, peaks).",
   "servers": [
     {
       "id": "aot",
@@ -8,7 +8,7 @@
       "description": "Paradis and Marley, wall to coast. Swing through cities and giant forests, hunt titans with your squad, run the story, prestige past level 100, and when you're invited, take on extraction.",
       "status": "public",
       "pack": "pack",
-      "address": "CHANGE_ME:25565",
+      "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "accent": "#a8432a",
@@ -39,14 +39,14 @@
           "id": "public",
           "name": "Public",
           "pack": "pack",
-          "address": "CHANGE_ME:25565",
+          "address": "25.52.234.232:25565",
           "note": ""
         },
         {
           "id": "early",
           "name": "Early Access",
           "pack": "packs/aot-early",
-          "address": "CHANGE_ME:25566",
+          "address": "CHANGE_ME_EARLY:25565",
           "code": "CHANGE-ME-EARLY",
           "note": "Patreon supporters"
         },
@@ -54,11 +54,22 @@
           "id": "dev",
           "name": "Development",
           "pack": "packs/aot-dev",
-          "address": "CHANGE_ME:25567",
+          "address": "25.52.234.232:25565",
           "code": "CHANGE-ME-DEV",
-          "note": "Team builds"
+          "note": "Team builds",
+          "addresses": [
+            {
+              "label": "Hamachi",
+              "address": "25.52.234.232:25565"
+            },
+            {
+              "label": "Public",
+              "address": "CHANGE_ME_DEV:25565"
+            }
+          ]
         }
-      ]
+      ],
+      "theme": "wall"
     },
     {
       "id": "stance",
@@ -67,7 +78,7 @@
       "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
       "status": "soon",
       "pack": "packs/stance",
-      "address": "",
+      "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "accent": "#2f5d8a",
@@ -82,10 +93,11 @@
           "id": "public",
           "name": "Public",
           "pack": "packs/stance",
-          "address": "",
+          "address": "25.52.234.232:25565",
           "note": ""
         }
-      ]
+      ],
+      "theme": "peaks"
     }
   ]
 }
