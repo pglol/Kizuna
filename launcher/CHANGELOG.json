@@ -1,4 +1,8 @@
 {
+  "1.2.2": [
+    "Updates arrive again: fixes the update check getting stuck on older versions",
+    "Server tab icons no longer flash letters when switching servers"
+  ],
   "1.2.1": [
     "Server tab icons no longer flash letters when switching servers"
   ],

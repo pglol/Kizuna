@@ -26,6 +26,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: launcher
@@ -66,6 +67,9 @@ jobs:
 
   release:
     needs: build
+    # Publish even when one platform's build didn't finish (a Mac runner that never starts shouldn't
+    # hold back the Windows update); the step checks the Windows installer is really there.
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -75,10 +79,18 @@ jobs:
         run: |
           v=$(node -p "require('./launcher/package.json').version")
           id=$(gh api repos/${{ github.repository }}/releases --jq ".[] | select(.tag_name==\"v$v\" and .draft) | .id" | head -1)
+          if [ -n "$id" ] && ! gh api repos/${{ github.repository }}/releases/$id --jq '.assets[].name' | grep -q '^latest.yml$'; then
+            echo "v$v has no Windows build yet; not publishing"
+            exit 1
+          fi
           if [ -n "$id" ]; then
             notes=$(node -e "const c=require('./launcher/CHANGELOG.json')['$v']||[];console.log(c.map(x=>'- '+x).join('\n'))")
-            gh api -X PATCH repos/${{ github.repository }}/releases/$id -f draft=false -f name="Kizuna Launcher $v" -f body="$notes" >/dev/null
+            gh api -X PATCH repos/${{ github.repository }}/releases/$id -f draft=false -f name="Kizuna Launcher $v" -f body="$notes" -f make_latest=true >/dev/null
             echo "published v$v"
           else
             echo "v$v already published (or nothing new)"
           fi
+          # Installed launchers only look at the release GitHub calls "latest". Keep that pointing at the
+          # newest launcher release even after other uploads (like mod files).
+          tag=$(gh api repos/${{ github.repository }}/releases --jq '[.[] | select(.draft|not) | select(.tag_name|startswith("v"))][0].id')
+          [ -n "$tag" ] && gh api -X PATCH repos/${{ github.repository }}/releases/$tag -f make_latest=true >/dev/null && echo "latest -> $tag"
