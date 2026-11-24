@@ -103,6 +103,7 @@ public final class AotRpgClient implements ClientModInitializer {
             InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_CAPS_LOCK, "category.aot_rpg"));
         ShoulderCam.load();
         ClientTickEvents.END_CLIENT_TICK.register(ShoulderCam::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(BoardScreen::tick);
         ClientTickEvents.END_CLIENT_TICK.register(WalkInMenus::tick);
         ClientTickEvents.END_CLIENT_TICK.register(IslandSky::tick);
         ClientPlayNetworking.registerGlobalReceiver(Net.IslandSky.ID, (payload, ctx) -> IslandSky.on(payload));
@@ -295,6 +296,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(Compass::render);
         HudRenderCallback.EVENT.register(QuestTracker::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.Activities.ID, (payload, ctx) -> QuestTracker.on(payload));
+        ClientPlayNetworking.registerGlobalReceiver(Net.Board.ID, (payload, ctx) -> BoardScreen.on(payload));
         Settings.load();
         // Tell the server which build we are (an out-of-date client is turned away with a clear message).
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((h, sender, mc) -> {
@@ -443,6 +445,7 @@ public final class AotRpgClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(DownedFx::renderHud);
         ClientTickEvents.END_CLIENT_TICK.register(DownedFx::tick);
         HudRenderCallback.EVENT.register(GameHints::render);
+        HudRenderCallback.EVENT.register(HelpCards::render);
         ClientPlayNetworking.registerGlobalReceiver(Net.CrateOpened.ID, (payload, ctx) -> StoreScreen.onOpened(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.CatalogView.ID, (payload, ctx) -> CatalogScreen.on(payload));
         ClientPlayNetworking.registerGlobalReceiver(Net.InboxView.ID, (payload, ctx) -> InboxScreen.on(payload));

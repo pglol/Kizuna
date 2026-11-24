@@ -1087,6 +1087,22 @@ public final class Net {
     }
 
     /** Server -> client: your world activities ("title|task|x|z|color" each), for the tracker. */
+    /** The join board: rows "kind|title|text|color", and whether to open it even if seen. */
+    public record Board(java.util.List<String> rows, boolean open) implements CustomPayload {
+        public static final Id<Board> ID = id("board");
+        public static final PacketCodec<RegistryByteBuf, Board> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.rows.size());
+            for (String s : v.rows) b.writeString(s);
+            b.writeBoolean(v.open);
+        }, b -> {
+            int n = Math.min(b.readVarInt(), 40);
+            java.util.List<String> l = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) l.add(b.readString());
+            return new Board(l, b.readBoolean());
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     public record Activities(java.util.List<String> rows) implements CustomPayload {
         public static final Id<Activities> ID = id("activities");
         public static final PacketCodec<RegistryByteBuf, Activities> CODEC = PacketCodec.of((v, b) -> {
@@ -2897,6 +2913,7 @@ public final class Net {
         PayloadTypeRegistry.playC2S().register(PrestigeAction.ID, PrestigeAction.CODEC);
         PayloadTypeRegistry.playS2C().register(PrestigeView.ID, PrestigeView.CODEC);
         PayloadTypeRegistry.playS2C().register(Activities.ID, Activities.CODEC);
+        PayloadTypeRegistry.playS2C().register(Board.ID, Board.CODEC);
         PayloadTypeRegistry.playC2S().register(Hello.ID, Hello.CODEC);
         PayloadTypeRegistry.playS2C().register(OdmMove.ID, OdmMove.CODEC);
         PayloadTypeRegistry.playS2C().register(OdmState.ID, OdmState.CODEC);

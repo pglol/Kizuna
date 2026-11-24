@@ -98,6 +98,14 @@ public final class EventShop {
         return data.active && (data.endsAt <= 0 || System.currentTimeMillis() < data.endsAt);
     }
 
+    public String eventName() {
+        return data.name;
+    }
+
+    public long endsAt() {
+        return data.endsAt;
+    }
+
     public String tokenName() {
         return data.token + "s";
     }
