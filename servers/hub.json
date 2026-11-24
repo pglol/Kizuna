@@ -1,5 +1,5 @@
 {
-  "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. background: the main picture; gallery: extra pictures (slideshow). news: newest first, each {title, date, image, tag, url}. status: public | private (needs code) | soon. channels: the builds players can pick, each {id, name, pack, address, code?, note?}; a channel with a code is locked until the player enters it (Early Access codes for Patreon supporters, Development codes for the team). Only the hash of each code is published. A channel can list several addresses (e.g. Hamachi and a public host); players switch between them. theme: the scene along the bottom of the launcher (wall, peaks).",
+  "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. background: the main picture; gallery: extra pictures (slideshow). news: newest first, each {title, date, image, tag, url}. status: public | private (needs code) | soon. channels: the builds players can pick, each {id, name, pack, address, code?, note?}; a channel with a codeHash is locked until the player enters its code (Early Access codes for Patreon supporters, Development codes for the team). Only the hash of each code is published. A channel can list several addresses (e.g. Hamachi and a public host); players switch between them. theme: the scene along the bottom of the launcher (wall, peaks). To set a new code, put \"code\": \"...\" on the channel instead; the build turns it into a hash. Prefer codeHash so the plain code never sits in the repo.",
   "servers": [
     {
       "id": "aot",
@@ -47,15 +47,14 @@
           "name": "Early Access",
           "pack": "packs/aot-early",
           "address": "CHANGE_ME_EARLY:25565",
-          "code": "CHANGE-ME-EARLY",
-          "note": "Patreon supporters"
+          "note": "Patreon supporters",
+          "codeHash": "98388f8a942342ef2db453236542dd209eb951b2dc10b3298a355ee067ec62ca"
         },
         {
           "id": "dev",
           "name": "Development",
           "pack": "packs/aot-dev",
           "address": "25.52.234.232:25565",
-          "code": "CHANGE-ME-DEV",
           "note": "Team builds",
           "addresses": [
             {
@@ -66,7 +65,8 @@
               "label": "Public",
               "address": "CHANGE_ME_DEV:25565"
             }
-          ]
+          ],
+          "codeHash": "24844d566607d685f630522b6857a01d77fcf6e89837a82bdaf82700cbc320ff"
         }
       ],
       "theme": "wall"

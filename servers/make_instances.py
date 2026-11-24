@@ -49,7 +49,9 @@ for s in hub["servers"]:
         ce = {"id": c["id"], "name": c.get("name", c["id"]), "note": c.get("note", ""), "address": c.get("address", ""),
               "pack": f"{base}/{c['pack'].strip('/')}/pack.toml",
               "addresses": c.get("addresses", [])}
-        if c.get("code"):
+        if c.get("codeHash"):
+            ce["codeHash"] = c["codeHash"]
+        elif c.get("code"):
             ce["codeHash"] = hashlib.sha256(str(c["code"]).strip().upper().encode()).hexdigest()
         chans.append(ce)
     e["channels"] = chans
