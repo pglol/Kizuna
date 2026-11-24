@@ -68,7 +68,9 @@ app.on('window-all-closed', () => {
 
 const pub = (a) => (a ? { name: a.name, uuid: a.uuid } : null);
 
-ipcMain.handle('init', () => ({ brand: config.brand || 'KIZUNA', name: config.name || 'Kizuna', version: app.getVersion(), account: pub(store.account.get()), settings: store.settings.get(), platform: process.platform }));
+ipcMain.handle('open-logs', () => shell.openPath(store.dir()));
+
+ipcMain.handle('init', () => ({ testMode: !!config.testMode, brand: config.brand || 'KIZUNA', name: config.name || 'Kizuna', version: app.getVersion(), account: pub(store.account.get()), settings: store.settings.get(), platform: process.platform }));
 
 ipcMain.handle('hub', async () => {
   let hub;
@@ -151,19 +153,40 @@ ipcMain.handle('win', (_e, what) => {
   else if (what === 'close') win.close();
 });
 
-ipcMain.handle('play', async (_e, id) => {
+/** Test builds only: an offline profile, so the whole install-and-start path can be tried before Microsoft approves the app. */
+function testSession() {
+  const name = 'Tester';
+  const h = crypto.createHash('md5').update('OfflinePlayer:' + name).digest();
+  h[6] = (h[6] & 0x0f) | 0x30;
+  h[8] = (h[8] & 0x3f) | 0x80;
+  return { name, uuid: h.toString('hex'), access: '0', xuid: '', offline: true };
+}
+
+/** Everything the launcher did, for testers to send back. */
+function logLine(...a) {
+  try {
+    const f = path.join(store.dir(), 'launcher.log');
+    fs.mkdirSync(store.dir(), { recursive: true });
+    fs.appendFileSync(f, `[${new Date().toISOString()}] ${a.join(' ')}\n`);
+  } catch {}
+}
+
+ipcMain.handle('play', async (_e, id, test) => {
   if (playing) return { ok: false, error: 'A game is already running.' };
   const hub = store.read('hub-cache.json', { servers: [] });
   const server = (hub.servers || []).find((s) => s.id === id);
   if (!server) return { ok: false, error: 'That server is not available right now.' };
   if (server.status === 'soon') return { ok: false, error: `${server.name} isn't open yet.` };
   const acct = store.account.get();
-  if (!acct) return { ok: false, error: 'Sign in first.', code: 'signin' };
+  const testing = !!(test && config.testMode);
+  if (!acct && !testing) return { ok: false, error: 'Sign in first.', code: 'signin' };
   playing = id;
+  logLine('play', id, testing ? '(test mode)' : '');
   try {
     send('status', { text: 'Signing in', fraction: 0.02 });
     let r;
-    try {
+    if (testing) r = { account: acct, session: testSession() };
+    else try {
       r = await auth.refresh(acct, config.msClientId);
     } catch (e) {
       if (e.code === 'invalid_grant' || e.status === 400) {
@@ -172,16 +195,21 @@ ipcMain.handle('play', async (_e, id) => {
       }
       throw e;
     }
-    store.account.set(r.account);
+    if (r.account) store.account.set(r.account);
     const settings = store.settings.get();
     await game.play(store.dir(), server, r.session, settings, {
-      status: (text, fraction) => send('status', { text, fraction }),
+      status: (text, fraction) => {
+        logLine(text);
+        send('status', { text, fraction });
+      },
       started: () => {
         send('status', { text: 'Playing', fraction: 1, playing: true });
         if (settings.closeOnPlay && win) win.hide();
       },
       exited: (code, log) => {
         playing = null;
+        logLine('game exited with code', code);
+        if (code) logLine(log);
         if (win) {
           win.show();
           win.focus();
@@ -192,6 +220,7 @@ ipcMain.handle('play', async (_e, id) => {
     return { ok: true };
   } catch (e) {
     playing = null;
+    logLine('error:', e.stack || e.message || String(e));
     return { ok: false, error: e.message || String(e), code: e.code };
   }
 });

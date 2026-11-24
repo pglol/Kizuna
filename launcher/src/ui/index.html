@@ -11,7 +11,7 @@
   <div class="shade"></div>
 
   <header class="bar">
-    <div class="brand"><span class="dot"></span><span id="brand">KIZUNA</span></div>
+    <div class="brand"><span class="dot"></span><span id="brand">KIZUNA</span><span class="testtag" id="testtag" hidden>TEST BUILD</span></div>
     <div class="drag"></div>
     <button class="account" id="account" title="Account"></button>
     <button class="icon" id="open-settings" title="Settings">⚙</button>
@@ -48,6 +48,7 @@
       <h2>Welcome</h2>
       <p>Sign in with the Microsoft account you play Minecraft on. That's all: the launcher downloads everything and takes you straight into the server.</p>
       <button class="play wide" id="login"><span>SIGN IN WITH MICROSOFT</span></button>
+      <button class="ghost wide-ghost" id="test-go" hidden>Test without signing in (test build)</button>
       <p class="fine" id="signin-err"></p>
     </div>
   </section>
@@ -62,6 +63,7 @@
         <span id="who"></span>
         <button class="ghost" id="logout">Sign out</button>
       </div>
+      <div class="row split"><span>Something went wrong?</span><button class="ghost" id="logs">Open logs</button></div>
       <p class="fine" id="about"></p>
       <button class="ghost" data-close>Done</button>
     </div>

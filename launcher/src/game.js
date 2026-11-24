@@ -51,7 +51,12 @@ async function play(dataDir, server, session, settings, on) {
       on.started();
     }
   });
-  launcher.on('close', (code) => on.exited(code, log.slice(-120).join('\n')));
+  launcher.on('close', (code) => {
+    try {
+      fs.writeFileSync(path.join(gameDir, 'last-launch.log'), log.join('\n'));
+    } catch {}
+    on.exited(code, log.slice(-120).join('\n'));
+  });
 
   const addr = (server.address || '').trim();
   const opts = {
@@ -65,12 +70,13 @@ async function play(dataDir, server, session, settings, on) {
       uuid: session.uuid,
       name: session.name,
       user_properties: '{}',
-      meta: { type: 'msa', demo: false, xuid: session.xuid },
+      meta: { type: session.offline ? 'legacy' : 'msa', demo: false, xuid: session.xuid },
     },
     overrides: { gameDirectory: gameDir, detached: true, maxSockets: 8 },
     customArgs: ['-XX:+UseG1GC', '-XX:MaxGCPauseMillis=50'],
   };
-  if (addr && !addr.includes('CHANGE_ME')) opts.quickPlay = { type: 'multiplayer', identifier: addr };
+  // Offline test profiles can't join an online-mode server, so they stop at the title screen.
+  if (addr && !addr.includes('CHANGE_ME') && !session.offline) opts.quickPlay = { type: 'multiplayer', identifier: addr };
   on.status('Starting the game', 0.95);
   const child = await launcher.launch(opts);
   if (!child) throw new Error('Minecraft could not start: ' + (log.slice(-5).join(' ') || 'unknown error'));

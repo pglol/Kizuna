@@ -116,3 +116,6 @@ pre { max-height: 300px; overflow: auto; font-size: 11px; background: rgba(0, 0,
 .update button { margin-left: 10px; color: var(--gold); font-weight: 700; }
 
 @media (max-height: 660px) { h1 { font-size: 44px; } .desc { display: none; } }
+
+.wide-ghost { width: 100%; margin-top: 10px; }
+.testtag { font-size: 9px; letter-spacing: 0.16em; padding: 3px 6px; border: 1px solid #e8433a; color: #ff8a80; border-radius: 3px; }

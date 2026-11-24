@@ -42,6 +42,7 @@ jobs:
         env:
           CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
           HUB_URL: ${{ vars.LAUNCHER_HUB_URL }}
+          TEST_MODE: ${{ (startsWith(github.ref, 'refs/tags/launcher-v') || inputs.publish) && 'false' || 'true' }}
         run: node scripts/configure.js
 
       - name: Build
@@ -57,7 +58,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: kizuna-${{ matrix.os }}
+          name: kizuna-test-build-${{ matrix.os }}
           path: |
             launcher/out/*.exe
             launcher/out/*.dmg

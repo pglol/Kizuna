@@ -2,7 +2,7 @@
 (function () {
   const W = window.kizuna;
   const $ = (id) => document.getElementById(id);
-  let state = { account: null, settings: {}, servers: [], selected: null, busy: false, playing: false };
+  let state = { test: false, testMode: false, account: null, settings: {}, servers: [], selected: null, busy: false, playing: false };
 
   const STATUS = {
     public: ['OPEN', '#5bd35b'],
@@ -151,8 +151,9 @@
       return;
     }
     play.disabled = false;
-    label.textContent = state.account ? 'PLAY' : 'SIGN IN';
-    $('ptext').textContent = state.account ? `Ready · ${s.name}` : 'Sign in with Microsoft to play';
+    const can = state.account || state.test;
+    label.textContent = state.account ? 'PLAY' : state.test ? 'TEST PLAY' : 'SIGN IN';
+    $('ptext').textContent = state.account ? `Ready · ${s.name}` : state.test ? `Test mode · installs everything and opens the game at the title screen` : 'Sign in with Microsoft to play';
     $('pfill').style.width = '0';
   }
 
@@ -199,13 +200,13 @@
   async function play() {
     const s = state.servers.find((x) => x.id === state.selected);
     if (!s || state.busy || state.playing) return;
-    if (!state.account) {
+    if (!state.account && !state.test) {
       show('signin', true);
       return;
     }
     state.busy = true;
     updateDock();
-    const r = await W.play(s.id);
+    const r = await W.play(s.id, !state.account && state.test);
     state.busy = false;
     if (!r.ok) {
       $('pfill').style.width = '0';
@@ -256,6 +257,12 @@
 
   $('play').addEventListener('click', play);
   $('login').addEventListener('click', login);
+  $('test-go').addEventListener('click', () => {
+    state.test = true;
+    show('signin', false);
+    updateDock();
+  });
+  $('logs').addEventListener('click', () => W.openLogs());
   $('folder').addEventListener('click', () => state.selected && W.openFolder(state.selected));
   $('account').addEventListener('click', () => (state.account ? openSettings() : show('signin', true)));
   $('open-settings').addEventListener('click', openSettings);
@@ -305,6 +312,9 @@
     const init = await W.init();
     $('brand').textContent = init.brand;
     document.title = init.name;
+    state.testMode = !!init.testMode;
+    $('test-go').hidden = !state.testMode;
+    $('testtag').hidden = !state.testMode;
     $('about').textContent = `${init.brand} Launcher ${init.version}`;
     state.account = init.account;
     state.settings = init.settings;
