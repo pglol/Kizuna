@@ -103,10 +103,21 @@
   window.Scene = {
     set(theme, accent, artUrl) {
       cur = { theme: theme || '絆', accent: accent || '#c42b1f' };
-      if (artUrl) {
-        img.src = artUrl;
+      // Show the picture only once it has loaded; until then (or if it fails) the kanji cover stays.
+      img.onload = () => {
         img.hidden = false;
         cv.hidden = true;
+      };
+      img.onerror = () => {
+        img.hidden = true;
+        cv.hidden = false;
+      };
+      img.hidden = true;
+      cv.hidden = false;
+      resize();
+      draw();
+      if (artUrl) {
+        img.src = artUrl;
       } else {
         img.hidden = true;
         img.removeAttribute('src');

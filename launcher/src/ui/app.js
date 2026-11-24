@@ -21,6 +21,26 @@
     return (w.length > 1 ? w[0][0] + w[1][0] : (w[0] || '?').slice(0, 2)).toUpperCase();
   };
   const head = (name) => `https://mc-heads.net/avatar/${encodeURIComponent(name)}/64`;
+  /** A player's face, or their initial in a box if the picture can't load. */
+  function face(name, cls) {
+    const box = document.createElement('span');
+    box.className = 'face ' + (cls || '');
+    box.textContent = (name || '?')[0].toUpperCase();
+    const img = new Image();
+    img.onload = () => {
+      box.textContent = '';
+      box.style.backgroundImage = `url("${img.src}")`;
+    };
+    img.src = head(name);
+    return box;
+  }
+  /** Sets a background picture only once it has actually loaded. */
+  function bgOnLoad(el, url) {
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => (el.style.backgroundImage = `url("${url}")`);
+    img.src = url;
+  }
 
   const STAMP = {
     public: ['OPEN', '#2f7d4a'],
@@ -37,10 +57,7 @@
       b.textContent = state.test ? 'Test' : 'Sign in';
       return;
     }
-    const img = document.createElement('img');
-    img.src = head(state.account.name);
-    img.onerror = () => img.remove();
-    b.append(img, document.createTextNode(state.account.name));
+    b.append(face(state.account.name), document.createTextNode(state.account.name));
   }
 
   function renderRail() {
@@ -53,8 +70,15 @@
       t.title = s.name;
       const band = document.createElement('span');
       band.className = 'band';
-      if (s.icon) band.style.cssText = `background: var(--tc) url("${s.icon}") center / 70% no-repeat`;
-      else band.textContent = (s.short || initials(s.name)).slice(0, 4);
+      band.textContent = (s.short || initials(s.name)).slice(0, 4);
+      if (s.icon) {
+        const ic = new Image();
+        ic.onload = () => {
+          band.textContent = '';
+          band.style.background = `var(--tc) url("${s.icon}") center / 70% no-repeat`;
+        };
+        ic.src = s.icon;
+      }
       const name = document.createElement('span');
       name.className = 'name';
       name.textContent = s.name;
@@ -89,8 +113,15 @@
     box.innerHTML = '';
     for (const n of ((s && s.news) || []).slice(0, 3)) {
       const c = document.createElement('button');
-      c.className = 'npanel' + (n.image ? ' img' : '');
-      if (n.image) c.style.backgroundImage = `url("${n.image}")`;
+      c.className = 'npanel';
+      if (n.image) {
+        const im = new Image();
+        im.onload = () => {
+          c.classList.add('img');
+          c.style.backgroundImage = `url("${n.image}")`;
+        };
+        im.src = n.image;
+      }
       const cap = document.createElement('div');
       cap.className = 'cap';
       const sm = document.createElement('small');
@@ -189,8 +220,7 @@
       for (const r of group) {
         const row = document.createElement('div');
         row.className = 'friend ' + (r.at ? 'on' : 'off');
-        const img = document.createElement('img');
-        img.src = head(r.n);
+        const img = face(r.n);
         const txt = document.createElement('div');
         const b = document.createElement('b');
         b.textContent = r.n;

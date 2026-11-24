@@ -194,3 +194,7 @@ pre { max-height: 300px; overflow: auto; font-size: 11px; background: #fff; bord
 .hanko svg { width: 46px; height: 46px; fill: #f8efe6; }
 .hanko span { font-size: 20px; letter-spacing: 0.14em; }
 .plain { font-size: 12.5px; color: var(--ink2); }
+
+.face { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--ink); background: var(--paper2) center / cover no-repeat; image-rendering: pixelated; font-family: var(--head); font-size: 11px; color: var(--ink2); flex: 0 0 auto; }
+.friend .face { width: 32px; height: 32px; border-width: 2px; font-size: 14px; }
+.friend.off .face { filter: grayscale(1); opacity: 0.6; }
