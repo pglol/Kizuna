@@ -68,6 +68,25 @@ function create() {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 }
 
+// Play asks this first: is there a newer launcher? (At most a few seconds; offline just says no.)
+let updater = null;
+const newer = (a, b) => {
+  const x = String(a).split(/[.-]/).map(Number), y = String(b).split(/[.-]/).map(Number);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+};
+ipcMain.handle('update-check', async () => {
+  if (!updater) return null;
+  try {
+    const r = await Promise.race([updater.checkForUpdates(), new Promise((res) => setTimeout(() => res(null), 6000))]);
+    const v = r && r.updateInfo && r.updateInfo.version;
+    return v && newer(v, app.getVersion()) ? { version: v } : null;
+  } catch (e) {
+    logLine('update check before play failed:', e && e.message);
+    return null;
+  }
+});
+
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('net.pglol.kizuna');
   create();
@@ -99,6 +118,7 @@ app.whenReady().then(() => {
           check();
         }
       });
+      updater = autoUpdater;
       ipcMain.handle('update-download', () => autoUpdater.downloadUpdate().catch((e) => logLine('update download failed:', e && e.message)));
       ipcMain.handle('update-install', () => {
         if (playing) return false;

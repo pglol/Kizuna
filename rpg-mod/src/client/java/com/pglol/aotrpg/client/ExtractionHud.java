@@ -123,6 +123,8 @@ public final class ExtractionHud {
             Ui.text(c, Text.literal(pr), 14 + 166 - Ui.font().getWidth(pr) * 0.62f, y + 3, 0.62f, done ? 0xFF5BD35B : Ui.GOLD, false);
             y += 14;
         }
+        // Whatever sits under the corner map (the party list) goes below the radar and its tasks.
+        Minimap.bottom = y + 6;
     }
 
     static void disc(DrawContext c, int cx, int cy, int r, int col) {

@@ -733,6 +733,8 @@ public final class AotRpg implements ModInitializer {
                 if (!pr.created) {
                     if (!several || !hasClient(p)) CREATION.begin(p);
                 } else {
+                    // Character creation makes you untouchable; never let that outlive it (it's saved with the player).
+                    if (!CREATION.active(p) && !p.isCreative() && !p.isSpectator()) p.setInvulnerable(false);
                     PROGRESSION.apply(p, pr);
                     sync(p, pr);
                     NAMETAGS.update(p, pr);

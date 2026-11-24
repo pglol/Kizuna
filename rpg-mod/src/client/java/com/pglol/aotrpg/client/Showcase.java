@@ -219,6 +219,9 @@ public final class Showcase {
     }
 
     /** How far the showroom camera stands back for a slot (effects need room). */
+    /** How far above the waist the camera aims (raised as the showroom zooms in, towards the face). */
+    public static float lift;
+
     static float distance(String slot) {
         return switch (slot) {
             case "trail" -> 6.5f;
@@ -237,7 +240,7 @@ public final class Showcase {
         MinecraftClient mc = MinecraftClient.getInstance();
         var p = mc.player;
         if (p == null || mc.world == null) return null;
-        Vec3d target = p.getLerpedPos(td).add(0, 1.0, 0);
+        Vec3d target = p.getLerpedPos(td).add(0, 1.0 + lift, 0);
         float yaw = p.bodyYaw + 180 + spin, pitch = 10;
         Vec3d f = Vec3d.fromPolar(pitch, yaw);
         float yr = yaw * MathHelper.RADIANS_PER_DEGREE;

@@ -94,6 +94,7 @@ public final class CosmeticsScreen extends Screen {
         client.options.hudHidden = hudWas;
         CosmeticFx.previewSlot = null;
         CosmeticFx.previewId = null;
+        Showcase.lift = 0;
         Showcase.clear();
     }
 
@@ -153,14 +154,21 @@ public final class CosmeticsScreen extends Screen {
             CosmeticFx.Category cat = CosmeticFx.category(slot);
             int rows = (visible(cat).size() + cols() - 1) / cols();
             scroll = Math.max(0, Math.min(rows - visibleRows(), scroll - (int) Math.signum(v)));
+        } else {
+            // Over the stage: scroll to zoom in on yourself (and out again).
+            zoom = net.minecraft.util.math.MathHelper.clamp(zoom - (float) v * 0.1f, 0.3f, 1.4f);
         }
         return true;
     }
 
     /** The camera while the showroom is open. */
+    private float zoom = 1f, zoomShown = 1f;
+
     public com.pglol.aotrpg.client.story.CutscenePlayer.Cam camera(float td) {
         float stageMid = (railW + 24 + libX - 12) / 2f;
-        return Showcase.camera(td, spin, Showcase.distance(slot), stageMid, width);
+        zoomShown += (zoom - zoomShown) * 0.15f;
+        Showcase.lift = Math.max(0, 1 - zoomShown) * 0.65f;
+        return Showcase.camera(td, spin, Showcase.distance(slot) * zoomShown, stageMid, width);
     }
 
     /** Where to buy a piece, and for how much: the store's offer, or null if it isn't sold. */
@@ -301,7 +309,7 @@ public final class CosmeticsScreen extends Screen {
                     Sleek.button(c, hits, bx - 96, by + 32, 96, 18, "See crates", false, true, () -> client.setScreen(new StoreScreen(this, "crates")));
                 }
             }
-            Ui.text(c, Text.literal(own ? "Previewing on you  ·  drag to turn" : "Try it on  ·  drag to turn"), sx0 + 10, by + 40, 0.55f, 0xFF7A766C, false);
+            Ui.text(c, Text.literal(own ? "Previewing on you  ·  drag to turn  ·  scroll to zoom" : "Try it on  ·  drag to turn  ·  scroll to zoom"), sx0 + 10, by + 40, 0.55f, 0xFF7A766C, false);
             // Pieces that take a colour: pick it here (it changes the whole set).
             if (own && OneOfOne.sp(show.id()) && client.player != null) {
                 int cur = OneOfOne.tint(client.player.getUuid()), sw = 14, gap = 4;

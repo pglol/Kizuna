@@ -411,12 +411,26 @@
     }
   }
 
-  async function play() {
+  // Pressing Play first checks for a newer launcher; if there is one you're asked (Update now / Later),
+  // and Later carries on into the game.
+  let playAfterPrompt = false;
+  async function play(skipCheck) {
     const s = current();
     if (!s || state.busy || state.playing) return;
     if (!state.account && !state.test) return show('signin', true);
     state.busy = true;
     updateDock();
+    if (skipCheck !== true) {
+      $('ptext').textContent = 'Checking for updates';
+      const u = await K.checkUpdate().catch(() => null);
+      if (u && u.version && updDismissed !== u.version) {
+        state.busy = false;
+        updateDock();
+        playAfterPrompt = true;
+        showUpdate(u.version);
+        return;
+      }
+    }
     $('ptext').textContent = 'Getting ready';
     const ch = channelOf(s), h = hostOf(s, ch);
     const r = await K.play(s.id, !state.account && state.test, ch.id, h ? h.label : '');
@@ -453,10 +467,8 @@
   });
   // Launcher updates: ask, then show the download, then restart into the new version.
   let updDismissed = '';
-  K.on('update', (d) => {
-    if (d.state === 'available') {
-      if (updDismissed === d.version) return;
-      $('upd-text').textContent = `Version ${d.version} of the launcher is out.`;
+  function showUpdate(version) {
+      $('upd-text').textContent = `Version ${version} of the launcher is out.`;
       $('upd-bar').hidden = true;
       $('upd-go').textContent = 'Update now';
       $('upd-go').disabled = false;
@@ -467,10 +479,19 @@
         K.downloadUpdate();
       };
       $('upd-later').onclick = () => {
-        updDismissed = d.version;
+        updDismissed = version;
         show('update', false);
+        if (playAfterPrompt) {
+          playAfterPrompt = false;
+          play(true);
+        }
       };
       show('update', true);
+  }
+  K.on('update', (d) => {
+    if (d.state === 'available') {
+      if (updDismissed === d.version) return;
+      showUpdate(d.version);
     } else if (d.state === 'downloading') {
       $('upd-fill').style.width = (d.percent || 0) + '%';
     } else if (d.state === 'ready') {
@@ -484,7 +505,7 @@
   });
 
 
-  $('play').addEventListener('click', play);
+  $('play').addEventListener('click', () => play());
   $('login').addEventListener('click', login);
   $('test-go').addEventListener('click', () => {
     state.test = true;

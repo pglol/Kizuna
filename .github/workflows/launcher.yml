@@ -83,8 +83,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           v=$(node -p "require('./launcher/package.json').version")
-          id=$(gh api repos/${{ github.repository }}/releases --jq ".[] | select(.tag_name==\"v$v\" and .draft) | .id" | head -1)
-          if [ -n "$id" ] && ! gh api repos/${{ github.repository }}/releases/$id --jq '.assets[].name' | grep -q '^latest.yml$'; then
+          # The build can leave more than one draft for a version; use the one with the Windows installer
+          # (and its update file), and remove empty duplicates.
+          ids=$(gh api repos/${{ github.repository }}/releases --jq ".[] | select(.tag_name==\"v$v\" and .draft) | .id")
+          id=""
+          for i in $ids; do
+            if [ -z "$id" ] && gh api repos/${{ github.repository }}/releases/$i --jq '.assets[].name' | grep -q '^latest.yml$'; then
+              id=$i
+            elif [ "$(gh api repos/${{ github.repository }}/releases/$i --jq '.assets | length')" = "0" ]; then
+              gh api -X DELETE repos/${{ github.repository }}/releases/$i && echo "removed empty draft $i"
+            fi
+          done
+          if [ -n "$ids" ] && [ -z "$id" ]; then
             echo "v$v has no Windows build yet; not publishing"
             exit 1
           fi

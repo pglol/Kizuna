@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('kizuna', {
   win: (what) => ipcRenderer.invoke('win', what),
   installUpdate: () => ipcRenderer.invoke('update-install'),
   downloadUpdate: () => ipcRenderer.invoke('update-download'),
+  checkUpdate: () => ipcRenderer.invoke('update-check'),
   on: (ch, fn) => {
     if (!['status', 'exited', 'update'].includes(ch)) return;
     ipcRenderer.on(ch, (_e, d) => fn(d));
