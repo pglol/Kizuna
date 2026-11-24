@@ -36,6 +36,9 @@ for s in hub["servers"]:
     # What the Kizuna launcher shows and uses.
     e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "features", "status", "address", "minecraft", "fabric", "theme", "accent", "art")}
     e["pack"] = pack_url
+    # A picture kept in the repo (e.g. servers/art/aot.png): served from the same place as the packs.
+    if e.get("art") and not e["art"].startswith("http"):
+        e["art"] = f"{base}/{e['art'].lstrip('/')}"
     if s["status"] == "private":
         code = str(s.get("code", ""))
         if not code:

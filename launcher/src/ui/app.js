@@ -4,12 +4,6 @@
   const $ = (id) => document.getElementById(id);
   let state = { test: false, testMode: false, account: null, settings: {}, servers: [], selected: null, busy: false, playing: false };
 
-  const STATUS = {
-    public: ['OPEN', '#5bd35b'],
-    beta: ['BETA', '#b06ae0'],
-    private: ['PRIVATE', '#e8c36f'],
-    soon: ['COMING SOON', '#8f8a7a'],
-  };
 
   function toast(msg) {
     const t = $('toast');
@@ -45,26 +39,44 @@
     b.append(img, document.createTextNode(a.name));
   }
 
+  const STAMP = {
+    public: ['連載中', 'OPEN NOW', '#c42b1f'],
+    beta: ['試読', 'PLAYTEST', '#6b3fa0'],
+    private: ['秘密', 'PRIVATE', '#15120f'],
+    soon: ['近日', 'COMING SOON', '#7a7064'],
+  };
+
   function renderRail() {
     const rail = $('rail');
     rail.innerHTML = '';
-    for (const s of state.servers) {
+    state.servers.forEach((s, i) => {
       const t = document.createElement('button');
-      t.className = 'tile' + (s.id === state.selected ? ' on' : '');
-      t.style.setProperty('--tc', s.accent || '#e8c36f');
+      t.className = 'spine' + (s.id === state.selected ? ' on' : '');
+      t.style.setProperty('--tc', s.accent || '#c42b1f');
       t.title = s.name;
-      const sp = document.createElement('span');
-      sp.textContent = (s.short || initials(s.name)).slice(0, 4);
-      const st = document.createElement('i');
-      st.className = 'st ' + (s.status === 'beta' ? 'beta' : s.status === 'soon' ? 'soon' : '');
-      t.append(sp, st);
+      const band = document.createElement('span');
+      band.className = 'band';
+      band.textContent = (s.short || initials(s.name)).slice(0, 4);
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = s.name;
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.innerHTML = `${i + 1}<small>巻</small>`;
+      t.append(band, name, num);
+      if (s.status === 'soon') {
+        const soon = document.createElement('i');
+        soon.className = 'soon';
+        soon.textContent = '近日';
+        t.append(soon);
+      }
       t.addEventListener('click', () => select(s.id));
       rail.append(t);
-    }
+    });
     const add = document.createElement('button');
-    add.className = 'tile add';
+    add.className = 'spine add';
     add.title = 'Enter an access code';
-    add.textContent = '+';
+    add.innerHTML = '+<span>code</span>';
     add.addEventListener('click', () => {
       $('code-input').value = '';
       $('code-err').textContent = '';
@@ -75,51 +87,51 @@
   }
 
   function renderHero() {
-    const s = state.servers.find((x) => x.id === state.selected);
-    const hero = $('hero');
-    // Restart the entrance animation.
-    hero.style.animation = 'none';
-    for (const c of hero.children) {
+    const idx = state.servers.findIndex((x) => x.id === state.selected);
+    const s = state.servers[idx];
+    // Ink the panels in again.
+    for (const c of $('hero').children) {
       c.style.animation = 'none';
       void c.offsetWidth;
       c.style.animation = '';
     }
+    const f = $('features');
+    f.innerHTML = '';
     if (!s) {
-      $('title').textContent = state.offline ? 'Offline' : 'No servers yet';
+      $('title').textContent = state.offline ? 'Offline' : 'Nothing on the shelf yet';
       $('tagline').textContent = state.offline ? "Can't reach the server list. Check your connection." : '';
       $('desc').textContent = '';
-      $('features').innerHTML = '';
-      $('chips').innerHTML = '';
-      Scene.set('none', '#e8c36f');
+      $('chips').hidden = true;
+      $('vol').textContent = 'VOL.—';
+      $('no').textContent = '';
+      Scene.set('none');
       updateDock();
       return;
     }
-    document.documentElement.style.setProperty('--accent', s.accent || '#e8c36f');
+    document.documentElement.style.setProperty('--accent', s.accent || '#c42b1f');
     Scene.set(s.theme || 'none', s.accent, s.art);
-    const [label, color] = STATUS[s.status] || STATUS.public;
-    $('chips').innerHTML = '';
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.style.color = color;
-    chip.textContent = label;
-    $('chips').append(chip);
-    if (s.minecraft) {
-      const v = document.createElement('span');
-      v.className = 'chip';
-      v.style.color = '#8f8a7a';
-      v.textContent = 'MINECRAFT ' + s.minecraft;
-      $('chips').append(v);
-    }
+    const n = String(idx + 1).padStart(2, '0');
+    $('vol').textContent = `VOL.${idx + 1}`;
+    $('no').textContent = `#${n}${s.minecraft ? ' · MINECRAFT ' + s.minecraft : ''}`;
+    const [kanji, label, color] = STAMP[s.status] || STAMP.public;
+    const st = $('chips');
+    st.hidden = false;
+    st.style.setProperty('--sc', color);
+    st.innerHTML = '';
+    st.append(document.createTextNode(kanji));
+    const sm = document.createElement('small');
+    sm.textContent = label;
+    st.append(sm);
     $('title').textContent = s.name;
     $('tagline').textContent = s.tagline || '';
     $('desc').textContent = s.description || '';
-    const f = $('features');
-    f.innerHTML = '';
-    for (const x of s.features || []) {
+    (s.features || []).forEach((x, i) => {
       const li = document.createElement('li');
-      li.textContent = x;
+      const b = document.createElement('b');
+      b.textContent = `第${i + 1}話`;
+      li.append(b, document.createTextNode(x));
       f.append(li);
-    }
+    });
     updateDock();
   }
 
@@ -128,6 +140,7 @@
     const play = $('play');
     const label = play.querySelector('span');
     $('folder').hidden = !s || s.status === 'soon';
+    play.classList.toggle('busy', !!state.busy);
     if (state.playing) {
       play.disabled = true;
       label.textContent = 'PLAYING';
@@ -146,14 +159,13 @@
     if (s.status === 'soon') {
       play.disabled = true;
       label.textContent = 'SOON';
-      $('ptext').textContent = `${s.name} isn't open yet. Keep an eye out.`;
+      $('ptext').textContent = `${s.name} isn't out yet. Keep an eye on the shelf.`;
       $('pfill').style.width = '0';
       return;
     }
     play.disabled = false;
-    const can = state.account || state.test;
-    label.textContent = state.account ? 'PLAY' : state.test ? 'TEST PLAY' : 'SIGN IN';
-    $('ptext').textContent = state.account ? `Ready · ${s.name}` : state.test ? `Test mode · installs everything and opens the game at the title screen` : 'Sign in with Microsoft to play';
+    label.textContent = state.account ? 'PLAY' : state.test ? 'TEST' : 'SIGN IN';
+    $('ptext').textContent = state.account ? `Ready when you are · ${s.name}` : state.test ? 'Test mode: installs everything and opens the game at the title screen' : 'Sign in with Microsoft to play';
     $('pfill').style.width = '0';
   }
 

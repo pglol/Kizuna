@@ -17,7 +17,7 @@
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "theme": "aot",
-      "accent": "#e8c36f",
+      "accent": "#a8432a",
       "short": "AOT"
     },
     {
@@ -36,7 +36,7 @@
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "theme": "duel",
-      "accent": "#9ad0ff",
+      "accent": "#2f5d8a",
       "short": "SB"
     }
   ]
