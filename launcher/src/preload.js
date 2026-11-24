@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('kizuna', {
   openLogs: () => ipcRenderer.invoke('open-logs'),
   ping: (address) => ipcRenderer.invoke('ping', address),
   friends: (list) => ipcRenderer.invoke('friends', list),
+  notify: (title, body) => ipcRenderer.invoke('notify', title, body),
   openUrl: (url) => window.open(url),
   settings: (patch) => ipcRenderer.invoke('settings', patch),
   openFolder: (id, channel) => ipcRenderer.invoke('open-folder', id, channel),

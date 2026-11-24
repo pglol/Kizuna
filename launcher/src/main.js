@@ -1,5 +1,5 @@
 // Kizuna Launcher: sign in once with Microsoft, pick one of our servers, press Play.
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Notification } = require('electron');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -21,6 +21,24 @@ app.on('second-instance', () => {
     win.focus();
   }
 });
+
+/** A desktop notification; clicking it brings the launcher to the front. */
+function notify(title, body) {
+  try {
+    if (!Notification.isSupported()) return;
+    const n = new Notification({ title, body, icon: path.join(__dirname, '..', 'build', 'icon.png') });
+    n.on('click', () => {
+      if (win) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+    });
+    n.show();
+  } catch {}
+}
+
+ipcMain.handle('notify', (_e, title, body) => notify(String(title).slice(0, 80), String(body).slice(0, 200)));
 
 function send(ch, data) {
   if (win && !win.isDestroyed()) win.webContents.send(ch, data);
@@ -51,6 +69,7 @@ function create() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') app.setAppUserModelId('net.pglol.kizuna');
   create();
   if (app.isPackaged) {
     // Launcher updates: check now and every 30 minutes; ask the player, then download and restart.
@@ -58,13 +77,28 @@ app.whenReady().then(() => {
       const { autoUpdater } = require('electron-updater');
       autoUpdater.autoDownload = false;
       autoUpdater.autoInstallOnAppQuit = true;
-      autoUpdater.on('update-available', (i) => send('update', { state: 'available', version: i.version }));
+      let told = '';
+      autoUpdater.on('update-available', (i) => {
+        send('update', { state: 'available', version: i.version });
+        // A desktop notification too, so people hear about it even with the launcher minimised.
+        if (told !== i.version) {
+          told = i.version;
+          notify('Kizuna update', `Version ${i.version} is ready. Click to update.`);
+        }
+      });
       autoUpdater.on('download-progress', (p) => send('update', { state: 'downloading', percent: Math.round(p.percent || 0) }));
       autoUpdater.on('update-downloaded', (i) => send('update', { state: 'ready', version: i.version }));
       autoUpdater.on('error', (e) => logLine('update error:', e && e.message));
       const check = () => autoUpdater.checkForUpdates().catch(() => {});
       check();
-      setInterval(check, 30 * 60 * 1000);
+      setInterval(check, 10 * 60 * 1000);
+      let last = Date.now();
+      win.on('focus', () => {
+        if (Date.now() - last > 60 * 1000) {
+          last = Date.now();
+          check();
+        }
+      });
       ipcMain.handle('update-download', () => autoUpdater.downloadUpdate().catch((e) => logLine('update download failed:', e && e.message)));
       ipcMain.handle('update-install', () => {
         if (playing) return false;
@@ -82,9 +116,30 @@ const pub = (a) => (a ? { name: a.name, uuid: a.uuid } : null);
 
 ipcMain.handle('ping', (_e, address) => (address && !String(address).includes('CHANGE_ME') ? status.ping(address) : null));
 
+/** Friends made inside our games: each game saves its list to config/kizuna/friends.json in its folder. */
+function gameFriends() {
+  const out = new Map();
+  const dir = path.join(store.dir(), 'instances');
+  let names = [];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {}
+  for (const n of names) {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(dir, n, 'config', 'kizuna', 'friends.json'), 'utf8'));
+      for (const f of j.friends || []) if (/^[A-Za-z0-9_]{3,16}$/.test(f) && !out.has(f.toLowerCase())) out.set(f.toLowerCase(), { name: f, from: j.server || n });
+    } catch {}
+  }
+  return out;
+}
+
 ipcMain.handle('friends', (_e, list) => {
   if (Array.isArray(list)) store.settings.set({ friends: list.filter((n) => /^[A-Za-z0-9_]{3,16}$/.test(n)).slice(0, 200) });
-  return store.settings.get().friends || [];
+  const mine = store.settings.get().friends || [];
+  const game = gameFriends();
+  const rows = mine.map((name) => ({ name, from: '' }));
+  for (const [k, f] of game) if (!mine.some((m) => m.toLowerCase() === k)) rows.push(f);
+  return rows;
 });
 
 ipcMain.handle('open-logs', () => shell.openPath(store.dir()));

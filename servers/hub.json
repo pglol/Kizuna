@@ -72,27 +72,27 @@
       "theme": "wall"
     },
     {
-      "id": "stance",
-      "name": "Stancebound",
+      "id": "kata",
+      "name": "Kata",
       "tagline": "Martial arts duels in a ruined kingdom.",
       "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
       "status": "soon",
-      "pack": "packs/stance",
+      "pack": "packs/kata",
       "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "accent": "#2f5d8a",
-      "short": "SB",
+      "short": "KT",
       "icon": "",
       "logo": "",
       "background": "",
       "news": [],
-      "kanji": "\u6b66",
+      "kanji": "\u578b",
       "channels": [
         {
           "id": "public",
           "name": "Public",
-          "pack": "packs/stance",
+          "pack": "packs/kata",
           "address": "25.52.234.232:25565",
           "note": ""
         }

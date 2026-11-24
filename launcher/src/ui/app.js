@@ -279,7 +279,7 @@
   function renderFriends() {
     const list = $('flist');
     list.innerHTML = '';
-    const rows = state.friends.map((n) => ({ n, at: whereIs(n) }));
+    const rows = state.friends.map((f) => ({ n: f.name, from: f.from, at: whereIs(f.name) }));
     const on = rows.filter((r) => r.at), off = rows.filter((r) => !r.at);
     $('friends-count').textContent = on.length;
     if (!rows.length) {
@@ -300,17 +300,19 @@
         const b = document.createElement('b');
         b.textContent = r.n;
         const sm = document.createElement('small');
-        sm.textContent = r.at ? r.at.name : 'offline';
+        const src = r.from && state.servers.find((x) => x.id === r.from);
+        sm.textContent = (r.at ? r.at.name : 'offline') + (src ? ` · friend in ${src.short || src.name}` : '');
         txt.append(b, sm);
         const x = document.createElement('button');
         x.className = 'x';
         x.title = 'Remove';
         x.textContent = '✕';
         x.addEventListener('click', async () => {
-          state.friends = await K.friends(state.friends.filter((f) => f !== r.n));
+          state.friends = await K.friends(state.friends.filter((f) => !f.from && f.name !== r.n).map((f) => f.name));
           renderFriends();
         });
-        row.append(img, txt, x);
+        row.append(img, txt);
+        if (!r.from) row.append(x);
         if (r.at) row.addEventListener('dblclick', () => select(r.at.id));
         list.append(row);
       }
@@ -325,8 +327,8 @@
     e.preventDefault();
     const name = $('friend-input').value.trim();
     if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return toast('That isn’t a Minecraft name.');
-    if (state.friends.some((f) => f.toLowerCase() === name.toLowerCase())) return;
-    state.friends = await K.friends([...state.friends, name]);
+    if (state.friends.some((f) => f.name.toLowerCase() === name.toLowerCase())) return;
+    state.friends = await K.friends([...state.friends.filter((f) => !f.from).map((f) => f.name), name]);
     $('friend-input').value = '';
     renderFriends();
   });
@@ -365,7 +367,25 @@
     renderRail();
     renderHero();
     pingAll();
+    announceNews();
     if (hub.offline && state.servers.length) toast('Offline: showing the last server list.');
+  }
+
+  /** New news posts since last time: a desktop notification (the first run just remembers what's there). */
+  async function announceNews() {
+    const seen = new Set(state.settings.seenNews || []);
+    const now = [];
+    const fresh = [];
+    for (const s of state.servers) for (const n of s.news || []) {
+      const key = `${s.id}:${n.title}`;
+      now.push(key);
+      if (!seen.has(key)) fresh.push([s, n]);
+    }
+    if (state.settings.seenNews && fresh.length) {
+      const [s, n] = fresh[0];
+      K.notify(`${s.name}${fresh.length > 1 ? ` (+${fresh.length - 1} more)` : ''}`, n.title);
+    }
+    state.settings = await K.settings({ seenNews: now.slice(-200) });
   }
 
   async function login() {
@@ -413,7 +433,9 @@
       updateDock();
     }
   });
-  K.on('exited', (d) => {
+  K.on('exited', async (d) => {
+    state.friends = await K.friends();
+    renderFriends();
     state.playing = false;
     state.busy = false;
     updateDock();

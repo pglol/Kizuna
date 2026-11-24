@@ -427,6 +427,7 @@ public final class AotRpg implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(Net.PassAction.ID, (payload, ctx) -> SEASON.action(ctx.player(), payload.action(), payload.tier()));
         ServerPlayNetworking.registerGlobalReceiver(Net.EventAction.ID, (payload, ctx) -> EVENTS.action(ctx.player(), payload.action(), payload.item()));
         ServerPlayNetworking.registerGlobalReceiver(Net.SocialAction.ID, (payload, ctx) -> SOCIAL.action(ctx.player(), payload.action(), payload.target()));
+        SOCIAL.registerEvents();
         ServerPlayNetworking.registerGlobalReceiver(Net.FishResult.ID, (payload, ctx) -> FISHING.result(ctx.player(), payload.quality()));
         ServerPlayNetworking.registerGlobalReceiver(Net.ToggleSheath.ID, (payload, ctx) -> {
             if (PROFILES.get(ctx.player().getUuid()).created) LOADOUT.toggle(ctx.player());

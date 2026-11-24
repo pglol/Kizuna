@@ -24,6 +24,13 @@ public final class Social {
         this.server = server;
     }
 
+    /** Everyone gets their friends list shortly after joining (the game keeps a copy for the launcher). */
+    public void registerEvents() {
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((h, sender, s) -> AotRpg.SCHEDULER.later(100, () -> {
+            if (server != null && !h.player.isDisconnected()) send(h.player, false);
+        }));
+    }
+
     public void action(ServerPlayerEntity p, String action, UUID target) {
         ServerPlayerEntity t = target == null ? null : server.getPlayerManager().getPlayer(target);
         ProfileStore.Account a = AotRpg.PROFILES.account(p.getUuid());
@@ -84,7 +91,9 @@ public final class Social {
             } catch (Exception ex) {
                 continue;
             }
-            list.add(new Net.SocialPlayer(id, e.getValue(), "", 0, "", 0, false, true, false, "Offline", "", 0, "", 0));
+            // Their Minecraft name too (from the server's name cache), so the launcher's friends list can follow them.
+            String acct = server.getUserCache() == null ? "" : server.getUserCache().getByUuid(id).map(gp -> gp.getName()).orElse("");
+            list.add(new Net.SocialPlayer(id, e.getValue(), acct, 0, "", 0, false, true, false, "Offline", "", 0, "", 0));
         }
         ServerPlayNetworking.send(p, new Net.SocialView(list, open));
     }

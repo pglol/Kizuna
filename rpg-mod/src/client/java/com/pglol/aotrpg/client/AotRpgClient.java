@@ -376,6 +376,7 @@ public final class AotRpgClient implements ClientModInitializer {
         });
         ClientPlayNetworking.registerGlobalReceiver(Net.SocialView.ID, (payload, ctx) -> {
             ClientState.social = payload;
+            LauncherFriends.save(payload);
             if (ctx.client().currentScreen instanceof SocialScreen s) s.refresh();
             else if (payload.open()) ctx.client().setScreen(new SocialScreen());
         });

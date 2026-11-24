@@ -21,7 +21,7 @@ Open world. Titans. Extraction runs.<br>
 <sub>Builds: Public · Early Access · Development</sub>
 </td>
 <td width="50%" valign="top">
-<h3><a href="https://pglol.github.io/minecraft/servers/stance.html">Stancebound</a></h3>
+<h3><a href="https://pglol.github.io/minecraft/servers/kata.html">Kata</a></h3>
 Martial arts duels in a ruined kingdom.<br>
 <sub>Coming soon</sub>
 </td>
