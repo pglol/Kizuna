@@ -71,6 +71,11 @@ const pub = (a) => (a ? { name: a.name, uuid: a.uuid } : null);
 
 ipcMain.handle('ping', (_e, address) => (address && !String(address).includes('CHANGE_ME') ? status.ping(address) : null));
 
+ipcMain.handle('friends', (_e, list) => {
+  if (Array.isArray(list)) store.settings.set({ friends: list.filter((n) => /^[A-Za-z0-9_]{3,16}$/.test(n)).slice(0, 200) });
+  return store.settings.get().friends || [];
+});
+
 ipcMain.handle('open-logs', () => shell.openPath(store.dir()));
 
 ipcMain.handle('init', () => ({ mark: config.mark || '', testMode: !!config.testMode, brand: config.brand || 'KIZUNA', name: config.name || 'Kizuna', version: app.getVersion(), account: pub(store.account.get()), settings: store.settings.get(), platform: process.platform }));

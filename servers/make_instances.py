@@ -34,7 +34,7 @@ launcher = []
 for s in hub["servers"]:
     pack_url = f"{base}/{s['pack'].strip('/')}/pack.toml"
     # What the Kizuna launcher shows and uses.
-    e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "status", "address", "minecraft", "fabric", "accent", "icon", "logo", "background")}
+    e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "status", "address", "minecraft", "fabric", "accent", "kanji", "icon", "logo", "background")}
     e["pack"] = pack_url
     # Pictures kept in the repo (e.g. servers/art/aot-bg.png) are served from the same place as the packs.
     def url(v):

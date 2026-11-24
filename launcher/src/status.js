@@ -60,7 +60,8 @@ function ping(address, timeout = 3500) {
         at = id[1];
         const sl = readVarint(buf, at);
         const json = JSON.parse(buf.slice(sl[1], sl[1] + sl[0]).toString('utf8'));
-        done({ online: json.players ? json.players.online : 0, max: json.players ? json.players.max : 0, ms: Date.now() - started });
+        const pl = json.players || {};
+        done({ online: pl.online || 0, max: pl.max || 0, names: (pl.sample || []).map((x) => x.name).filter(Boolean), ms: Date.now() - started });
       } catch {
         done(null);
       }

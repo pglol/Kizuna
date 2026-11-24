@@ -11,7 +11,7 @@
       "address": "CHANGE_ME:25565",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
-      "accent": "#c8553a",
+      "accent": "#a8432a",
       "short": "AOT",
       "icon": "servers/art/aot-icon.png",
       "logo": "",
@@ -31,7 +31,8 @@
           "image": "",
           "url": ""
         }
-      ]
+      ],
+      "kanji": "\u5de8"
     },
     {
       "id": "stance",
@@ -43,12 +44,13 @@
       "address": "",
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
-      "accent": "#3d7fc4",
+      "accent": "#2f5d8a",
       "short": "SB",
       "icon": "",
       "logo": "",
       "background": "",
-      "news": []
+      "news": [],
+      "kanji": "\u6b66"
     }
   ]
 }
