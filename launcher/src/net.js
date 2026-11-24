@@ -71,6 +71,30 @@ function hashFile(file, algo) {
   });
 }
 
+/**
+ * Moves tmp over dest. On Windows a file that's open somewhere (a server still running, OneDrive or
+ * antivirus scanning it) can't be replaced for a moment: keep trying for a few seconds, then say why.
+ */
+async function replace(tmp, dest) {
+  for (let i = 0; ; i++) {
+    try {
+      await fs.promises.rename(tmp, dest);
+      return;
+    } catch (e) {
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) throw e;
+      if (i >= 10) {
+        try {
+          await fs.promises.rm(tmp, { force: true });
+        } catch {}
+        const err = new Error(`${path.basename(dest)} is in use, so it can't be updated. Close anything using it (a server already running in another window, or OneDrive still syncing that folder) and try again.`);
+        err.fatal = true;
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
+}
+
 /** Downloads url to dest (atomically), checking the hash when one is given. Skips it if dest already matches. */
 async function file(url, dest, hash, algo = 'sha1') {
   if (hash && fs.existsSync(dest)) {
@@ -94,7 +118,7 @@ async function file(url, dest, hash, algo = 'sha1') {
     }
     const tmp = dest + '.part';
     await fs.promises.writeFile(tmp, buf);
-    await fs.promises.rename(tmp, dest);
+    await replace(tmp, dest);
   });
   return true;
 }

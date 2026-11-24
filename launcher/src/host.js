@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const AdmZip = require('adm-zip');
+const TOML = require('smol-toml');
 const net = require('./net');
 const java = require('./java');
 const pack = require('./pack');
@@ -53,6 +54,30 @@ function setAsideDuplicates(folder, packFiles, log) {
   }
 }
 
+/**
+ * "AoT RPG mod only": leave the server's own mods and configs as they are and just bring the AoT RPG
+ * jar up to date (older copies of it under other names are moved to mods-disabled/).
+ */
+async function updateModOnly(packUrl, folder, line) {
+  const base = packUrl.slice(0, packUrl.lastIndexOf('/') + 1);
+  const p = TOML.parse(await net.text(packUrl));
+  const meta = TOML.parse(await net.text(base + 'mods/aot-rpg.pw.toml'));
+  const mods = path.join(folder, 'mods');
+  fs.mkdirSync(mods, { recursive: true });
+  for (const f of fs.readdirSync(mods)) {
+    if (!f.endsWith('.jar') || f === meta.filename) continue;
+    if (modIds(path.join(mods, f)).includes('aot_rpg')) {
+      fs.mkdirSync(path.join(folder, 'mods-disabled'), { recursive: true });
+      fs.renameSync(path.join(mods, f), path.join(folder, 'mods-disabled', f));
+      line(`Moved the old ${f} to mods-disabled`);
+    }
+  }
+  const d = meta.download || {};
+  const fetched = await net.file(d.url, path.join(mods, meta.filename), d.hash, d['hash-format'] || 'sha256');
+  line(fetched ? 'AoT RPG mod updated to the newest build' : 'AoT RPG mod already on the newest build');
+  return { minecraft: p.versions && p.versions.minecraft, fabric: p.versions && p.versions.fabric };
+}
+
 async function serverJar(folder, mc, loader) {
   const meta = path.join(folder, '.kizuna-server.json');
   let m = {};
@@ -95,13 +120,18 @@ async function start(k, opts, on) {
     line('Checking for the newest build…');
     const sha = await net.pinLatest(opts.hubUrl);
     if (sha) line(`Newest build: ${sha.slice(0, 8)}`);
-    const p = await pack.sync(opts.packUrl, folder, (t) => line(t), { side: 'server' });
-    line(`Server files up to date (${p.files} files, ${p.fetched} updated)`);
-    let ledger = [];
-    try {
-      ledger = JSON.parse(fs.readFileSync(path.join(folder, '.kizuna-pack.json'), 'utf8')).files || [];
-    } catch {}
-    setAsideDuplicates(folder, ledger, line);
+    let p;
+    if (opts.mode === 'pack') {
+      p = await pack.sync(opts.packUrl, folder, (t) => line(t), { side: 'server' });
+      line(`Server files up to date (${p.files} files, ${p.fetched} updated)`);
+      let ledger = [];
+      try {
+        ledger = JSON.parse(fs.readFileSync(path.join(folder, '.kizuna-pack.json'), 'utf8')).files || [];
+      } catch {}
+      setAsideDuplicates(folder, ledger, line);
+    } else {
+      p = await updateModOnly(opts.packUrl, folder, line);
+    }
     const javaPath = await java.ensure(opts.root, p.minecraft, (d, t) => line(`Installing Java (${d}/${t})`));
     const jar = await serverJar(folder, p.minecraft, p.fabric);
     if (!opts.eula) throw new Error('Accept the Minecraft EULA first (tick the box).');

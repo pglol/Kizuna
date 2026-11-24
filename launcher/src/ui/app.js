@@ -534,46 +534,51 @@
   const hostStates = {};
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const HOST_LABEL = { stopped: 'Stopped', updating: 'Updating', starting: 'Starting', running: 'Running' };
+  // The settings people actually change, laid out to fit without scrolling; the rest is one click away.
   const PROPS = [
-    ['Basics'],
-    ['motd', 'Name in the server list', 'text', 'A Minecraft Server'],
-    ['max-players', 'Max players', 'number', '20'],
-    ['server-port', 'Port', 'number', '25565'],
-    ['level-name', 'World folder', 'text', 'world'],
-    ['Who can join'],
-    ['online-mode', 'Real Microsoft accounts only (turn off for test mode)', 'bool', 'true'],
-    ['white-list', 'Whitelist only', 'bool', 'false'],
-    ['enforce-whitelist', 'Kick people taken off the whitelist', 'bool', 'false'],
-    ['Gameplay'],
+    ['motd', 'Server name', 'text', 'A Minecraft Server'],
+    ['max-players', 'Max players', 'range:1:100', '20'],
+    ['difficulty', 'Difficulty', 'seg:peaceful,easy,normal,hard', 'easy'],
+    ['gamemode', 'New players start in', 'seg:survival,adventure,creative', 'survival'],
     ['pvp', 'PvP', 'bool', 'true'],
-    ['difficulty', 'Difficulty', 'select:peaceful,easy,normal,hard', 'easy'],
-    ['gamemode', 'Game mode for new players', 'select:survival,adventure,creative,spectator', 'survival'],
-    ['allow-flight', 'Allow flight (avoids "flying is not enabled" kicks on gear)', 'bool', 'false'],
-    ['spawn-protection', 'Spawn protection radius (0 = off)', 'number', '16'],
-    ['Performance'],
-    ['view-distance', 'View distance (chunks)', 'number', '10'],
-    ['simulation-distance', 'Simulation distance (chunks)', 'number', '10'],
+    ['white-list', 'Whitelist only', 'bool', 'false'],
+    ['online-mode', 'Real Microsoft accounts only', 'bool', 'true'],
+    ['allow-flight', 'Allow flight (no gear kicks)', 'bool', 'false'],
+    ['view-distance', 'View distance', 'range:4:32', '10'],
+    ['simulation-distance', 'Simulation distance', 'range:4:32', '10'],
+    ['spawn-protection', 'Spawn protection', 'range:0:64', '16'],
+    ['server-port', 'Port', 'number', '25565'],
   ];
   function propsHtml(values) {
-    const known = new Set(PROPS.filter((p) => p.length > 1).map((p) => p[0]));
-    const row = (k, label, type, def) => {
-      const v = k in values ? values[k] : def;
-      const id = 'hp-' + k.replace(/[^a-z0-9]/gi, '_');
+    return PROPS.map(([k, label, type, def]) => {
+      const v = k in values && values[k] !== '' ? values[k] : def;
       let input;
-      if (type === 'bool') input = `<input type="checkbox" id="${id}" data-k="${k}" data-t="bool" ${v === 'true' ? 'checked' : ''}>`;
-      else if (type.startsWith('select:')) input = `<select id="${id}" data-k="${k}">${type.slice(7).split(',').map((o) => `<option ${o === v ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
-      else input = `<input type="${type}" id="${id}" data-k="${k}" value="${esc(v)}">`;
-      return `<label for="${id}">${esc(label)}</label>${input}`;
-    };
-    let h = '';
-    for (const p of PROPS) h += p.length === 1 ? `<div class="grp">${esc(p[0])}</div>` : row(...p);
-    const rest = Object.keys(values).filter((k) => !known.has(k)).sort();
-    if (rest.length) {
-      h += '<div class="grp">Everything else</div>';
-      for (const k of rest) h += row(k, k, 'text', '');
-    }
-    return h;
+      if (type === 'bool') input = `<label class="switch"><input type="checkbox" data-k="${k}" data-t="bool" ${v === 'true' ? 'checked' : ''}><i></i></label>`;
+      else if (type.startsWith('seg:')) input = `<span class="seg" data-k="${k}" data-t="seg" data-v="${esc(v)}">${type.slice(4).split(',').map((o) => `<button type="button" data-o="${o}" class="${o === v ? 'on' : ''}">${o[0].toUpperCase() + o.slice(1)}</button>`).join('')}</span>`;
+      else if (type.startsWith('range:')) {
+        const [, lo, hi] = type.split(':');
+        input = `<span class="rng"><input type="range" min="${lo}" max="${hi}" value="${esc(v)}" data-k="${k}"><b class="val">${esc(v)}</b></span>`;
+      } else input = `<input type="${type}" data-k="${k}" value="${esc(v)}">`;
+      return `<div class="pitem"><span>${esc(label)}</span>${input}</div>`;
+    }).join('');
   }
+  $('host-props').addEventListener('input', (e) => {
+    if (e.target.type === 'range') e.target.nextElementSibling.textContent = e.target.value;
+  });
+  $('host-props').addEventListener('click', (e) => {
+    const b = e.target.closest('.seg button');
+    if (!b) return;
+    const seg = b.parentElement;
+    seg.dataset.v = b.dataset.o;
+    seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  });
+  function setMode(m) {
+    document.querySelectorAll('#host-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  }
+  document.querySelectorAll('#host-mode button').forEach((b) => b.addEventListener('click', () => {
+    setMode(b.dataset.mode);
+    K.hostSet(hostView.id, hostView.ch, { mode: b.dataset.mode });
+  }));
   function setHostState(st) {
     $('host-state').textContent = HOST_LABEL[st] || st;
     $('host-state').className = 'hstate' + (st === 'running' ? ' running' : st === 'stopped' ? '' : ' busy');
@@ -607,8 +612,9 @@
     $('host-folder').textContent = i.folder;
     $('host-folder').title = i.folder;
     $('host-eula').checked = i.eula;
-    const ram = $('host-ram');
-    ram.innerHTML = [2, 3, 4, 5, 6, 8, 10, 12, 16].map((g) => `<option value="${g}" ${g === i.ram ? 'selected' : ''}>${g} GB</option>`).join('');
+    $('host-ram').value = i.ram;
+    $('host-ram-label').textContent = i.ram + ' GB';
+    setMode(i.mode || 'mod');
     $('host-log').innerHTML = '';
     i.log.forEach(logLine);
     $('host-props').innerHTML = propsHtml(i.props || {});
@@ -651,7 +657,9 @@
     e.preventDefault();
     K.openUrl('https://aka.ms/MinecraftEULA');
   });
+  $('host-ram').addEventListener('input', (e) => ($('host-ram-label').textContent = e.target.value + ' GB'));
   $('host-ram').addEventListener('change', (e) => K.hostSet(hostView.id, hostView.ch, { ram: Number(e.target.value) }));
+  $('host-props-file').addEventListener('click', () => K.hostPropsFile(hostView.id, hostView.ch));
   $('host-folder-change').addEventListener('click', async () => {
     const f = await K.hostFolder(hostView.id, hostView.ch);
     if (f) {
@@ -664,7 +672,7 @@
   $('host-props-save').addEventListener('click', async () => {
     const props = {};
     document.querySelectorAll('#host-props [data-k]').forEach((el) => {
-      props[el.dataset.k] = el.dataset.t === 'bool' ? String(el.checked) : el.value;
+      props[el.dataset.k] = el.dataset.t === 'bool' ? String(el.checked) : el.dataset.t === 'seg' ? el.dataset.v : el.value;
     });
     await K.hostSet(hostView.id, hostView.ch, { props });
     toast(hostStates[hostView.key] && hostStates[hostView.key] !== 'stopped' ? 'Saved. Restart the server to apply.' : 'Server settings saved.');

@@ -123,13 +123,16 @@
         <form class="add" id="host-cmd-form"><input class="field small" id="host-cmd" placeholder="Command, e.g. op Name · whitelist add Name · say Hello" autocomplete="off" spellcheck="false"><button class="box small">Send</button></form>
       </div>
       <div id="host-pane-props" hidden>
-        <div class="props" id="host-props"></div>
-        <div class="row split"><span class="fine">Saved to server.properties; applies the next time the server starts.</span><button class="box red small" id="host-props-save">Save</button></div>
+        <div class="pgrid" id="host-props"></div>
+        <div class="row split"><button class="box small" id="host-props-file">Open server.properties (everything else)</button><span><span class="fine" id="host-props-note">Applies the next time the server starts.</span> <button class="box red small" id="host-props-save">Save</button></span></div>
       </div>
       <div class="row split hfolder"><span class="fine" id="host-folder"></span><span><button class="box small" id="host-folder-change">Change folder</button> <button class="box small" id="host-folder-open">Open</button></span></div>
+      <div class="row split hopts">
+        <span class="seg" id="host-mode"><span class="seglabel">Keep updated</span><button data-mode="mod">AoT RPG mod only</button><button data-mode="pack">Whole pack</button></span>
+        <label class="ramrow">Memory <input type="range" id="host-ram" min="2" max="16" step="1"> <b id="host-ram-label"></b></label>
+      </div>
       <div class="row split">
         <label class="toggle"><input type="checkbox" id="host-eula"> I accept the <a href="#" id="host-eula-link">Minecraft EULA</a></label>
-        <label>Memory <select id="host-ram"></select></label>
       </div>
       <div class="row split"><button class="box small" data-close>Close</button><span><button class="box small" id="host-stop">Stop</button> <button class="box red small" id="host-start">Start server</button></span></div>
     </div>

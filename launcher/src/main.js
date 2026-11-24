@@ -351,7 +351,7 @@ ipcMain.handle('host-info', (_e, id, channel) => {
   const t = hostTarget(id, channel);
   if (!t) return null;
   const s = store.settings.get();
-  return { key: t.k, name: t.name, folder: t.folder, ram: (s.hostRam || {})[t.k] || 6, eula: !!s.hostEula, props: readProps(t.folder), ...host.info(t.k) };
+  return { key: t.k, name: t.name, folder: t.folder, ram: (s.hostRam || {})[t.k] || 6, mode: (s.hostMode || {})[t.k] || 'mod', eula: !!s.hostEula, props: readProps(t.folder), ...host.info(t.k) };
 });
 ipcMain.handle('host-folder', async (_e, id, channel) => {
   if (!hostAllowed()) return null;
@@ -375,6 +375,7 @@ ipcMain.handle('host-set', (_e, id, channel, patch) => {
   const p = {};
   if (patch.ram) p.hostRam = { ...(s.hostRam || {}), [t.k]: Math.max(2, Math.min(32, Number(patch.ram) || 6)) };
   if ('eula' in patch) p.hostEula = !!patch.eula;
+  if (patch.mode) p.hostMode = { ...(s.hostMode || {}), [t.k]: patch.mode === 'pack' ? 'pack' : 'mod' };
   store.settings.set(p);
   if (patch.props && typeof patch.props === 'object') {
     const clean = {};
@@ -387,11 +388,18 @@ ipcMain.handle('host-start', (_e, id, channel) => {
   if (!hostAllowed()) return false;
   const t = hostTarget(id, channel);
   const s = store.settings.get();
-  host.start(t.k, { packUrl: t.pack, folder: t.folder, root: path.join(store.dir(), 'minecraft'), ram: (s.hostRam || {})[t.k] || 6, eula: !!s.hostEula, hubUrl: config.hubUrl }, {
+  host.start(t.k, { packUrl: t.pack, folder: t.folder, root: path.join(store.dir(), 'minecraft'), ram: (s.hostRam || {})[t.k] || 6, mode: (s.hostMode || {})[t.k] || 'mod', eula: !!s.hostEula, hubUrl: config.hubUrl }, {
     line: (l) => send('host', { key: t.k, line: l }),
     state: (st) => send('host', { key: t.k, state: st }),
   });
   return true;
+});
+ipcMain.handle('host-props-file', (_e, id, channel) => {
+  if (!hostAllowed()) return;
+  const t = hostTarget(id, channel);
+  const f = path.join(t.folder, PROPS);
+  if (!fs.existsSync(f)) writeProps(t.folder, {});
+  shell.openPath(f);
 });
 ipcMain.handle('host-stop', (_e, id, channel) => hostAllowed() && host.stop(hostTarget(id, channel).k));
 ipcMain.handle('host-cmd', (_e, id, channel, text) => hostAllowed() && host.command(hostTarget(id, channel).k, text));
