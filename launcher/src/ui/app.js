@@ -153,7 +153,7 @@
       return;
     }
     document.documentElement.style.setProperty('--accent', s.accent || '#c42b1f');
-    Scene.set(s.kanji || '絆', s.accent, s.background);
+    Scene.set(s.kanji || '絆', s.accent, [s.background, ...(s.gallery || [])]);
     $('vol').textContent = `VOL.${idx + 1}`;
     $('no').textContent = `#${String(idx + 1).padStart(2, '0')}`;
     const [kanji, color] = STAMP[s.status] || STAMP.public;

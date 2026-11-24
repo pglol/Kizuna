@@ -1,5 +1,5 @@
 {
-  "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. icon: square, 128x128+. logo: transparent PNG wordmark, about 900x350. background: 1920x1080 screenshot (or .mp4/.webm clip). news: newest first, each {title, date, image, tag, url}. status: public | beta | private (needs code) | soon. address: what Play joins (host:port).",
+  "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. icon: square, 128x128+. logo: transparent PNG wordmark, about 900x350. background: the main picture (cover panel). gallery: optional extra pictures; with any, the cover becomes a slideshow. news: newest first, each {title, date, image, tag, url}. status: public | beta | private (needs code) | soon. address: what Play joins (host:port).",
   "servers": [
     {
       "id": "aot",
@@ -15,7 +15,7 @@
       "short": "AOT",
       "icon": "servers/art/aot-icon.png",
       "logo": "",
-      "background": "",
+      "background": "servers/art/aot-cover.webp",
       "news": [
         {
           "title": "Swing sites: ruins, spires, groves and wall breaches in every region",
@@ -32,7 +32,8 @@
           "url": ""
         }
       ],
-      "kanji": "\u5de8"
+      "kanji": "\u5de8",
+      "gallery": []
     },
     {
       "id": "stance",

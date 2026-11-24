@@ -198,3 +198,8 @@ pre { max-height: 300px; overflow: auto; font-size: 11px; background: #fff; bord
 .face { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--ink); background: var(--paper2) center / cover no-repeat; image-rendering: pixelated; font-family: var(--head); font-size: 11px; color: var(--ink2); flex: 0 0 auto; }
 .friend .face { width: 32px; height: 32px; border-width: 2px; font-size: 14px; }
 .friend.off .face { filter: grayscale(1); opacity: 0.6; }
+
+.cover img { transition: opacity 0.22s; }
+.dots { position: absolute; left: 14px; bottom: 16px; display: flex; gap: 6px; z-index: 2; }
+.dot { width: 12px; height: 12px; border: 2px solid var(--ink); background: var(--paper); padding: 0; }
+.dot.on { background: var(--accent); }

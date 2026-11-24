@@ -42,6 +42,7 @@ for s in hub["servers"]:
     for k in ("icon", "logo", "background"):
         e[k] = url(e.get(k, ""))
     e["news"] = [dict(n, image=url(n.get("image", ""))) for n in s.get("news", [])]
+    e["gallery"] = [url(g) for g in s.get("gallery", []) if g]
     if s["status"] == "private":
         code = str(s.get("code", ""))
         if not code:

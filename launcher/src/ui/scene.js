@@ -100,33 +100,66 @@
   }
 
 
+  // Pictures: the main one, then any gallery ones as a slideshow (crossfading every 6 seconds).
+  const dots = document.getElementById('dots');
+  let slides = [], at = 0, timer = null, token = 0;
+
+  function showSlide(i) {
+    if (!slides.length) return;
+    at = (i + slides.length) % slides.length;
+    img.style.opacity = '0';
+    setTimeout(() => {
+      img.src = slides[at];
+      img.style.opacity = '1';
+    }, 220);
+    [...dots.children].forEach((d, k) => d.classList.toggle('on', k === at));
+  }
+
   window.Scene = {
-    set(theme, accent, artUrl) {
+    set(theme, accent, urls) {
       cur = { theme: theme || '絆', accent: accent || '#c42b1f' };
-      // Show the picture only once it has loaded; until then (or if it fails) the kanji cover stays.
-      img.onload = () => {
-        img.hidden = false;
-        cv.hidden = true;
-      };
-      img.onerror = () => {
-        img.hidden = true;
-        cv.hidden = false;
-      };
+      const my = ++token;
+      clearInterval(timer);
+      slides = [];
+      dots.innerHTML = '';
       img.hidden = true;
       cv.hidden = false;
       resize();
       draw();
-      if (artUrl) {
-        img.src = artUrl;
-      } else {
-        img.hidden = true;
-        img.removeAttribute('src');
-        cv.hidden = false;
-        resize();
-        draw();
-        // Canvas text doesn't pull in a font by itself: load the brush glyph, then draw again.
-        if (document.fonts) document.fonts.load("100px 'Yuji Syuku'", cur.theme || '絆').then(draw, () => {});
-      }
+      if (document.fonts) document.fonts.load("100px 'Yuji Syuku'", cur.theme).then(draw, () => {});
+      const list = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
+      // Keep only the pictures that actually load, in order; the kanji cover stays if none do.
+      list.forEach((u, k) => {
+        const probe = new Image();
+        probe.onload = () => {
+          if (my !== token) return;
+          slides[k] = u;
+          slides = slides.filter(Boolean);
+          if (slides.length === 1) {
+            img.src = u;
+            img.style.opacity = '1';
+            img.hidden = false;
+            cv.hidden = true;
+          }
+          dots.innerHTML = '';
+          if (slides.length > 1) {
+            slides.forEach((_, i) => {
+              const d = document.createElement('button');
+              d.className = 'dot' + (i === at ? ' on' : '');
+              d.addEventListener('click', () => {
+                showSlide(i);
+                clearInterval(timer);
+                timer = setInterval(() => showSlide(at + 1), 6000);
+              });
+              dots.append(d);
+            });
+            clearInterval(timer);
+            timer = setInterval(() => showSlide(at + 1), 6000);
+          }
+        };
+        probe.src = u;
+      });
+      at = 0;
     },
   };
   document.fonts && document.fonts.ready.then(draw);
