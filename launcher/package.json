@@ -1,6 +1,6 @@
 {
-  "name": "warfront-launcher",
-  "productName": "Warfront Launcher",
+  "name": "kizuna-launcher",
+  "productName": "Kizuna Launcher",
   "version": "1.0.0",
   "description": "Sign in, pick a server, press Play.",
   "main": "src/main.js",
@@ -22,14 +22,62 @@
     "electron-builder": "26.18.0"
   },
   "build": {
-    "appId": "net.pglol.warfront",
-    "productName": "Warfront Launcher",
-    "files": ["src/**", "config.json", "package.json"],
-    "directories": { "buildResources": "build", "output": "out" },
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.png" },
-    "nsis": { "oneClick": true, "perMachine": false, "artifactName": "Warfront-Setup-${version}.${ext}" },
-    "mac": { "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }], "icon": "build/icon.png", "category": "public.app-category.games", "artifactName": "Warfront-${version}-${arch}.${ext}" },
-    "linux": { "target": ["AppImage"], "icon": "build/icon.png", "category": "Game", "artifactName": "Warfront-${version}.${ext}" },
-    "publish": [{ "provider": "github", "owner": "pglol", "repo": "minecraft", "releaseType": "release" }]
+    "appId": "net.pglol.kizuna",
+    "productName": "Kizuna Launcher",
+    "files": [
+      "src/**",
+      "config.json",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "out"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.games",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "Game",
+      "artifactName": "${productName}-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "pglol",
+        "repo": "minecraft",
+        "releaseType": "release"
+      }
+    ]
   }
 }

@@ -1,6 +1,6 @@
 // The launcher's screen: the server rail, the hero, the Play dock, and the small dialogs.
 (function () {
-  const W = window.warfront;
+  const W = window.kizuna;
   const $ = (id) => document.getElementById(id);
   let state = { account: null, settings: {}, servers: [], selected: null, busy: false, playing: false };
 
@@ -304,6 +304,7 @@
   (async () => {
     const init = await W.init();
     $('brand').textContent = init.brand;
+    document.title = init.name;
     $('about').textContent = `${init.brand} Launcher ${init.version}`;
     state.account = init.account;
     state.settings = init.settings;

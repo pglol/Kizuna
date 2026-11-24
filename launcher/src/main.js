@@ -1,4 +1,4 @@
-// Warfront Launcher: sign in once with Microsoft, pick one of our servers, press Play.
+// Kizuna Launcher: sign in once with Microsoft, pick one of our servers, press Play.
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const crypto = require('crypto');
@@ -68,13 +68,14 @@ app.on('window-all-closed', () => {
 
 const pub = (a) => (a ? { name: a.name, uuid: a.uuid } : null);
 
-ipcMain.handle('init', () => ({ brand: config.brand || 'WARFRONT', version: app.getVersion(), account: pub(store.account.get()), settings: store.settings.get(), platform: process.platform }));
+ipcMain.handle('init', () => ({ brand: config.brand || 'KIZUNA', name: config.name || 'Kizuna', version: app.getVersion(), account: pub(store.account.get()), settings: store.settings.get(), platform: process.platform }));
 
 ipcMain.handle('hub', async () => {
   let hub;
   try {
     hub = await net.json(config.hubUrl + (config.hubUrl.includes('?') ? '&' : '?') + 't=' + Date.now());
     store.write('hub-cache.json', hub);
+    removeDropped(hub);
   } catch (e) {
     hub = store.read('hub-cache.json', null);
     if (!hub) return { servers: [], offline: true, error: String(e.message || e) };
@@ -84,6 +85,31 @@ ipcMain.handle('hub', async () => {
   hub.servers = (hub.servers || []).filter((s) => s.status !== 'private' || unlocked.has(s.codeHash));
   return hub;
 });
+
+/**
+ * A server taken off the list: delete its downloaded game folder (mods, configs, its own saves).
+ * Only after a fresh, successful read of the list, never while offline, and never while that game
+ * is running. Servers paused as "soon" or hidden as "private" are still on the list, so they stay.
+ */
+function removeDropped(hub) {
+  const listed = new Set((hub.servers || []).map((s) => s.id));
+  if (!listed.size) return;
+  const dir = path.join(store.dir(), 'instances');
+  let names = [];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const n of names) {
+    if (listed.has(n) || n === playing) continue;
+    try {
+      fs.rmSync(path.join(dir, n), { recursive: true, force: true });
+    } catch {}
+  }
+  const s = store.settings.get();
+  if (s.selected && !listed.has(s.selected)) store.settings.set({ selected: null });
+}
 
 ipcMain.handle('unlock', async (_e, code) => {
   const h = crypto.createHash('sha256').update(String(code || '').trim().toUpperCase()).digest('hex');

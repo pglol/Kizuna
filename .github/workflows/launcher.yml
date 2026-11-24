@@ -1,4 +1,4 @@
-name: Build Warfront launcher
+name: Build Kizuna launcher
 
 on:
   push:
@@ -49,6 +49,10 @@ jobs:
             if (process.env.CLIENT_ID) c.msClientId = process.env.CLIENT_ID;
             if (process.env.HUB_URL) c.hubUrl = process.env.HUB_URL;
             fs.writeFileSync("config.json", JSON.stringify(c, null, 2));
+            // The app's name comes from config.json: one place to rename it.
+            const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            p.productName = p.build.productName = c.name + " Launcher";
+            fs.writeFileSync("package.json", JSON.stringify(p, null, 2));
             console.log("client id set:", c.msClientId !== "SET_ME", "hub:", c.hubUrl);
           '
       - name: Build
@@ -64,7 +68,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: warfront-${{ matrix.os }}
+          name: kizuna-${{ matrix.os }}
           path: |
             launcher/out/*.exe
             launcher/out/*.dmg

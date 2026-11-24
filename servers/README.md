@@ -13,7 +13,7 @@ dist/instances/hub.json   the public list (no addresses, no private servers)
 
 ## What players do
 
-1. Download **Warfront** (the installer from this repo's Releases page) and open it.
+1. Download **Kizuna** (the installer from this repo's Releases page) and open it.
 2. **Sign in with Microsoft**, the account they play Minecraft on. Once; it remembers them.
 3. Pick a server on the left and press **PLAY**.
 
@@ -39,7 +39,7 @@ Minecraft only accepts sign-ins from launchers Microsoft has approved, so the la
 own app ID:
 
 1. Go to https://portal.azure.com → **App registrations** → **New registration**.
-   Name: `Warfront Launcher`. Supported account types: **Personal Microsoft accounts only**.
+   Name: `Kizuna Launcher`. Supported account types: **Personal Microsoft accounts only**.
    Redirect URI: platform **Public client/native (mobile & desktop)**,
    `https://login.microsoftonline.com/common/oauth2/nativeclient`. Register.
 2. In the app: **Authentication** → *Allow public client flows* → **Yes** → Save.
@@ -55,7 +55,7 @@ own app ID:
 - Every push that touches `launcher/` builds installers for Windows, Mac and Linux (they appear as
   downloads on the Actions run).
 - To publish one to players: bump `version` in `launcher/package.json`, push, then **Actions →
-  Build Warfront launcher → Run workflow** with *Publish* ticked (or push a tag `launcher-v1.0.1`).
+  Build Kizuna launcher → Run workflow** with *Publish* ticked (or push a tag `launcher-v1.0.1`).
   It becomes a GitHub Release; installed launchers see it and update themselves.
 
 ### Must be public
@@ -75,32 +75,66 @@ Variables) to that repo's raw `dist/launcher.json` URL, and change `publish` in
   **+** in the launcher and type the code to see it. Playtests: `"status": "beta"` plus
   `/aotrpg access mode beta` on the server.
 
-## Adding a new server
+## Adding a modpack (a new server)
 
-1. Make its pack: copy `pack/` to `packs/<id>/` (e.g. `packs/jjk/`), edit `pack.toml` (name,
-   Minecraft and Fabric versions), and put that server's mods in `mods/` (with the packwiz CLI:
-   `cd packs/jjk && packwiz modrinth add <mod>`; or copy a `.pw.toml` and change the URL and hash).
+1. Make a folder `packs/<id>/` (e.g. `packs/jjk/`) with two files:
+   - `pack.toml`: copy `pack/pack.toml` and change `name` (and the Minecraft/Fabric versions if different).
+   - `mods.txt`: one line per mod. `modrinth <slug> [both|client|server]` for anything on
+     modrinth.com (the slug is in the mod page's URL), `url <file.jar> <link>` for a direct download,
+     or `file <path-in-repo>` for a jar kept in this repo. Configs or other files go in the folder
+     itself (e.g. `packs/jjk/config/...`) and are copied to players as they are.
 2. Add an entry to `servers/hub.json`:
 
    ```json
    {
      "id": "jjk",
      "name": "Jujutsu RPG",
+     "short": "JJK",
      "tagline": "Sorcerers, curses and domains",
-     "status": "beta",
+     "description": "One or two sentences for the launcher.",
+     "features": ["Cursed techniques", "Domains", "Raids"],
+     "status": "public",
      "pack": "packs/jjk",
      "address": "25.12.34.56:25566",
      "minecraft": "1.21.1",
-     "fabric": "0.16.10"
+     "fabric": "0.16.10",
+     "theme": "duel",
+     "accent": "#d070ff"
    }
    ```
+3. Push. CI looks up every mod's exact download and hash, rebuilds `dist/launcher.json`, and the
+   server appears in everyone's launcher the next time they open it.
 
-   Its mods go in `packs/jjk/mods.txt` (`modrinth <slug>` lines); CI looks up the downloads.
-3. Push. CI refreshes every pack, rebuilds `dist/launcher.json`, and the new server shows up in
-   everyone's launcher the next time they open it.
-   (Or run `python3 pack/update.py <base url>` and `python3 servers/make_instances.py <base url>` yourself.)
+## Removing or pausing one
 
-Changing a pack later (a new mod, a config) needs nothing from players: their next Play picks it up.
+- **Gone for good:** delete its entry from `servers/hub.json` (and its `packs/<id>` folder) and push.
+  It vanishes from every launcher on next open, and the launcher deletes that server's downloaded
+  files from players' computers.
+- **Paused:** `"status": "soon"` keeps it listed with Play disabled (files stay).
+- **Hidden:** `"status": "private"` plus a `"code"`; only players who enter the code see it.
+
+## How updates reach players
+
+Nobody installs anything by hand:
+
+- **Packs and our mods.** Change a pack (push a new AoT RPG build, add or remove a line in
+  `mods.txt`, change a config) and CI recomputes its hashes. On the next Play, every launcher
+  compares hashes, downloads only what changed and deletes what was dropped. Anyone already in a
+  game on the old version is turned away by the server with "restart your launcher"; pressing Play
+  again brings them up to date.
+- **Outside mods stay pinned.** Fabric API, Sodium and so on keep the version CI first looked up,
+  so an update elsewhere can't break a server by surprise. To move one up, delete its file in
+  `packs/<id>/mods/` (or `pack/mods/`) and push; CI fetches the newest.
+- **Server details.** Name, description, address, status: edit `servers/hub.json` and push. Every
+  launcher reads the list fresh when it opens.
+- **The launcher itself.** Bump `version` in `launcher/package.json`, then **Actions → Build
+  Kizuna launcher → Run workflow** with *Publish* ticked. Installed launchers download it in the
+  background and show a Restart button.
+
+## Renaming the launcher
+
+Change `name` and `brand` in `launcher/config.json` (and `appId` in `launcher/package.json` only
+if you want it treated as a different app), then publish a new version.
 
 ## Who gets in: public, beta, private
 

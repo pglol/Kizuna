@@ -42,7 +42,7 @@ async function sync(packUrl, gameDir, progress) {
   });
 
   fs.mkdirSync(gameDir, { recursive: true });
-  const ledger = path.join(gameDir, '.warfront-pack.json');
+  const ledger = path.join(gameDir, '.kizuna-pack.json');
   let before = [];
   try {
     before = JSON.parse(fs.readFileSync(ledger, 'utf8')).files || [];

@@ -10,7 +10,7 @@ MARK = "# managed by mods.txt"
 base = sys.argv[1].rstrip("/")
 upgrade = "--upgrade" in sys.argv
 repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UA = {"User-Agent": "warfront-pack-builder/1.0"}
+UA = {"User-Agent": "kizuna-pack-builder/1.0"}
 
 def get(url):
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:

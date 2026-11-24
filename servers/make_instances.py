@@ -33,7 +33,7 @@ listing = []
 launcher = []
 for s in hub["servers"]:
     pack_url = f"{base}/{s['pack'].strip('/')}/pack.toml"
-    # What the Warfront launcher shows and uses.
+    # What the Kizuna launcher shows and uses.
     e = {k: s.get(k, "") for k in ("id", "name", "short", "tagline", "description", "features", "status", "address", "minecraft", "fabric", "theme", "accent", "art")}
     e["pack"] = pack_url
     if s["status"] == "private":

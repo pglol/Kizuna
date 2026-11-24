@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('warfront', {
+contextBridge.exposeInMainWorld('kizuna', {
   init: () => ipcRenderer.invoke('init'),
   hub: () => ipcRenderer.invoke('hub'),
   unlock: (code) => ipcRenderer.invoke('unlock', code),
