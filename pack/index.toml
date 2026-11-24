@@ -2,5 +2,5 @@ hash-format = "sha256"
 
 [[files]]
 file = "mods/aot-rpg.pw.toml"
-hash = "0b22193c2a2a27c91fdf7315d27c2ab77f688a11a428a533c97c8f5d763e68d7"
+hash = "7f11d50774e66c595e469edcbbc2bd6f30fc81b7c9e8919233b8111d25cd8c1e"
 metafile = true
