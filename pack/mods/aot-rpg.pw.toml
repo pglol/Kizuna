@@ -5,4 +5,4 @@ side = "both"
 [download]
 url = "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/dist/aot-rpg.jar"
 hash-format = "sha256"
-hash = "225d4f630aa47d4338de3c5a3ac9e1a352109ea6558e4ba63e45f88e49ab6335"
+hash = "720d88e380e96436a50abcac1d7f63b93b895f0cc1c967dd55b685f11fdd0051"
