@@ -1,7 +1,7 @@
 {
   "name": "kizuna-launcher",
   "productName": "Kizuna Launcher",
-  "version": "1.2.5",
+  "version": "1.3.0",
   "description": "Sign in, pick a server, press Play.",
   "main": "src/main.js",
   "author": "pglol",
@@ -13,6 +13,7 @@
     "dist": "electron-builder --publish never"
   },
   "dependencies": {
+    "adm-zip": "0.4.16",
     "electron-updater": "6.8.11",
     "minecraft-launcher-core": "3.18.2",
     "smol-toml": "1.9.1"

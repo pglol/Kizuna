@@ -108,7 +108,7 @@ for s in hub["servers"]:
     })
     print("instance", s["id"], "->", path, "" if jar else "(no bootstrap jar inside!)")
 
-open(os.path.join(repo, "dist", "launcher.json"), "w").write(json.dumps({"servers": launcher}, indent=2) + "\n")
+open(os.path.join(repo, "dist", "launcher.json"), "w").write(json.dumps({"servers": launcher, **({"hostCodeHash": hub["hostCodeHash"]} if hub.get("hostCodeHash") else {})}, indent=2) + "\n")
 
 # A public listing without addresses: what a future launcher (or a website) reads to show the servers.
 public = [l for l in listing if l["status"] not in ("private", "soon")]

@@ -185,3 +185,25 @@ pre { max-height: 300px; overflow: auto; font-size: 11px; background: #fff; bord
 @media (max-height: 640px) { .news { display: none; } }
 
 .xp.idle { opacity: 0; pointer-events: none; }
+
+/* Hosting */
+.sheet.hostpanel { width: 860px; max-height: calc(100vh - 40px); overflow: auto; padding: 16px 20px; }
+.sheet.hostpanel h2 { margin: 0; font-size: 19px; }
+.sheet.hostpanel .row { margin: 8px 0 4px; }
+.hstate { font-family: var(--pixel); font-size: 13px; padding: 3px 10px; border: 2px solid var(--ink); border-radius: 6px; background: #fff; }
+.hstate.running { background: #2e7d32; color: #fff; }
+.hstate.busy { background: #f2c14e; }
+.htabs { display: flex; gap: 6px; margin: 0 0 8px; }
+.htab { font: 700 13px var(--body); padding: 6px 12px; border: 2px solid var(--ink); border-radius: 6px; background: #fff; color: var(--ink); cursor: pointer; }
+.htab.on { background: var(--ink); color: var(--page); }
+#host-log { height: clamp(140px, calc(100vh - 380px), 360px); margin: 0 0 8px; padding: 10px; overflow: auto; background: #15120f; color: #e9e1cf; font: 11.5px/1.45 Consolas, 'Courier New', monospace; border: 2.5px solid var(--ink); border-radius: 8px; white-space: pre-wrap; word-break: break-word; user-select: text; }
+#host-log .warn { color: #f2c14e; }
+#host-log .err { color: #ff7a6a; }
+.props { max-height: clamp(160px, calc(100vh - 360px), 380px); overflow: auto; display: grid; grid-template-columns: 1fr 220px; gap: 6px 14px; align-items: center; padding: 4px 2px 10px; }
+.props label { font-size: 13px; }
+.props .grp { grid-column: 1 / -1; font-family: var(--head); font-size: 15px; margin-top: 8px; }
+.props input[type=text], .props input[type=number], .props select { height: 30px; border: 2px solid var(--ink); border-radius: 6px; padding: 0 8px; font: 13px var(--body); background: #fff; }
+.props input[type=checkbox] { width: 18px; height: 18px; justify-self: start; }
+.hfolder .fine { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px; margin: 0; }
+#host-ram { height: 30px; border: 2px solid var(--ink); border-radius: 6px; margin-left: 6px; }
+#test-name { margin: 0 0 8px; }

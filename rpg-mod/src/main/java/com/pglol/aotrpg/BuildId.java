@@ -61,6 +61,15 @@ public final class BuildId {
     private static void check(ServerPlayerEntity p) {
         String theirs = heard.get(p.getUuid()), ours = id();
         if (theirs == null || ours.equals("dev") || theirs.equals("dev") || theirs.equals(ours)) return;
+        // They have the newest build and the server doesn't: it's the server that's behind.
+        if (theirs.equals(ServerUpdate.latest)) {
+            AotRpg.LOG.info("{} joined with the newer build {} (server has {}): server update pending", p.getName().getString(), theirs, ours);
+            ServerUpdate.playerAhead(p.getServer());
+            p.networkHandler.disconnect(Text.literal("The server is updating").formatted(Formatting.GOLD, Formatting.BOLD)
+                .append(Text.literal("\n\nYou're on the newest build (" + theirs + "); the server is still on " + ours + ".").formatted(Formatting.GRAY))
+                .append(Text.literal("\nIt installs the update on its next restart. Try again in a minute.").formatted(Formatting.WHITE)));
+            return;
+        }
         kick(p, "build " + theirs);
     }
 
@@ -68,6 +77,6 @@ public final class BuildId {
         AotRpg.LOG.info("{} joined with {} of the mod (server has {}): turned away", p.getName().getString(), theirs, id());
         p.networkHandler.disconnect(Text.literal("Your AoT RPG mod is out of date").formatted(Formatting.GOLD, Formatting.BOLD)
             .append(Text.literal("\n\nYou have " + theirs + "; this server runs build " + id() + ".").formatted(Formatting.GRAY))
-            .append(Text.literal("\nRestart your launcher to update automatically, or download the latest aot-rpg.jar, then join again.").formatted(Formatting.WHITE)));
+            .append(Text.literal("\nPress Play in the Kizuna launcher again: it brings your game up to date first.").formatted(Formatting.WHITE)));
     }
 }

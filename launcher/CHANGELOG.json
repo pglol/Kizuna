@@ -1,4 +1,8 @@
 {
+  "1.3.0": [
+    "Test mode asks for a name, so several testers can play together",
+    "For the team: host a server from the launcher (needs a host code)"
+  ],
   "1.2.5": [
     "Play always loads the newest build: it checks for the latest version of the game files (and the launcher) before starting",
     "Builds can come with preset settings and controls; they're set up once and your own changes are kept"

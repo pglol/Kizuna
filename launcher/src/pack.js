@@ -18,8 +18,9 @@ function inside(root, rel) {
 
 const join = (base, rel) => new URL(rel.split('/').map(encodeURIComponent).join('/'), base.endsWith('/') ? base : base + '/').toString();
 
-/** progress(text, fraction) */
-async function sync(packUrl, gameDir, progress) {
+/** progress(text, fraction). opts.side: 'client' (default) or 'server' (for hosting: client-only files are left out). */
+async function sync(packUrl, gameDir, progress, opts = {}) {
+  const side = opts.side === 'server' ? 'server' : 'client';
   progress && progress('Checking for updates', 0);
   const packBase = packUrl.slice(0, packUrl.lastIndexOf('/') + 1);
   const pack = TOML.parse(await net.text(packUrl));
@@ -33,12 +34,13 @@ async function sync(packUrl, gameDir, progress) {
   await net.pool(files, 8, async (f) => {
     if (f.metafile) {
       const meta = TOML.parse(await net.text(join(indexBase, f.file)));
-      if (meta.side === 'server') return;
+      if (meta.side === (side === 'server' ? 'client' : 'server')) return;
       const dir = path.posix.dirname(f.file);
       const d = meta.download || {};
       if (!d.url) throw new Error(`${meta.name || f.file} has no direct download`);
       want.push({ rel: (dir === '.' ? '' : dir + '/') + meta.filename, url: d.url, hash: d.hash, algo: ALGO[d['hash-format']] });
     } else if (f.file.startsWith('defaults/')) {
+      if (side === 'server') return;
       defaults.push({ rel: f.file.slice('defaults/'.length), url: join(indexBase, f.file), hash: f.hash, algo: ALGO[f['hash-format'] || index['hash-format']] });
     } else {
       want.push({ rel: f.file, url: join(indexBase, f.file), hash: f.hash, algo: ALGO[f['hash-format'] || index['hash-format']] });

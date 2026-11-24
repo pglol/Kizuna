@@ -366,6 +366,8 @@
   async function loadHub() {
     const hub = await K.hub();
     state.servers = hub.servers || [];
+    state.host = !!hub.host;
+    $('host-btn').hidden = !state.host;
     state.offline = !!hub.offline;
     if (!current()) {
       const first = state.servers.find((s) => s.status !== 'soon') || state.servers[0];
@@ -507,7 +509,13 @@
 
   $('play').addEventListener('click', () => play());
   $('login').addEventListener('click', login);
-  $('test-go').addEventListener('click', () => {
+  $('test-go').addEventListener('click', async () => {
+    const n = ($('test-name').value || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 16);
+    if (n.length < 3) {
+      $('signin-err').textContent = 'Pick a test name (3+ letters), different from your friends.';
+      return;
+    }
+    state.settings = await K.settings({ testName: n });
     state.test = true;
     show('signin', false);
     renderAccount();
@@ -521,6 +529,147 @@
     show('settings', false);
     openCode();
   });
+  // ---- Hosting (only after the host code) ----
+  let hostView = null;
+  const hostStates = {};
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const HOST_LABEL = { stopped: 'Stopped', updating: 'Updating', starting: 'Starting', running: 'Running' };
+  const PROPS = [
+    ['Basics'],
+    ['motd', 'Name in the server list', 'text', 'A Minecraft Server'],
+    ['max-players', 'Max players', 'number', '20'],
+    ['server-port', 'Port', 'number', '25565'],
+    ['level-name', 'World folder', 'text', 'world'],
+    ['Who can join'],
+    ['online-mode', 'Real Microsoft accounts only (turn off for test mode)', 'bool', 'true'],
+    ['white-list', 'Whitelist only', 'bool', 'false'],
+    ['enforce-whitelist', 'Kick people taken off the whitelist', 'bool', 'false'],
+    ['Gameplay'],
+    ['pvp', 'PvP', 'bool', 'true'],
+    ['difficulty', 'Difficulty', 'select:peaceful,easy,normal,hard', 'easy'],
+    ['gamemode', 'Game mode for new players', 'select:survival,adventure,creative,spectator', 'survival'],
+    ['allow-flight', 'Allow flight (avoids "flying is not enabled" kicks on gear)', 'bool', 'false'],
+    ['spawn-protection', 'Spawn protection radius (0 = off)', 'number', '16'],
+    ['Performance'],
+    ['view-distance', 'View distance (chunks)', 'number', '10'],
+    ['simulation-distance', 'Simulation distance (chunks)', 'number', '10'],
+  ];
+  function propsHtml(values) {
+    const known = new Set(PROPS.filter((p) => p.length > 1).map((p) => p[0]));
+    const row = (k, label, type, def) => {
+      const v = k in values ? values[k] : def;
+      const id = 'hp-' + k.replace(/[^a-z0-9]/gi, '_');
+      let input;
+      if (type === 'bool') input = `<input type="checkbox" id="${id}" data-k="${k}" data-t="bool" ${v === 'true' ? 'checked' : ''}>`;
+      else if (type.startsWith('select:')) input = `<select id="${id}" data-k="${k}">${type.slice(7).split(',').map((o) => `<option ${o === v ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+      else input = `<input type="${type}" id="${id}" data-k="${k}" value="${esc(v)}">`;
+      return `<label for="${id}">${esc(label)}</label>${input}`;
+    };
+    let h = '';
+    for (const p of PROPS) h += p.length === 1 ? `<div class="grp">${esc(p[0])}</div>` : row(...p);
+    const rest = Object.keys(values).filter((k) => !known.has(k)).sort();
+    if (rest.length) {
+      h += '<div class="grp">Everything else</div>';
+      for (const k of rest) h += row(k, k, 'text', '');
+    }
+    return h;
+  }
+  function setHostState(st) {
+    $('host-state').textContent = HOST_LABEL[st] || st;
+    $('host-state').className = 'hstate' + (st === 'running' ? ' running' : st === 'stopped' ? '' : ' busy');
+    $('host-start').disabled = st !== 'stopped';
+    $('host-stop').disabled = st === 'stopped';
+  }
+  function hostButton() {
+    const on = Object.values(hostStates).some((s) => s && s !== 'stopped');
+    $('host-btn').textContent = on ? 'Server running' : 'Host server';
+    $('host-btn').classList.toggle('live', on);
+  }
+  function logLine(l) {
+    const box = $('host-log');
+    const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    const div = document.createElement('div');
+    div.textContent = l;
+    if (/\bWARN\b/.test(l)) div.className = 'warn';
+    if (/\bERROR\b|Exception|Error:/.test(l)) div.className = 'err';
+    box.append(div);
+    while (box.childNodes.length > 1500) box.firstChild.remove();
+    if (stick) box.scrollTop = box.scrollHeight;
+  }
+  async function openHost() {
+    const s = current();
+    if (!s) return;
+    const ch = channelOf(s).id;
+    const i = await K.hostInfo(s.id, ch);
+    if (!i) return;
+    hostView = { id: s.id, ch, key: i.key };
+    $('host-title').textContent = 'Host · ' + i.name;
+    $('host-folder').textContent = i.folder;
+    $('host-folder').title = i.folder;
+    $('host-eula').checked = i.eula;
+    const ram = $('host-ram');
+    ram.innerHTML = [2, 3, 4, 5, 6, 8, 10, 12, 16].map((g) => `<option value="${g}" ${g === i.ram ? 'selected' : ''}>${g} GB</option>`).join('');
+    $('host-log').innerHTML = '';
+    i.log.forEach(logLine);
+    $('host-props').innerHTML = propsHtml(i.props || {});
+    hostStates[i.key] = i.state;
+    setHostState(i.state);
+    show('host', true);
+    $('host-log').scrollTop = $('host-log').scrollHeight;
+  }
+  K.on('host', (d) => {
+    if (d.state) {
+      hostStates[d.key] = d.state;
+      hostButton();
+    }
+    if (!hostView || d.key !== hostView.key) return;
+    if (d.line) logLine(d.line);
+    if (d.state) setHostState(d.state);
+  });
+  $('host-btn').addEventListener('click', openHost);
+  document.querySelectorAll('.htab').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.htab').forEach((x) => x.classList.toggle('on', x === b));
+    $('host-pane-console').hidden = b.dataset.htab !== 'console';
+    $('host-pane-props').hidden = b.dataset.htab !== 'props';
+  }));
+  $('host-start').addEventListener('click', async () => {
+    if (!$('host-eula').checked) return toast('Tick the Minecraft EULA box first.');
+    setHostState('updating');
+    await K.hostStart(hostView.id, hostView.ch);
+  });
+  $('host-stop').addEventListener('click', () => K.hostStop(hostView.id, hostView.ch));
+  $('host-cmd-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = $('host-cmd').value.trim();
+    if (!v) return;
+    logLine('> ' + v);
+    if (!(await K.hostCmd(hostView.id, hostView.ch, v))) logLine('The server is not running.');
+    $('host-cmd').value = '';
+  });
+  $('host-eula').addEventListener('change', (e) => K.hostSet(hostView.id, hostView.ch, { eula: e.target.checked }));
+  $('host-eula-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    K.openUrl('https://aka.ms/MinecraftEULA');
+  });
+  $('host-ram').addEventListener('change', (e) => K.hostSet(hostView.id, hostView.ch, { ram: Number(e.target.value) }));
+  $('host-folder-change').addEventListener('click', async () => {
+    const f = await K.hostFolder(hostView.id, hostView.ch);
+    if (f) {
+      $('host-folder').textContent = f;
+      const i = await K.hostInfo(hostView.id, hostView.ch);
+      $('host-props').innerHTML = propsHtml(i.props || {});
+    }
+  });
+  $('host-folder-open').addEventListener('click', () => K.hostOpen(hostView.id, hostView.ch));
+  $('host-props-save').addEventListener('click', async () => {
+    const props = {};
+    document.querySelectorAll('#host-props [data-k]').forEach((el) => {
+      props[el.dataset.k] = el.dataset.t === 'bool' ? String(el.checked) : el.value;
+    });
+    await K.hostSet(hostView.id, hostView.ch, { props });
+    toast(hostStates[hostView.key] && hostStates[hostView.key] !== 'stopped' ? 'Saved. Restart the server to apply.' : 'Server settings saved.');
+  });
+
   $('crash-copy').addEventListener('click', () => navigator.clipboard.writeText($('crash-log').textContent));
 
   function openSettings() {
@@ -553,6 +702,11 @@
       return;
     }
     show('code', false);
+    if (r.host) {
+      await loadHub();
+      toast('Server hosting unlocked: Host server is next to Play');
+      return;
+    }
     state.selected = r.id;
     state.settings = await K.settings({});
     await loadHub();
@@ -575,6 +729,8 @@
     state.selected = init.settings.selected;
     state.testMode = !!init.testMode;
     $('test-go').hidden = !state.testMode;
+    $('test-name').hidden = !state.testMode;
+    $('test-name').value = (state.settings && state.settings.testName) || '';
     $('testtag').hidden = !state.testMode;
     state.friends = await K.friends();
     renderAccount();

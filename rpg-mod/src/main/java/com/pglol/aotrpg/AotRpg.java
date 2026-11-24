@@ -154,6 +154,7 @@ public final class AotRpg implements ModInitializer {
         Pursuit.register();
         Prestige.register();
         BuildId.register();
+        ServerUpdate.register();
         Weekly.register();
         RankedSeasons.register();
         WorldActivities.register();

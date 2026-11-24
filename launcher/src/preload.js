@@ -18,8 +18,15 @@ contextBridge.exposeInMainWorld('kizuna', {
   installUpdate: () => ipcRenderer.invoke('update-install'),
   downloadUpdate: () => ipcRenderer.invoke('update-download'),
   checkUpdate: () => ipcRenderer.invoke('update-check'),
+  hostInfo: (id, ch) => ipcRenderer.invoke('host-info', id, ch),
+  hostFolder: (id, ch) => ipcRenderer.invoke('host-folder', id, ch),
+  hostOpen: (id, ch) => ipcRenderer.invoke('host-open', id, ch),
+  hostSet: (id, ch, patch) => ipcRenderer.invoke('host-set', id, ch, patch),
+  hostStart: (id, ch) => ipcRenderer.invoke('host-start', id, ch),
+  hostStop: (id, ch) => ipcRenderer.invoke('host-stop', id, ch),
+  hostCmd: (id, ch, text) => ipcRenderer.invoke('host-cmd', id, ch, text),
   on: (ch, fn) => {
-    if (!['status', 'exited', 'update'].includes(ch)) return;
+    if (!['status', 'exited', 'update', 'host'].includes(ch)) return;
     ipcRenderer.on(ch, (_e, d) => fn(d));
   },
 });

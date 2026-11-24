@@ -1,5 +1,5 @@
 // Kizuna Launcher: sign in once with Microsoft, pick one of our servers, press Play.
-const { app, BrowserWindow, ipcMain, shell, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Notification, dialog } = require('electron');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -8,6 +8,7 @@ const game = require('./game');
 const net = require('./net');
 const store = require('./store');
 const status = require('./status');
+const host = require('./host');
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json'), 'utf8'));
 let win = null;
@@ -131,6 +132,21 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (!playing) app.quit();
 });
+// Hosting: quitting the launcher stops the servers properly (they save the world first).
+let quitting = false;
+app.on('before-quit', (e) => {
+  if (quitting || !host.anyRunning()) return;
+  e.preventDefault();
+  quitting = true;
+  host.stopAll();
+  const t0 = Date.now();
+  const wait = setInterval(() => {
+    if (!host.anyRunning() || Date.now() - t0 > 30000) {
+      clearInterval(wait);
+      app.exit(0);
+    }
+  }, 300);
+});
 
 const pub = (a) => (a ? { name: a.name, uuid: a.uuid } : null);
 
@@ -178,6 +194,9 @@ ipcMain.handle('hub', async () => {
     hub.offline = true;
   }
   const unlocked = new Set(store.settings.get().unlocked || []);
+  // Server hosting stays hidden unless this computer has entered the host code.
+  hub.host = !!hub.hostCodeHash && store.settings.get().host === hub.hostCodeHash;
+  delete hub.hostCodeHash;
   hub.servers = (hub.servers || []).filter((s) => s.status !== 'private' || unlocked.has(s.codeHash));
   // Build channels: a coded one stays locked until its code has been entered on this computer.
   for (const s of hub.servers) {
@@ -226,6 +245,10 @@ ipcMain.handle('unlock', async (_e, code) => {
   const hub = store.read('hub-cache.json', { servers: [] });
   const s = store.settings.get();
   const save = (patch) => store.settings.set({ unlocked: [...new Set([...(s.unlocked || []), h])], ...patch });
+  if (hub.hostCodeHash && hub.hostCodeHash === h) {
+    store.settings.set({ host: h });
+    return { ok: true, host: true, name: 'Server hosting' };
+  }
   const server = (hub.servers || []).find((x) => x.codeHash === h);
   if (server) {
     save({ selected: server.id });
@@ -256,7 +279,10 @@ ipcMain.handle('logout', () => {
   return true;
 });
 
-ipcMain.handle('settings', (_e, patch) => store.settings.set(patch || {}));
+ipcMain.handle('settings', (_e, patch) => {
+  const { host: _h, ...rest } = patch || {}; // hosting is only ever turned on by its code
+  return store.settings.set(rest);
+});
 
 ipcMain.handle('open-folder', (_e, id, channel) => {
   const dir = path.join(store.dir(), 'instances', dirName(id, channel));
@@ -271,9 +297,108 @@ ipcMain.handle('win', (_e, what) => {
   else if (what === 'close') win.close();
 });
 
+// ---- Hosting (only with the host code) ----
+
+function hostAllowed() {
+  const hub = store.read('hub-cache.json', {});
+  return !!hub.hostCodeHash && store.settings.get().host === hub.hostCodeHash;
+}
+
+/** The server and build being hosted, with its folder. */
+function hostTarget(id, channelId) {
+  const hub = store.read('hub-cache.json', { servers: [] });
+  const s = (hub.servers || []).find((x) => x.id === id);
+  if (!s) return null;
+  const chans = s.channels && s.channels.length ? s.channels : [{ id: 'public', name: 'Public', pack: s.pack }];
+  const ch = chans.find((c) => c.id === channelId) || chans[0];
+  const k = host.key(s.id, ch.id);
+  const dirs = store.settings.get().hostDirs || {};
+  return { k, name: `${s.name} (${ch.name || ch.id})`, pack: ch.pack || s.pack, folder: dirs[k] || path.join(store.dir(), 'servers', dirName(s.id, ch.id)) };
+}
+
+const PROPS = 'server.properties';
+function readProps(folder) {
+  const out = {};
+  try {
+    for (const l of fs.readFileSync(path.join(folder, PROPS), 'utf8').split(/\r?\n/)) {
+      const m = /^([^#=\s][^=]*)=(.*)$/.exec(l);
+      if (m) out[m[1].trim()] = m[2];
+    }
+  } catch {}
+  return out;
+}
+function writeProps(folder, values) {
+  const file = path.join(folder, PROPS);
+  let lines = [];
+  try {
+    lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+  } catch {}
+  const left = { ...values };
+  lines = lines.map((l) => {
+    const m = /^([^#=\s][^=]*)=(.*)$/.exec(l);
+    if (!m || !(m[1].trim() in left)) return l;
+    const v = left[m[1].trim()];
+    delete left[m[1].trim()];
+    return `${m[1].trim()}=${v}`;
+  });
+  for (const [k, v] of Object.entries(left)) lines.push(`${k}=${v}`);
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(file, lines.join('\n').replace(/\n*$/, '\n'));
+}
+
+ipcMain.handle('host-info', (_e, id, channel) => {
+  if (!hostAllowed()) return null;
+  const t = hostTarget(id, channel);
+  if (!t) return null;
+  const s = store.settings.get();
+  return { key: t.k, name: t.name, folder: t.folder, ram: (s.hostRam || {})[t.k] || 6, eula: !!s.hostEula, props: readProps(t.folder), ...host.info(t.k) };
+});
+ipcMain.handle('host-folder', async (_e, id, channel) => {
+  if (!hostAllowed()) return null;
+  const t = hostTarget(id, channel);
+  const r = await dialog.showOpenDialog(win, { title: 'Server folder (pick your existing server to keep its world)', defaultPath: t.folder, properties: ['openDirectory', 'createDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return t.folder;
+  const s = store.settings.get();
+  store.settings.set({ hostDirs: { ...(s.hostDirs || {}), [t.k]: r.filePaths[0] } });
+  return r.filePaths[0];
+});
+ipcMain.handle('host-open', (_e, id, channel) => {
+  if (!hostAllowed()) return;
+  const t = hostTarget(id, channel);
+  fs.mkdirSync(t.folder, { recursive: true });
+  shell.openPath(t.folder);
+});
+ipcMain.handle('host-set', (_e, id, channel, patch) => {
+  if (!hostAllowed()) return;
+  const t = hostTarget(id, channel);
+  const s = store.settings.get();
+  const p = {};
+  if (patch.ram) p.hostRam = { ...(s.hostRam || {}), [t.k]: Math.max(2, Math.min(32, Number(patch.ram) || 6)) };
+  if ('eula' in patch) p.hostEula = !!patch.eula;
+  store.settings.set(p);
+  if (patch.props && typeof patch.props === 'object') {
+    const clean = {};
+    for (const [k, v] of Object.entries(patch.props)) if (/^[a-z0-9.\-_]+$/i.test(k)) clean[k] = String(v).replace(/[\r\n]/g, ' ');
+    writeProps(t.folder, clean);
+  }
+  return true;
+});
+ipcMain.handle('host-start', (_e, id, channel) => {
+  if (!hostAllowed()) return false;
+  const t = hostTarget(id, channel);
+  const s = store.settings.get();
+  host.start(t.k, { packUrl: t.pack, folder: t.folder, root: path.join(store.dir(), 'minecraft'), ram: (s.hostRam || {})[t.k] || 6, eula: !!s.hostEula, hubUrl: config.hubUrl }, {
+    line: (l) => send('host', { key: t.k, line: l }),
+    state: (st) => send('host', { key: t.k, state: st }),
+  });
+  return true;
+});
+ipcMain.handle('host-stop', (_e, id, channel) => hostAllowed() && host.stop(hostTarget(id, channel).k));
+ipcMain.handle('host-cmd', (_e, id, channel, text) => hostAllowed() && host.command(hostTarget(id, channel).k, text));
+
 /** Test builds only: an offline profile, so the whole install-and-start path can be tried before Microsoft approves the app. */
 function testSession() {
-  const name = 'Tester';
+  const name = (store.settings.get().testName || 'Tester').replace(/[^A-Za-z0-9_]/g, '').slice(0, 16) || 'Tester';
   const h = crypto.createHash('md5').update('OfflinePlayer:' + name).digest();
   h[6] = (h[6] & 0x0f) | 0x30;
   h[8] = (h[8] & 0x3f) | 0x80;

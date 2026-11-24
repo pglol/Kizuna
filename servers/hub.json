@@ -1,5 +1,6 @@
 {
   "_comment": "Every server we run; the launcher shows these. Pictures can be paths in this repo (servers/art/...) or links. background: the main picture; gallery: extra pictures (slideshow). news: newest first, each {title, date, image, tag, url}. status: public | private (needs code) | soon. channels: the builds players can pick, each {id, name, pack, address, code?, note?}; a channel with a codeHash is locked until the player enters its code (Early Access codes for Patreon supporters, Development codes for the team). Only the hash of each code is published. A channel can list several addresses (e.g. Hamachi and a public host); players switch between them. theme: the scene along the bottom of the launcher (wall, peaks). To set a new code, put \"code\": \"...\" on the channel instead; the build turns it into a hash. Prefer codeHash so the plain code never sits in the repo.",
+  "hostCodeHash": "b613056143061404a1ddcf65feede3e10607a9375d4d321d7f6fd3c4414b1124",
   "servers": [
     {
       "id": "aot",
@@ -32,7 +33,7 @@
           "url": ""
         }
       ],
-      "kanji": "\u5de8",
+      "kanji": "巨",
       "gallery": [],
       "channels": [
         {
@@ -87,7 +88,7 @@
       "logo": "",
       "background": "",
       "news": [],
-      "kanji": "\u578b",
+      "kanji": "型",
       "channels": [
         {
           "id": "public",

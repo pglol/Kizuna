@@ -59,6 +59,7 @@
         <div class="ptrack"><div class="pfill" id="pfill"></div></div>
       </div>
       <button class="plain" id="folder">Open game folder</button>
+      <button class="plain" id="host-btn" hidden>Host server</button>
       <button class="play" id="play"><span>PLAY</span></button>
     </div>
   </footer>
@@ -83,6 +84,7 @@
     <div class="sheet signin">
       <div class="big">絆</div>
       <button class="box red" id="login">Sign in with Microsoft</button>
+      <input class="field small" id="test-name" placeholder="Test name (different for each person)" maxlength="16" autocomplete="off" spellcheck="false" hidden>
       <button class="box" id="test-go" hidden>Test without signing in</button>
       <p class="fine" id="signin-err"></p>
     </div>
@@ -109,6 +111,27 @@
       <input class="field" id="code-input" maxlength="40" placeholder="CODE" autocomplete="off" spellcheck="false">
       <p class="fine" id="code-err"></p>
       <div class="row split"><button class="box small" data-close>Cancel</button><button class="box red small" id="code-go">Unlock</button></div>
+    </div>
+  </section>
+
+  <section class="overlay" id="host" hidden>
+    <div class="sheet wide hostpanel">
+      <div class="row split"><h2 id="host-title">Host</h2><span class="hstate" id="host-state">Stopped</span></div>
+      <div class="htabs"><button class="htab on" data-htab="console">Console</button><button class="htab" data-htab="props">Server settings</button></div>
+      <div id="host-pane-console">
+        <pre id="host-log"></pre>
+        <form class="add" id="host-cmd-form"><input class="field small" id="host-cmd" placeholder="Command, e.g. op Name · whitelist add Name · say Hello" autocomplete="off" spellcheck="false"><button class="box small">Send</button></form>
+      </div>
+      <div id="host-pane-props" hidden>
+        <div class="props" id="host-props"></div>
+        <div class="row split"><span class="fine">Saved to server.properties; applies the next time the server starts.</span><button class="box red small" id="host-props-save">Save</button></div>
+      </div>
+      <div class="row split hfolder"><span class="fine" id="host-folder"></span><span><button class="box small" id="host-folder-change">Change folder</button> <button class="box small" id="host-folder-open">Open</button></span></div>
+      <div class="row split">
+        <label class="toggle"><input type="checkbox" id="host-eula"> I accept the <a href="#" id="host-eula-link">Minecraft EULA</a></label>
+        <label>Memory <select id="host-ram"></select></label>
+      </div>
+      <div class="row split"><button class="box small" data-close>Close</button><span><button class="box small" id="host-stop">Stop</button> <button class="box red small" id="host-start">Start server</button></span></div>
     </div>
   </section>
 
