@@ -1,0 +1,15 @@
+# managed by mods.txt
+# sha1 62fce6c3a4aa278d19fb774a1e21c7439d5e88a0
+name = "3d-hands"
+filename = "3d-hands-1.0.1-mod.jar"
+side = "client"
+
+[download]
+url = "https://cdn.modrinth.com/data/OORXn0mW/versions/FeJve9ez/3d-hands-1.0.1-mod.jar"
+hash-format = "sha512"
+hash = "63533103d9cafa3aa5078524bf7d62d40f7535dfe0d3fb51e216c4626253e33de8f574ce24321f4bb774d61cdc3b4db7f2ee3b88e9a74f01d3b3e1034af9dea4"
+
+[update]
+[update.modrinth]
+mod-id = "OORXn0mW"
+version = "FeJve9ez"

@@ -6,4 +6,4 @@ side = "client"
 [download]
 url = "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/dist/kizuna-brand.jar"
 hash-format = "sha256"
-hash = "61c9a57971aeac2e3b5f7845366a44de62f4d62a00a3f29798e2750e4bed6ed8"
+hash = "d586d1b90b26eaacb9112964bb0830586518a3aa319b8a847822c42847c6c571"

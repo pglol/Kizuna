@@ -1,6 +1,42 @@
 hash-format = "sha256"
 
 [[files]]
+file = "config/c2me.toml"
+hash = "208ab8d92dbcbeb1b644d3353a86ffd4c9bf2af0a875361c6ddf2e31dabe14c8"
+
+[[files]]
+file = "config/concentration.json"
+hash = "d5b574951774c5cab441fe4fadf6d8a2068d94eade834d3c446d2099347ecbc7"
+
+[[files]]
+file = "config/dannys-aot.json"
+hash = "f2c96092c9a2ea77b665e0ce910efbf836b5efb14ffda48206b6729e645dc4ad"
+
+[[files]]
+file = "config/entity_model_features.json"
+hash = "4d13dfd4a71e0f9b0e6f673233856185f10bc2465916d7e43ace4e3621334067"
+
+[[files]]
+file = "config/entity_texture_features.json"
+hash = "bd66edf9d1a72cd717bbe9b17b41ffd16963b089493e5ddae3d3ad69153105ba"
+
+[[files]]
+file = "config/immediatelyfast.json"
+hash = "5986efada30e7f010293f88598f1d36c6011fc270172fdae52c69c91f34ef34b"
+
+[[files]]
+file = "config/modmenu.json"
+hash = "18a3ac5282758f7e45d8381bae6df93035f6e7629c72a0871fcea6809bf1f2ba"
+
+[[files]]
+file = "config/sodium-extra-options.json"
+hash = "c1b7cccb834723848e7402fec299f824a17249490e3ef4e008c9ea7c8af37251"
+
+[[files]]
+file = "config/vmp.properties"
+hash = "5677d5261dba834047ed55cadb55afe51ec562bec5d51575fdca84a9d67acae5"
+
+[[files]]
 file = "config/kizuna/brand.json"
 hash = "bab831d2cb0938a6f09d0c0f6c309b0882d79313139cf61ada8dbe41d68e8727"
 
@@ -9,26 +45,146 @@ file = "config/kizuna/logo.png"
 hash = "c109e7462994c27881fa9ce4fcf664e22fbdbcb71642696b642cd8da1135ebaa"
 
 [[files]]
+file = "mods/3d-hands.pw.toml"
+hash = "19cd57863efc6b90ca7a9633160e6540dbf436816f9a84f645961274cc56af71"
+metafile = true
+
+[[files]]
 file = "mods/aot-rpg.pw.toml"
-hash = "f6353353aecc024309aa2d2bc470436496312e8d930457e266159ccebafc723f"
+hash = "50fc389221fec3ed2ddd9bc2c6aed1d46e4c918b90d0fb5d717fa4f85902161c"
+metafile = true
+
+[[files]]
+file = "mods/c2me.pw.toml"
+hash = "2d33683f583dcd7ee9798a9dab5b6f46cdd94d6ac8660929718680e78bbbee2f"
+metafile = true
+
+[[files]]
+file = "mods/cloth-config.pw.toml"
+hash = "62daf100b31eed8dd820329da71f67fa32ba55d716a4f8bc3d5be429bbc9b1cc"
+metafile = true
+
+[[files]]
+file = "mods/concentration.pw.toml"
+hash = "1802f54419285372bd74f0d9602c2fec1bc3c4acca28f7ab29a040d38942dbaa"
+metafile = true
+
+[[files]]
+file = "mods/dannys-aot.pw.toml"
+hash = "cee420fd2c9c619665f63b4675fbb277d940dc57a91a30c17f40ea4a4a9a5bd6"
+metafile = true
+
+[[files]]
+file = "mods/distanthorizons.pw.toml"
+hash = "87e57cfca3ae99ae31cf1c4755efc651a75a7817398d4bd192073b394b9efd4a"
+metafile = true
+
+[[files]]
+file = "mods/entity-model-features.pw.toml"
+hash = "257ea401a9ecc2b523d7ca59aa2a4392ae8aae5e0ff7a0517e4e96de7ac4292d"
+metafile = true
+
+[[files]]
+file = "mods/entity-texture-features.pw.toml"
+hash = "79b17dca66170edef01b27c4a86dbb37ec679fb08a8a93b484efb55c1b8a4a34"
 metafile = true
 
 [[files]]
 file = "mods/fabric-api.pw.toml"
-hash = "9e884d3ed93f3309077173c94a551b9cce6a0809ca668fc4a0b5aa94c89815c4"
+hash = "20732014bdd9b8599b52b9816eb4d641cfc1d15ea6720a11d5883280756c0050"
+metafile = true
+
+[[files]]
+file = "mods/geckolib.pw.toml"
+hash = "c65228f9d9edbb99a34c9371250c0dacad87e8c83d29e7c6397bec8313d722b6"
+metafile = true
+
+[[files]]
+file = "mods/immediatelyfast.pw.toml"
+hash = "141f794149259bc56b4bdbe5e67b8e8e50db76e3dd5009cdbebebc004daf3f29"
 metafile = true
 
 [[files]]
 file = "mods/iris.pw.toml"
-hash = "693373dcf37ffab41d09b6ac56568559d32599484c3efcb970c2342a45403ae8"
+hash = "fe27f4e0bf37103951014cd30e95e1ac9c18988dd6e2bfe4ef6b64f05d79cf14"
 metafile = true
 
 [[files]]
 file = "mods/kizuna-brand.pw.toml"
-hash = "eaffa4d123e298e2f81b0a729992a9481959e2c57bd909053901e1d390a2bb5b"
+hash = "5323a324f23548a768a52783d1f395751ce27a6d1ad45b6974c72b2d30c4d9a3"
+metafile = true
+
+[[files]]
+file = "mods/modmenu.pw.toml"
+hash = "2967f160226cf79d96c3035992cce5cf5b10c843ef5cccfb8154a32f52ec5849"
+metafile = true
+
+[[files]]
+file = "mods/player-animation-lib.pw.toml"
+hash = "6cbe80e7517a0b1dfff3ca35bae3869ea2ae96c595becf7ec9ebf24b7d439215"
+metafile = true
+
+[[files]]
+file = "mods/reeses-sodium-options.pw.toml"
+hash = "a33ff22ed613dd4e9b386f2224822b13789598627e92277d3f419da405dd0bcb"
+metafile = true
+
+[[files]]
+file = "mods/skinlayers3d.pw.toml"
+hash = "d2ab5758a1d2c63010d745ccfe3be875ded53e17a91bd90b8f046fc05483f2cd"
+metafile = true
+
+[[files]]
+file = "mods/sodium-extra.pw.toml"
+hash = "6387f6e9063103e88ac2c0f29f39642267e487e0cf5c94ef2f162958e459e39a"
 metafile = true
 
 [[files]]
 file = "mods/sodium.pw.toml"
-hash = "d95a99d6b0374341ee8dec69c9967c84bd6b67427fc2012a069d21ab9620239e"
+hash = "0825c83873745cf06b4de68ba52761323fc9126fcf5731cddd18c2f6e3cba98e"
+metafile = true
+
+[[files]]
+file = "mods/vmp.pw.toml"
+hash = "450ff30abc7fc06687ddf1a2492552c2d7fe3c290360e5a05365d10fae56dfa9"
+metafile = true
+
+[[files]]
+file = "resourcepacks/fresh-animations-extensions.pw.toml"
+hash = "feda05fa088c06e022b78b8b228a605a7599ef2ab6edbe1522276ce5a717fcde"
+metafile = true
+
+[[files]]
+file = "resourcepacks/fresh-animations.pw.toml"
+hash = "a2145858e9bfb44c0e1c08c6203f62965a2b741d61bbbceefa567127c91aa2f8"
+metafile = true
+
+[[files]]
+file = "resourcepacks/fresh-moves.pw.toml"
+hash = "d32442431ee6bf49feb083ce191a2158d0b07987ff8a06c90d11b112a697510d"
+metafile = true
+
+[[files]]
+file = "shaderpacks/complementary-reimagined.pw.toml"
+hash = "92c0efeb0270b88a62896e159f372c120d89338dc161677dda3d664b81b52a57"
+metafile = true
+
+[[files]]
+file = "shaderpacks/fantasy-shaders-reimagined.pw.toml"
+hash = "2a7cb7a802c253f2b35d71f991918684cc4b63c50ee2c892fb0c5b07f1dad465"
+metafile = true
+
+[[files]]
+file = "shaderpacks/fastpbr.pw.toml"
+hash = "233bccbe6c51e6a9856e3e2a6aa66901ba417d18abe2b1d3207540894ba85e62"
+metafile = true
+
+[[files]]
+file = "shaderpacks/photon.pw.toml"
+hash = "934d3b0d11867f81cde10c930a742a7d62ce0bf9bdfc7197bd483f81f4822ea7"
+metafile = true
+
+[[files]]
+file = "shaderpacks/voyager.pw.toml"
+hash = "6f6aca8967b0864d883f46725cabc69fda3328d3185a4ba52cf8a6eac2eda151"
 metafile = true

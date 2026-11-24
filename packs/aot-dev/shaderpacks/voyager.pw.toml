@@ -1,0 +1,15 @@
+# managed by mods.txt
+# sha1 3ed816e8bca19e6216ec1fcbcf7aa145628a9874
+name = "voyager"
+filename = "Voyager shader 2.0.8.zip"
+side = "client"
+
+[download]
+url = "https://cdn.modrinth.com/data/71EyVfCn/versions/GZ6KdIAk/Voyager%20shader%202.0.8.zip"
+hash-format = "sha512"
+hash = "755bab481694f6e037dcf12760aff0f6f9911e3bb0d773dcff7d388db9b00f7d620e95f3c1500112b63b9582485866b05a84f8803e6fddb820f25d1fb920fde2"
+
+[update]
+[update.modrinth]
+mod-id = "71EyVfCn"
+version = "GZ6KdIAk"

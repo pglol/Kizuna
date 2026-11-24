@@ -1,0 +1,15 @@
+# managed by mods.txt
+# sha1 d60b3b29d3101378f68218100b7efe4880b52d87
+name = "dannys-aot"
+filename = "dannys-aot-2.4.3.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/7x3oDLDY/versions/p2GQ0M4J/dannys-aot-2.4.3.jar"
+hash-format = "sha512"
+hash = "7898a6d7131905b10a81f9197df2dfb479f55f4a5d9078cb28d5a14b006e614f26a77325a84e1e26d70f138bf79583f4e370408c5f2bd4cf4876a45e7fe3be7d"
+
+[update]
+[update.modrinth]
+mod-id = "7x3oDLDY"
+version = "p2GQ0M4J"

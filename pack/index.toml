@@ -10,7 +10,7 @@ hash = "c109e7462994c27881fa9ce4fcf664e22fbdbcb71642696b642cd8da1135ebaa"
 
 [[files]]
 file = "mods/aot-rpg.pw.toml"
-hash = "0dcfd28c557dc664d6c59b6a30f7b9b8268a75f798717ec534e78c1ecb71be7b"
+hash = "633a9df34f3ba1b929ab580157e038b43043b36ea87e77f1c6b18989ce6f1a55"
 metafile = true
 
 [[files]]
@@ -25,7 +25,7 @@ metafile = true
 
 [[files]]
 file = "mods/kizuna-brand.pw.toml"
-hash = "eaffa4d123e298e2f81b0a729992a9481959e2c57bd909053901e1d390a2bb5b"
+hash = "5323a324f23548a768a52783d1f395751ce27a6d1ad45b6974c72b2d30c4d9a3"
 metafile = true
 
 [[files]]
