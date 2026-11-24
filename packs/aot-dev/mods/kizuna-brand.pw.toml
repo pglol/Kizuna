@@ -1,0 +1,9 @@
+# managed by mods.txt
+name = "kizuna-brand.jar"
+filename = "kizuna-brand.jar"
+side = "client"
+
+[download]
+url = "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/dist/kizuna-brand.jar"
+hash-format = "sha256"
+hash = "61c9a57971aeac2e3b5f7845366a44de62f4d62a00a3f29798e2750e4bed6ed8"
