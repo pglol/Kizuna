@@ -7,3 +7,4 @@ rpg-mod/.gradle/
 rpg-mod/run/
 servers/.bootstrap.jar
 _site/
+.gradle/
