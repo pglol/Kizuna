@@ -700,6 +700,10 @@ public final class Extraction {
         ServerPlayerEntity lead = server.getPlayerManager().getPlayer(leader);
         if (lead == null || lead == p || !inLobby(lead) || runOf(p.getUuid()) != null || runOf(leader) != null) return;
         if (inLobby(p) && slotAt(p.getX()) == slotAt(lead.getX())) return;
+        if (!AotRpg.MODES.extractionAllowed(p)) {
+            p.sendMessage(net.minecraft.text.Text.literal("Extraction is closed: an admin has to let you in.").formatted(Formatting.RED), true);
+            return;
+        }
         Profile pr = AotRpg.PROFILES.get(p.getUuid());
         pr.mode = DeathCare.EXTRACTION;
         AotRpg.PROFILES.save(p.getUuid());

@@ -53,6 +53,24 @@ public final class CutscenePlayer {
     private static Vec3d pos, vel, look, lookVel;
     private static float fovNow, fovVel, rollNow, rollVel;
     private static int shotIndex;
+    /** A flight between places far apart (no cuts): from where, looking where, when, how long. */
+    private static Vec3d flyFrom, flyLookFrom;
+    private static float flyStart = -1, flyDur;
+
+    /** Swoops from the camera's current pose toward a shot far away, arcing up over whatever's between. */
+    private static void fly(Vec3d from, Vec3d lookFrom, Vec3d to, float at) {
+        flyFrom = from;
+        flyLookFrom = lookFrom;
+        flyStart = at;
+        flyDur = (float) MathHelper.clamp(0.75 + from.distanceTo(to) / 140.0, 0.8, 1.7);
+        var mc = MinecraftClient.getInstance();
+        if (mc.player != null) mc.getSoundManager().play(net.minecraft.client.sound.PositionedSoundInstance.master(com.pglol.aotrpg.HitSounds.WHOOSH, 0.8f, 0.55f));
+    }
+
+    private static double ease3(double k) {
+        k = MathHelper.clamp(k, 0, 1);
+        return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    }
     private static Cam out;
     /** The game's own lens this frame (before any cutscene), so the glide home lands on it exactly. */
     public static float vanillaFov = 70;
@@ -121,9 +139,12 @@ public final class CutscenePlayer {
         fovNow = vanillaFov;
         fovVel = 0;
         rollNow = rollVel = 0;
-        // A first shot far off can't be flown to: open on it from black instead.
+        // A story scene opens on its first shot (from black); anything else lifts out of your eyes,
+        // flying there if it's far.
+        flyStart = -1;
         Want first = want(shots.get(0), 0);
-        if (first.pos().distanceTo(pos) > FAR || fade) snapTo(shots.get(0));
+        if (fade) snapTo(shots.get(0));
+        else if (first.pos().distanceTo(pos) > FAR) fly(pos, look, first.pos(), 0);
         com.pglol.aotrpg.client.HudHide.hide("cutscene");
     }
 
@@ -227,8 +248,8 @@ public final class CutscenePlayer {
             Net.Shot s = shots.get(i);
             if (i != shotIndex) {
                 // A shot across the world: a real cut (the blink hides it), arriving already moving.
-                Want prevEnd = want(shots.get(shotIndex), 1), next = want(s, 0);
-                if (prevEnd.pos().distanceTo(next.pos()) > FAR) snapTo(s);
+                Want next = want(s, 0);
+                if (pos.distanceTo(next.pos()) > FAR) fly(pos, look, next.pos(), t);
                 shotIndex = i;
             }
             Want wnt = want(s, left / Math.max(0.01f, s.seconds()));
@@ -238,6 +259,21 @@ public final class CutscenePlayer {
             tr = wnt.roll();
             // Easing out of your eyes takes its time; once moving it follows the shot closely.
             w = MathHelper.lerp(MathHelper.clamp(t / 0.9f, 0, 1), 4.2, 7.5);
+            if (flyStart >= 0 && t - flyStart < flyDur) {
+                // In flight: up and over on a curve, the lens opening with the speed, the gaze
+                // turning toward what's ahead a beat before arriving.
+                double k = ease3((t - flyStart) / flyDur);
+                Vec3d end = wnt.pos();
+                double d = flyFrom.distanceTo(end);
+                Vec3d mid = flyFrom.add(end).multiply(0.5).add(0, Math.max(14, d * 0.32), 0);
+                double u = 1 - k;
+                tp = flyFrom.multiply(u * u).add(mid.multiply(2 * u * k)).add(end.multiply(k * k));
+                double lk = ease3(Math.min(1, (t - flyStart) / (flyDur * 0.8)));
+                tl = flyLookFrom.lerp(wnt.look(), lk);
+                tf += (float) (16 * Math.sin(Math.PI * k));
+                tr += (float) (6 * Math.sin(Math.PI * k));
+                w = 16;
+            }
         } else {
             if (homeAt < 0) homeAt = t;
             if (!blendOut) {
@@ -407,12 +443,21 @@ public final class CutscenePlayer {
             float a = t < 0.8f ? 1 : t < 1.2f ? 1 - (t - 0.8f) / 0.4f * 0.7f : t < 1.5f ? 0.3f + (t - 1.2f) / 0.3f * 0.5f : 0.8f * (1 - (t - 1.5f) / 0.7f);
             c.fill(0, 0, w, h, (int) (255 * MathHelper.clamp(a, 0, 1)) << 24);
         }
-        // Opening on a shot far from you: up from black.
-        if (!fade && t < 0.35f && want(shots.get(0), 0).pos().distanceTo(MinecraftClient.getInstance().player.getCameraPosVec(1f)) > FAR) {
-            c.fill(0, 0, w, h, (int) (255 * (1 - t / 0.35f)) << 24);
+        // In flight: the edges darken and streak with speed.
+        if (flyStart >= 0 && t - flyStart < flyDur && !home()) {
+            float k = (float) Math.sin(Math.PI * MathHelper.clamp((t - flyStart) / flyDur, 0, 1));
+            int va = (int) (90 * k);
+            for (int i = 0; i < 8; i++) {
+                int e = i * 5, a = va * (8 - i) / 8;
+                c.fill(0, e, w, e + 5, a << 24);
+                c.fill(0, h - e - 5, w, h - e, a << 24);
+            }
+            var rnd = new java.util.Random((long) (t * 30));
+            for (int i = 0; i < 14; i++) {
+                int ly = rnd.nextInt(h), lx = rnd.nextInt(w), len = 30 + rnd.nextInt(80);
+                c.fill(lx, ly, Math.min(w, lx + len), ly + 1, ((int) (60 * k)) << 24 | 0xFFFFFF);
+            }
         }
-        float dip = home() ? 0 : cutDip(t);
-        if (dip > 0) c.fill(0, 0, w, h, (int) (255 * dip) << 24);
         // Cutting away somewhere else: close on black.
         if (!blendOut && home()) c.fill(0, 0, w, h, (int) (255 * MathHelper.clamp((t - homeAt) / 0.3f, 0, 1)) << 24);
         if (!title.isEmpty()) {
