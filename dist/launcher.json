@@ -73,9 +73,9 @@
       ]
     },
     {
-      "id": "stance",
-      "name": "Stancebound",
-      "short": "SB",
+      "id": "kata",
+      "name": "Kata",
+      "short": "KT",
       "tagline": "Martial arts duels in a ruined kingdom.",
       "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
       "status": "soon",
@@ -83,12 +83,12 @@
       "minecraft": "1.21.1",
       "fabric": "0.16.10",
       "accent": "#2f5d8a",
-      "kanji": "\u6b66",
+      "kanji": "\u578b",
       "theme": "peaks",
       "icon": "",
       "logo": "",
       "background": "",
-      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml",
+      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata/pack.toml",
       "news": [],
       "gallery": [],
       "channels": [
@@ -97,7 +97,7 @@
           "name": "Public",
           "note": "",
           "address": "25.52.234.232:25565",
-          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/stance/pack.toml",
+          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata/pack.toml",
           "addresses": []
         }
       ]
