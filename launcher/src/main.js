@@ -291,6 +291,16 @@ function logLine(...a) {
 
 ipcMain.handle('play', async (_e, id, test, channelId, hostLabel) => {
   if (playing) return { ok: false, error: 'A game is already running.' };
+  // Always the newest build: pin to the latest commit and re-read the server list before anything else.
+  send('status', { text: 'Checking for updates', fraction: 0.01 });
+  const sha = await net.pinLatest(config.hubUrl);
+  try {
+    const latest = await net.json(config.hubUrl + (sha ? '' : (config.hubUrl.includes('?') ? '&' : '?') + 't=' + Date.now()));
+    store.write('hub-cache.json', latest);
+  } catch (e) {
+    logLine('could not refresh the server list before playing:', e.message || e);
+  }
+  logLine('build check:', sha ? 'latest commit ' + sha.slice(0, 8) : 'commit lookup failed, using branch links');
   const hub = store.read('hub-cache.json', { servers: [] });
   const found = (hub.servers || []).find((s) => s.id === id);
   if (!found) return { ok: false, error: 'That server is not available right now.' };

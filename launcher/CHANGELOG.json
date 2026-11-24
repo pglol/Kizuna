@@ -1,4 +1,8 @@
 {
+  "1.2.5": [
+    "Play always loads the newest build: it checks for the latest version of the game files (and the launcher) before starting",
+    "Builds can come with preset settings and controls; they're set up once and your own changes are kept"
+  ],
   "1.2.4": [
     "Play checks for a launcher update first; choose Update now, or Later to go straight into the game",
     "Builds can come with preset settings and controls; they're set up once and your own changes are kept"

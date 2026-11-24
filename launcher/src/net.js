@@ -17,7 +17,38 @@ async function retry(fn, tries = 4) {
   throw last;
 }
 
+// GitHub's raw file host keeps a branch's files cached for a few minutes, so right after a new build
+// is pushed it can still hand out the old one. Before playing we look up the branch's newest commit
+// and read everything from that exact commit instead (those links never go stale).
+let pinned = null;
+
+async function pinLatest(hubUrl) {
+  const m = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/(.+)\/dist\/[^/]+$/.exec(hubUrl || '');
+  if (!m) return null;
+  const [, owner, repo, branch] = m;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${branch}`, {
+      headers: { Accept: 'application/vnd.github.sha', 'User-Agent': 'kizuna-launcher' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    });
+    const sha = r.ok ? (await r.text()).trim() : '';
+    if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(`commit lookup ${r.status}`);
+    pinned = { from: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/`, to: `https://raw.githubusercontent.com/${owner}/${repo}/${sha}/` };
+    return sha;
+  } catch {
+    pinned = null;
+    return null;
+  }
+}
+
+/** The same link at the pinned commit, when it points into the repo's branch. */
+function fresh(url) {
+  return pinned && url.startsWith(pinned.from) ? pinned.to + url.slice(pinned.from.length) : url;
+}
+
 async function text(url) {
+  url = fresh(url);
   return retry(async () => {
     const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) {
@@ -48,6 +79,7 @@ async function file(url, dest, hash, algo = 'sha1') {
     } catch {}
   }
   await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+  url = fresh(url);
   await retry(async () => {
     const r = await fetch(url);
     if (!r.ok) {
@@ -79,4 +111,4 @@ async function pool(items, n, fn) {
   await Promise.all(workers);
 }
 
-module.exports = { text, json, file, hashFile, pool, retry };
+module.exports = { text, json, file, hashFile, pool, retry, pinLatest, fresh };
