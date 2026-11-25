@@ -17,6 +17,7 @@
     "SprintDustMixin",
     "StepSoundMixin",
     "TravelMixin",
+    "JumpMixin",
     "GravityMixin"
   ],
   "injectors": {

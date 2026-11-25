@@ -40,6 +40,22 @@ public final class KataCore implements ModInitializer {
         if (BRACED.size() > 512) BRACED.clear();
     }
 
+    private static final java.util.Map<java.util.UUID, Integer> SLAMMED = new java.util.HashMap<>();
+
+    /**
+     * The player hit a wall at speed (blocks a tick). Hurts like flying into one with elytra: nothing
+     * at a jog, more the harder you hit. Only ever about the player themselves, once a half second.
+     */
+    public static void impact(ServerPlayerEntity p, double speed) {
+        int now = p.getServer().getTicks();
+        Integer last = SLAMMED.get(p.getUuid());
+        if (last != null && now - last < 10) return;
+        SLAMMED.put(p.getUuid(), now);
+        if (SLAMMED.size() > 512) SLAMMED.clear();
+        float dmg = (float) (Math.min(speed, 4) * 10 - 3);
+        if (dmg > 0.5f && !p.isCreative() && !p.isSpectator()) p.damage(p.getDamageSources().flyIntoWall(), dmg);
+    }
+
     /** Braced in the last half second: the landing is caught. */
     public static boolean braced(ServerPlayerEntity p) {
         Integer at = BRACED.get(p.getUuid());

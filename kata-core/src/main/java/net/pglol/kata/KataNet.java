@@ -40,6 +40,8 @@ public final class KataNet {
 
     /** Act mode meaning "crouched to catch a landing" (for the server's fall damage; not shown). */
     public static final int BRACE = 31;
+    /** Act mode meaning "slammed into a wall"; side carries the speed (twentieths of a block a tick). */
+    public static final int IMPACT = 32;
 
     static void register() {
         PayloadTypeRegistry.playC2S().register(Act.ID, Act.CODEC);
@@ -48,6 +50,10 @@ public final class KataNet {
             ServerPlayerEntity p = ctx.player();
             if (payload.mode() == BRACE) {
                 KataCore.brace(p);
+                return;
+            }
+            if (payload.mode() == IMPACT) {
+                KataCore.impact(p, payload.side() / 20.0);
                 return;
             }
             int mode = Math.max(0, Math.min(15, payload.mode())), side = Math.max(-1, Math.min(1, payload.side()));

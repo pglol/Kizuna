@@ -224,7 +224,7 @@ public final class Ragdoll {
         for (int s = 0; s < steps; s++) {
             for (int i = 0; i < N; i++) {
                 double vx = (x[i] - px[i]) * drag, vy = (y[i] - py[i]) * drag, vz = (z[i] - pz[i]) * drag;
-                double sp = Math.sqrt(vx * vx + vy * vy + vz * vz), cap = 40 * h;
+                double sp = Math.sqrt(vx * vx + vy * vy + vz * vz), cap = 80 * h;
                 if (sp > cap) {
                     vx *= cap / sp;
                     vy *= cap / sp;

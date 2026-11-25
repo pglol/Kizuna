@@ -742,7 +742,9 @@ public final class Animator {
      * the arm points straight at it.
      */
     static void reach(Pose out, Bone arm, Bone fore, Vector3f shoulder, Vector3f target, Matrix4f invFrame, float weight) {
-        solve(out, arm, fore, shoulder, target, invFrame, weight, UPPER, FORE, -1, (float) Math.toRadians(-90));
+        // Elbows hang down and a little back and out, like a relaxed arm's do.
+        Vector3f pole = new Vector3f(Math.signum(shoulder.x) * 0.3f, 1, 0.45f);
+        solve(out, arm, fore, shoulder, target, invFrame, weight, UPPER, FORE, -1, (float) Math.toRadians(-90), pole);
     }
 
     /**
@@ -751,7 +753,7 @@ public final class Animator {
      * smoothly through every direction instead of jumping where angles wrap. sign: -1 elbows bend
      * forward, +1 knees bend back.
      */
-    private static void solve(Pose out, Bone upper, Bone lower, Vector3f root, Vector3f target, Matrix4f inv, float weight, float l1, float l2, float sign, float basePitch) {
+    private static void solve(Pose out, Bone upper, Bone lower, Vector3f root, Vector3f target, Matrix4f inv, float weight, float l1, float l2, float sign, float basePitch, Vector3f pole) {
         Vector3f d = inv.transformPosition(new Vector3f(target)).sub(root);
         float n = d.length();
         if (n < 1e-3f || weight <= 0) return;
@@ -761,7 +763,17 @@ public final class Animator {
         Vector3f h = new Vector3f(0, l1 + l2 * MathHelper.cos(bend), sign * l2 * MathHelper.sin(bend));
         Quaternionf base = new Quaternionf().rotationX(basePitch);
         Vector3f hb = base.transform(new Vector3f(h)).normalize();
-        Quaternionf q = new Quaternionf().rotationTo(hb, d.div(n)).mul(base);
+        Vector3f axis = new Vector3f(d).div(n);
+        Quaternionf q = new Quaternionf().rotationTo(hb, axis).mul(base);
+        // Then twist the bent limb about the reach line until the elbow (or knee) points the natural
+        // way, instead of wherever the shortest turn happened to leave it.
+        Vector3f mid = q.transform(new Vector3f(0, l1, 0));
+        Vector3f ep = new Vector3f(mid).sub(new Vector3f(axis).mul(mid.dot(axis)));
+        Vector3f pp = new Vector3f(pole).sub(new Vector3f(axis).mul(pole.dot(axis)));
+        if (ep.lengthSquared() > 1e-4f && pp.lengthSquared() > 1e-4f) {
+            float ang = (float) Math.atan2(axis.dot(new Vector3f(ep).cross(pp)), ep.dot(pp));
+            q = new Quaternionf().rotationAxis(ang, axis).mul(q);
+        }
         Vector3f e = new org.joml.Matrix3f().set(q).getEulerAnglesZYX(new Vector3f());
         float pd = (float) Math.toDegrees(e.x), yd = (float) Math.toDegrees(e.y), rd = (float) Math.toDegrees(e.z), bd = (float) Math.toDegrees(bend);
         out.set(upper, MathHelper.lerp(weight, out.get(upper, Pose.PITCH), pd), MathHelper.lerp(weight, out.get(upper, Pose.YAW), yd), MathHelper.lerp(weight, out.get(upper, Pose.ROLL), rd));
@@ -853,7 +865,7 @@ public final class Animator {
 
     /** Two-bone IK for a leg (thigh and shin, 6 pixels each; the knee bends backwards). */
     static void stride(Pose out, Bone leg, Bone shin, Vector3f hip, Vector3f target, Matrix4f invFrame) {
-        solve(out, leg, shin, hip, target, invFrame, 1, 6, 6, 1, 0);
+        solve(out, leg, shin, hip, target, invFrame, 1, 6, 6, 1, 0, new Vector3f(Math.signum(hip.x) * 0.15f, 0, -1));
     }
 
     /** A steady random number in -1..1 for each step. */
