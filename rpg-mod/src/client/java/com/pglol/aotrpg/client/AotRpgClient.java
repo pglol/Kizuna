@@ -301,7 +301,9 @@ public final class AotRpgClient implements ClientModInitializer {
         // Tell the server which build we are (an out-of-date client is turned away with a clear message).
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((h, sender, mc) -> {
             if (ClientPlayNetworking.canSend(Net.Hello.ID)) ClientPlayNetworking.send(new Net.Hello(com.pglol.aotrpg.BuildId.id()));
+            LauncherParty.joined();
         });
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(LauncherParty::tick);
         WorldRenderEvents.AFTER_ENTITIES.register(SheathRender::render);
         net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, ctx) -> {
             if (renderer instanceof net.minecraft.client.render.entity.PlayerEntityRenderer pr) helper.register(new SheathRender.Feature(pr));

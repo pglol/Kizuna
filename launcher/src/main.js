@@ -9,6 +9,32 @@ const net = require('./net');
 const store = require('./store');
 const status = require('./status');
 const host = require('./host');
+const party = require('./party');
+
+// Parties and friends' presence: who you are to the party service (a signed-in Microsoft account, or
+// the remembered test login), and its news passed to the window.
+party.configure({
+  identity: async () => {
+    const acct = store.account.get();
+    if (acct && acct.name) return { name: acct.name, token: acct.access };
+    const s = store.settings.get();
+    const name = String(s.testName || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 16);
+    return config.testMode && s.testLogin && name.length >= 3 ? { name } : null;
+  },
+  onEvent: (m) => send('party', m),
+  onFatal: async (m) => {
+    // A stale Minecraft token: refresh it once and try again.
+    const acct = store.account.get();
+    if (!acct || !/Minecraft account/.test(m.msg || '') || !config.msClientId) return false;
+    try {
+      const r = await auth.refresh(acct, config.msClientId);
+      if (r.account) store.account.set(r.account);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+});
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json'), 'utf8'));
 let win = null;
@@ -249,6 +275,7 @@ ipcMain.handle('hub', async () => {
   const unlocked = new Set(store.settings.get().unlocked || []);
   // Server hosting stays hidden unless this computer has entered the host code.
   hub.host = !!hub.hostCodeHash && store.settings.get().host === hub.hostCodeHash;
+  party.configure({ url: hub.partyUrl || config.partyUrl || '' });
   delete hub.hostCodeHash;
   hub.servers = (hub.servers || []).filter((s) => s.status !== 'private' || unlocked.has(s.codeHash));
   // Build channels: a coded one stays locked until its code has been entered on this computer.
@@ -330,14 +357,19 @@ ipcMain.handle('login', async () => {
   try {
     const r = await auth.login(win, config.msClientId);
     store.account.set(r.account);
+    setTimeout(() => party.restart(), 50);
     return { ok: true, account: pub(r.account) };
   } catch (e) {
     return { ok: false, error: e.message, code: e.code };
   }
 });
 
+ipcMain.handle('party', (_e, m) => party.act(m));
+ipcMain.handle('party-restart', () => party.restart());
+
 ipcMain.handle('logout', () => {
   store.account.set(null);
+  setTimeout(() => party.restart(), 50);
   return true;
 });
 
@@ -560,10 +592,14 @@ ipcMain.handle('play', async (_e, id, test, channelId, hostLabel) => {
       },
       started: () => {
         send('status', { text: 'Playing', fraction: 1, playing: true });
+        party.setStatus({ state: 'playing', game: found.id, gameName: found.name, channel: ch.id, address: server.address || '' });
+        party.setGameDir(path.join(store.dir(), 'instances', server.dir));
         if (settings.closeOnPlay && win) win.hide();
       },
       exited: (code, log) => {
         playing = null;
+        party.setStatus({ state: 'launcher' });
+        party.setGameDir(null);
         logLine('game exited with code', code);
         if (code) logLine(log);
         if (win) {

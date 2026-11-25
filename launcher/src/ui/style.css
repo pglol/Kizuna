@@ -333,3 +333,30 @@ pre { max-height: 300px; overflow: auto; font-size: 11px; background: #0e0e11; c
   .play { height: 64px; font-size: 30px; }
   .tools { margin-top: 8px; }
 }
+
+/* Parties */
+.pty:empty { display: none; }
+.pty { display: flex; flex-direction: column; gap: 8px; }
+.invite { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--ok) 16%, rgba(255, 255, 255, 0.04)); border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent); animation: pop 0.25s both; }
+.invite > div { flex: 1; min-width: 0; }
+.invite b { display: block; font-size: 13px; }
+.invite span { font-size: 11px; color: var(--text2); }
+.phd { display: flex; align-items: center; gap: 6px; margin: 2px 4px 0; font-size: 11px; font-weight: 700; color: var(--soft); }
+.phd b { color: var(--text); font-size: 12px; }
+.phd i { font-style: normal; font-family: var(--pixel); color: var(--text2); }
+.phd .grow { flex: 1; }
+.follow { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text2); }
+.follow input { accent-color: var(--ok); width: 12px; height: 12px; margin: 0; }
+.act { flex: none; height: 24px; padding: 0 9px; border-radius: 7px; font-size: 11px; font-weight: 700; color: var(--text2); background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); }
+.act:hover { color: #fff; border-color: var(--line2); }
+.act.on { background: var(--ok); border-color: transparent; color: #06210f; }
+.act.on:hover { filter: brightness(1.1); }
+.friend .act { opacity: 0; }
+.friend:hover .act, .invite .act, .phd .act { opacity: 1; }
+.reqs { display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+.reqs .act { opacity: 1; }
+.stab .badge { position: absolute; top: 2px; right: 18%; min-width: 15px; height: 15px; padding: 0 3px; display: grid; place-items: center; border-radius: 8px; background: var(--red); color: #fff; font: 700 9.5px var(--pixel); font-style: normal; }
+.fbox.lobby { box-shadow: inset 3px 0 0 #8c8880; }
+.pty .fbox { box-shadow: inset 3px 0 0 var(--ok); }
+.friend .act { display: none; }
+.friend:hover .act, .reqs .friend .act { display: inline-block; }

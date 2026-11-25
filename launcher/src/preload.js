@@ -28,8 +28,10 @@ contextBridge.exposeInMainWorld('kizuna', {
   hostStart: (id, ch) => ipcRenderer.invoke('host-start', id, ch),
   hostStop: (id, ch) => ipcRenderer.invoke('host-stop', id, ch),
   hostCmd: (id, ch, text) => ipcRenderer.invoke('host-cmd', id, ch, text),
+  party: (m) => ipcRenderer.invoke('party', m),
+  partyRestart: () => ipcRenderer.invoke('party-restart'),
   on: (ch, fn) => {
-    if (!['status', 'exited', 'update', 'host'].includes(ch)) return;
+    if (!['status', 'exited', 'update', 'host', 'party'].includes(ch)) return;
     ipcRenderer.on(ch, (_e, d) => fn(d));
   },
 });

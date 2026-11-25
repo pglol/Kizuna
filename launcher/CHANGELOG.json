@@ -1,4 +1,9 @@
 {
+  "0.72.0": [
+    "Parties: invite online friends from the friends panel, accept invites with one click, and see what everyone in your party is doing.",
+    "Joining a party takes you straight into the leader's game, and with Follow leader on you go wherever they go.",
+    "Friends show whether they're in the launcher or in a game, with a Join button to hop into their server. People who added you show under the + tab."
+  ],
   "0.71.0": [
     "Clicking anywhere outside the friends panel folds it away again."
   ],

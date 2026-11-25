@@ -2290,6 +2290,23 @@ public final class Net {
     }
 
     /** Client -> server: the guard (block) key held or released. */
+    /** Client -> server: the player's party in the Kizuna launcher (leader and members, Minecraft names). */
+    public record LauncherParty(String leader, java.util.List<String> members) implements CustomPayload {
+        public static final Id<LauncherParty> ID = id("launcher_party");
+        public static final PacketCodec<RegistryByteBuf, LauncherParty> CODEC = PacketCodec.of((v, b) -> {
+            b.writeString(v.leader, 16);
+            b.writeVarInt(Math.min(8, v.members.size()));
+            for (int i = 0; i < Math.min(8, v.members.size()); i++) b.writeString(v.members.get(i), 16);
+        }, b -> {
+            String leader = b.readString(16);
+            int n = Math.min(8, b.readVarInt());
+            java.util.List<String> l = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) l.add(b.readString(16));
+            return new LauncherParty(leader, l);
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     public record GuardKey(boolean on) implements CustomPayload {
         public static final Id<GuardKey> ID = id("guard_key");
         public static final PacketCodec<RegistryByteBuf, GuardKey> CODEC =
@@ -2862,6 +2879,7 @@ public final class Net {
         PayloadTypeRegistry.playS2C().register(CosmeticsOf.ID, CosmeticsOf.CODEC);
         PayloadTypeRegistry.playS2C().register(SlashFx.ID, SlashFx.CODEC);
         PayloadTypeRegistry.playC2S().register(GuardKey.ID, GuardKey.CODEC);
+        PayloadTypeRegistry.playC2S().register(LauncherParty.ID, LauncherParty.CODEC);
         PayloadTypeRegistry.playS2C().register(GuardFx.ID, GuardFx.CODEC);
         PayloadTypeRegistry.playS2C().register(TasksView.ID, TasksView.CODEC);
         PayloadTypeRegistry.playC2S().register(TaskAction.ID, TaskAction.CODEC);

@@ -376,8 +376,15 @@
     const list = $('flist');
     list.innerHTML = '';
     const q = ($('friend-search').value || '').trim().toLowerCase();
-    const rows = state.friends.map((f) => ({ n: f.name, from: f.from, at: whereIs(f.name) }));
-    const on = rows.filter((r) => r.at);
+    // Presence: the party service when it's connected (in the launcher, or playing what), otherwise
+    // whoever the game servers say is on.
+    const pres = new Map(((state.pty && state.pty.friends) || []).map((f) => [f.name.toLowerCase(), f]));
+    const rows = state.friends.map((f) => {
+      const pr = pres.get(f.name.toLowerCase());
+      const svc = pr && pr.online && pr.state === 'playing' ? state.servers.find((s) => s.id === pr.game) || { id: pr.game, name: pr.gameName || 'a game' } : null;
+      return { n: f.name, from: f.from, pr, at: svc || (!pr || !pr.online ? whereIs(f.name) : null), lobby: !!(pr && pr.online && pr.state !== 'playing') };
+    });
+    const on = rows.filter((r) => r.at || r.lobby);
     $('friends-count').textContent = on.length;
     $('friends-count').hidden = !on.length;
     const shown = rows.filter((r) => !q || r.n.toLowerCase().includes(q));
@@ -394,7 +401,13 @@
       const g = shown.filter((r) => r.at && r.at.id === s.id);
       if (g.length) groups.push([s.name, g, s]);
     }
-    const off = shown.filter((r) => !r.at);
+    const other = shown.filter((r) => r.at && !state.servers.some((s) => s.id === r.at.id));
+    if (other.length) groups.push(['Other games', other, { accent: '#8c8880' }]);
+    const lobby = shown.filter((r) => !r.at && r.lobby);
+    if (lobby.length) groups.push(['In the launcher', lobby, { accent: '#8c8880' }]);
+    const waiting = shown.filter((r) => !r.at && !r.lobby && r.pr && r.pr.pending);
+    if (waiting.length) groups.push(['Haven’t added you back', waiting, null]);
+    const off = shown.filter((r) => !r.at && !r.lobby && !(r.pr && r.pr.pending));
     if (off.length) groups.push(['Offline', off, null]);
     for (const [label, group, srv] of groups) {
       const g = document.createElement('div');
@@ -407,6 +420,7 @@
       const box = document.createElement('div');
       box.className = 'fbox' + (srv ? '' : ' off');
       if (srv) box.style.setProperty('--fc', srv.accent || '#c4372a');
+      if (srv && !srv.id) box.classList.add('lobby');
       for (const r of group) {
         const row = document.createElement('div');
         row.className = 'friend ' + (r.at ? 'on' : 'off');
@@ -416,9 +430,27 @@
         b.textContent = r.n;
         const sm = document.createElement('small');
         const src = r.from && state.servers.find((x) => x.id === r.from);
-        sm.textContent = (r.at ? 'In game' : 'Offline') + (src ? ` · from ${src.short || src.name}` : '');
+        const where = r.at ? (r.pr && r.pr.channel && r.pr.channel !== 'public' ? 'In game · ' + chanName(r.at, r.pr.channel) : 'In game') : r.lobby ? 'Online' : r.pr && r.pr.pending ? 'Waiting for them' : 'Offline';
+        sm.textContent = where + (src ? ` · from ${src.short || src.name}` : '');
         txt.append(b, sm);
         row.append(img, txt);
+        const inParty = state.pty && state.pty.party && state.pty.party.members.some((m) => m.name.toLowerCase() === r.n.toLowerCase());
+        if (r.pr && r.pr.online && !inParty) {
+          const inv = document.createElement('button');
+          inv.className = 'act';
+          inv.textContent = 'Invite';
+          inv.title = 'Invite to your party';
+          inv.addEventListener('click', () => K.party({ t: 'invite', name: r.n }).then((ok) => ok && toast(`Invited ${r.n}`)));
+          row.append(inv);
+        }
+        if (r.pr && r.pr.state === 'playing' && r.at) {
+          const join = document.createElement('button');
+          join.className = 'act on';
+          join.textContent = 'Join';
+          join.title = `Join ${r.n} in ${r.at.name}`;
+          join.addEventListener('click', () => joinPlaying({ name: r.n, game: r.pr.game, channel: r.pr.channel, address: r.pr.address }));
+          row.append(join);
+        }
         if (!r.from) {
           const x = document.createElement('button');
           x.className = 'x';
@@ -426,6 +458,7 @@
           x.textContent = '✕';
           x.addEventListener('click', async () => {
             state.friends = await K.friends(state.friends.filter((f) => !f.from && f.name !== r.n).map((f) => f.name));
+            sendWatch();
             renderFriends();
           });
           row.append(x);
@@ -439,6 +472,187 @@
       list.append(g, box);
     }
   }
+  const chanName = (s, id) => ((s.channels || []).find((c) => c.id === id) || { name: id }).name;
+
+  // ---- parties (through the party service) ----
+  state.pty = null;
+  state.ptyUp = false;
+  let followOn = true;
+  try {
+    followOn = localStorage.getItem('kz.follow') !== '0';
+  } catch {}
+  function renderParty() {
+    const box = $('party');
+    box.innerHTML = '';
+    const st = state.pty;
+    // Invites first.
+    for (const inv of (st && st.invites) || []) {
+      const c = document.createElement('div');
+      c.className = 'invite';
+      c.innerHTML = '<div><b></b><span></span></div>';
+      c.querySelector('b').textContent = inv.from;
+      c.querySelector('span').textContent = `invited you to their party (${inv.size}/5)`;
+      const yes = document.createElement('button');
+      yes.className = 'act on';
+      yes.textContent = 'Join';
+      yes.addEventListener('click', () => {
+        joinOnAccept = inv.from.toLowerCase();
+        K.party({ t: 'accept', from: inv.from });
+      });
+      const no = document.createElement('button');
+      no.className = 'act';
+      no.textContent = '✕';
+      no.title = 'Decline';
+      no.addEventListener('click', () => K.party({ t: 'decline', from: inv.from }));
+      c.append(yes, no);
+      box.append(c);
+    }
+    const p = st && st.party;
+    if (p) {
+      const me = p.members.find((m) => m.you);
+      const lead = me && me.leader;
+      const head = document.createElement('div');
+      head.className = 'phd';
+      head.innerHTML = '<b>Party</b><i></i><span class="grow"></span>';
+      head.querySelector('i').textContent = `${p.members.length}/5`;
+      if (!lead) {
+        const f = document.createElement('label');
+        f.className = 'follow';
+        f.title = 'Go where your party leader goes';
+        f.innerHTML = '<input type="checkbox"> Follow leader';
+        f.querySelector('input').checked = followOn;
+        f.querySelector('input').addEventListener('change', (e) => {
+          followOn = e.target.checked;
+          try {
+            localStorage.setItem('kz.follow', followOn ? '1' : '0');
+          } catch {}
+          followSig = '';
+          follow();
+        });
+        head.append(f);
+      }
+      const leave = document.createElement('button');
+      leave.className = 'act';
+      leave.textContent = 'Leave';
+      leave.addEventListener('click', () => K.party({ t: 'leave' }));
+      head.append(leave);
+      box.append(head);
+      const list = document.createElement('div');
+      list.className = 'fbox';
+      for (const m of p.members) {
+        const row = document.createElement('div');
+        row.className = 'friend ' + (m.online ? 'on' : 'off');
+        const txt = document.createElement('div');
+        const b = document.createElement('b');
+        b.textContent = (m.leader ? '♛ ' : '') + m.name + (m.you ? ' (you)' : '');
+        const sm = document.createElement('small');
+        const g = m.state === 'playing' && (state.servers.find((s) => s.id === m.game) || { name: m.gameName });
+        sm.textContent = !m.online ? 'Offline' : g ? `Playing ${g.name}` : 'In the launcher';
+        txt.append(b, sm);
+        row.append(face(m.name), txt);
+        if (lead && !m.you) {
+          const up = document.createElement('button');
+          up.className = 'x';
+          up.textContent = '♛';
+          up.title = 'Make leader';
+          up.addEventListener('click', () => K.party({ t: 'promote', name: m.name }));
+          const kick = document.createElement('button');
+          kick.className = 'x';
+          kick.textContent = '✕';
+          kick.title = 'Remove from party';
+          kick.addEventListener('click', () => K.party({ t: 'kick', name: m.name }));
+          row.append(up, kick);
+        }
+        list.append(row);
+      }
+      for (const n of p.invited || []) {
+        const row = document.createElement('div');
+        row.className = 'friend off';
+        row.innerHTML = '<div><b></b><small>Invited</small></div>';
+        row.querySelector('b').textContent = n;
+        row.prepend(face(n));
+        list.append(row);
+      }
+      box.append(list);
+    }
+    // Who has added you (shown under the add tab, counted on it).
+    const reqs = (st && st.requests) || [];
+    $('req-count').hidden = !reqs.length;
+    $('req-count').textContent = reqs.length;
+    const rq = $('requests');
+    rq.innerHTML = '';
+    for (const n of reqs) {
+      const row = document.createElement('div');
+      row.className = 'friend on';
+      row.innerHTML = '<div><b></b><small>Added you</small></div>';
+      row.querySelector('b').textContent = n;
+      row.prepend(face(n));
+      const add = document.createElement('button');
+      add.className = 'act on';
+      add.textContent = 'Add back';
+      add.addEventListener('click', async () => {
+        state.friends = await K.friends([...state.friends.filter((f) => !f.from).map((f) => f.name), n]);
+        sendWatch();
+        renderFriends();
+      });
+      row.append(add);
+      rq.append(row);
+    }
+    rq.hidden = !reqs.length || $('friend-form').hidden;
+  }
+  function sendWatch() {
+    K.party({ t: 'watch', names: state.friends.map((f) => f.name) });
+  }
+
+  // Following: when your party leader goes into a game, you go too (or, joining a party, straight away).
+  let followSig = '', joinOnAccept = '';
+  function follow() {
+    const p = state.pty && state.pty.party;
+    if (!p) return (followSig = '');
+    const lead = p.members.find((m) => m.leader);
+    const me = p.members.find((m) => m.you);
+    if (!lead || lead.you || !me) return;
+    const joining = joinOnAccept && joinOnAccept === lead.name.toLowerCase();
+    if (joining) joinOnAccept = '';
+    if (lead.state !== 'playing' || !lead.online) return (followSig = '');
+    const sig = [lead.game, lead.channel, lead.address].join('|');
+    if (sig === followSig && !joining) return;
+    followSig = sig;
+    if (followOn || joining) joinPlaying(lead);
+  }
+  async function joinPlaying(who) {
+    const s = state.servers.find((x) => x.id === who.game);
+    if (!s) return toast(`${who.name} is playing a game you don't have.`);
+    const ch = (s.channels || []).find((c) => c.id === who.channel) || (s.channels || [])[0];
+    if (!ch || ch.locked || ch.soon) return toast(`${who.name} is on ${s.name} (${ch ? ch.name : who.channel}). You need access to that build.`);
+    const host = (ch.addresses || []).find((a) => a.address === who.address);
+    if (state.playing && state.playingId === s.id && channelOf(s).id === ch.id) return;
+    state.settings = await K.settings({ channels: { ...(state.settings.channels || {}), [s.id]: ch.id }, ...(host ? { hosts: { ...(state.settings.hosts || {}), [`${s.id}:${ch.id}`]: host.label } } : {}) });
+    select(s.id);
+    toast(`Joining ${who.name} in ${s.name}`);
+    play();
+  }
+  K.on('party', (m) => {
+    if (m.t === 'state') {
+      state.pty = m;
+      renderParty();
+      renderFriends();
+      follow();
+    } else if (m.t === 'connection') {
+      state.ptyUp = m.up;
+      if (m.up) sendWatch();
+      else {
+        state.pty = null;
+        renderParty();
+        renderFriends();
+      }
+    } else if (m.t === 'invited') {
+      toast(`${m.from} invited you to their party`);
+      K.notify('Party invite', `${m.from} invited you to their party.`);
+    } else if (m.t === 'kicked') toast(`${m.by} removed you from the party`);
+    else if (m.t === 'error' && m.msg) toast(m.msg);
+  });
+
   // The panel stays docked on the right; folding it leaves a small button (remembered).
   function setSocial(open) {
     $('friends').hidden = !open;
@@ -470,6 +684,7 @@
     if (tab === 'chat') return toast('Chat is coming soon.');
     document.querySelectorAll('.stab').forEach((x) => x.classList.toggle('on', x === b));
     $('friend-form').hidden = tab !== 'add';
+    $('requests').hidden = tab !== 'add' || !((state.pty && state.pty.requests) || []).length;
     if (tab === 'add') setTimeout(() => $('friend-input').focus(), 30);
   }));
   $('friend-form').addEventListener('submit', async (e) => {
@@ -478,6 +693,7 @@
     if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return toast('That isn’t a Minecraft name.');
     if (state.friends.some((f) => f.name.toLowerCase() === name.toLowerCase())) return;
     state.friends = await K.friends([...state.friends.filter((f) => !f.from).map((f) => f.name), name]);
+    sendWatch();
     $('friend-input').value = '';
     renderFriends();
   });
@@ -693,6 +909,7 @@
     }
     state.settings = await K.settings({ testName: n, testLogin: true });
     state.test = true;
+    K.partyRestart();
     show('signin', false);
     renderAccount();
     updateDock();
@@ -903,6 +1120,7 @@
     if (state.test && !state.account) {
       state.test = false;
       state.settings = await K.settings({ testLogin: false });
+      K.partyRestart();
       renderAccount();
       updateDock();
       show('acct', false);

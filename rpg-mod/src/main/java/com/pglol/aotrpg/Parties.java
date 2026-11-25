@@ -339,6 +339,78 @@ public final class Parties {
         }
     }
 
+    // ---- parties made in the Kizuna launcher ----
+    // Each player's game tells us their launcher party. When two players agree (the member names the
+    // leader, and the leader lists the member) and both are here, they're put in the same party here
+    // too; when the launcher party changes, players this put together are taken back out.
+
+    private record Claim(String leader, java.util.Set<String> members) { }
+    private final Map<UUID, Claim> claims = new HashMap<>();
+    private final java.util.Set<UUID> linked = new java.util.HashSet<>();
+
+    public void launcherParty(ServerPlayerEntity p, String leader, List<String> members) {
+        this.server = p.getServer();
+        String l = leader == null ? "" : leader.trim().toLowerCase(java.util.Locale.ROOT);
+        if (l.isEmpty()) claims.remove(p.getUuid());
+        else {
+            java.util.Set<String> m = new java.util.HashSet<>();
+            for (String s : members) m.add(s.trim().toLowerCase(java.util.Locale.ROOT));
+            claims.put(p.getUuid(), new Claim(l, m));
+        }
+        reconcile();
+    }
+
+    private static String mcName(ServerPlayerEntity p) {
+        return p.getGameProfile().getName().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private void reconcile() {
+        if (server == null) return;
+        // Players this put together whose launcher party no longer matches: back out.
+        for (UUID id : new java.util.ArrayList<>(linked)) {
+            ServerPlayerEntity a = server.getPlayerManager().getPlayer(id);
+            Party party = byPlayer.get(id);
+            if (a == null || party == null) {
+                linked.remove(id);
+                continue;
+            }
+            ServerPlayerEntity lead = server.getPlayerManager().getPlayer(party.leader);
+            Claim c = claims.get(id);
+            if (c == null || lead == null || !c.leader.equals(mcName(lead))) {
+                linked.remove(id);
+                if (!id.equals(party.leader)) leave(a);
+            }
+        }
+        // Agreeing pairs that are both here: same party.
+        for (ServerPlayerEntity a : server.getPlayerManager().getPlayerList()) {
+            Claim c = claims.get(a.getUuid());
+            if (c == null || c.leader.equals(mcName(a))) continue;
+            ServerPlayerEntity lead = server.getPlayerManager().getPlayer(c.leader);
+            if (lead == null) continue;
+            Claim lc = claims.get(lead.getUuid());
+            if (lc == null || !lc.leader.equals(c.leader) || !lc.members.contains(mcName(a))) continue;
+            Party party = byPlayer.get(lead.getUuid());
+            if (party != null && party.members.contains(a.getUuid())) continue;
+            if (byPlayer.containsKey(a.getUuid())) leave(a);
+            if (party == null) {
+                party = new Party();
+                party.leader = lead.getUuid();
+                party.members.add(lead.getUuid());
+                byPlayer.put(lead.getUuid(), party);
+            }
+            if (party.members.size() >= MAX) continue;
+            party.members.add(a.getUuid());
+            byPlayer.put(a.getUuid(), party);
+            invites.remove(a.getUuid());
+            linked.add(a.getUuid());
+            linked.add(lead.getUuid());
+            tell(party, who(a.getUuid()).append(Text.literal(" joined the party (from the launcher).").formatted(Formatting.GREEN)));
+            sync(party);
+            refreshQuests(party);
+            AotRpg.EXTRACT.joinedParty(a, party.leader);
+        }
+    }
+
     public void joined(ServerPlayerEntity p) {
         this.server = p.getServer();
         Party party = byPlayer.get(p.getUuid());

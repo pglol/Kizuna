@@ -22,17 +22,26 @@ public final class PartyHud {
         MinecraftClient mc = MinecraftClient.getInstance();
         List<Net.PartyMember> party = ClientState.party;
         ClientPlayerEntity me = mc.player;
-        if (party.isEmpty() || me == null || mc.currentScreen != null || mc.options.hudHidden || mc.getDebugHud().shouldShowDebugHud()) return;
+        java.util.List<String[]> away = LauncherParty.elsewhere(mc);
+        if ((party.isEmpty() && away.isEmpty()) || me == null || mc.currentScreen != null || mc.options.hudHidden || mc.getDebugHud().shouldShowDebugHud()) return;
 
         int x = 4;
         // Below the minimap and objective.
         int y = Math.max(4, Minimap.bottom);
 
-        c.drawTextWithShadow(Ui.font(), Ui.heading("Party  " + (party.size() + 1) + "/6"), x + 2, y, Ui.GOLD);
+        c.drawTextWithShadow(Ui.font(), Ui.heading("Party  " + (party.size() + 1 + away.size()) + "/6"), x + 2, y, Ui.GOLD);
         y += 12;
         for (Net.PartyMember m : party) {
             frame(c, me, m, x, y);
             y += H + 3;
+        }
+        // Launcher party members who aren't on this server.
+        for (String[] a : away) {
+            c.fill(x, y, x + W, y + 20, 0x900D0D0D);
+            c.drawBorder(x, y, W, 20, a[2].isEmpty() ? Ui.BORDER : Ui.GOLD);
+            c.drawTextWithShadow(Ui.font(), Text.literal(a[0]), x + 6, y + 2, Ui.DIM);
+            c.drawTextWithShadow(Ui.font(), Text.literal(a[1]), x + 6, y + 11, Ui.MUTED);
+            y += 23;
         }
     }
 
