@@ -15,6 +15,17 @@
   }
   const show = (id, on) => ($(id).hidden = !on);
 
+  /**
+   * Version numbers as people see them: updates are 0.1, 0.2…; patches move by 0.01 (0.11, 0.12…).
+   * Internally 0.11 is 0.11.0 and 0.2 is 0.20.0, so they still sort correctly.
+   */
+  function shownVersion(v) {
+    const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || ''));
+    if (!m || m[1] !== '0') return String(v || '');
+    const minor = Number(m[2]);
+    return minor % 10 === 0 ? `0.${minor / 10}` : `0.${String(minor).padStart(2, '0')}`;
+  }
+
   /** A yes/no question in the launcher's own style. Clicking outside counts as no. */
   let asking = null;
   function ask(title, text, yes) {
@@ -298,7 +309,7 @@
     Scene.set(s.kanji || '絆', s.accent, [s.background, ...(s.gallery || [])]);
     Ground.set(s.theme, s.accent);
     $('vol').textContent = `VOL.${idx + 1}`;
-    $('no').textContent = `#${String(idx + 1).padStart(2, '0')}`;
+    $('no').textContent = `#${String(idx + 1).padStart(2, '0')}` + (s.version ? `  ·  v${s.version}` : '');
     const [kanji, color] = STAMP[s.status] || STAMP.public;
     const st = $('chips');
     st.hidden = false;
@@ -565,7 +576,7 @@
   // Launcher updates: ask, then show the download, then restart into the new version.
   let updDismissed = '';
   function showUpdate(version) {
-      $('upd-text').textContent = `Version ${version} of the launcher is out.`;
+      $('upd-text').textContent = `Version ${shownVersion(version)} of the launcher is out.`;
       $('upd-bar').hidden = true;
       $('upd-go').textContent = 'Update now';
       $('upd-go').disabled = false;
@@ -639,7 +650,7 @@
     if (u && u.version) {
       show('settings', false);
       showUpdate(u.version);
-    } else toast(`You're on the newest version (${state.version || ''}).`);
+    } else toast(`You're on the newest version (${shownVersion(state.version)}).`);
   });
   $('enter-code').addEventListener('click', () => {
     show('settings', false);
@@ -873,7 +884,7 @@
   (async () => {
     const init = await K.init();
     document.title = init.name;
-    $('about').textContent = `You have ${init.name} ${init.version}`;
+    $('about').textContent = `You have ${init.name} ${shownVersion(init.version)}`;
     state.account = init.account;
     state.settings = init.settings;
     state.selected = init.settings.selected;

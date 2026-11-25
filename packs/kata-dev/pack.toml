@@ -1,6 +1,6 @@
 name = "Kata (Development)"
 author = "pglol"
-version = "0.1.0"
+version = "0.01"
 pack-format = "packwiz:1.1.0"
 
 [index]

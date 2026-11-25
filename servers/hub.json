@@ -81,7 +81,8 @@
         "file": "aot-rpg",
         "name": "AoT RPG mod"
       },
-      "hostMode": "mod"
+      "hostMode": "mod",
+      "version": "0.1"
     },
     {
       "id": "kata",
@@ -160,7 +161,8 @@
         "file": "kata-core",
         "name": "Kata Core"
       },
-      "hostMode": "pack"
+      "hostMode": "pack",
+      "version": "0.01"
     }
   ]
 }

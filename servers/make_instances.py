@@ -48,6 +48,7 @@ for s in hub["servers"]:
     if s.get("mainMod"):
         e["mainMod"] = s["mainMod"]
     e["hostMode"] = s.get("hostMode", "pack")
+    e["version"] = str(s.get("version", ""))
     # Build channels (Public / Early Access / Development): each its own pack and server; codes go out only as hashes.
     chans = []
     for c in s.get("channels") or [{"id": "public", "name": "Public", "pack": s["pack"], "address": s.get("address", "")}]:

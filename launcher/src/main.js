@@ -127,7 +127,7 @@ ipcMain.handle('update-check', async () => {
   try {
     const r = await Promise.race([updater.checkForUpdates(), new Promise((res) => setTimeout(() => res(null), 6000))]);
     const v = r && r.updateInfo && r.updateInfo.version;
-    return v && newer(v, app.getVersion()) ? { version: v } : null;
+    return v && v !== app.getVersion() && (newer(v, app.getVersion()) || /^0\./.test(v)) ? { version: v } : null;
   } catch (e) {
     logLine('update check before play failed:', e && e.message);
     return null;
@@ -142,6 +142,8 @@ app.whenReady().then(() => {
     try {
       const { autoUpdater } = require('electron-updater');
       autoUpdater.autoDownload = false;
+      // The latest release is always the one to have, even if its number is lower (moving to 0.x numbering).
+      autoUpdater.allowDowngrade = true;
       autoUpdater.autoInstallOnAppQuit = true;
       let told = '';
       autoUpdater.on('update-available', (i) => {

@@ -99,12 +99,19 @@ jobs:
             exit 1
           fi
           if [ -n "$id" ]; then
-            notes=$(node -e "const c=require('./launcher/CHANGELOG.json')['$v']||[];console.log(c.map(x=>'- '+x).join('\n'))")
-            gh api -X PATCH repos/${{ github.repository }}/releases/$id -f draft=false -f name="Kizuna Launcher $v" -f body="$notes" -f make_latest=true >/dev/null
+            notes=$(node launcher/scripts/notes.js notes)
+            name=$(node launcher/scripts/notes.js name)
+            gh api -X PATCH repos/${{ github.repository }}/releases/$id -f draft=false -f name="$name" -f body="$notes" -f make_latest=true >/dev/null
             echo "published v$v"
           else
             echo "v$v already published (or nothing new)"
           fi
+          # Leftover drafts of versions that are already out: remove them.
+          for tag in $(gh api repos/${{ github.repository }}/releases --paginate --jq '.[] | select(.draft|not) | .tag_name'); do
+            for d in $(gh api repos/${{ github.repository }}/releases --paginate --jq ".[] | select(.draft and .tag_name==\"$tag\") | .id"); do
+              gh api -X DELETE repos/${{ github.repository }}/releases/$d && echo "removed leftover draft of $tag"
+            done
+          done
           # Installed launchers only look at the release GitHub calls "latest". Keep that pointing at the
           # newest launcher release even after other uploads (like mod files).
           tag=$(gh api repos/${{ github.repository }}/releases --jq '[.[] | select(.draft|not) | select(.tag_name|startswith("v"))][0].id')

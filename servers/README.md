@@ -189,3 +189,18 @@ host, change `address` in the hub and push: every launcher picks up the new addr
 The pack itself must still be downloadable without logging in: the repo (or a small public repo
 holding only `pack/`, `packs/` and `dist/`) has to be public, or the files served from any web
 host. See `pack/README.md`.
+
+## Version numbers
+
+Nothing is near 1.0 yet. Every game and the launcher use the same scheme:
+
+- **Updates** are 0.1, 0.2, 0.3… Their release notes collect every patch since the previous update.
+- **Patches** for serious issues move by 0.01: 0.1 → 0.11 → 0.12 → … → the next update, 0.2.
+
+Where each lives:
+
+- **Launcher:** `launcher/package.json` holds it in three-part form (0.11 is `0.11.0`, 0.2 is `0.20.0`) so
+  installs sort them correctly; the launcher shows the short form. Notes go in `launcher/CHANGELOG.json`
+  under the same key; an update's release page gathers its patches automatically.
+- **Games:** `"version"` on each server in `servers/hub.json` (shown on its page in the launcher) and
+  `version` in its pack's `pack.toml`.
