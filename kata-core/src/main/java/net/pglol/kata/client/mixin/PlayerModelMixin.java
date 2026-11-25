@@ -43,6 +43,14 @@ public abstract class PlayerModelMixin {
         Pose p = Rig.current;
         if (p == null || !(entity instanceof net.minecraft.entity.player.PlayerEntity)) return;
         BipedEntityModel<?> m = (BipedEntityModel<?>) (Object) this;
+        if (p.gait) {
+            // Our walk cycle replaces Minecraft's stick-leg swing (everything else it does stays).
+            float c = net.minecraft.util.math.MathHelper.cos(limbAngle * 0.6662f);
+            m.rightArm.pitch -= -c * limbDistance;
+            m.leftArm.pitch -= c * limbDistance;
+            m.rightLeg.pitch -= c * 1.4f * limbDistance;
+            m.leftLeg.pitch -= -c * 1.4f * limbDistance;
+        }
         add(m.head, p, Bone.HEAD);
         add(m.rightArm, p, Bone.RIGHT_ARM);
         add(m.leftArm, p, Bone.LEFT_ARM);
@@ -64,6 +72,7 @@ public abstract class PlayerModelMixin {
 
     @Inject(method = "setArmAngle", at = @At("HEAD"))
     private void kata$itemChest(Arm arm, MatrixStack matrices, CallbackInfo ci) {
+        Rig.root(matrices, Rig.current);
         Rig.chest(matrices, Rig.current);
     }
 

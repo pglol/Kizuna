@@ -15,7 +15,9 @@ public enum Bone {
     RIGHT_LEG("Right leg"),
     RIGHT_SHIN("Right knee"),
     LEFT_LEG("Left leg"),
-    LEFT_SHIN("Left knee");
+    LEFT_SHIN("Left knee"),
+    /** The whole body: its lean and bank (about the feet), and its offset (bob, sway, drop). */
+    ROOT("Body");
 
     public final String title;
 

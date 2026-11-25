@@ -57,6 +57,20 @@ public final class Rig {
         return new Quaternionf().rotationZYX(p.rad(b, Pose.ROLL), p.rad(b, Pose.YAW), p.rad(b, Pose.PITCH));
     }
 
+    /** Where the whole body leans and banks from: the feet, in model pixels. */
+    public static final float FEET_Y = 24f;
+
+    /** The whole body: offset (bob, sway, drop), then lean and bank about the feet. */
+    public static void root(MatrixStack m, Pose p) {
+        if (p == null || !p.shifted()) return;
+        m.translate(p.offset[0] / 16f, p.offset[1] / 16f, p.offset[2] / 16f);
+        if (p.moves(Bone.ROOT)) {
+            m.translate(0, FEET_Y / 16f, 0);
+            m.multiply(euler(p, Bone.ROOT));
+            m.translate(0, -FEET_Y / 16f, 0);
+        }
+    }
+
     /** Head and arms ride on the chest: turn them about the waist before their own rotation. */
     public static void chest(MatrixStack m, Pose p) {
         if (p == null || !p.moves(Bone.CHEST)) return;
@@ -110,6 +124,7 @@ public final class Rig {
         if (!part.visible) return true;
         ModelPartAccessor acc = (ModelPartAccessor) (Object) part;
         m.push();
+        root(m, p);
         if (role.followsChest) chest(m, p);
         part.rotate(m);
         if (!part.hidden) {
