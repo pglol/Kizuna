@@ -3,7 +3,6 @@ package net.pglol.kata.client;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
 import net.pglol.kata.rig.Bone;
 import net.pglol.kata.rig.Pose;
 
@@ -35,13 +34,13 @@ public final class Animator {
     private static final float[] STIFF = new float[N], DAMP = new float[N];
 
     static {
-        set(Bone.ROOT, 160, 0.75f);
-        set(Bone.CHEST, 130, 0.62f);
-        set(Bone.HEAD, 90, 0.58f);
-        set(Bone.RIGHT_ARM, 75, 0.5f);
-        set(Bone.LEFT_ARM, 75, 0.5f);
-        set(Bone.RIGHT_FOREARM, 60, 0.48f);
-        set(Bone.LEFT_FOREARM, 60, 0.48f);
+        set(Bone.ROOT, 120, 0.95f);
+        set(Bone.CHEST, 140, 0.8f);
+        set(Bone.HEAD, 200, 0.9f);
+        set(Bone.RIGHT_ARM, 85, 0.55f);
+        set(Bone.LEFT_ARM, 85, 0.55f);
+        set(Bone.RIGHT_FOREARM, 70, 0.55f);
+        set(Bone.LEFT_FOREARM, 70, 0.55f);
         set(Bone.RIGHT_LEG, 420, 0.85f);
         set(Bone.LEFT_LEG, 420, 0.85f);
         set(Bone.RIGHT_SHIN, 380, 0.8f);
@@ -59,12 +58,12 @@ public final class Animator {
         final float[][] ang = new float[N][3], vel = new float[N][3];
         final float[] off = new float[3], offVel = new float[3];
         final Pose shown = new Pose();
+        Pose out = new Pose();
         long last = System.nanoTime();
         boolean wasGround = true, first = true;
         double fallSpeed;
         float land, run, crouch, air, gaitW;
         // Movement, from position (works for other players too).
-        Vec3d lastPos;
         float fwd, side, accFwd, accSide, lastYaw, yawRate;
     }
 
@@ -79,7 +78,7 @@ public final class Animator {
             var w = MinecraftClient.getInstance().world;
             STATES.keySet().removeIf(id -> w == null || w.getEntityById(id) == null);
         }
-        if (dt <= 0 && !s.first) return s.shown;
+        if (dt <= 0 && !s.first) return s.out;
 
         motion(p, td, s, dt);
         Pose want = target(p, td, s, dt);
@@ -114,33 +113,49 @@ public final class Animator {
         for (Bone b : Bone.values()) for (int a = 0; a < 3; a++) s.shown.set(b, a, s.ang[b.ordinal()][a]);
         System.arraycopy(s.off, 0, s.shown.offset, 0, 3);
         s.shown.gait = want.gait;
-        return s.shown;
+
+        // The body faces where they look (Minecraft lets it drift towards the way they walk), so strafing
+        // is a side-step and backing off is a backpedal. The head takes that turn back off, and takes back
+        // the body's lean, twist and bank, so it sits steady on the shoulders looking where the camera does.
+        Pose sh = s.shown;
+        float turn = 0;
+        if (want.gait) {
+            float body = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
+            float face = MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw);
+            turn = MathHelper.wrapDegrees(face - body);
+        }
+        sh.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn);
+        float headPitch = sh.get(Bone.HEAD, Pose.PITCH) - 0.9f * (sh.get(Bone.ROOT, Pose.PITCH) + sh.get(Bone.CHEST, Pose.PITCH));
+        float headYaw = sh.get(Bone.HEAD, Pose.YAW) - turn - 0.95f * (sh.get(Bone.CHEST, Pose.YAW) + sh.get(Bone.ROOT, Pose.YAW) - turn);
+        float headRoll = sh.get(Bone.HEAD, Pose.ROLL) - 0.95f * (sh.get(Bone.ROOT, Pose.ROLL) + sh.get(Bone.CHEST, Pose.ROLL));
+        Pose out = sh.copy();
+        out.set(Bone.HEAD, headPitch, headYaw, headRoll);
+        s.out = out;
+        return out;
     }
 
-    /** How fast they're going forward and sideways (relative to where the body faces), and how that's changing. */
+    /**
+     * How fast they're going forward and sideways relative to where they look, from the game's own
+     * movement ticks (steady, unlike frame-to-frame positions), and how that's changing; how fast they turn.
+     */
     private static void motion(PlayerEntity p, float td, State s, float dt) {
-        Vec3d pos = p.getLerpedPos(td);
-        if (s.lastPos == null || dt <= 0) {
-            s.lastPos = pos;
-            s.lastYaw = p.bodyYaw;
-            return;
-        }
-        Vec3d v = pos.subtract(s.lastPos).multiply(1 / Math.max(dt, 1e-3f));
-        s.lastPos = pos;
-        float yaw = MathHelper.lerp(td, p.prevBodyYaw, p.bodyYaw);
-        double r = Math.toRadians(yaw);
+        float face = MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw);
+        double vx = (p.getX() - p.prevX) * 20, vz = (p.getZ() - p.prevZ) * 20;
+        double r = Math.toRadians(face);
         double fx = -Math.sin(r), fz = Math.cos(r);
-        float fwd = (float) (v.x * fx + v.z * fz), side = (float) (v.x * fz - v.z * fx);
-        float k = 1 - (float) Math.exp(-10 * dt);
+        float fwd = (float) (vx * fx + vz * fz), side = (float) (vx * fz - vz * fx);
+        float k = 1 - (float) Math.exp(-dt / 0.12f);
         float nf = s.fwd + (fwd - s.fwd) * k, ns = s.side + (side - s.side) * k;
-        float af = (nf - s.fwd) / Math.max(dt, 1e-3f), as = (ns - s.side) / Math.max(dt, 1e-3f);
-        s.accFwd += (af - s.accFwd) * (1 - (float) Math.exp(-6 * dt));
-        s.accSide += (as - s.accSide) * (1 - (float) Math.exp(-6 * dt));
+        float ka = 1 - (float) Math.exp(-dt / 0.25f);
+        if (dt > 0) {
+            s.accFwd += ((nf - s.fwd) / dt - s.accFwd) * ka;
+            s.accSide += ((ns - s.side) / dt - s.accSide) * ka;
+        }
         s.fwd = nf;
         s.side = ns;
-        float yr = MathHelper.wrapDegrees(yaw - s.lastYaw) / Math.max(dt, 1e-3f);
-        s.lastYaw = yaw;
-        s.yawRate += (yr - s.yawRate) * (1 - (float) Math.exp(-8 * dt));
+        float yr = MathHelper.wrapDegrees(p.headYaw - p.prevHeadYaw) * 20;
+        s.yawRate += (yr - s.yawRate) * (1 - (float) Math.exp(-dt / 0.2f));
+        s.lastYaw = face;
     }
 
     private static Pose target(PlayerEntity p, float td, State s, float dt) {
@@ -192,31 +207,32 @@ public final class Animator {
         float rKnee = w * (Math.max(0, sn) * swingFold + (1 - Math.abs(sn)) * 9);
         float lKnee = w * (Math.max(0, -sn) * swingFold + (1 - Math.abs(sn)) * 9);
         // Arms: opposite the legs, elbows bend more as the arm comes forward and when running.
-        float armAmp = (22 + 30 * run) * (1 - 0.6f * Math.abs(sideK));
+        // Arms: a free swing opposite the legs, held a little out from the body; straighter on the back
+        // swing, bending as they come forward; a full pump when running.
+        float armAmp = (34 + 26 * run) * (1 - 0.6f * Math.abs(sideK));
         o.set(Bone.RIGHT_ARM, Pose.PITCH, -c * armAmp * w);
         o.set(Bone.LEFT_ARM, Pose.PITCH, c * armAmp * w);
-        o.set(Bone.RIGHT_ARM, Pose.ROLL, w * run * 8);
-        o.set(Bone.LEFT_ARM, Pose.ROLL, -w * run * 8);
-        float elbowBase = 14 + 64 * run;
-        o.set(Bone.RIGHT_FOREARM, Pose.PITCH, w * (elbowBase + Math.max(0, c) * 18));
-        o.set(Bone.LEFT_FOREARM, Pose.PITCH, w * (elbowBase + Math.max(0, -c) * 18));
+        o.set(Bone.RIGHT_ARM, Pose.ROLL, 5 + w * (2 + 7 * run));
+        o.set(Bone.LEFT_ARM, Pose.ROLL, -5 - w * (2 + 7 * run));
+        float elbowBase = 6 + 70 * run;
+        o.set(Bone.RIGHT_FOREARM, Pose.PITCH, w * (elbowBase + Math.max(0, c) * (24 - 10 * run)));
+        o.set(Bone.LEFT_FOREARM, Pose.PITCH, w * (elbowBase + Math.max(0, -c) * (24 - 10 * run)));
 
         // The body: drops as far as the planted leg is angled (feet stay down), bobbing twice a stride;
         // sways over the planted foot; shoulders turn against the hips.
         float planted = (float) Math.toRadians(Math.abs(c) * stride * w);
         float drop = 12 * (1 - MathHelper.cos(planted)) + w * (0.4f + 0.6f * run) * (1 - Math.abs(sn) * 0.5f);
         o.offset[1] = drop;
-        o.offset[0] = w * sn * (0.45f + 0.25f * run);
-        o.set(Bone.ROOT, Pose.ROLL, -w * sn * (1.5f + 1.5f * run));
-        o.set(Bone.CHEST, Pose.YAW, w * c * (7 + 7 * run));
-        o.set(Bone.CHEST, Pose.ROLL, w * sn * (2 + 2 * run));
+        o.offset[0] = w * sn * (0.3f + 0.15f * run);
+        o.set(Bone.ROOT, Pose.ROLL, -w * sn * 0.8f);
+        o.set(Bone.CHEST, Pose.YAW, w * c * (6 + 5 * run));
+        o.set(Bone.CHEST, Pose.ROLL, w * sn * 1.2f);
 
         // Momentum: lean with speed and into speeding up, back when stopping or backpedalling; bank into turns.
-        float lean = w * (2 + 9 * run) - backK * w * 6 + MathHelper.clamp(s.accFwd * 1.4f, -9, 9);
+        float lean = w * (1.5f + 7 * run) - backK * w * 5 + MathHelper.clamp(s.accFwd * 0.7f, -5, 5);
         o.set(Bone.ROOT, Pose.PITCH, lean);
-        float bank = MathHelper.clamp(s.yawRate * 0.035f * Math.max(w, 0.25f), -12, 12) + MathHelper.clamp(-s.accSide * 1.2f, -7, 7);
+        float bank = MathHelper.clamp(s.yawRate * 0.012f * w, -6, 6) + MathHelper.clamp(-s.accSide * 0.6f, -4, 4);
         add(o, Bone.ROOT, Pose.ROLL, bank);
-        add(o, Bone.CHEST, Pose.YAW, MathHelper.clamp(s.yawRate * 0.02f, -10, 10));
 
         // Idle: weight shifting from foot to foot, breathing that lifts the shoulders.
         float idle = 1 - w;
@@ -270,10 +286,6 @@ public final class Animator {
         o.set(Bone.RIGHT_SHIN, Pose.PITCH, rKnee);
         o.set(Bone.LEFT_SHIN, Pose.PITCH, lKnee);
 
-        // The head stays level and looking ahead: it takes back most of the body's lean, twist and bank.
-        add(o, Bone.HEAD, Pose.PITCH, -(o.get(Bone.ROOT, Pose.PITCH) + o.get(Bone.CHEST, Pose.PITCH)) * 0.8f);
-        add(o, Bone.HEAD, Pose.YAW, -o.get(Bone.CHEST, Pose.YAW) * 0.85f);
-        add(o, Bone.HEAD, Pose.ROLL, -(o.get(Bone.ROOT, Pose.ROLL) + o.get(Bone.CHEST, Pose.ROLL)) * 0.7f);
         return o;
     }
 
