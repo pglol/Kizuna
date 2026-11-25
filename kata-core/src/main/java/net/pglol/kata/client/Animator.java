@@ -136,6 +136,8 @@ public final class Animator {
                     float lookY = MathHelper.wrapDegrees(MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw) - frame);
                     shown = r.getUpPose(limp, r.getUp, lookP, lookY);
                     Ragdoll.turn(shown, MathHelper.wrapDegrees(frame - by));
+                    Vec3d at = p.getLerpedPos(td);
+                    Ragdoll.keepAbove(shown, at, by, at.y);
                 }
                 s.out = shown;
                 s.first = true; // the springs pick up from wherever this leaves the body

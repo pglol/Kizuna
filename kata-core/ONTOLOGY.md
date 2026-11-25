@@ -33,7 +33,7 @@ moves the body somewhere the physics wouldn't.
 | **Movement input** | Forward/back/strafe keys, as a direction relative to where the player looks. |
 | **Jump input** | Tap, hold, or double tap of space. |
 | **Crouch input** | Shift, which also times a landing brace. |
-| **Sprint input** | Fast walk (double-tap forward) or run (sprint held). |
+| **Sprint input** | Fast walk (double-tap forward, 0.82 × vanilla sprint) or run (sprint held, 1.6 ×: about twice the fast walk). |
 | **Intent** | What the player is trying to do with the next contact: none, grab (catch a lip), climb (get on top). Expires. |
 
 ### 1.3 Body resources
@@ -137,7 +137,7 @@ moves the body somewhere the physics wouldn't.
     - landing at more than 0.62 blocks/tick across the ground (a tumble)
     - flung through the air at more than 1.4 blocks/tick for 3 ticks
 11. **Limp means no will.** No walking, no sprinting, no sprint FOV. Position follows the pelvis.
-12. **Getting up** starts once the body has been still for 0.35 s (after at least 0.9 s), or after 3.2 s at most. It runs push-up or sit-up, then kneel, then stand, over 1.15 s.
+12. **Getting up** starts once the body has been still for 0.2 s (after at least 0.55 s), or after 2.2 s at most. It runs push-up or sit-up, then kneel, then stand, over 1.15 s. No part of the body goes below the ground while getting up.
 
 ### 3.4 Falling and landing
 13. **Safe fall is 4 blocks.**
@@ -159,6 +159,8 @@ moves the body somewhere the physics wouldn't.
     - Away from the wall (S): drop, or with space, a back jump that turns to face the other ledge.
     - Sideways (A/D): shuffle, or with space, a side jump.
     - Space alone: ledge jump up.
+23a. **Catch reflex.** Falling past a lip (after at least 2.5 blocks of fall, and not the edge you just left), the hands grab it on any side, facing first. It works even while limp in the air. Falling faster than 1.1 blocks/tick tears the grip; holding crouch means letting yourself drop.
+23b. **Thin tops are climbed over.** A rail, fence or coping less than about half a block deep, with air beyond: you go over it and down the far side instead of standing on it.
 23. **No spider climbing.** A wall can only be climbed through a lip, a run-up, or a mantle.
 
 ### 3.6 Proximity awareness

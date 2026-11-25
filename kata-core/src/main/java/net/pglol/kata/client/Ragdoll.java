@@ -55,7 +55,7 @@ public final class Ragdoll {
         {RH, PELVIS, 0.3}, {LH, PELVIS, 0.3}, {RH, LS, 0.3}, {LH, RS, 0.3}, {RE, LS, 0.25}, {LE, RS, 0.25},
     };
     private static final float RADIUS = 0.09f, GRAVITY = 28.8f, FRICTION = 0.72f;
-    private static final float MIN_TIME = 0.9f, MAX_TIME = 3.2f, GET_UP = 1.15f;
+    private static final float MIN_TIME = 0.55f, MAX_TIME = 2.2f, GET_UP = 1.15f;
 
     private static final Map<Integer, Ragdoll> ACTIVE = new HashMap<>();
 
@@ -250,7 +250,7 @@ public final class Ragdoll {
         }
         double speed = moved / N / (steps * h);
         still = speed < 0.35 ? still + dt : 0;
-        if ((age > MIN_TIME && still > 0.35) || age > MAX_TIME) {
+        if ((age > MIN_TIME && still > 0.2) || age > MAX_TIME) {
             getUp = 0;
             // Which way up it ended: chest towards the sky (on its back) or not.
             double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];
@@ -438,6 +438,17 @@ public final class Ragdoll {
     }
 
     /** Joint positions for a pose, in model pixels. */
+    /**
+     * Getting up never goes into the ground: if any part of the pose would be below the ground the
+     * player stands on, the whole body is lifted just clear of it.
+     */
+    static void keepAbove(Pose pose, Vec3d pos, float bodyYaw, double ground) {
+        double low = Double.MAX_VALUE;
+        for (Vector3f m : joints(pose)) low = Math.min(low, toWorld(m, pos, bodyYaw).y);
+        double sink = ground - (low - RADIUS);
+        if (sink > 0) pose.offset[1] -= (float) (sink * 16 / 0.9375);
+    }
+
     static Vector3f[] joints(Pose pose) {
         Vector3f[] m = new Vector3f[N];
         Matrix4f root = rootFrame(pose);

@@ -465,6 +465,7 @@ public final class Parkour {
                     }
                 }
                 if (!ground && intent != Intent.NONE && wall(p, at, 0.3, 1.7)) reach(p, at, climbAsk);
+                else if (!ground && mode == Mode.NONE) reflex(p, sneak, false);
             }
             case VAULT -> {
                 ticks++;
@@ -510,6 +511,11 @@ public final class Parkour {
             case RAGDOLL -> {
                 ticks++;
                 Ragdoll r = Ragdoll.of(p);
+                // Still in the air and not yet hit anything: a hand can still find a lip.
+                if (!ground && r != null && !r.resting() && ticks > 2 && reflex(p, sneak, true)) {
+                    Ragdoll.stop(p);
+                    break;
+                }
                 if (ticks > 4 && (r == null || r.finished())) set(Mode.NONE);
                 else if (r != null && r.resting() && !stoodUp) {
                     // Get up where the body ended up.
@@ -777,6 +783,29 @@ public final class Parkour {
         return true;
     }
 
+    /**
+     * The catch reflex: falling past a lip (a real fall, not stepping off the edge you were on), the
+     * hands go for it, whichever side of you it's on, facing first. Too fast and the grip can't take
+     * it; holding crouch means letting yourself drop.
+     */
+    private static boolean reflex(ClientPlayerEntity p, boolean sneak, boolean limp) {
+        double vy = p.getVelocity().y;
+        double fallen = peakY - p.getY();
+        if (sneak || (!limp && fallen < 2.5) || vy > -0.35 || vy < -1.1 || cooldown > 0) return false;
+        Direction keep = dir;
+        Direction face = p.getHorizontalFacing();
+        Vec3d at = p.getPos();
+        for (Direction d : new Direction[] {face, face.rotateYClockwise(), face.rotateYCounterclockwise(), face.getOpposite()}) {
+            dir = d;
+            if (!wall(p, at, 0.3, 1.7)) continue;
+            Double l = lip(p, at, at.y, 1.3, 2.3);
+            if (l == null || (!limp && l > peakY + 0.5)) continue; // not one you've just come off
+            if (grab(p, at, l)) return true;
+        }
+        dir = keep;
+        return false;
+    }
+
     /** Where a leap from `from` to `to` is at k (0..1): off fast, easing into the catch, lifted by lift. */
     private static Vec3d arc(float k, double lift) {
         float u = 1 - (1 - k) * (1 - k);
@@ -914,12 +943,37 @@ public final class Parkour {
     }
 
     /** Up beside the wall to top, then over onto it. false if there isn't room. */
+    /**
+     * If what you're climbing is less than about half a block deep with open air beyond it, where to
+     * go to clear it (just past it, at the top's height: you drop down the far side from there).
+     */
+    private static Vec3d overThin(ClientPlayerEntity p, Vec3d up, double top) {
+        double depth = -1;
+        for (double s = 0.36; s <= 1.2; s += 0.04) {
+            Vec3d c = ahead(up, s);
+            if (empty(p, new Box(c.x - 0.05, top - 0.1, c.z - 0.05, c.x + 0.05, top - 0.01, c.z + 0.05))) {
+                depth = s - 0.36;
+                break;
+            }
+        }
+        if (depth < 0 || depth > 0.6) return null;
+        Vec3d beyond = ahead(up, 0.36 + depth + 0.35);
+        if (!empty(p, column(beyond.x, beyond.y, beyond.z, 1.8))) return null;
+        return beyond;
+    }
+
     private static boolean startPath(ClientPlayerEntity p, Mode m, double top) {
         Vec3d at = p.getPos();
         Vec3d up = new Vec3d(at.x, top + 0.01, at.z);
         Vec3d end = ahead(up, 0.8);
-        if (!empty(p, column(at.x, at.y, at.z, top + 1.8 - at.y)) || !empty(p, column(end.x, end.y, end.z, 1.8))) return false;
-        if (empty(p, column(end.x, end.y - 0.1, end.z, 0.1))) return false; // nothing to stand on
+        if (!empty(p, column(at.x, at.y, at.z, top + 1.8 - at.y))) return false;
+        // A thin top (a rail, a fence, a wall's coping): over it and down beside it, not stood on.
+        Vec3d over = overThin(p, up, top);
+        if (over != null) end = over;
+        else {
+            if (!empty(p, column(end.x, end.y, end.z, 1.8))) return false;
+            if (empty(p, column(end.x, end.y - 0.1, end.z, 0.1))) return false; // nothing to stand on
+        }
         from = at;
         to = end;
         ledgeY = top;

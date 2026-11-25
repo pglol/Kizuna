@@ -21,7 +21,7 @@ public final class Move {
     public enum Mode { WALK, FAST, RUN }
 
     /** Ground speed against Minecraft's sprint speed (walking is 0.77 of it). */
-    private static final float FAST_SPEED = 0.885f, RUN_SPEED = 1.42f;
+    private static final float FAST_SPEED = 0.82f, RUN_SPEED = 1.6f; // a full run is about twice a fast walk
     private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (5f * 20), FAST_REGEN = 1 / (12f * 20);
 
     public static Mode mode = Mode.WALK;
