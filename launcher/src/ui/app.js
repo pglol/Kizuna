@@ -14,6 +14,38 @@
     toast.h = setTimeout(() => (t.hidden = true), 5000);
   }
   const show = (id, on) => ($(id).hidden = !on);
+
+  /** A yes/no question in the launcher's own style. Clicking outside counts as no. */
+  let asking = null;
+  function ask(title, text, yes) {
+    if (asking) asking(false);
+    $('ask-title').textContent = title;
+    $('ask-text').textContent = text;
+    $('ask-yes').textContent = yes || 'Yes';
+    show('ask', true);
+    return new Promise((res) => {
+      asking = (v) => {
+        asking = null;
+        show('ask', false);
+        res(v);
+      };
+    });
+  }
+  document.getElementById('ask-yes').addEventListener('click', () => asking && asking(true));
+  document.getElementById('ask-no').addEventListener('click', () => asking && asking(false));
+
+  // Click outside any window or drawer to close it, so you can carry on elsewhere.
+  document.querySelectorAll('.overlay').forEach((o) => o.addEventListener('mousedown', (e) => {
+    if (e.target !== o) return;
+    if (o.id === 'ask') return asking && asking(false);
+    if (o.id === 'update' && document.getElementById('upd-later').onclick) return document.getElementById('upd-later').click();
+    o.hidden = true;
+  }));
+  document.addEventListener('mousedown', (e) => {
+    const d = document.getElementById('friends');
+    if (d.hidden || d.contains(e.target) || document.getElementById('friends-btn').contains(e.target)) return;
+    d.hidden = true;
+  });
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => (b.closest('.overlay').hidden = true)));
   document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => K.win(b.dataset.win)));
   const current = () => state.servers.find((s) => s.id === state.selected);
@@ -143,7 +175,7 @@
       b.append(document.createTextNode(c.name));
       b.title = c.note || c.name;
       b.addEventListener('click', async () => {
-        if (state.busy || state.playing) return;
+        if (state.busy || (state.playing && s.id === state.playingId)) return;
         if (c.locked) return openCode(`${s.name}: ${c.name}`);
         state.settings = await K.settings({ channels: { ...(state.settings.channels || {}), [s.id]: c.id } });
         renderChannels(s);
@@ -173,7 +205,7 @@
       b.textContent = a.label;
       b.title = a.address;
       b.addEventListener('click', async () => {
-        if (state.busy || state.playing) return;
+        if (state.busy || (state.playing && s.id === state.playingId)) return;
         state.settings = await K.settings({ hosts: { ...(state.settings.hosts || {}), [`${s.id}:${c.id}`]: a.label } });
         renderHosts(s, c);
         refreshPing(s);
@@ -389,12 +421,14 @@
     const play = $('play'), label = play.querySelector('span');
     $('folder').hidden = !s || s.status === 'soon';
     play.classList.toggle('busy', !!state.busy);
-    document.querySelector('.xp').classList.toggle('idle', !(state.busy || state.playing));
-    if (!state.busy && !state.playing) {
+    const here = state.playing && s && s.id === state.playingId;
+    document.querySelector('.xp').classList.toggle('idle', !(state.busy || here));
+    if (!state.busy && !here) {
       $('ptext').textContent = '';
       $('pfill').style.width = '0';
     }
-    if (state.playing) [play.disabled, label.textContent] = [true, 'PLAYING'];
+    // "Playing" only on the tab whose game is running; other tabs can still be started (you're asked first).
+    if (state.playing && (!s || s.id === state.playingId)) [play.disabled, label.textContent] = [true, 'PLAYING'];
     else if (state.busy) [play.disabled, label.textContent] = [true, 'LOADING'];
     else if (!s || s.status === 'soon') [play.disabled, label.textContent] = [true, s ? 'SOON' : 'PLAY'];
     else [play.disabled, label.textContent] = [false, state.account ? 'PLAY' : state.test ? 'TEST' : 'SIGN IN'];
@@ -462,7 +496,15 @@
   let playAfterPrompt = false;
   async function play(skipCheck) {
     const s = current();
-    if (!s || state.busy || state.playing) return;
+    if (!s || state.busy) return;
+    if (state.playing) {
+      if (s.id === state.playingId) return;
+      const ok = await ask(`Close ${state.playingName}?`, `Only one game runs at a time. Close ${state.playingName} and start ${s.name}?`, 'Close and play');
+      if (!ok) return;
+      state.stopping = true;
+      $('ptext').textContent = `Closing ${state.playingName}`;
+      await K.stopGame();
+    }
     if (!state.account && !state.test) return show('signin', true);
     state.busy = true;
     updateDock();
@@ -479,6 +521,8 @@
     }
     $('ptext').textContent = 'Getting ready';
     const ch = channelOf(s), h = hostOf(s, ch);
+    state.playingId = s.id;
+    state.playingName = s.name;
     const r = await K.play(s.id, !state.account && state.test, ch.id, h ? h.label : '');
     state.busy = false;
     if (!r.ok) {
@@ -488,7 +532,11 @@
         show('signin', true);
       }
       toast(r.error);
-    } else state.playing = true;
+    } else {
+      state.playing = true;
+      state.playingId = s.id;
+      state.playingName = s.name;
+    }
     updateDock();
   }
 
@@ -504,9 +552,12 @@
     state.friends = await K.friends();
     renderFriends();
     state.playing = false;
+    state.playingId = null;
     state.busy = false;
     updateDock();
-    if (d.code) {
+    const stopped = state.stopping;
+    state.stopping = false;
+    if (d.code && !stopped) {
       $('crash-log').textContent = d.log || '';
       show('crash', true);
     }
@@ -541,11 +592,20 @@
     } else if (d.state === 'downloading') {
       $('upd-fill').style.width = (d.percent || 0) + '%';
     } else if (d.state === 'ready') {
-      $('upd-text').textContent = state.playing ? 'Update downloaded. It installs when you close the game.' : 'Update downloaded.';
+      $('upd-text').textContent = state.playing ? `Update downloaded. Restarting closes ${state.playingName}.` : 'Update downloaded.';
       $('upd-bar').hidden = true;
-      $('upd-go').disabled = !!state.playing;
+      $('upd-go').disabled = false;
       $('upd-go').textContent = 'Restart';
-      $('upd-go').onclick = () => K.installUpdate();
+      $('upd-go').onclick = async () => {
+        if (state.playing) {
+          const ok = await ask(`Close ${state.playingName}?`, `The launcher restarts to update. Close ${state.playingName} first?`, 'Close and update');
+          if (!ok) return;
+          state.stopping = true;
+          $('upd-go').disabled = true;
+          $('upd-go').textContent = 'Closing game…';
+          await K.installUpdate(true);
+        } else await K.installUpdate(false);
+      };
       show('update', true);
     }
   });

@@ -12,7 +12,20 @@ const host = require('./host');
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json'), 'utf8'));
 let win = null;
-let playing = null;
+let playing = null, playingName = '';
+
+/** Waits until the game has closed (or the time runs out). */
+function waitForExit(ms) {
+  return new Promise((res) => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (!playing || Date.now() - t0 > ms) {
+        clearInterval(iv);
+        res(!playing);
+      }
+    }, 200);
+  });
+}
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => {
@@ -154,10 +167,15 @@ app.whenReady().then(() => {
       });
       updater = autoUpdater;
       ipcMain.handle('update-download', () => autoUpdater.downloadUpdate().catch((e) => logLine('update download failed:', e && e.message)));
-      ipcMain.handle('update-install', () => {
-        if (playing) return false;
+      ipcMain.handle('update-install', async (_e, closeGame) => {
+        // A game open: the launcher asks first; with the go-ahead, close it, then restart into the update.
+        if (playing) {
+          if (!closeGame) return { ok: false, playing: playingName };
+          game.stop();
+          await waitForExit(20000);
+        }
         autoUpdater.quitAndInstall(false, true);
-        return true;
+        return { ok: true };
       });
     } catch {}
   }
@@ -331,6 +349,12 @@ ipcMain.handle('open-folder', (_e, id, channel) => {
   shell.openPath(dir);
 });
 
+ipcMain.handle('stop-game', async () => {
+  if (!playing) return true;
+  game.stop();
+  return waitForExit(20000);
+});
+
 ipcMain.handle('win', (_e, what) => {
   if (!win) return;
   if (what === 'min') win.minimize();
@@ -485,7 +509,7 @@ function logLine(...a) {
 }
 
 ipcMain.handle('play', async (_e, id, test, channelId, hostLabel) => {
-  if (playing) return { ok: false, error: 'A game is already running.' };
+  if (playing) return { ok: false, code: 'running', running: playingName, error: `${playingName || 'A game'} is already running.` };
   // Always the newest build: pin to the latest commit and re-read the server list before anything else.
   send('status', { text: 'Checking for updates', fraction: 0.01 });
   const sha = await net.pinLatest(config.hubUrl);
@@ -509,6 +533,7 @@ ipcMain.handle('play', async (_e, id, test, channelId, hostLabel) => {
   const testing = !!(test && config.testMode);
   if (!acct && !testing) return { ok: false, error: 'Sign in first.', code: 'signin' };
   playing = id;
+  playingName = found.name;
   logLine('play', id, testing ? '(test mode)' : '');
   try {
     send('status', { text: 'Signing in', fraction: 0.02 });

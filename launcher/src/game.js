@@ -84,8 +84,23 @@ async function play(dataDir, server, session, settings, on) {
   if (addr && !addr.includes('CHANGE_ME') && !session.offline) opts.quickPlay = { type: 'multiplayer', identifier: addr };
   on.status('Starting the game', 0.95);
   const child = await launcher.launch(opts);
+  current = child;
+  if (child) child.on('exit', () => {
+    if (current === child) current = null;
+  });
   if (!child) throw new Error('Minecraft could not start: ' + (log.slice(-5).join(' ') || 'unknown error'));
   return { gameDir, pack: p };
 }
 
-module.exports = { play };
+let current = null;
+
+/** Closes the running game (asked first in the launcher). */
+function stop() {
+  if (!current) return false;
+  try {
+    current.kill();
+  } catch {}
+  return true;
+}
+
+module.exports = { play, stop };

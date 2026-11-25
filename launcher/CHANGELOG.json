@@ -1,4 +1,9 @@
 {
+  "1.3.8": [
+    "Playing shows only on the game that's running; starting another asks to close it first",
+    "Restart to update while a game is open asks to close it, then updates",
+    "Click outside any window or the Friends list to close it"
+  ],
   "1.3.7": [
     "Your name opens Account (who you're playing as, switch to Microsoft, sign out); Settings is just settings, grouped and tidied"
   ],
