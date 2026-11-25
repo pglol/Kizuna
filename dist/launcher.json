@@ -45,7 +45,7 @@
         "name": "AoT RPG mod"
       },
       "hostMode": "mod",
-      "version": "0.75",
+      "version": "0.76",
       "channels": [
         {
           "id": "public",
