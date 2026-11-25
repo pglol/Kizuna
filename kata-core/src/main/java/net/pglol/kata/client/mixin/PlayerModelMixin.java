@@ -65,6 +65,9 @@ public abstract class PlayerModelMixin {
                 m.leftArm.pivotY = 2;
             }
         }
+        // Minecraft sets the head's pitch and yaw every frame but never its roll: start it level, or a
+        // tilt (from a ragdoll, say) would stay on forever.
+        m.head.roll = 0;
         add(m.head, p, Bone.HEAD);
         add(m.rightArm, p, Bone.RIGHT_ARM);
         add(m.leftArm, p, Bone.LEFT_ARM);

@@ -82,6 +82,9 @@ public final class Animator {
         boolean wasHang;
         int lastHurt;
         boolean ragdolled;
+        // Hands to a wall right in front: how much, and how far off it is.
+        float wallW;
+        double wallHit = 0.6;
         // Hand over hand: where each hand is planted, and a hand on its way to a new spot.
         Vec3d[] plant, stepFrom;
         float[] stepT = {-1, -1};
@@ -185,6 +188,7 @@ public final class Animator {
         Pose out = sh.copy();
         out.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn);
         hang(p, td, s, dt, out);
+        touch(p, td, s, dt, out);
         s.out = out;
         return out;
     }
@@ -370,6 +374,26 @@ public final class Animator {
         add(o, Bone.RIGHT_FOREARM, Pose.PITCH, ai * 28);
         add(o, Bone.LEFT_FOREARM, Pose.PITCH, ai * 28);
         add(o, Bone.CHEST, Pose.PITCH, ai * (9 * up + 4 * mid - 2 * down));
+
+        // Falling fast: the body reacts. Arms flung out and windmilling, legs cycling for footing that
+        // isn't there.
+        float fear = s.air * MathHelper.clamp((float) (-vy - 0.55) / 0.6f, 0, 1);
+        if (fear > 0.01f) {
+            float w1 = MathHelper.sin(t * 9.5f), w2 = MathHelper.sin(t * 7.3f + 1.3f);
+            Pose flail = new Pose();
+            flail.set(Bone.HEAD, -15, 0, 0);
+            flail.set(Bone.CHEST, -8 + 6 * w2, 6 * w1, 0);
+            flail.set(Bone.RIGHT_ARM, -110 + 55 * w1, 0, 62 + 15 * w2).set(Bone.RIGHT_FOREARM, 25 + 15 * w2, 0, 0);
+            flail.set(Bone.LEFT_ARM, -110 - 55 * w1, 0, -62 + 15 * w2).set(Bone.LEFT_FOREARM, 25 - 15 * w2, 0, 0);
+            flail.set(Bone.RIGHT_LEG, -40 + 32 * w2, 0, 8).set(Bone.RIGHT_SHIN, 70 - 30 * w2, 0, 0);
+            flail.set(Bone.LEFT_LEG, -40 - 32 * w2, 0, -8).set(Bone.LEFT_SHIN, 70 + 30 * w2, 0, 0);
+            for (Bone b : Bone.values()) {
+                if (b == Bone.ROOT) continue;
+                for (int ax = 0; ax < 3; ax++) o.set(b, ax, MathHelper.lerp(fear * 0.85f, o.get(b, ax), flail.get(b, ax)));
+            }
+            rKnee = MathHelper.lerp(fear * 0.85f, rKnee, flail.get(Bone.RIGHT_SHIN, Pose.PITCH));
+            lKnee = MathHelper.lerp(fear * 0.85f, lKnee, flail.get(Bone.LEFT_SHIN, Pose.PITCH));
+        }
 
         // Landing: sink, with the legs bending just enough to keep the feet down (simple leg IK).
         float sink = land * 4.5f;
@@ -643,6 +667,42 @@ public final class Animator {
         float pd = MathHelper.wrapDegrees((float) Math.toDegrees(pitch)), rd = (float) Math.toDegrees(roll), bd = (float) Math.toDegrees(bend);
         out.set(arm, MathHelper.lerp(weight, out.get(arm, Pose.PITCH), pd), MathHelper.lerp(weight, out.get(arm, Pose.YAW), 0), MathHelper.lerp(weight, out.get(arm, Pose.ROLL), rd));
         out.set(fore, MathHelper.lerp(weight, out.get(fore, Pose.PITCH), bd), 0, 0);
+    }
+
+    /**
+     * Close to a wall in front (walking up to it, or jumping up against it) the hands come up and press
+     * flat against it, elbows bending the closer you get. Starts within about a block.
+     */
+    private static void touch(PlayerEntity p, float td, State s, float dt, Pose out) {
+        boolean free = Parkour.view(p).mode() == Parkour.Mode.NONE && !p.isSwimming() && !p.hasVehicle()
+            && !p.getAbilities().flying && !p.isSleeping() && !p.isSpectator() && !p.isInSneakingPose();
+        Vec3d pos = p.getLerpedPos(td);
+        float yaw = MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw);
+        double fx = -Math.sin(Math.toRadians(yaw)), fz = Math.cos(Math.toRadians(yaw));
+        double y = pos.y + (p.isOnGround() ? 1.25 : 1.45);
+        double hit = -1;
+        if (free) {
+            for (double d = 0.3; d <= 1.0; d += 0.05) {
+                double cx = pos.x + fx * d, cz = pos.z + fz * d;
+                if (!p.getWorld().isSpaceEmpty(new net.minecraft.util.math.Box(cx - 0.04, y - 0.15, cz - 0.04, cx + 0.04, y + 0.15, cz + 0.04))) {
+                    hit = d;
+                    break;
+                }
+            }
+        }
+        float want = hit < 0 ? 0 : MathHelper.clamp((float) (0.95 - hit) / 0.45f, 0, 1);
+        s.wallW += (want - s.wallW) * (1 - (float) Math.exp(-dt * 9));
+        if (hit >= 0) s.wallHit = hit;
+        if (s.wallW < 0.01f) return;
+        double rx = -Math.cos(Math.toRadians(yaw)), rz = -Math.sin(Math.toRadians(yaw));
+        double d = s.wallHit - 0.03;
+        Vec3d base = new Vec3d(pos.x + fx * d, y + 0.05, pos.z + fz * d);
+        Vec3d rh = base.add(rx * 0.2, 0, rz * 0.2), lh = base.add(-rx * 0.2, 0, -rz * 0.2);
+        float body = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
+        Matrix4f frame = armFrame(out).invert();
+        float w = s.wallW * s.wallW * (3 - 2 * s.wallW);
+        reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, new Vector3f(-5, 2, 0), toModel(rh, pos, body), frame, w);
+        reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, new Vector3f(5, 2, 0), toModel(lh, pos, body), frame, w);
     }
 
     /** Two-bone IK for a leg (thigh and shin, 6 pixels each; the knee bends backwards). */

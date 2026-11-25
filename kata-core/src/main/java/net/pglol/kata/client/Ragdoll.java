@@ -143,9 +143,23 @@ public final class Ragdoll {
             r.pz[i] = r.z[i] - vz * h;
         }
         for (int k = 0; k < LINKS.length; k++) r.rest[k] = r.dist(LINKS[k][0], LINKS[k][1]);
-        for (int k = 0; k < SPANS.length; k++) r.span[k] = r.dist(SPANS[k][0], SPANS[k][1]) * 0.45;
+        for (int k = 0; k < SPANS.length; k++) r.span[k] = r.full(SPANS[k]) * 0.62;
         ACTIVE.put(p.getId(), r);
         if (ACTIVE.size() > 64) ACTIVE.clear();
+    }
+
+    /** A limb's full length: shoulder to elbow to hand (or hip to knee to foot). */
+    private double full(int[] span) {
+        int a = span[0], c = span[1], b = a == RS ? RE : a == LS ? LE : a == RHIP ? RK : LK;
+        return dist(a, b) + dist(b, c);
+    }
+
+    /** Pairs that aren't joined keep apart (no part of the body passes into another). */
+    private static final boolean[][] JOINED = new boolean[N][N];
+
+    static {
+        for (int[] l : LINKS) JOINED[l[0]][l[1]] = JOINED[l[1]][l[0]] = true;
+        for (int i = 0; i < N; i++) JOINED[i][i] = true;
     }
 
     private double dist(int a, int b) {
@@ -193,6 +207,8 @@ public final class Ragdoll {
             for (int it = 0; it < 4; it++) {
                 for (int k = 0; k < LINKS.length; k++) keep(LINKS[k][0], LINKS[k][1], rest[k], false);
                 for (int k = 0; k < SPANS.length; k++) keep(SPANS[k][0], SPANS[k][1], span[k], true);
+                for (int a = 0; a < N; a++)
+                    for (int b = a + 1; b < N; b++) if (!JOINED[a][b]) keep(a, b, 0.2, true);
             }
             for (int i = 0; i < N; i++) collide(w, i);
         }

@@ -10,6 +10,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.pglol.kata.KataCore;
 import net.pglol.kata.KataNet;
 
 import java.util.HashMap;
@@ -68,6 +69,8 @@ public final class Parkour {
     private static Vec3d airVel = Vec3d.ZERO;
     private static boolean stoodUp;
     private static Vec3d[] hopHands;
+    /** A ledge jump that turns you round (to the wall behind), or null. */
+    private static Direction hopTurn;
     private static double peakY;
     private static int sneakAge = 99, landTicks = 12;
     private static boolean lastSneak;
@@ -125,6 +128,8 @@ public final class Parkour {
     public static volatile Direction markerDir = Direction.NORTH;
     /** Where each hand would hold (right, left), for the marker. */
     public static volatile Vec3d[] markerHands;
+    /** How far off the wall the marker's lip is (0 when touching it). */
+    private static double markerDist;
 
     // ---- the hands ----
 
@@ -162,6 +167,10 @@ public final class Parkour {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && p.getId() == mc.player.getId()) {
             if (mode == Mode.CORNER) return MathHelper.lerpAngleDegrees(ease(progress(Mode.CORNER, (System.nanoTime() - started) / 1e9f)), yawFrom, yawTo);
+            if (mode == Mode.HOP && hopTurn != null) {
+                float k = (progress(Mode.HOP, (System.nanoTime() - started) / 1e9f) - hopWindShare()) / (1 - hopWindShare());
+                return MathHelper.lerpAngleDegrees(ease(k), yawFrom, yawTo);
+            }
             return dir.asRotation();
         }
         return p.getHorizontalFacing().asRotation();
@@ -389,6 +398,15 @@ public final class Parkour {
                 dir = p.getHorizontalFacing();
                 Vec3d at = p.getPos();
                 boolean justJumped = jumpEdge && lastGround && !ground && p.getVelocity().y > 0.3;
+                if (justJumped && marker != null && !markerReady && Move.mode != Move.Mode.RUN) {
+                    // Close to a lip you can reach with a jump: the jump carries you in to it (a step and a
+                    // little hop), and the catch takes it from there.
+                    Direction md = markerDir;
+                    double push = MathHelper.clamp(markerDist / 5 + 0.06, 0.06, 0.24);
+                    Vec3d v = p.getVelocity();
+                    p.setVelocity(md.getOffsetX() != 0 ? md.getOffsetX() * push : v.x * 0.3, v.y, md.getOffsetZ() != 0 ? md.getOffsetZ() * push : v.z * 0.3);
+                    intent = intent == Intent.NONE ? Intent.GRAB : intent;
+                }
                 if (justJumped && fwd > 0.1) {
                     double feet = groundY;
                     Double low = ledge(p, at, feet, 0.5, 1.6);
@@ -422,8 +440,9 @@ public final class Parkour {
                 Vec3d at = p.getPos();
                 ticks++;
                 if (sneak) drop(p, 0.08);
-                else if (jumpEdge && away) kickOff(p);
-                else if ((toward(p) && ticks > 4 && cyc == 0) || (climbAsk && !jumpEdge && ticks > 2)) {
+                else if (jumpEdge && away) {
+                    if (!backJump(p, at)) kickOff(p);
+                } else if ((toward(p) && ticks > 4 && cyc == 0) || (climbAsk && !jumpEdge && ticks > 2)) {
                     // W (or holding space after the catch): up and over; no room on top: the lip above.
                     intent = Intent.NONE;
                     if (!startPath(p, Mode.PULL, ledgeY)) {
@@ -483,16 +502,17 @@ public final class Parkour {
      */
     private static void brace(ClientPlayerEntity p) {
         double below = -1;
-        for (double d = 0; d <= 2.5; d += 0.125) {
+        for (double d = 0; d <= 5; d += 0.125) {
             if (!empty(p, new Box(p.getX() - 0.25, p.getY() - d - 0.01, p.getZ() - 0.25, p.getX() + 0.25, p.getY() - d, p.getZ() + 0.25))) {
                 below = d;
                 break;
             }
         }
-        if (below < 0) return;
-        double total = peakY - p.getY() + below;
+        double fallen = peakY - p.getY();
+        double total = below < 0 ? fallen + 5 : fallen + below;
         boolean huge = total >= FACEPLANT_ALWAYS, caught = sneakAge <= CATCH_WINDOW;
-        if ((huge && below <= 2.0) || (!caught && total >= FACEPLANT_UNCAUGHT && below <= 0.9)) {
+        // A big drop: limp well before the ground (or once you've fallen a long way already).
+        if ((huge && (below < 0 ? fallen >= 9 : below <= 4.0)) || (!caught && below >= 0 && total >= FACEPLANT_UNCAUGHT && below <= 0.9)) {
             landRough = 1;
             stoodUp = false;
             set(Mode.RAGDOLL);
@@ -584,6 +604,41 @@ public final class Parkour {
         }
     }
 
+    /** Leap backwards, turning round in the air, to a lip on the wall behind (up to ~3 blocks away). */
+    private static boolean backJump(ClientPlayerEntity p, Vec3d at) {
+        Direction keep = dir, back = dir.getOpposite();
+        Vec3d b = new Vec3d(back.getOffsetX(), 0, back.getOffsetZ());
+        dir = back;
+        try {
+            for (double d = 0.9; d <= 3.2; d += 0.15) {
+                for (double dy = 0; dy <= 1.2; dy = dy <= 0 ? -dy + 0.25 : -dy) {
+                    if (dy < -1.5) continue;
+                    Vec3d c = at.add(b.multiply(d)).add(0, dy, 0);
+                    if (!empty(p, column(c.x, c.y, c.z, 1.8))) continue;
+                    Double l = lip(p, c, c.y, HANG_H - 0.2, HANG_H + 0.2);
+                    if (l == null) continue;
+                    Vec3d hold = snap(c, l - 0.03);
+                    Vec3d hang = new Vec3d(hold.x, l - HANG_H, hold.z);
+                    if (!empty(p, column(hang.x, hang.y, hang.z, 1.8))) continue;
+                    dir = keep;
+                    hopHands = handPoints(p.getWorld(), at, keep, ledgeY);
+                    hopTurn = back;
+                    yawFrom = keep.asRotation();
+                    yawTo = back.asRotation();
+                    from = at;
+                    to = hang;
+                    ledgeY = l;
+                    hopWind = 4;
+                    set(Mode.HOP);
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            if (mode != Mode.HOP) dir = keep;
+        }
+    }
+
     private static void kickOff(ClientPlayerEntity p) {
         set(Mode.NONE);
         cooldown = 8;
@@ -623,6 +678,7 @@ public final class Parkour {
                 Double reach = now != null ? now : lip(p, probe, at.y, 1.3, ground ? (Move.mode == Move.Mode.RUN ? 4.4 : 3.3) : 2.3);
                 if (reach != null) {
                     setMarker(probe, reach, now != null, dir);
+                    markerDist = k;
                     return;
                 }
                 break;
@@ -669,6 +725,7 @@ public final class Parkour {
     }
 
     private static void set(Mode m) {
+        if (m != Mode.HOP) hopTurn = null;
         mode = m;
         cyc = 0;
         plant = null;
@@ -779,6 +836,20 @@ public final class Parkour {
                 p.setVelocity(0, Math.min(0, p.getVelocity().y), 0);
                 return false;
             }
+            case RAGDOLL -> {
+                // You are the body: no walking; you go where it goes (and fall while it falls).
+                Ragdoll r = Ragdoll.of(p);
+                double vy = p.isOnGround() ? 0 : (p.getVelocity().y - KataCore.GRAVITY) * 0.98;
+                double dx = 0, dz = 0;
+                if (r != null && !r.resting()) {
+                    Vec3d pel = r.pelvis();
+                    dx = MathHelper.clamp(pel.x - p.getX(), -0.6, 0.6);
+                    dz = MathHelper.clamp(pel.z - p.getZ(), -0.6, 0.6);
+                }
+                p.setVelocity(0, vy, 0);
+                p.move(MovementType.SELF, new Vec3d(dx, vy, dz));
+                return true;
+            }
             case CORNER -> {
                 ticks++;
                 float k = ease(Math.min(1, ticks / (float) CORNER_TICKS));
@@ -827,6 +898,7 @@ public final class Parkour {
                 else if (k >= 1) {
                     if (mode == Mode.HOP) {
                         int s = side;
+                        if (hopTurn != null) dir = hopTurn;
                         p.setPosition(to);
                         set(Mode.HANG);
                         side = s; // the animator swings the catch on in the direction of the leap
