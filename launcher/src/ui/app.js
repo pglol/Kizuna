@@ -458,6 +458,12 @@
     renderFriends();
   });
   $('friends-close').addEventListener('click', () => setSocial(false));
+  // Clicking anywhere else folds it away (not while a dialog is up, or on the button that opens it).
+  document.addEventListener('mousedown', (e) => {
+    if ($('friends').hidden) return;
+    if ($('friends').contains(e.target) || $('friends-btn').contains(e.target) || e.target.closest('.overlay, .toast, .topbar')) return;
+    setSocial(false);
+  });
   $('friend-search').addEventListener('input', renderFriends);
   document.querySelectorAll('.stab').forEach((b) => b.addEventListener('click', () => {
     const tab = b.dataset.stab;

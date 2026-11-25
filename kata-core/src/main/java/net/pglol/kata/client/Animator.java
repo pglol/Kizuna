@@ -338,6 +338,29 @@ public final class Animator {
         o.set(Bone.RIGHT_SHIN, Pose.PITCH, rKnee);
         o.set(Bone.LEFT_SHIN, Pose.PITCH, lKnee);
 
+        // Parkour takes the body over (the springs carry it in and out smoothly).
+        Parkour.View pv = Parkour.view(p);
+        if (pv.mode() != Parkour.Mode.NONE) {
+            Pose stand = new Pose();
+            float k = pv.progress();
+            Pose want;
+            float weight = 1;
+            switch (pv.mode()) {
+                case VAULT -> {
+                    want = Presets.VAULT;
+                    weight = MathHelper.sin(MathHelper.PI * Math.min(1, k * 1.1f));
+                }
+                case HANG -> want = Presets.hang(pv.side(), pv.phase());
+                case CLIMB -> want = Presets.climb(pv.phase());
+                case PULL -> want = k < 0.45f ? Pose.lerp(Presets.HANG, Presets.PULL, k / 0.45f)
+                    : k < 0.8f ? Pose.lerp(Presets.PULL, Presets.KNEE, (k - 0.45f) / 0.35f)
+                    : Pose.lerp(Presets.KNEE, stand, (k - 0.8f) / 0.2f);
+                default -> want = k < 0.5f ? Pose.lerp(Presets.PULL, Presets.KNEE, k / 0.5f) : Pose.lerp(Presets.KNEE, stand, (k - 0.5f) / 0.5f);
+            }
+            Pose mixed = Pose.lerp(o, want, MathHelper.clamp(weight, 0, 1));
+            mixed.gait = o.gait;
+            return mixed;
+        }
         return o;
     }
 

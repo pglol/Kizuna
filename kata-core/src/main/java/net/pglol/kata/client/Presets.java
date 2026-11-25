@@ -43,6 +43,61 @@ public final class Presets {
         HANG.set(Bone.LEFT_LEG, -5, 0, 0).set(Bone.LEFT_SHIN, 20, 0, 0);
     }
 
+    /** Parkour keyframes: halfway up a pull (elbows bent, chest over the hands), a knee up onto the
+     *  top (pushing down on it), and a vault (one hand planted, legs tucked and swung to the side). */
+    public static final Pose PULL = new Pose(), KNEE = new Pose(), VAULT = new Pose();
+
+    static {
+        PULL.set(Bone.HEAD, 10, 0, 0);
+        PULL.set(Bone.CHEST, 25, 0, 0);
+        PULL.set(Bone.RIGHT_ARM, -70, 0, 10).set(Bone.RIGHT_FOREARM, 110, 0, 0);
+        PULL.set(Bone.LEFT_ARM, -70, 0, -10).set(Bone.LEFT_FOREARM, 110, 0, 0);
+        PULL.set(Bone.RIGHT_LEG, -30, 0, 0).set(Bone.RIGHT_SHIN, 50, 0, 0);
+        PULL.set(Bone.LEFT_LEG, -5, 0, 0).set(Bone.LEFT_SHIN, 30, 0, 0);
+
+        KNEE.set(Bone.HEAD, 15, 0, 0);
+        KNEE.set(Bone.CHEST, 45, 0, 0);
+        KNEE.set(Bone.RIGHT_ARM, -15, 0, 15).set(Bone.RIGHT_FOREARM, 25, 0, 0);
+        KNEE.set(Bone.LEFT_ARM, -15, 0, -15).set(Bone.LEFT_FOREARM, 25, 0, 0);
+        KNEE.set(Bone.RIGHT_LEG, -95, 0, 0).set(Bone.RIGHT_SHIN, 110, 0, 0);
+        KNEE.set(Bone.LEFT_LEG, 15, 0, 0).set(Bone.LEFT_SHIN, 35, 0, 0);
+
+        VAULT.set(Bone.ROOT, 0, 0, -20);
+        VAULT.set(Bone.CHEST, 20, 0, -8);
+        VAULT.set(Bone.LEFT_ARM, -45, 0, -35).set(Bone.LEFT_FOREARM, 5, 0, 0);
+        VAULT.set(Bone.RIGHT_ARM, -80, 0, 70).set(Bone.RIGHT_FOREARM, 20, 0, 0);
+        VAULT.set(Bone.RIGHT_LEG, -75, 0, 30).set(Bone.RIGHT_SHIN, 85, 0, 0);
+        VAULT.set(Bone.LEFT_LEG, -70, 0, 30).set(Bone.LEFT_SHIN, 90, 0, 0);
+    }
+
+    /** Gripping a wall: hands and feet reaching up in turn as you climb (phase advances as you move). */
+    public static Pose climb(float phase) {
+        float s = (float) Math.sin(phase);
+        Pose p = new Pose();
+        p.set(Bone.HEAD, -20, 0, 0);
+        p.set(Bone.CHEST, 8, 0, 0);
+        p.set(Bone.RIGHT_ARM, -130 + 25 * s, 0, 12).set(Bone.RIGHT_FOREARM, 40 - 20 * s, 0, 0);
+        p.set(Bone.LEFT_ARM, -130 - 25 * s, 0, -12).set(Bone.LEFT_FOREARM, 40 + 20 * s, 0, 0);
+        p.set(Bone.RIGHT_LEG, -45 - 20 * s, 0, 6).set(Bone.RIGHT_SHIN, 70 + 25 * s, 0, 0);
+        p.set(Bone.LEFT_LEG, -45 + 20 * s, 0, -6).set(Bone.LEFT_SHIN, 70 - 25 * s, 0, 0);
+        return p;
+    }
+
+    /** Hanging, shuffling towards side (1 right, -1 left): the lead hand and foot open out that way in
+     *  steps and the others follow in. */
+    public static Pose hang(int side, float phase) {
+        Pose p = HANG.copy();
+        if (side == 0) return p;
+        float w = Math.abs((float) Math.sin(phase));
+        Bone leadArm = side > 0 ? Bone.RIGHT_ARM : Bone.LEFT_ARM, tailArm = side > 0 ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
+        Bone leadLeg = side > 0 ? Bone.RIGHT_LEG : Bone.LEFT_LEG, tailLeg = side > 0 ? Bone.LEFT_LEG : Bone.RIGHT_LEG;
+        p.set(leadArm, Pose.ROLL, p.get(leadArm, Pose.ROLL) + side * 22 * w);
+        p.set(tailArm, Pose.ROLL, p.get(tailArm, Pose.ROLL) + side * 10 * w);
+        p.set(leadLeg, Pose.ROLL, p.get(leadLeg, Pose.ROLL) + side * 18 * w);
+        p.set(tailLeg, Pose.ROLL, p.get(tailLeg, Pose.ROLL) + side * 8 * w);
+        return p;
+    }
+
     public static Pose of(String name) {
         return switch (name) {
             case "Guard" -> GUARD;

@@ -25,6 +25,8 @@ public final class KataClient implements ClientModInitializer {
         })));
         ClientTickEvents.START_CLIENT_TICK.register(KataClient::early);
         ClientTickEvents.END_CLIENT_TICK.register(KataClient::tick);
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.ActOf.ID,
+            (payload, ctx) -> Parkour.remote(payload.entity(), payload.mode(), payload.side()));
         HudRenderCallback.EVENT.register((c, tick) -> Hud.render(c, tick.getTickDelta(false)));
     }
 
@@ -36,6 +38,7 @@ public final class KataClient implements ClientModInitializer {
 
     private static void tick(MinecraftClient mc) {
         Move.tick(mc);
+        Parkour.tick(mc);
         // Kata is played in third person, always (the body is the point).
         if (mc.player != null && mc.options.getPerspective() != Perspective.THIRD_PERSON_BACK) mc.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         while (editorKey.wasPressed()) if (mc.currentScreen == null) openEditor = true;

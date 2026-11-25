@@ -15,9 +15,13 @@
     "HotbarScrollMixin",
     "RunFeelMixin",
     "SprintDustMixin",
-    "StepSoundMixin"
+    "StepSoundMixin",
+    "TravelMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "mixins": [
+    "FlightMixin"
+  ]
 }

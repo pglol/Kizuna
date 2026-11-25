@@ -1,4 +1,7 @@
 {
+  "0.71.0": [
+    "Clicking anywhere outside the friends panel folds it away again."
+  ],
   "0.70.0": [
     "A new look: each game's cover fills the window, with a slim rail of games on the left and the game's title, builds and Play on the cover.",
     "Friends live in a panel on the right with your profile at the top, grouped by the game they're in, with search and an add tab. Fold it away to a button when you want the full cover.",

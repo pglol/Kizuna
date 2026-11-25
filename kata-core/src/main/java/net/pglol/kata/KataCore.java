@@ -26,6 +26,7 @@ public final class KataCore implements ModInitializer {
                 c.getSource().sendFeedback(() -> Text.literal("Test zone built (" + n + " blocks). Press O for the pose editor."), false);
                 return 1;
             }))));
+        KataNet.register();
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (!noHunger) return;
             for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
