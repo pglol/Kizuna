@@ -104,8 +104,8 @@ public final class Presets {
         REACH.set(Bone.CHEST, -10, 0, 0);
         REACH.set(Bone.RIGHT_ARM, -172, 8, 6).set(Bone.RIGHT_FOREARM, 6, 0, 0);
         REACH.set(Bone.LEFT_ARM, -172, -8, -6).set(Bone.LEFT_FOREARM, 6, 0, 0);
-        REACH.set(Bone.RIGHT_LEG, 8, 0, 0).set(Bone.RIGHT_SHIN, 12, 0, 0);
-        REACH.set(Bone.LEFT_LEG, -14, 0, 0).set(Bone.LEFT_SHIN, 30, 0, 0);
+        REACH.set(Bone.RIGHT_LEG, 14, 0, 2).set(Bone.RIGHT_SHIN, 8, 0, 0);
+        REACH.set(Bone.LEFT_LEG, -6, 0, -2).set(Bone.LEFT_SHIN, 18, 0, 0);
     }
 
     /** Coiling for a ledge jump: elbows pull in, knees tuck, leaning away from where you'll go (side). */
@@ -154,6 +154,22 @@ public final class Presets {
         KNEEL.set(Bone.RIGHT_LEG, -85, 0, 4).set(Bone.RIGHT_SHIN, 115, 0, 0);
         KNEEL.set(Bone.LEFT_LEG, 20, 0, -4).set(Bone.LEFT_SHIN, 100, 0, 0);
         KNEEL.offset[1] = 6;
+    }
+
+    /** Leaping sideways towards side (1 right): that hand reaching out and up for the lip, the other
+     *  lower, legs trailing the other way. */
+    public static Pose sideReach(int side) {
+        Pose p = new Pose();
+        Bone lead = side > 0 ? Bone.RIGHT_ARM : Bone.LEFT_ARM, trail = side > 0 ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
+        Bone leadF = side > 0 ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM, trailF = side > 0 ? Bone.LEFT_FOREARM : Bone.RIGHT_FOREARM;
+        p.set(Bone.HEAD, -20, 0, 0);
+        p.set(Bone.CHEST, -4, 0, side * 10);
+        p.set(lead, -118, 0, side * 52).set(leadF, 8, 0, 0);
+        p.set(trail, -60, 0, -side * 8).set(trailF, 35, 0, 0);
+        p.set(Bone.RIGHT_LEG, -10, 0, -side * 16).set(Bone.RIGHT_SHIN, 30, 0, 0);
+        p.set(Bone.LEFT_LEG, -25, 0, -side * 16).set(Bone.LEFT_SHIN, 45, 0, 0);
+        p.set(Bone.ROOT, 0, 0, side * 8);
+        return p;
     }
 
     public static Pose of(String name) {

@@ -40,7 +40,7 @@ public final class Parkour {
     private Parkour() {}
 
     /** Synced by ordinal: add new moves at the end. */
-    public enum Mode { NONE, VAULT, HANG, RUNUP, PULL, MANTLE, HOP, CORNER, LAND, FACEPLANT }
+    public enum Mode { NONE, VAULT, HANG, RUNUP, PULL, MANTLE, HOP, CORNER, LAND, FACEPLANT, RAGDOLL }
 
     /** What the animator needs: the move, how far into it (0..1), shuffle side, step phase, seconds in. */
     /** rough: how hard a landing was (0..1). */
@@ -64,7 +64,10 @@ public final class Parkour {
     // Landings: a crouch pressed just before touching down catches it (rougher the higher you fell);
     // too high, or a high fall without the crouch, and you go down on your face.
     private static final int CATCH_WINDOW = 6, FACEPLANT_TICKS = 28;
-    private static final double LAND_MIN = 2.6, FACEPLANT_UNCAUGHT = 6, FACEPLANT_ALWAYS = 12;
+    private static final double LAND_MIN = 3.5, FACEPLANT_UNCAUGHT = 7, FACEPLANT_ALWAYS = 13;
+    private static Vec3d airVel = Vec3d.ZERO;
+    private static boolean stoodUp;
+    private static Vec3d[] hopHands;
     private static double peakY;
     private static int sneakAge = 99, landTicks = 12;
     private static boolean lastSneak;
@@ -72,7 +75,20 @@ public final class Parkour {
 
     /** Movement while landing: slowed through a caught landing, none while face down. */
     public static float speedScale() {
-        return mode == Mode.FACEPLANT ? 0 : mode == Mode.LAND ? 0.45f : 1;
+        return mode == Mode.FACEPLANT || mode == Mode.RAGDOLL ? 0 : mode == Mode.LAND ? 0.45f : 1;
+    }
+
+    /** How fast a player was going as they hit the ground (blocks per second), for the ragdoll. */
+    public static Vec3d impact(PlayerEntity p) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null && p.getId() == mc.player.getId()) return airVel.multiply(20);
+        Vec3d v = p.getPos().subtract(p.prevX, p.prevY, p.prevZ).multiply(20);
+        return new Vec3d(v.x, Math.min(v.y, -9), v.z);
+    }
+
+    /** The share of a ledge jump spent winding up (for the animator). */
+    public static float hopWindShare() {
+        return hopWind / (float) (HOP_TICKS + hopWind);
     }
 
     // Shuffling, hand over hand: the lead hand reaches out (REACH ticks), then the body follows while the
@@ -169,6 +185,8 @@ public final class Parkour {
         return switch (v.mode()) {
             case HANG, CORNER -> 1;
             case PULL -> 1 - MathHelper.clamp((v.progress() - 0.6f) / 0.25f, 0, 1);
+            // The hands stay on the lip while winding up for a ledge jump, then let go.
+            case HOP -> 1 - MathHelper.clamp((v.progress() - hopWindShare()) / 0.08f, 0, 1);
             case MANTLE -> 1 - MathHelper.clamp((v.progress() - 0.45f) / 0.3f, 0, 1);
             default -> 0;
         };
@@ -186,10 +204,12 @@ public final class Parkour {
                     // The hand on its way: a quick little arc, between ticks too.
                     float k = MathHelper.clamp(cycK + cycRate * td, 0, 1);
                     float e = ease(k);
-                    h[cyc == 1 ? lead : 1 - lead] = handFrom.lerp(handTo, e).add(0, 0.06 * MathHelper.sin(MathHelper.PI * k), 0);
+                    double arc = cyc == 3 ? 0 : 0.06 * MathHelper.sin(MathHelper.PI * k);
+                    h[cyc == 1 ? lead : 1 - lead] = handFrom.lerp(handTo, e).add(0, arc, 0);
                 }
                 return h;
             }
+            if (mode == Mode.HOP && hopHands != null) return hopHands;
             if (mode == Mode.CORNER && handsFrom != null) {
                 float k = ease(progress(Mode.CORNER, (System.nanoTime() - started) / 1e9f));
                 return new Vec3d[] {handsFrom[0].lerp(handsTo[0], k), handsFrom[1].lerp(handsTo[1], k)};
@@ -342,8 +362,14 @@ public final class Parkour {
         boolean climbAsk = intent == Intent.CLIMB;
         boolean away = away(p);
         sneakAge++;
-        if (sneak && !lastSneak) sneakAge = 0;
+        if (sneak && !lastSneak) {
+            sneakAge = 0;
+            // Crouching to catch a landing: tell the server now (it works out fall damage on touchdown).
+            if (!ground && p.getVelocity().y < -0.3 && ClientPlayNetworking.canSend(KataNet.Act.ID))
+                ClientPlayNetworking.send(new KataNet.Act(KataNet.BRACE, 0));
+        }
         lastSneak = sneak;
+        if (!ground) airVel = p.getVelocity();
 
         boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater() || p.isFallFlying() || p.isDead();
         if (free && mode != Mode.NONE) set(Mode.NONE);
@@ -425,6 +451,17 @@ public final class Parkour {
             case FACEPLANT -> {
                 if (++ticks >= FACEPLANT_TICKS) set(Mode.NONE);
             }
+            case RAGDOLL -> {
+                ticks++;
+                Ragdoll r = Ragdoll.of(p);
+                if (ticks > 4 && (r == null || r.finished())) set(Mode.NONE);
+                else if (r != null && r.resting() && !stoodUp) {
+                    // Get up where the body ended up.
+                    stoodUp = true;
+                    Vec3d pel = r.pelvis();
+                    if (empty(p, column(pel.x, p.getY(), pel.z, 1.8))) p.setPosition(pel.x, p.getY(), pel.z);
+                }
+            }
             default -> { }
         }
         if (ground) {
@@ -439,8 +476,10 @@ public final class Parkour {
     private static void land(ClientPlayerEntity p, double h) {
         boolean caught = sneakAge <= CATCH_WINDOW;
         if (h >= FACEPLANT_ALWAYS || (!caught && h >= FACEPLANT_UNCAUGHT)) {
+            // Too high: the body goes limp on impact and lands how it lands.
             landRough = 1;
-            set(Mode.FACEPLANT);
+            stoodUp = false;
+            set(Mode.RAGDOLL);
             p.setVelocity(Vec3d.ZERO);
         } else if (caught && h >= LAND_MIN) {
             landRough = (float) MathHelper.clamp((h - LAND_MIN) / (FACEPLANT_ALWAYS - LAND_MIN), 0, 1);
@@ -486,10 +525,11 @@ public final class Parkour {
         Vec3d hold = snap(at, l - 0.03);
         Vec3d hang = new Vec3d(hold.x, l - HANG_H, hold.z);
         if (!empty(p, column(at.x, at.y, at.z, hang.y + 1.8 - at.y)) || !empty(p, column(hang.x, hang.y, hang.z, 1.8))) return;
+        hopHands = handPoints(p.getWorld(), at, dir, ledgeY);
         from = at;
         to = hang;
         ledgeY = l;
-        hopWind = 2;
+        hopWind = 4;
         set(Mode.HOP);
     }
 
@@ -506,6 +546,7 @@ public final class Parkour {
                 Vec3d hold = snap(c, l - 0.03);
                 Vec3d hang = new Vec3d(hold.x, l - HANG_H, hold.z);
                 if (!empty(p, column(hang.x, hang.y, hang.z, 1.8))) continue;
+                hopHands = handPoints(p.getWorld(), at, dir, ledgeY);
                 from = at;
                 to = hang;
                 ledgeY = l;
@@ -629,6 +670,11 @@ public final class Parkour {
                 int want = s > 0.1f ? -1 : s < -0.1f ? 1 : 0;
                 Vec3d at = p.getPos();
                 if (plant == null) plant = handPoints(p.getWorld(), at, dir, ledgeY);
+                if (cyc == 3) {
+                    cycK += cycRate;
+                    if (cycK >= 1) cyc = 0;
+                    return true;
+                }
                 if (cyc == 0 && want != 0) {
                     Vec3d r = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(want);
                     Vec3d next = null;
@@ -759,6 +805,17 @@ public final class Parkour {
                         set(Mode.HANG);
                         side = s; // the animator swings the catch on in the direction of the leap
                         ticks = 0;
+                        if (s != 0) {
+                            // The leading hand has it; the other comes up to the lip a beat later.
+                            plant = handPoints(p.getWorld(), to, dir, ledgeY);
+                            lead = s > 0 ? 0 : 1;
+                            Vec3d r = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(s);
+                            handFrom = plant[1 - lead].add(0, -0.55, 0).subtract(r.multiply(0.2));
+                            handTo = plant[1 - lead];
+                            cyc = 3;
+                            cycK = 0;
+                            cycRate = 1 / 4f;
+                        }
                     } else set(Mode.NONE);
                 }
                 return true;

@@ -23,6 +23,7 @@
     "defaultRequire": 1
   },
   "mixins": [
-    "FlightMixin"
+    "FlightMixin",
+    "FallMixin"
   ]
 }

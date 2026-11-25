@@ -81,6 +81,7 @@ public final class Animator {
         float sag, sagV;
         boolean wasHang;
         int lastHurt;
+        boolean ragdolled;
         // Hand over hand: where each hand is planted, and a hand on its way to a new spot.
         Vec3d[] plant, stepFrom;
         float[] stepT = {-1, -1};
@@ -101,6 +102,37 @@ public final class Animator {
             STATES.keySet().removeIf(id -> w == null || w.getEntityById(id) == null);
         }
         if (dt <= 0 && !s.first) return s.out;
+
+        // Ragdoll: the body is physics until it has got back up.
+        Parkour.View rv = Parkour.view(p);
+        if (rv.mode() == Parkour.Mode.RAGDOLL) {
+            float by = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
+            if (!s.ragdolled) {
+                s.ragdolled = true;
+                Ragdoll.start(p, s.out, by, Parkour.impact(p));
+            }
+            Ragdoll r = Ragdoll.of(p);
+            if (r != null && !r.finished()) {
+                r.step(p.getWorld(), dt);
+                Pose limp = r.pose(p, p.getLerpedPos(td), by, td);
+                Pose shown;
+                if (!r.resting()) shown = limp;
+                else {
+                    // Getting up from however it landed: onto a knee, then up.
+                    float k = r.getUp;
+                    Pose kneel = Presets.KNEEL.copy();
+                    kneel.set(Bone.ROOT, Pose.YAW, MathHelper.wrapDegrees(limp.get(Bone.ROOT, Pose.YAW)) * (1 - k));
+                    shown = k < 0.55f ? Pose.lerp(limp, kneel, ease(k / 0.55f)) : Pose.lerp(kneel, new Pose(), ease((k - 0.55f) / 0.45f));
+                    shown.gait = true;
+                }
+                s.out = shown;
+                s.first = true; // the springs pick up from wherever this leaves the body
+                return shown;
+            }
+        } else if (s.ragdolled) {
+            s.ragdolled = false;
+            Ragdoll.stop(p);
+        }
 
         motion(p, td, s, dt);
         Pose want = target(p, td, s, dt);
@@ -369,9 +401,14 @@ public final class Animator {
                 case RUNUP -> want = Presets.runUp(pv.phase());
                 case HOP -> {
                     // Wind up (coil, leaning away from the leap), then stretch out for the next lip.
-                    float wind = pv.side() != 0 ? 0.36f : 0.22f;
+                    // Sideways: the leading hand reaches out for the far lip, the other trails lower until
+                    // the first has caught. Upwards: stretch out tall, arms high, legs long beneath.
+                    float wind = Parkour.hopWindShare();
                     Pose coil = Presets.coil(-pv.side());
-                    want = k < wind ? Pose.lerp(Presets.HANG, coil, k / wind) : Pose.lerp(coil, Presets.REACH, Math.min(1, (k - wind) / 0.4f));
+                    Pose fly = pv.side() != 0 ? Presets.sideReach(pv.side()) : Presets.REACH;
+                    want = k < wind ? Pose.lerp(Presets.HANG, coil, ease(k / wind)) : Pose.lerp(coil, fly, ease(Math.min(1, (k - wind) / 0.35f)));
+                    // Sinking onto straight-ish arms before the spring (the hands stay on the lip).
+                    if (k < wind) want.offset[1] += 2.5f * ease(k / wind);
                 }
                 case LAND -> {
                     // A caught landing: in hard, wobbling (more the rougher it was), then easing back up.
@@ -563,7 +600,7 @@ public final class Animator {
     }
 
     /** A point in the world, in this player's model pixels (undoing the renderer's turn, flip and scale). */
-    private static Vector3f toModel(Vec3d w, Vec3d pos, float bodyYaw) {
+    static Vector3f toModel(Vec3d w, Vec3d pos, float bodyYaw) {
         Vector3f v = new Vector3f((float) (w.x - pos.x), (float) (w.y - pos.y), (float) (w.z - pos.z));
         new Quaternionf().rotationY((float) Math.toRadians(-(180 - bodyYaw))).transform(v);
         v.x = -v.x;
@@ -574,7 +611,7 @@ public final class Animator {
     }
 
     /** The arms' parent frame: the body's offset, lean and chest bend (as Rig applies them), in pixels. */
-    private static Matrix4f armFrame(Pose p) {
+    static Matrix4f armFrame(Pose p) {
         Matrix4f m = new Matrix4f().translate(p.offset[0], p.offset[1], p.offset[2]);
         m.translate(0, Rig.FEET_Y, 0).rotate(rot(p.get(Bone.ROOT, Pose.ROLL), p.get(Bone.ROOT, Pose.YAW), p.get(Bone.ROOT, Pose.PITCH))).translate(0, -Rig.FEET_Y, 0);
         m.translate(0, Rig.WAIST_Y, 0).rotate(rot(p.get(Bone.CHEST, Pose.ROLL), p.get(Bone.CHEST, Pose.YAW), p.get(Bone.CHEST, Pose.PITCH))).translate(0, -Rig.WAIST_Y, 0);
@@ -586,7 +623,7 @@ public final class Animator {
      * the distance (law of cosines), then the shoulder turns the bent arm onto the target. Out of reach,
      * the arm points straight at it.
      */
-    private static void reach(Pose out, Bone arm, Bone fore, Vector3f shoulder, Vector3f target, Matrix4f invFrame, float weight) {
+    static void reach(Pose out, Bone arm, Bone fore, Vector3f shoulder, Vector3f target, Matrix4f invFrame, float weight) {
         Vector3f d = invFrame.transformPosition(new Vector3f(target)).sub(shoulder);
         float dist = MathHelper.clamp(d.length(), Math.abs(FORE - UPPER) + 0.2f, UPPER + FORE - 0.05f);
         float cosIn = MathHelper.clamp((UPPER * UPPER + FORE * FORE - dist * dist) / (2 * UPPER * FORE), -1, 1);
@@ -603,6 +640,25 @@ public final class Animator {
         float pd = MathHelper.wrapDegrees((float) Math.toDegrees(pitch)), rd = (float) Math.toDegrees(roll), bd = (float) Math.toDegrees(bend);
         out.set(arm, MathHelper.lerp(weight, out.get(arm, Pose.PITCH), pd), MathHelper.lerp(weight, out.get(arm, Pose.YAW), 0), MathHelper.lerp(weight, out.get(arm, Pose.ROLL), rd));
         out.set(fore, MathHelper.lerp(weight, out.get(fore, Pose.PITCH), bd), 0, 0);
+    }
+
+    /** Two-bone IK for a leg (thigh and shin, 6 pixels each; the knee bends backwards). */
+    static void stride(Pose out, Bone leg, Bone shin, Vector3f hip, Vector3f target, Matrix4f invFrame) {
+        Vector3f d = invFrame.transformPosition(new Vector3f(target)).sub(hip);
+        float n = d.length();
+        if (n < 1e-3f) return;
+        float dist = MathHelper.clamp(n, 0.5f, 11.9f);
+        float cosIn = MathHelper.clamp((36 + 36 - dist * dist) / (2 * 36f), -1, 1);
+        float bend = (float) (Math.PI - Math.acos(cosIn));
+        float hy = 6 + 6 * MathHelper.cos(bend), hz = 6 * MathHelper.sin(bend);
+        d.mul(dist / n);
+        float flat = (float) Math.sqrt(d.x * d.x + d.y * d.y);
+        float y1 = d.y < 0 ? -flat : flat;
+        if (Math.abs(y1) < 1e-4f) y1 = 1e-4f;
+        float roll = (float) Math.atan2(-d.x / y1, d.y / y1);
+        float pitch = (float) (Math.atan2(d.z, y1) - Math.atan2(hz, hy));
+        out.set(leg, MathHelper.wrapDegrees((float) Math.toDegrees(pitch)), 0, (float) Math.toDegrees(roll));
+        out.set(shin, (float) Math.toDegrees(bend), 0, 0);
     }
 
     /** A steady random number in -1..1 for each step. */

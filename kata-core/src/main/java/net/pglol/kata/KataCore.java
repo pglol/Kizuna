@@ -24,6 +24,26 @@ public final class KataCore implements ModInitializer {
         if (g != null) g.setBaseValue(GRAVITY);
         var j = p.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_JUMP_STRENGTH);
         if (j != null) j.setBaseValue(JUMP);
+        // Falls only start to hurt past 4 blocks (Minecraft: 3).
+        var f = p.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_SAFE_FALL_DISTANCE);
+        if (f != null) f.setBaseValue(SAFE_FALL);
+    }
+
+    public static final double SAFE_FALL = 4;
+    /** A caught landing (crouch just before touching down) takes this share of the fall damage. */
+    public static final float CAUGHT_DAMAGE = 0.35f;
+    private static final java.util.Map<java.util.UUID, Integer> BRACED = new java.util.HashMap<>();
+
+    /** The player pressed crouch while falling (their game says so the moment it happens). */
+    public static void brace(ServerPlayerEntity p) {
+        BRACED.put(p.getUuid(), p.getServer().getTicks());
+        if (BRACED.size() > 512) BRACED.clear();
+    }
+
+    /** Braced in the last half second: the landing is caught. */
+    public static boolean braced(ServerPlayerEntity p) {
+        Integer at = BRACED.get(p.getUuid());
+        return at != null && p.getServer().getTicks() - at <= 10;
     }
 
     @Override

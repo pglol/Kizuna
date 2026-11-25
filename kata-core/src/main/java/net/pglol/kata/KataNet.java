@@ -38,11 +38,18 @@ public final class KataNet {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Act mode meaning "crouched to catch a landing" (for the server's fall damage; not shown). */
+    public static final int BRACE = 31;
+
     static void register() {
         PayloadTypeRegistry.playC2S().register(Act.ID, Act.CODEC);
         PayloadTypeRegistry.playS2C().register(ActOf.ID, ActOf.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(Act.ID, (payload, ctx) -> {
             ServerPlayerEntity p = ctx.player();
+            if (payload.mode() == BRACE) {
+                KataCore.brace(p);
+                return;
+            }
             int mode = Math.max(0, Math.min(15, payload.mode())), side = Math.max(-1, Math.min(1, payload.side()));
             for (ServerPlayerEntity other : PlayerLookup.tracking(p)) {
                 if (other != p && ServerPlayNetworking.canSend(other, ActOf.ID)) ServerPlayNetworking.send(other, new ActOf(p.getId(), mode, side));
