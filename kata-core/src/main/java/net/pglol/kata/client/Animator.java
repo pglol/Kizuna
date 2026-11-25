@@ -104,8 +104,8 @@ public final class Animator {
         for (int i = 0; i < steps; i++) {
             for (Bone b : Bone.values()) {
                 int bi = b.ordinal();
-                float k = STIFF[bi] * (ARM[bi] ? 1 + 1.6f * s.run : 1);
-                float c = 2 * DAMP[bi] * (ARM[bi] ? 1 - 0.2f * s.run : 1) * (float) Math.sqrt(k);
+                float k = STIFF[bi] * (ARM[bi] ? 1 + 0.7f * s.run : 1);
+                float c = 2 * DAMP[bi] * (ARM[bi] ? 1 + 0.25f * s.run : 1) * (float) Math.sqrt(k);
                 for (int a = 0; a < 3; a++) {
                     float acc = k * (want.get(b, a) - s.ang[bi][a]) - c * s.vel[bi][a];
                     s.vel[bi][a] += acc * h;
@@ -176,7 +176,8 @@ public final class Animator {
         // In the air the stride stops and the jump pose takes over (quick in, so it reads on take-off).
         boolean airborne = !(ground || special || p.isTouchingWater());
         s.air = approach(s.air, airborne ? 1 : 0, dt * (airborne ? 12 : 9));
-        if (airborne && s.wasGround && p.getVelocity().y > 0) s.leadRight = MathHelper.cos(limb * 0.6662f) < 0;
+        // Each jump leads with the other leg (holding jump alternates legs instead of repeating one).
+        if (airborne && s.wasGround && p.getVelocity().y > 0) s.leadRight = !s.leadRight;
         float w = s.gaitW * (1 - s.air);
         // Fast walk (double-tap forward) and run (holding sprint) look different: see Move.
         float mvNow = (float) Math.sqrt(s.fwd * s.fwd + s.side * s.side);
@@ -228,16 +229,16 @@ public final class Animator {
         float armAmp = (34 + 24 * fast) * rough * (1 - 0.6f * Math.abs(sideK));
         float rSwing = -c * armAmp * w, lSwing = c * armAmp * w;
         float back = 68 * rough;
-        o.set(Bone.RIGHT_ARM, Pose.PITCH, MathHelper.lerp(run, rSwing, w * (back + c * 15)));
-        o.set(Bone.LEFT_ARM, Pose.PITCH, MathHelper.lerp(run, lSwing, w * (back - c * 15)));
-        o.set(Bone.RIGHT_ARM, Pose.ROLL, 5 + w * (2 + 9 * fast + 22 * run));
-        o.set(Bone.LEFT_ARM, Pose.ROLL, -5 - w * (2 + 9 * fast + 22 * run));
+        o.set(Bone.RIGHT_ARM, Pose.PITCH, MathHelper.lerp(run, rSwing, w * (back + c * 9)));
+        o.set(Bone.LEFT_ARM, Pose.PITCH, MathHelper.lerp(run, lSwing, w * (back - c * 9)));
+        o.set(Bone.RIGHT_ARM, Pose.ROLL, 5 + w * (2 + 9 * fast + 17 * run));
+        o.set(Bone.LEFT_ARM, Pose.ROLL, -5 - w * (2 + 9 * fast + 17 * run));
         // The arms answer the body: flung out of turns, dragged behind a strafe, thrown back harder as
         // you set off. Both swing the same way (same roll as the body's lean, so the hands trail it).
-        float swingOut = w * (MathHelper.clamp(s.yawRate * 0.05f, -16, 16) + sideK * 14) * (0.5f + 0.5f * (fast + run));
+        float swingOut = w * (MathHelper.clamp(s.yawRate * 0.025f, -8, 8) + sideK * 7) * (0.5f + 0.5f * (fast + run));
         add(o, Bone.RIGHT_ARM, Pose.ROLL, swingOut);
         add(o, Bone.LEFT_ARM, Pose.ROLL, swingOut);
-        float kick = run * w * MathHelper.clamp(s.accFwd * 1.6f, -10, 16);
+        float kick = run * w * MathHelper.clamp(s.accFwd * 0.8f, -5, 8);
         add(o, Bone.RIGHT_ARM, Pose.PITCH, kick);
         add(o, Bone.LEFT_ARM, Pose.PITCH, kick);
         // Swept back, the arms turn so the palms face up and back.

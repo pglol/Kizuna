@@ -21,7 +21,7 @@ public final class Move {
     public enum Mode { WALK, FAST, RUN }
 
     /** Ground speed against Minecraft's sprint speed (walking is 0.77 of it). */
-    private static final float FAST_SPEED = 0.885f, RUN_SPEED = 1.25f;
+    private static final float FAST_SPEED = 0.885f, RUN_SPEED = 1.42f;
     private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (5f * 20), FAST_REGEN = 1 / (12f * 20);
 
     public static Mode mode = Mode.WALK;
@@ -84,8 +84,16 @@ public final class Move {
         return traveled + Math.max(0.35f, Math.min(1, units));
     }
 
+    /** Sneaking: Minecraft's own sneak is 0.3 of walking. Kata's crouch walk is quicker than that, and
+     *  stepping sideways or back while crouched is quick footwork, a bit faster than a plain walk. */
+    private static final float VANILLA_SNEAK = 0.3f, CROUCH_WALK = 0.6f, CROUCH_SHUFFLE = 1.12f;
+
     /** Multiplier on the local player's ground speed. */
     public static float speedFactor(PlayerEntity p) {
+        if (p.isInSneakingPose() && p instanceof net.minecraft.client.network.ClientPlayerEntity cp && !p.getAbilities().flying) {
+            boolean shuffle = cp.input.movementForward < 0 || (cp.input.movementForward == 0 && cp.input.movementSideways != 0);
+            return (shuffle ? CROUCH_SHUFFLE : CROUCH_WALK) / VANILLA_SNEAK;
+        }
         if (!p.isSprinting()) return 1;
         return switch (mode) {
             case RUN -> RUN_SPEED;
