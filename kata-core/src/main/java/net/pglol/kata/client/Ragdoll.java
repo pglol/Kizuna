@@ -54,7 +54,7 @@ public final class Ragdoll {
         {RF, LF, 0.14}, {RK, LK, 0.14},
         {RH, PELVIS, 0.3}, {LH, PELVIS, 0.3}, {RH, LS, 0.3}, {LH, RS, 0.3}, {RE, LS, 0.25}, {LE, RS, 0.25},
     };
-    private static final float RADIUS = 0.09f, GRAVITY = 26f, FRICTION = 0.72f;
+    private static final float RADIUS = 0.09f, GRAVITY = 28.8f, FRICTION = 0.72f;
     private static final float MIN_TIME = 0.9f, MAX_TIME = 3.2f, GET_UP = 1.15f;
 
     private static final Map<Integer, Ragdoll> ACTIVE = new HashMap<>();
@@ -62,7 +62,9 @@ public final class Ragdoll {
     final double[] x = new double[N], y = new double[N], z = new double[N];
     final double[] px = new double[N], py = new double[N], pz = new double[N];
     final double[] rest = new double[LINKS.length], span = new double[SPANS.length];
-    float age, still, getUp = -1;
+    float age, still, getUp = -1, acc;
+    /** Which way the body lay when it started getting up (degrees, like a player's yaw). */
+    float lieYaw;
     boolean faceUp;
 
     // Getting up: face down push up onto the hands; face up sit up; then onto a knee and stand.
@@ -85,6 +87,23 @@ public final class Ragdoll {
         SIT.set(Bone.RIGHT_LEG, -80, 0, 6).set(Bone.RIGHT_SHIN, 40, 0, 0);
         SIT.set(Bone.LEFT_LEG, -88, 0, -6).set(Bone.LEFT_SHIN, 15, 0, 0);
         SIT.offset[1] = 11;
+    }
+
+    /** Turns a whole pose about the vertical through the feet by deg (model space), offset and all. */
+    static void turn(Pose p, float deg) {
+        if (Math.abs(deg) < 0.01f) return;
+        Quaternionf y = new Quaternionf().rotationY((float) Math.toRadians(deg));
+        setRot(p, Bone.ROOT, new Quaternionf(y).mul(rot(p, Bone.ROOT)));
+        Vector3f o = y.transform(new Vector3f(p.offset[0], p.offset[1], p.offset[2]));
+        p.offset[0] = o.x;
+        p.offset[1] = o.y;
+        p.offset[2] = o.z;
+    }
+
+    /** How far through getting up the body has turned from the way it lay to the way you face. */
+    float turnShare() {
+        float u = MathHelper.clamp((getUp - 0.3f) / 0.65f, 0, 1);
+        return u * u * (3 - 2 * u);
     }
 
     /** Getting up from limp at k (0..1): through the keyframes for how it lies, rotations blended as
@@ -139,7 +158,7 @@ public final class Ragdoll {
         }
         // Keep everything just above whatever it's standing on.
         r.settleOut(p.getWorld());
-        double h = 1 / 120.0;
+        double h = 1 / 240.0; // one physics step: the body starts exactly as fast as you were falling
         // A little forward topple and spin so no two falls come out alike.
         double yaw = Math.toRadians(bodyYaw);
         double fx = -Math.sin(yaw), fz = Math.cos(yaw);
@@ -193,13 +212,19 @@ public final class Ragdoll {
             getUp = Math.min(1, getUp + dt / GET_UP);
             return;
         }
-        int steps = Math.max(1, (int) Math.ceil(dt / (1 / 240f)));
-        double h = dt / steps;
+        // Fixed steps (Verlet keeps speed as distance per step, so the step can't change size).
+        acc = Math.min(acc + dt, 0.1f);
+        int steps = (int) (acc * 240);
+        if (steps == 0) return;
+        acc -= steps / 240f;
+        double h = 1 / 240.0;
         double moved = 0;
+        // The same air drag a falling player has (0.98 a tick), so the body and the camera fall as one.
+        double drag = Math.pow(0.98, 20 * h);
         for (int s = 0; s < steps; s++) {
             for (int i = 0; i < N; i++) {
-                double vx = (x[i] - px[i]) * 0.996, vy = (y[i] - py[i]) * 0.996, vz = (z[i] - pz[i]) * 0.996;
-                double sp = Math.sqrt(vx * vx + vy * vy + vz * vz), cap = 0.06;
+                double vx = (x[i] - px[i]) * drag, vy = (y[i] - py[i]) * drag, vz = (z[i] - pz[i]) * drag;
+                double sp = Math.sqrt(vx * vx + vy * vy + vz * vz), cap = 40 * h;
                 if (sp > cap) {
                     vx *= cap / sp;
                     vy *= cap / sp;
@@ -223,7 +248,7 @@ public final class Ragdoll {
             }
             for (int i = 0; i < N; i++) collide(w, i);
         }
-        double speed = moved / N / dt;
+        double speed = moved / N / (steps * h);
         still = speed < 0.35 ? still + dt : 0;
         if ((age > MIN_TIME && still > 0.35) || age > MAX_TIME) {
             getUp = 0;
@@ -233,6 +258,21 @@ public final class Ragdoll {
             // Front = up x right (world, y up): pointing up means lying on the back.
             double fy = uz * rx - ux * rz;
             faceUp = fy > 0.25 * Math.sqrt(ux * ux + uy * uy + uz * uz) * Math.sqrt(rx * rx + ry * ry + rz * rz);
+            // The way it gets up facing: face down it pushes up and stands facing where its head was;
+            // on its back it sits up and faces down its legs.
+            double dx, dz;
+            if (faceUp) {
+                dx = (x[RF] + x[LF]) / 2 - x[PELVIS];
+                dz = (z[RF] + z[LF]) / 2 - z[PELVIS];
+            } else {
+                dx = ux;
+                dz = uz;
+            }
+            if (dx * dx + dz * dz < 1e-4) {
+                dx = rz; // fall back to square to the shoulders
+                dz = -rx;
+            }
+            lieYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
         }
     }
 

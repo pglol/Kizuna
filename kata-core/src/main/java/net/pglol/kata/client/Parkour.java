@@ -41,6 +41,9 @@ public final class Parkour {
     private Parkour() {}
 
     /** Synced by ordinal: add new moves at the end. */
+    /** While limp: the feet's height against the pelvis (eases to a hip's height). */
+    private static double ragOff = Double.NaN;
+
     public enum Mode { NONE, VAULT, HANG, RUNUP, PULL, MANTLE, HOP, CORNER, LAND, FACEPLANT, RAGDOLL }
 
     /** What the animator needs: the move, how far into it (0..1), shuffle side, step phase, seconds in. */
@@ -729,6 +732,7 @@ public final class Parkour {
 
     private static void set(Mode m) {
         if (m != Mode.HOP) hopTurn = null;
+        if (m == Mode.RAGDOLL && mode != Mode.RAGDOLL) ragOff = Double.NaN;
         mode = m;
         cyc = 0;
         plant = null;
@@ -849,7 +853,10 @@ public final class Parkour {
                     double dx = MathHelper.clamp(pel.x - p.getX(), -0.6, 0.6);
                     double dz = MathHelper.clamp(pel.z - p.getZ(), -0.6, 0.6);
                     // Feet a hip's height under the pelvis (the ground stops them when it's lying down).
-                    double dy = MathHelper.clamp(pel.y - 0.70 - p.getY(), -3.0, 0.3);
+                    // Eased in from wherever they were when it went limp, so the camera never jerks.
+                    if (Double.isNaN(ragOff)) ragOff = p.getY() - pel.y;
+                    ragOff += (-0.70 - ragOff) * 0.15;
+                    double dy = MathHelper.clamp(pel.y + ragOff - p.getY(), -3.0, 0.3);
                     p.setVelocity(0, dy, 0);
                     p.move(MovementType.SELF, new Vec3d(dx, dy, dz));
                     return true;

@@ -93,6 +93,12 @@ public final class Animator {
         boolean leadRight;
         // Movement, from position (works for other players too).
         float fwd, side, accFwd, accSide, lastYaw, yawRate;
+        // Follow-through: the chest swings behind the body's changes of speed and turn, the arms behind
+        // the chest, the legs (in the air) behind the body. {angle, speed} per axis.
+        final float[] chP = new float[2], chR = new float[2], chY = new float[2];
+        final float[] armP = new float[2], armR = new float[2], legP = new float[2], legR = new float[2];
+        float ftFwd, ftSide, ftVy, ftYaw;
+        boolean ftInit;
     }
 
     private static final Map<Integer, State> STATES = new HashMap<>();
@@ -119,14 +125,17 @@ public final class Animator {
             Ragdoll r = Ragdoll.of(p);
             if (r != null && !r.finished()) {
                 r.step(p.getWorld(), dt);
-                Pose limp = r.pose(p, p.getLerpedPos(td), by, td);
                 Pose shown;
-                if (!r.resting()) shown = limp;
+                if (!r.resting()) shown = r.pose(p, p.getLerpedPos(td), by, td);
                 else {
                     // Getting up from however it landed (pushing up, or sitting up), onto a knee, then up.
+                    // It rises the way it lay and turns to where you face as it stands, in one smooth turn.
+                    float frame = r.lieYaw + MathHelper.wrapDegrees(by - r.lieYaw) * r.turnShare();
+                    Pose limp = r.pose(p, p.getLerpedPos(td), frame, td);
                     float lookP = MathHelper.lerp(td, p.prevPitch, p.getPitch());
-                    float lookY = MathHelper.wrapDegrees(MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw) - by);
+                    float lookY = MathHelper.wrapDegrees(MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw) - frame);
                     shown = r.getUpPose(limp, r.getUp, lookP, lookY);
+                    Ragdoll.turn(shown, MathHelper.wrapDegrees(frame - by));
                 }
                 s.out = shown;
                 s.first = true; // the springs pick up from wherever this leaves the body
@@ -189,6 +198,7 @@ public final class Animator {
         }
         Pose out = sh.copy();
         out.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn);
+        follow(p, s, dt, out);
         hang(p, td, s, dt, out);
         touch(p, td, s, dt, out);
         s.out = out;
@@ -199,6 +209,85 @@ public final class Animator {
      * How fast they're going forward and sideways relative to where they look, from the game's own
      * movement ticks (steady, unlike frame-to-frame positions), and how that's changing; how fast they turn.
      */
+    /**
+     * The chain of follow-through that hanging has, for all movement: the body changes speed or turns,
+     * the chest is carried along a beat late and swings past before settling, the arms hang off the
+     * chest and trail it, and off the ground the legs trail the body. Each link is a damped swing driven
+     * by how fast the one before it is moving, so the motion runs down the body instead of all of it
+     * moving at once.
+     */
+    private static void follow(PlayerEntity p, State s, float dt, Pose out) {
+        if (dt <= 0) return;
+        boolean active = Parkour.view(p).mode() == Parkour.Mode.NONE && out.gait;
+        float vy = (float) (p.getY() - p.prevY) * 20;
+        if (!s.ftInit) {
+            s.ftInit = true;
+            s.ftFwd = s.fwd;
+            s.ftSide = s.side;
+            s.ftVy = vy;
+            s.ftYaw = s.yawRate;
+        }
+        float aF = (s.fwd - s.ftFwd) / dt, aS = (s.side - s.ftSide) / dt;
+        float aY = (s.yawRate - s.ftYaw) / dt;
+        s.ftFwd = s.fwd;
+        s.ftSide = s.side;
+        s.ftYaw = s.yawRate;
+        s.ftVy = vy;
+        if (!active) {
+            aF = aS = aY = 0;
+        }
+        aF = MathHelper.clamp(aF, -60, 60);
+        aS = MathHelper.clamp(aS, -60, 60);
+        aY = MathHelper.clamp(aY, -4000, 4000);
+        float air = s.air;
+        int steps = Math.max(1, (int) Math.ceil(dt / (1 / 240f)));
+        float h = dt / steps;
+        for (int i = 0; i < steps; i++) {
+            // Chest: speeding up leaves it behind (leans back), stopping throws it forward; a side push
+            // tips it the other way; a turn leaves it facing where it was.
+            float cp0 = s.chP[1], cr0 = s.chR[1];
+            swing(s.chP, 55, 0.45f, -aF * 10, h);
+            swing(s.chR, 55, 0.45f, -aS * 8, h);
+            swing(s.chY, 70, 0.5f, -aY * 0.35f, h);
+            // Arms hang off the chest: they're thrown by its swinging (and by the body's own push).
+            float chestAccP = (s.chP[1] - cp0) / h, chestAccR = (s.chR[1] - cr0) / h;
+            swing(s.armP, 40, 0.35f, aF * 16 + chestAccP * 0.8f, h);
+            swing(s.armR, 40, 0.35f, aS * 13 + chestAccR * 0.6f, h);
+            // Legs, off the ground: they hang from the hips and trail the body's push.
+            swing(s.legP, 45, 0.3f, aF * 16 * air, h);
+            swing(s.legR, 45, 0.3f, aS * 12 * air, h);
+        }
+        float cp = MathHelper.clamp(s.chP[0], -9, 9), cr = MathHelper.clamp(s.chR[0], -7, 7), cy = MathHelper.clamp(s.chY[0], -14, 14);
+        float ap = MathHelper.clamp(s.armP[0], -22, 22), ar = MathHelper.clamp(s.armR[0], -14, 14);
+        float lp = MathHelper.clamp(s.legP[0], -25, 25), lr = MathHelper.clamp(s.legR[0], -12, 12);
+        out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) + cp);
+        out.set(Bone.CHEST, Pose.ROLL, out.get(Bone.CHEST, Pose.ROLL) + cr);
+        out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) + cy);
+        out.set(Bone.RIGHT_ARM, Pose.PITCH, out.get(Bone.RIGHT_ARM, Pose.PITCH) + ap);
+        out.set(Bone.LEFT_ARM, Pose.PITCH, out.get(Bone.LEFT_ARM, Pose.PITCH) + ap);
+        // Thrown sideways, both arms go the same way: one swings out, the other swings in.
+        out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) + ar);
+        out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) + ar);
+        // The forearms lag a little more than the upper arms (the elbow gives).
+        out.set(Bone.RIGHT_FOREARM, Pose.PITCH, out.get(Bone.RIGHT_FOREARM, Pose.PITCH) + Math.max(0, -ap) * 0.4f);
+        out.set(Bone.LEFT_FOREARM, Pose.PITCH, out.get(Bone.LEFT_FOREARM, Pose.PITCH) + Math.max(0, -ap) * 0.4f);
+        out.set(Bone.RIGHT_LEG, Pose.PITCH, out.get(Bone.RIGHT_LEG, Pose.PITCH) + lp);
+        out.set(Bone.LEFT_LEG, Pose.PITCH, out.get(Bone.LEFT_LEG, Pose.PITCH) + lp);
+        out.set(Bone.RIGHT_LEG, Pose.ROLL, out.get(Bone.RIGHT_LEG, Pose.ROLL) + lr);
+        out.set(Bone.LEFT_LEG, Pose.ROLL, out.get(Bone.LEFT_LEG, Pose.ROLL) + lr);
+        // Knees give a little as the legs swing.
+        float knee = Math.abs(lp) * 0.35f;
+        out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) + knee);
+        out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) + knee);
+    }
+
+    /** One damped swing (x = {angle, speed}) at stiffness k and damping zeta, pushed by force. */
+    private static void swing(float[] x, float k, float zeta, float force, float h) {
+        float c = 2 * zeta * (float) Math.sqrt(k);
+        x[1] += (force - k * x[0] - c * x[1]) * h;
+        x[0] += x[1] * h;
+    }
+
     private static void motion(PlayerEntity p, float td, State s, float dt) {
         float face = MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw);
         double vx = (p.getX() - p.prevX) * 20, vz = (p.getZ() - p.prevZ) * 20;
@@ -735,13 +824,14 @@ public final class Animator {
             reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, rs, toModel(base.add(frx * 0.24, 0, frz * 0.24), pos, body), frame, fw);
             reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, ls, toModel(base.add(-frx * 0.24, 0, -frz * 0.24), pos, body), frame, fw);
         }
-        // A hand flat on the wall beside you, a little ahead and below the shoulder.
+        // A guiding hand on the wall beside you: out ahead of the shoulder at chest height, fingertips
+        // resting on the surface, the elbow easy.
         for (int i = 0; i < 2; i++) {
             float w = smooth(s.sideW[i]) * (1 - 0.6f * fw);
             if (w < 0.01f) continue;
             double sx = i == 0 ? rx : -rx, sz = i == 0 ? rz : -rz;
-            double d = Math.max(0.3, s.sideHit[i] - 0.03);
-            Vec3d hand = new Vec3d(pos.x + sx * d + bx * 0.14, pos.y + 1.0, pos.z + sz * d + bz * 0.14);
+            double d = Math.max(0.28, s.sideHit[i] - 0.02);
+            Vec3d hand = new Vec3d(pos.x + sx * d + bx * 0.42, pos.y + 1.18, pos.z + sz * d + bz * 0.42);
             if (i == 0) reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, rs, toModel(hand, pos, body), frame, w);
             else reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, ls, toModel(hand, pos, body), frame, w);
         }
