@@ -364,12 +364,24 @@ public final class Parkour {
                 ticks++;
                 if (sneak) drop(p, 0.08);
                 else if (jumpEdge && away) kickOff(p);
-                else if ((climbAsk && ticks > 2) || (toward(p) && ticks > 4 && cyc == 0)) {
+                else if ((toward(p) && ticks > 4 && cyc == 0) || (climbAsk && !jumpEdge && ticks > 2)) {
+                    // W (or holding space after the catch): up and over; no room on top: the lip above.
                     intent = Intent.NONE;
-                    // Room on top: up and over. Otherwise spring for the next lip above.
                     if (!startPath(p, Mode.PULL, ledgeY)) {
                         Double up = lip(p, at, ledgeY, 0.5, 3.1);
                         if (up != null) hop(p, at, up);
+                    }
+                } else if (jumpEdge && ticks > 2) {
+                    // Space: a ledge jump. With A/D, across to a lip that way; on its own, up to the lip
+                    // above (or over the top if there's nothing above).
+                    intent = Intent.NONE;
+                    float sw = p.input.movementSideways;
+                    int sideWant = sw > 0.1f ? -1 : sw < -0.1f ? 1 : 0;
+                    if (sideWant != 0) sideJump(p, at, sideWant);
+                    else {
+                        Double up = lip(p, at, ledgeY, 0.5, 3.1);
+                        if (up != null) hop(p, at, up);
+                        else startPath(p, Mode.PULL, ledgeY);
                     }
                 } else if (lip(p, at, at.y, HANG_H - 0.15, HANG_H + 0.15) == null) drop(p, 0); // the lip went (broken, or slid off the end)
             }
@@ -429,6 +441,28 @@ public final class Parkour {
         to = hang;
         ledgeY = l;
         set(Mode.HOP);
+    }
+
+    /** Leap sideways (1 right, -1 left) to the nearest lip on the same wall, up to ~2.4 blocks across. */
+    private static void sideJump(ClientPlayerEntity p, Vec3d at, int side) {
+        Vec3d r = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(side);
+        for (double d = 0.6; d <= 2.4; d += 0.15) {
+            for (double dy = 0; dy <= 1.2; dy = dy <= 0 ? -dy + 0.25 : -dy) {
+                if (dy < -1.0) continue;
+                Vec3d c = at.add(r.multiply(d)).add(0, dy, 0);
+                if (!empty(p, column(c.x, c.y, c.z, 1.8))) continue;
+                Double l = lip(p, c, c.y, HANG_H - 0.2, HANG_H + 0.2);
+                if (l == null) continue;
+                Vec3d hold = snap(c, l - 0.03);
+                Vec3d hang = new Vec3d(hold.x, l - HANG_H, hold.z);
+                if (!empty(p, column(hang.x, hang.y, hang.z, 1.8))) continue;
+                from = at;
+                to = hang;
+                ledgeY = l;
+                set(Mode.HOP);
+                return;
+            }
+        }
     }
 
     private static void kickOff(ClientPlayerEntity p) {
@@ -649,7 +683,9 @@ public final class Parkour {
                 if (mode == Mode.HOP) {
                     // A spring straight up, fast off the hands, easing into the catch.
                     float u = 1 - (1 - k) * (1 - k);
-                    target = new Vec3d(MathHelper.lerp(u, from.x, to.x), MathHelper.lerp(u, from.y, to.y), MathHelper.lerp(u, from.z, to.z));
+                    double across = Math.hypot(to.x - from.x, to.z - from.z);
+                    double lift = Math.min(0.5, across * 0.25) * MathHelper.sin(MathHelper.PI * k);
+                    target = new Vec3d(MathHelper.lerp(u, from.x, to.x), MathHelper.lerp(u, from.y, to.y) + lift, MathHelper.lerp(u, from.z, to.z));
                 } else if (k < 0.62f) {
                     // Up first (most of it), then over onto the top.
                     float u = ease(k / 0.62f);
