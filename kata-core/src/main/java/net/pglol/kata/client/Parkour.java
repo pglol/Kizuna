@@ -50,7 +50,7 @@ public final class Parkour {
     private static final int VAULT_TICKS = 9, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 8;
     private static final float RUNUP_COST = 0.12f;
     /** Hanging: the lip is this far above your feet, so straight-ish arms reach it (shoulders at 1.29). */
-    public static final double HANG_H = 1.78;
+    public static final double HANG_H = 1.72;
     private static final int CORNER_TICKS = 6;
     private static Direction cornerTo = Direction.NORTH;
     private static float yawFrom, yawTo;
