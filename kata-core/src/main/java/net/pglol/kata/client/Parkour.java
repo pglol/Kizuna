@@ -502,19 +502,21 @@ public final class Parkour {
      */
     private static void brace(ClientPlayerEntity p) {
         double below = -1;
-        for (double d = 0; d <= 5; d += 0.125) {
+        for (double d = 0; d <= 16; d += 0.25) {
             if (!empty(p, new Box(p.getX() - 0.25, p.getY() - d - 0.01, p.getZ() - 0.25, p.getX() + 0.25, p.getY() - d, p.getZ() + 0.25))) {
                 below = d;
                 break;
             }
         }
         double fallen = peakY - p.getY();
-        double total = below < 0 ? fallen + 5 : fallen + below;
+        double total = below < 0 ? fallen + 16 : fallen + below;
         boolean huge = total >= FACEPLANT_ALWAYS, caught = sneakAge <= CATCH_WINDOW;
-        // A big drop: limp well before the ground (or once you've fallen a long way already).
-        if ((huge && (below < 0 ? fallen >= 9 : below <= 4.0)) || (!caught && below >= 0 && total >= FACEPLANT_UNCAUGHT && below <= 0.9)) {
+        // A big drop: the body gives up early, a few blocks into the fall, and you ride it all the way
+        // down. A medium one you didn't brace for: limp a block or so before the ground.
+        if ((huge && fallen >= 3.5) || (!caught && below >= 0 && total >= FACEPLANT_UNCAUGHT && below <= 1.2)) {
             landRough = 1;
             stoodUp = false;
+            p.setSprinting(false);
             set(Mode.RAGDOLL);
         }
     }
@@ -525,6 +527,7 @@ public final class Parkour {
             // Too high: the body goes limp on impact and lands how it lands.
             landRough = 1;
             stoodUp = false;
+            p.setSprinting(false);
             set(Mode.RAGDOLL);
             p.setVelocity(Vec3d.ZERO);
         } else if (caught && h >= LAND_MIN) {
@@ -837,17 +840,23 @@ public final class Parkour {
                 return false;
             }
             case RAGDOLL -> {
-                // You are the body: no walking; you go where it goes (and fall while it falls).
+                // You are the body: no walking; you go where it goes, up, down and across, so the camera
+                // rides the whole fall and the impact with it instead of landing before it.
                 Ragdoll r = Ragdoll.of(p);
-                double vy = p.isOnGround() ? 0 : (p.getVelocity().y - KataCore.GRAVITY) * 0.98;
-                double dx = 0, dz = 0;
+                p.setSprinting(false);
                 if (r != null && !r.resting()) {
                     Vec3d pel = r.pelvis();
-                    dx = MathHelper.clamp(pel.x - p.getX(), -0.6, 0.6);
-                    dz = MathHelper.clamp(pel.z - p.getZ(), -0.6, 0.6);
+                    double dx = MathHelper.clamp(pel.x - p.getX(), -0.6, 0.6);
+                    double dz = MathHelper.clamp(pel.z - p.getZ(), -0.6, 0.6);
+                    // Feet a hip's height under the pelvis (the ground stops them when it's lying down).
+                    double dy = MathHelper.clamp(pel.y - 0.70 - p.getY(), -3.0, 0.3);
+                    p.setVelocity(0, dy, 0);
+                    p.move(MovementType.SELF, new Vec3d(dx, dy, dz));
+                    return true;
                 }
+                double vy = p.isOnGround() ? 0 : (p.getVelocity().y - KataCore.GRAVITY) * 0.98;
                 p.setVelocity(0, vy, 0);
-                p.move(MovementType.SELF, new Vec3d(dx, vy, dz));
+                p.move(MovementType.SELF, new Vec3d(0, vy, 0));
                 return true;
             }
             case CORNER -> {

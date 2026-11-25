@@ -41,6 +41,8 @@ public final class Move {
         // press, which would make double-tapping forward a run).
         boolean held = mc.currentScreen == null && physicallyHeld(mc);
         boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater();
+        // Knocked flat (or splatting into a landing): you aren't running any more, whatever is held.
+        if (down(p)) p.setSprinting(false);
         if (!p.isSprinting() || free) mode = Mode.WALK;
         else mode = held && !winded ? Mode.RUN : Mode.FAST;
 
@@ -53,6 +55,11 @@ public final class Move {
         if (winded && stamina >= 0.25f) winded = false;
     }
 
+    private static boolean down(PlayerEntity p) {
+        Parkour.Mode m = Parkour.view(p).mode();
+        return m == Parkour.Mode.RAGDOLL || m == Parkour.Mode.FACEPLANT || m == Parkour.Mode.LAND;
+    }
+
     private static boolean physicallyHeld(MinecraftClient mc) {
         InputUtil.Key k = KeyBindingHelper.getBoundKeyOf(mc.options.sprintKey);
         long win = mc.getWindow().getHandle();
@@ -63,6 +70,7 @@ public final class Move {
 
     /** Field of view: a fast walk barely widens it; a run pushes it out a little more than a sprint. */
     public static float fov(PlayerEntity p, float vanilla) {
+        if (down(p)) return 1;
         if (!p.isSprinting() || vanilla <= 1) return vanilla;
         return switch (mode) {
             case FAST -> 1 + (vanilla - 1) * 0.25f;

@@ -45,6 +45,15 @@ public final class Ragdoll {
     };
     /** Limbs that may not fold flat: shoulder-hand and hip-foot keep at least this share of full length. */
     private static final int[][] SPANS = {{RS, RH}, {LS, LH}, {RHIP, RF}, {LHIP, LF}};
+    /** Keep-apart distances between limbs and the torso (metres), so legs can't fold up under the body
+     *  and arms can't fold into it: {point, point, at least}. */
+    private static final double[][] CLEAR = {
+        {RF, NECK, 0.78}, {LF, NECK, 0.78}, {RK, NECK, 0.62}, {LK, NECK, 0.62},
+        {RF, RS, 0.72}, {RF, LS, 0.72}, {LF, RS, 0.72}, {LF, LS, 0.72},
+        {RK, RS, 0.5}, {RK, LS, 0.5}, {LK, RS, 0.5}, {LK, LS, 0.5},
+        {RF, LF, 0.14}, {RK, LK, 0.14},
+        {RH, PELVIS, 0.3}, {LH, PELVIS, 0.3}, {RH, LS, 0.3}, {LH, RS, 0.3}, {RE, LS, 0.25}, {LE, RS, 0.25},
+    };
     private static final float RADIUS = 0.09f, GRAVITY = 26f, FRICTION = 0.72f;
     private static final float MIN_TIME = 0.9f, MAX_TIME = 3.2f, GET_UP = 1.15f;
 
@@ -209,6 +218,8 @@ public final class Ragdoll {
                 for (int k = 0; k < SPANS.length; k++) keep(SPANS[k][0], SPANS[k][1], span[k], true);
                 for (int a = 0; a < N; a++)
                     for (int b = a + 1; b < N; b++) if (!JOINED[a][b]) keep(a, b, 0.2, true);
+                for (double[] c : CLEAR) keep((int) c[0], (int) c[1], c[2], true);
+                hinges();
             }
             for (int i = 0; i < N; i++) collide(w, i);
         }
@@ -223,6 +234,49 @@ public final class Ragdoll {
             double fy = uz * rx - ux * rz;
             faceUp = fy > 0.25 * Math.sqrt(ux * ux + uy * uy + uz * uz) * Math.sqrt(rx * rx + ry * ry + rz * rz);
         }
+    }
+
+    /**
+     * Knees only bend forward and elbows only bend back, like real ones: a joint that has been folded
+     * the wrong way is mirrored across its limb's line (lengths stay the same, no speed is added).
+     */
+    private void hinges() {
+        double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];
+        double rx = x[RS] - x[LS] + x[RHIP] - x[LHIP], ry = y[RS] - y[LS] + y[RHIP] - y[LHIP], rz = z[RS] - z[LS] + z[RHIP] - z[LHIP];
+        // Front = up x right.
+        double fx = uy * rz - uz * ry, fy = uz * rx - ux * rz, fz = ux * ry - uy * rx;
+        double fn = Math.sqrt(fx * fx + fy * fy + fz * fz);
+        if (fn < 1e-6) return;
+        fx /= fn;
+        fy /= fn;
+        fz /= fn;
+        hinge(RHIP, RK, RF, fx, fy, fz, 1);
+        hinge(LHIP, LK, LF, fx, fy, fz, 1);
+        hinge(RS, RE, RH, fx, fy, fz, -1);
+        hinge(LS, LE, LH, fx, fy, fz, -1);
+    }
+
+    private void hinge(int a, int m, int b, double fx, double fy, double fz, double sign) {
+        double lx = x[b] - x[a], ly = y[b] - y[a], lz = z[b] - z[a];
+        double ll = lx * lx + ly * ly + lz * lz;
+        if (ll < 1e-6) return;
+        // The front, square to the limb's line.
+        double t = (fx * lx + fy * ly + fz * lz) / ll;
+        double nx = fx - lx * t, ny = fy - ly * t, nz = fz - lz * t;
+        double nn = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (nn < 0.2) return; // limb points along the front: no clear "wrong way"
+        nx /= nn;
+        ny /= nn;
+        nz /= nn;
+        double off = (x[m] - x[a]) * nx + (y[m] - y[a]) * ny + (z[m] - z[a]) * nz;
+        if (off * sign >= -0.01) return;
+        double mx = -2 * off * nx, my = -2 * off * ny, mz = -2 * off * nz;
+        x[m] += mx;
+        y[m] += my;
+        z[m] += mz;
+        px[m] += mx;
+        py[m] += my;
+        pz[m] += mz;
     }
 
     /** Hold points a and b at length len (only pushing apart when min). */

@@ -85,6 +85,8 @@ public final class Animator {
         // Hands to a wall right in front: how much, and how far off it is.
         float wallW;
         double wallHit = 0.6;
+        final float[] sideW = new float[2];
+        final double[] sideHit = {0.5, 0.5};
         // Hand over hand: where each hand is planted, and a hand on its way to a new spot.
         Vec3d[] plant, stepFrom;
         float[] stepT = {-1, -1};
@@ -651,77 +653,117 @@ public final class Animator {
      * the arm points straight at it.
      */
     static void reach(Pose out, Bone arm, Bone fore, Vector3f shoulder, Vector3f target, Matrix4f invFrame, float weight) {
-        Vector3f d = invFrame.transformPosition(new Vector3f(target)).sub(shoulder);
-        float dist = MathHelper.clamp(d.length(), Math.abs(FORE - UPPER) + 0.2f, UPPER + FORE - 0.05f);
-        float cosIn = MathHelper.clamp((UPPER * UPPER + FORE * FORE - dist * dist) / (2 * UPPER * FORE), -1, 1);
-        float bend = (float) (Math.PI - Math.acos(cosIn));
-        float hy = UPPER + FORE * MathHelper.cos(bend), hz = -FORE * MathHelper.sin(bend);
+        solve(out, arm, fore, shoulder, target, invFrame, weight, UPPER, FORE, -1, (float) Math.toRadians(-90));
+    }
+
+    /**
+     * Two-bone IK without flips: the bend comes from the reach (law of cosines); the limb is then turned
+     * from a reference (arms forward, legs down) onto the target by the shortest rotation, so it moves
+     * smoothly through every direction instead of jumping where angles wrap. sign: -1 elbows bend
+     * forward, +1 knees bend back.
+     */
+    private static void solve(Pose out, Bone upper, Bone lower, Vector3f root, Vector3f target, Matrix4f inv, float weight, float l1, float l2, float sign, float basePitch) {
+        Vector3f d = inv.transformPosition(new Vector3f(target)).sub(root);
         float n = d.length();
-        if (n < 1e-3f) return;
-        d.mul(dist / n);
-        float flat = (float) Math.sqrt(d.x * d.x + d.y * d.y);
-        float y1 = d.y < 0 ? -flat : flat;
-        if (Math.abs(y1) < 1e-4f) y1 = -1e-4f;
-        float roll = (float) Math.atan2(-d.x / y1, d.y / y1);
-        float pitch = (float) (Math.atan2(d.z, y1) - Math.atan2(hz, hy));
-        float pd = MathHelper.wrapDegrees((float) Math.toDegrees(pitch)), rd = (float) Math.toDegrees(roll), bd = (float) Math.toDegrees(bend);
-        out.set(arm, MathHelper.lerp(weight, out.get(arm, Pose.PITCH), pd), MathHelper.lerp(weight, out.get(arm, Pose.YAW), 0), MathHelper.lerp(weight, out.get(arm, Pose.ROLL), rd));
-        out.set(fore, MathHelper.lerp(weight, out.get(fore, Pose.PITCH), bd), 0, 0);
+        if (n < 1e-3f || weight <= 0) return;
+        float dist = MathHelper.clamp(n, Math.abs(l1 - l2) + 0.2f, l1 + l2 - 0.05f);
+        float cosIn = MathHelper.clamp((l1 * l1 + l2 * l2 - dist * dist) / (2 * l1 * l2), -1, 1);
+        float bend = (float) (Math.PI - Math.acos(cosIn));
+        Vector3f h = new Vector3f(0, l1 + l2 * MathHelper.cos(bend), sign * l2 * MathHelper.sin(bend));
+        Quaternionf base = new Quaternionf().rotationX(basePitch);
+        Vector3f hb = base.transform(new Vector3f(h)).normalize();
+        Quaternionf q = new Quaternionf().rotationTo(hb, d.div(n)).mul(base);
+        Vector3f e = new org.joml.Matrix3f().set(q).getEulerAnglesZYX(new Vector3f());
+        float pd = (float) Math.toDegrees(e.x), yd = (float) Math.toDegrees(e.y), rd = (float) Math.toDegrees(e.z), bd = (float) Math.toDegrees(bend);
+        out.set(upper, MathHelper.lerp(weight, out.get(upper, Pose.PITCH), pd), MathHelper.lerp(weight, out.get(upper, Pose.YAW), yd), MathHelper.lerp(weight, out.get(upper, Pose.ROLL), rd));
+        out.set(lower, MathHelper.lerp(weight, out.get(lower, Pose.PITCH), bd), 0, 0);
     }
 
     /**
      * Close to a wall in front (walking up to it, or jumping up against it) the hands come up and press
-     * flat against it, elbows bending the closer you get. Starts within about a block.
+     * flat against it, elbows bending the closer you get. Starts within about a block. Side on to a wall,
+     * the arm on that side rests its hand on it and the body keeps clear of it instead of sinking in.
      */
     private static void touch(PlayerEntity p, float td, State s, float dt, Pose out) {
         boolean free = Parkour.view(p).mode() == Parkour.Mode.NONE && !p.isSwimming() && !p.hasVehicle()
             && !p.getAbilities().flying && !p.isSleeping() && !p.isSpectator() && !p.isInSneakingPose();
         Vec3d pos = p.getLerpedPos(td);
         float yaw = MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw);
-        double fx = -Math.sin(Math.toRadians(yaw)), fz = Math.cos(Math.toRadians(yaw));
-        double y = pos.y + (p.isOnGround() ? 1.25 : 1.45);
-        double hit = -1;
-        if (free) {
-            for (double d = 0.3; d <= 1.0; d += 0.05) {
-                double cx = pos.x + fx * d, cz = pos.z + fz * d;
-                if (!p.getWorld().isSpaceEmpty(new net.minecraft.util.math.Box(cx - 0.04, y - 0.15, cz - 0.04, cx + 0.04, y + 0.15, cz + 0.04))) {
-                    hit = d;
-                    break;
-                }
-            }
-        }
-        float want = hit < 0 ? 0 : MathHelper.clamp((float) (0.95 - hit) / 0.45f, 0, 1);
-        s.wallW += (want - s.wallW) * (1 - (float) Math.exp(-dt * 9));
-        if (hit >= 0) s.wallHit = hit;
-        if (s.wallW < 0.01f) return;
-        double rx = -Math.cos(Math.toRadians(yaw)), rz = -Math.sin(Math.toRadians(yaw));
-        double d = s.wallHit - 0.03;
-        Vec3d base = new Vec3d(pos.x + fx * d, y + 0.05, pos.z + fz * d);
-        Vec3d rh = base.add(rx * 0.2, 0, rz * 0.2), lh = base.add(-rx * 0.2, 0, -rz * 0.2);
         float body = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
+        double fx = -Math.sin(Math.toRadians(yaw)), fz = Math.cos(Math.toRadians(yaw));
+        double y = pos.y + (p.isOnGround() ? 1.2 : 1.4);
+        float k = 1 - (float) Math.exp(-dt * 9);
+
+        // Front.
+        double hit = free ? probe(p, pos.x, pos.z, fx, fz, y, 0.3, 1.0) : -1;
+        float want = hit < 0 ? 0 : MathHelper.clamp((float) (0.95 - hit) / 0.45f, 0, 1);
+        s.wallW += (want - s.wallW) * k;
+        if (hit >= 0) s.wallHit = hit;
+
+        // Sides, across the body (its own facing, so the shoulders are where the probe is).
+        double bx = -Math.sin(Math.toRadians(body)), bz = Math.cos(Math.toRadians(body));
+        double rx = -bz, rz = bx; // the body's right
+        double sy = pos.y + 1.3;
+        for (int i = 0; i < 2; i++) {
+            double sx = i == 0 ? rx : -rx, sz = i == 0 ? rz : -rz;
+            double h = free ? probe(p, pos.x, pos.z, sx, sz, sy, 0.22, 0.7) : -1;
+            float sw = h < 0 ? 0 : MathHelper.clamp((float) (0.7 - h) / 0.3f, 0, 1);
+            s.sideW[i] += (sw - s.sideW[i]) * k;
+            if (h >= 0) s.sideHit[i] = h;
+        }
+        if (s.wallW < 0.01f && s.sideW[0] < 0.01f && s.sideW[1] < 0.01f) return;
+
+        // Keep the shoulder (and the arm on it) out of a wall at the side: lean the whole body clear.
+        for (int i = 0; i < 2; i++) {
+            float w = smooth(s.sideW[i]);
+            double push = Math.max(0, 0.47 - s.sideHit[i]) * w;
+            if (push < 1e-4) continue;
+            double sx = i == 0 ? rx : -rx, sz = i == 0 ? rz : -rz;
+            Vector3f d = toModel(pos.add(-sx * push, 0, -sz * push), pos, body).sub(toModel(pos, pos, body));
+            out.offset[0] += d.x;
+            out.offset[2] += d.z;
+        }
         Matrix4f frame = armFrame(out).invert();
-        float w = s.wallW * s.wallW * (3 - 2 * s.wallW);
-        reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, new Vector3f(-5, 2, 0), toModel(rh, pos, body), frame, w);
-        reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, new Vector3f(5, 2, 0), toModel(lh, pos, body), frame, w);
+        Vector3f rs = new Vector3f(-5, 2, 0), ls = new Vector3f(5, 2, 0);
+
+        // Both hands on the wall in front, shoulder width apart.
+        float fw = smooth(s.wallW);
+        if (fw > 0.01f) {
+            double frx = -Math.cos(Math.toRadians(yaw)), frz = -Math.sin(Math.toRadians(yaw));
+            double d = s.wallHit - 0.03;
+            Vec3d base = new Vec3d(pos.x + fx * d, y, pos.z + fz * d);
+            reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, rs, toModel(base.add(frx * 0.24, 0, frz * 0.24), pos, body), frame, fw);
+            reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, ls, toModel(base.add(-frx * 0.24, 0, -frz * 0.24), pos, body), frame, fw);
+        }
+        // A hand flat on the wall beside you, a little ahead and below the shoulder.
+        for (int i = 0; i < 2; i++) {
+            float w = smooth(s.sideW[i]) * (1 - 0.6f * fw);
+            if (w < 0.01f) continue;
+            double sx = i == 0 ? rx : -rx, sz = i == 0 ? rz : -rz;
+            double d = Math.max(0.3, s.sideHit[i] - 0.03);
+            Vec3d hand = new Vec3d(pos.x + sx * d + bx * 0.14, pos.y + 1.0, pos.z + sz * d + bz * 0.14);
+            if (i == 0) reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, rs, toModel(hand, pos, body), frame, w);
+            else reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, ls, toModel(hand, pos, body), frame, w);
+        }
+    }
+
+    private static float smooth(float x) {
+        x = MathHelper.clamp(x, 0, 1);
+        return x * x * (3 - 2 * x);
+    }
+
+    /** How far along (dx, dz) from (x, z) at height y the first solid block is, between from and to; -1 if none. */
+    private static double probe(PlayerEntity p, double x, double z, double dx, double dz, double y, double from, double to) {
+        for (double d = from; d <= to; d += 0.03) {
+            double cx = x + dx * d, cz = z + dz * d;
+            if (!p.getWorld().isSpaceEmpty(new net.minecraft.util.math.Box(cx - 0.02, y - 0.15, cz - 0.02, cx + 0.02, y + 0.15, cz + 0.02))) return d;
+        }
+        return -1;
     }
 
     /** Two-bone IK for a leg (thigh and shin, 6 pixels each; the knee bends backwards). */
     static void stride(Pose out, Bone leg, Bone shin, Vector3f hip, Vector3f target, Matrix4f invFrame) {
-        Vector3f d = invFrame.transformPosition(new Vector3f(target)).sub(hip);
-        float n = d.length();
-        if (n < 1e-3f) return;
-        float dist = MathHelper.clamp(n, 0.5f, 11.9f);
-        float cosIn = MathHelper.clamp((36 + 36 - dist * dist) / (2 * 36f), -1, 1);
-        float bend = (float) (Math.PI - Math.acos(cosIn));
-        float hy = 6 + 6 * MathHelper.cos(bend), hz = 6 * MathHelper.sin(bend);
-        d.mul(dist / n);
-        float flat = (float) Math.sqrt(d.x * d.x + d.y * d.y);
-        float y1 = d.y < 0 ? -flat : flat;
-        if (Math.abs(y1) < 1e-4f) y1 = 1e-4f;
-        float roll = (float) Math.atan2(-d.x / y1, d.y / y1);
-        float pitch = (float) (Math.atan2(d.z, y1) - Math.atan2(hz, hy));
-        out.set(leg, MathHelper.wrapDegrees((float) Math.toDegrees(pitch)), 0, (float) Math.toDegrees(roll));
-        out.set(shin, (float) Math.toDegrees(bend), 0, 0);
+        solve(out, leg, shin, hip, target, invFrame, 1, 6, 6, 1, 0);
     }
 
     /** A steady random number in -1..1 for each step. */
