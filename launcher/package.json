@@ -9,7 +9,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "check": "node --check src/main.js && node --check src/auth.js && node --check src/java.js && node --check src/pack.js && node --check src/game.js && node --check src/store.js && node --check src/net.js && node --check src/preload.js && node --check src/ui/app.js && node --check src/status.js && node --check src/ui/scene.js && node --check src/ui/ground.js && node src/selftest.js",
+    "check": "node --check src/main.js && node --check src/auth.js && node --check src/java.js && node --check src/pack.js && node --check src/game.js && node --check src/store.js && node --check src/net.js && node --check src/preload.js && node --check src/ui/app.js && node --check src/status.js && node --check src/ui/scene.js && node src/selftest.js",
     "dist": "electron-builder --publish never"
   },
   "dependencies": {

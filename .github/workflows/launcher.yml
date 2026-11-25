@@ -116,4 +116,4 @@ jobs:
           # launcher release in package.json even after other uploads (like mod files). Matched by tag,
           # not by list order: 0.x comes after 1.x, so "newest number" isn't the release we want.
           tag=$(gh api repos/${{ github.repository }}/releases --paginate --jq ".[] | select(.draft|not) | select(.tag_name==\"v$v\") | .id" | head -1)
-          [ -n "$tag" ] && gh api -X PATCH repos/${{ github.repository }}/releases/$tag -f make_latest=true >/dev/null && echo "latest -> $tag"
+          if [ -n "$tag" ]; then gh api -X PATCH repos/${{ github.repository }}/releases/$tag -f make_latest=true >/dev/null && echo "latest -> $tag"; fi
