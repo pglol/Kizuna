@@ -344,15 +344,15 @@ public final class Parkour {
         sneakAge++;
         if (sneak && !lastSneak) sneakAge = 0;
         lastSneak = sneak;
+
+        boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater() || p.isFallFlying() || p.isDead();
+        if (free && mode != Mode.NONE) set(Mode.NONE);
         // Landings.
         boolean airMode = mode == Mode.NONE || mode == Mode.VAULT;
         if (!airMode || ground) {
             if (ground && !lastGround && airMode && !free) land(p, peakY - p.getY());
             peakY = p.getY();
         } else peakY = Math.max(peakY, p.getY());
-
-        boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater() || p.isFallFlying() || p.isDead();
-        if (free && mode != Mode.NONE) set(Mode.NONE);
 
         switch (mode) {
             case NONE -> {
