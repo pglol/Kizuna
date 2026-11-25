@@ -121,6 +121,9 @@ public final class Parkour {
     // Shuffling, hand over hand: the lead hand reaches out (REACH ticks), then the body follows while the
     // other hand comes in (FOLLOW ticks). Let go of the key and the step in progress finishes, quicker.
     private static final double STEP = 0.3;
+    /** Stamina for one quick (sprint-held) shuffle step: about 60 steps from full. */
+    private static final float QUICK_SHUFFLE_COST = 1 / 60f;
+    private static boolean cycQuick;
     private static final float REACH = 4, FOLLOW = 5, HURRY = 2.5f;
     private static int cyc, cycSide, lead;
     private static float cycK, cycRate;
@@ -862,9 +865,10 @@ public final class Parkour {
         Vec3d b = new Vec3d(back.getOffsetX(), 0, back.getOffsetZ());
         dir = back;
         try {
-            for (double d = 0.9; d <= 3.2; d += 0.15) {
-                for (double dy = 0; dy <= 1.2; dy = dy <= 0 ? -dy + 0.25 : -dy) {
-                    if (dy < -1.5) continue;
+            Vec3d fbHang = null;
+            double fbLip = 0;
+            for (double d = 0.6; d <= 4.2; d += 0.12) {
+                for (double dy = 0; dy <= 1.5; dy = dy <= 0 ? -dy + 0.25 : -dy) {
                     Vec3d c = at.add(b.multiply(d)).add(0, dy, 0);
                     if (!empty(p, column(c.x, c.y, c.z, 1.8))) continue;
                     Double l = lip(p, c, c.y, HANG_H - 0.2, HANG_H + 0.2);
@@ -874,24 +878,43 @@ public final class Parkour {
                     if (!empty(p, column(hang.x, hang.y, hang.z, 1.8))) continue;
                     from = at;
                     to = hang;
-                    if (!planArc(p)) continue; // nothing clear to fly through: try further on
-                    dir = keep;
-                    hopHands = handPoints(p.getWorld(), at, keep, ledgeY);
-                    hopTurn = back;
-                    yawFrom = keep.asRotation();
-                    yawTo = back.asRotation();
-                    from = at;
-                    to = hang;
-                    ledgeY = l;
-                    hopWind = 4;
-                    set(Mode.HOP);
-                    return true;
+                    if (!planArc(p)) {
+                        // Nothing clear to fly through to this one: remember it, try further on.
+                        if (fbHang == null) {
+                            fbHang = hang;
+                            fbLip = l;
+                        }
+                        continue;
+                    }
+                    return backLeap(p, at, keep, back, hang, l);
                 }
+            }
+            // No perfectly clear arc anywhere: go for the nearest lip all the same (a leap that hits
+            // something carries on as a free flight and still catches it).
+            if (fbHang != null) {
+                from = at;
+                to = fbHang;
+                planArc(p);
+                return backLeap(p, at, keep, back, fbHang, fbLip);
             }
             return false;
         } finally {
             if (mode != Mode.HOP) dir = keep;
         }
+    }
+
+    private static boolean backLeap(ClientPlayerEntity p, Vec3d at, Direction keep, Direction back, Vec3d hang, double l) {
+        dir = keep;
+        hopHands = handPoints(p.getWorld(), at, keep, ledgeY);
+        hopTurn = back;
+        yawFrom = keep.asRotation();
+        yawTo = back.asRotation();
+        from = at;
+        to = hang;
+        ledgeY = l;
+        hopWind = 4;
+        set(Mode.HOP);
+        return true;
     }
 
     private static void kickOff(ClientPlayerEntity p) {
@@ -903,11 +926,25 @@ public final class Parkour {
 
     /** On a wall the keys are the wall's: W climbs (towards it), S is away, A/D along it; the camera doesn't matter. */
     private static boolean toward(ClientPlayerEntity p) {
-        return p.input.movementForward > 0.5f;
+        return wallForward(p) > 0.5f;
     }
 
     private static boolean away(ClientPlayerEntity p) {
-        return p.input.movementForward < -0.5f;
+        return wallForward(p) < -0.5f;
+    }
+
+    /**
+     * Forward/back as the wall sees it. Normally that's just W and S, whatever the camera does; but
+     * turned right round to look behind you (at a ledge there, say), W means "that way": away from the
+     * wall.
+     */
+    private static float wallForward(ClientPlayerEntity p) {
+        float f = p.input.movementForward;
+        return lookingBack(p) ? -f : f;
+    }
+
+    private static boolean lookingBack(ClientPlayerEntity p) {
+        return Math.abs(MathHelper.wrapDegrees(p.getYaw() - dir.asRotation())) > 110;
     }
 
     /** Where the marker goes: the lip you're holding, or the nearest one in front you could catch. */
@@ -1043,10 +1080,13 @@ public final class Parkour {
                     if (cycK >= 1) cyc = 0;
                     return true;
                 }
+                // Sprint held (with breath to spare): a quick shuffle, longer reaches at a faster beat,
+                // costing a little stamina for each reach.
+                boolean quick = want != 0 && Move.sprintHeld(MinecraftClient.getInstance()) && !Move.winded();
                 if (cyc == 0 && want != 0) {
                     Vec3d r = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(want);
                     Vec3d next = null;
-                    for (double d = STEP; d > 0.05; d -= 0.1) {
+                    for (double d = quick ? STEP * 1.4 : STEP; d > 0.05; d -= 0.1) {
                         Vec3d n = at.add(r.multiply(d));
                         if (empty(p, column(n.x, n.y, n.z, 1.8)) && lip(p, n, n.y, HANG_H - 0.15, HANG_H + 0.15) != null) {
                             next = n;
@@ -1063,12 +1103,14 @@ public final class Parkour {
                         cyc = 1;
                         cycK = 0;
                         hurry = false;
+                        cycQuick = quick;
+                        if (quick && !p.isCreative()) Move.spend(QUICK_SHUFFLE_COST);
                     } else if (corner(p, want)) return true;
                 }
                 side = cyc != 0 ? cycSide : 0;
                 if (cyc != 0) {
                     if (want != cycSide) hurry = true;
-                    cycRate = (cyc == 1 ? 1 / REACH : 1 / FOLLOW) * (hurry ? HURRY : 1);
+                    cycRate = (cyc == 1 ? 1 / REACH : 1 / FOLLOW) * (hurry ? HURRY : 1) * (cycQuick ? 1.4f : 1);
                     cycK += cycRate;
                     phase += 0.4f;
                     if (cyc == 1 && cycK >= 1) {

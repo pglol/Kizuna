@@ -43,10 +43,15 @@ public final class Move {
         boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater();
         // Knocked flat (or splatting into a landing): you aren't running any more, whatever is held.
         if (down(p)) p.setSprinting(false);
+        // Winded: no running and no fast walk either, just walking until you've got your breath back.
+        if (winded) p.setSprinting(false);
         if (!p.isSprinting() || free) mode = Mode.WALK;
-        else mode = held && !winded ? Mode.RUN : Mode.FAST;
+        else mode = held ? Mode.RUN : Mode.FAST;
 
-        if (mode == Mode.RUN && !p.isCreative()) {
+        // Running costs breath only while you're really running: on your feet and moving.
+        boolean running = mode == Mode.RUN && p.isOnGround() && Parkour.view(p).mode() == Parkour.Mode.NONE
+            && p.getVelocity().horizontalLengthSquared() > 0.01;
+        if (running && !p.isCreative()) {
             stamina = Math.max(0, stamina - DRAIN);
             rest = 20;
             if (stamina <= 0) winded = true;
@@ -58,6 +63,22 @@ public final class Move {
     private static boolean down(PlayerEntity p) {
         Parkour.Mode m = Parkour.view(p).mode();
         return m == Parkour.Mode.RAGDOLL || m == Parkour.Mode.FACEPLANT || m == Parkour.Mode.LAND;
+    }
+
+    public static boolean winded() {
+        return winded;
+    }
+
+    /** Spend breath on something other than running (a quick shuffle, a run-up): counts as effort. */
+    public static void spend(float amount) {
+        stamina = Math.max(0, stamina - amount);
+        rest = 20;
+        if (stamina <= 0) winded = true;
+    }
+
+    /** Is the sprint key physically down (for moves other than running that it speeds up). */
+    public static boolean sprintHeld(MinecraftClient mc) {
+        return mc.currentScreen == null && physicallyHeld(mc);
     }
 
     private static boolean physicallyHeld(MinecraftClient mc) {

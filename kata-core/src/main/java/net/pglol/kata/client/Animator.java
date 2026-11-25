@@ -778,7 +778,19 @@ public final class Animator {
         }
         Vector3f e = new org.joml.Matrix3f().set(q).getEulerAnglesZYX(new Vector3f());
         float pd = (float) Math.toDegrees(e.x), yd = (float) Math.toDegrees(e.y), rd = (float) Math.toDegrees(e.z), bd = (float) Math.toDegrees(bend);
-        out.set(upper, MathHelper.lerp(weight, out.get(upper, Pose.PITCH), pd), MathHelper.lerp(weight, out.get(upper, Pose.YAW), yd), MathHelper.lerp(weight, out.get(upper, Pose.ROLL), rd));
+        // The same turn can be written two ways (pitch+180, 180-yaw, roll+180). Use the one nearer the
+        // arm's current angles, and blend the short way round: blending between the two ways would swing
+        // the arm through its other side (arms crossing on a fast catch).
+        float cp = out.get(upper, Pose.PITCH), cy = out.get(upper, Pose.YAW), cr = out.get(upper, Pose.ROLL);
+        float ap = pd + 180, ay = 180 - yd, ar = rd + 180;
+        float d1 = Math.abs(MathHelper.wrapDegrees(pd - cp)) + Math.abs(MathHelper.wrapDegrees(yd - cy)) + Math.abs(MathHelper.wrapDegrees(rd - cr));
+        float d2 = Math.abs(MathHelper.wrapDegrees(ap - cp)) + Math.abs(MathHelper.wrapDegrees(ay - cy)) + Math.abs(MathHelper.wrapDegrees(ar - cr));
+        if (d2 < d1) {
+            pd = ap;
+            yd = ay;
+            rd = ar;
+        }
+        out.set(upper, cp + MathHelper.wrapDegrees(pd - cp) * weight, cy + MathHelper.wrapDegrees(yd - cy) * weight, cr + MathHelper.wrapDegrees(rd - cr) * weight);
         out.set(lower, MathHelper.lerp(weight, out.get(lower, Pose.PITCH), bd), 0, 0);
     }
 
