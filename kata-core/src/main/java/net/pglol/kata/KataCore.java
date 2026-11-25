@@ -68,11 +68,11 @@ public final class KataCore implements ModInitializer {
             .requires(s -> s.hasPermissionLevel(2))
             .then(CommandManager.literal("dummy").executes(c -> {
                 ServerPlayerEntity p = c.getSource().getPlayerOrThrow();
-                Dummy d = new Dummy(KataEntities.DUMMY, p.getWorld());
+                Dummy dummy = new Dummy(KataEntities.DUMMY, p.getWorld());
                 net.minecraft.util.math.Vec3d at = p.getPos().add(net.minecraft.util.math.Vec3d.fromPolar(0, p.getYaw()).multiply(2.5));
-                d.refreshPositionAndAngles(at.x, p.getY(), at.z, p.getYaw() + 180, 0);
-                d.setCustomName(Text.literal("Training dummy"));
-                p.getWorld().spawnEntity(d);
+                dummy.refreshPositionAndAngles(at.x, p.getY(), at.z, p.getYaw() + 180, 0);
+                dummy.setCustomName(Text.literal("Training dummy"));
+                p.getWorld().spawnEntity(dummy);
                 c.getSource().sendFeedback(() -> Text.literal("Training dummy placed. Right click to guard, R to lock on, left click to punch."), false);
                 return 1;
             }))
