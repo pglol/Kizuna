@@ -4,8 +4,8 @@
       "id": "aot",
       "name": "Attack on Titan RPG",
       "short": "AOT",
-      "tagline": "Open world. Titans. Extraction runs.",
-      "description": "Paradis and Marley, wall to coast. Swing through cities and giant forests, hunt titans with your squad, run the story, prestige past level 100, and when you're invited, take on extraction.",
+      "tagline": "Hunt titans across Paradis.",
+      "description": "Swing through cities and giant forests on ODM gear, cut down titans with your squad, and push past the walls.",
       "status": "public",
       "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
@@ -34,6 +34,11 @@
         }
       ],
       "gallery": [],
+      "tags": [
+        "Open-World",
+        "RPG",
+        "Action"
+      ],
       "channels": [
         {
           "id": "public",
@@ -76,8 +81,8 @@
       "id": "kata",
       "name": "Kata",
       "short": "KT",
-      "tagline": "High school martial arts.",
-      "description": "A martial arts high school where every student fights in their own style: learn stances, chain your own combos, run the rooftops, and settle it on the mat.",
+      "tagline": "Fight in your own style.",
+      "description": "A martial arts high school. Build your stance and combos, run the rooftops between classes, and settle it on the mat.",
       "status": "soon",
       "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
@@ -89,8 +94,35 @@
       "logo": "",
       "background": "",
       "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata/pack.toml",
-      "news": [],
+      "news": [
+        {
+          "title": "Bodies that bend: elbows, knees and waist, with a pose editor to try them",
+          "date": "Nov 2026",
+          "tag": "Dev",
+          "image": "",
+          "url": ""
+        },
+        {
+          "title": "The gym yard is open for testing: vaults, climbing walls, rooftops and wall runs",
+          "date": "Nov 2026",
+          "tag": "Dev",
+          "image": "",
+          "url": ""
+        },
+        {
+          "title": "Coming next: footwork, stances and parkour",
+          "date": "Soon",
+          "tag": "Roadmap",
+          "image": "",
+          "url": ""
+        }
+      ],
       "gallery": [],
+      "tags": [
+        "Martial Arts",
+        "Action",
+        "Parkour"
+      ],
       "channels": [
         {
           "id": "public",
