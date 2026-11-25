@@ -43,6 +43,7 @@ for s in hub["servers"]:
         e[k] = url(e.get(k, ""))
     e["news"] = [dict(n, image=url(n.get("image", ""))) for n in s.get("news", [])]
     e["gallery"] = [url(g) for g in s.get("gallery", []) if g]
+    e["tags"] = [str(x) for x in s.get("tags", [])][:4]
     # Build channels (Public / Early Access / Development): each its own pack and server; codes go out only as hashes.
     chans = []
     for c in s.get("channels") or [{"id": "public", "name": "Public", "pack": s["pack"], "address": s.get("address", "")}]:

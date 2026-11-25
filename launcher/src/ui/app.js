@@ -130,8 +130,12 @@
     const box = $('chans');
     box.innerHTML = '';
     const list = (s && s.channels) || [];
-    $('chans').closest('.builds').hidden = !s || s.status === 'soon' || list.length < 2;
     const cur = channelOf(s);
+    // Shown when there's a choice to make: more than one build, or more than one server for this build.
+    const hosts = (cur && cur.addresses) || [];
+    $('chans').closest('.builds').hidden = !s || s.status === 'soon' || (list.length < 2 && hosts.length < 2);
+    $('chans').hidden = list.length < 2;
+    $('chans').previousElementSibling.hidden = list.length < 2;
     for (const c of list) {
       const b = document.createElement('button');
       b.className = 'chan' + (c.id === cur.id ? ' on' : '') + (c.locked ? ' locked' : '');
@@ -178,31 +182,59 @@
     }
   }
 
+  // News floats over the cover: one card at a time, changing every 6 seconds (paused while hovered).
+  const NEWS_MS = 6000;
+  let newsList = [], newsAt = 0, newsTimer = null;
   function renderNews(s) {
-    const box = $('news');
-    box.innerHTML = '';
-    for (const n of ((s && s.news) || []).slice(0, 3)) {
-      const c = document.createElement('button');
-      c.className = 'npanel';
+    newsList = ((s && s.news) || []).slice(0, 5);
+    clearTimeout(newsTimer);
+    $('news').hidden = !newsList.length;
+    const dots = $('ndots');
+    dots.innerHTML = '';
+    newsList.forEach((_, i) => {
+      const d = document.createElement('button');
+      d.title = 'News ' + (i + 1);
+      d.addEventListener('click', () => showNews(i));
+      dots.append(d);
+    });
+    if (newsList.length) showNews(0, true);
+  }
+  function showNews(i, first) {
+    clearTimeout(newsTimer);
+    newsAt = (i + newsList.length) % newsList.length;
+    const n = newsList[newsAt];
+    const card = $('ncard');
+    const fill = () => {
+      card.innerHTML = '';
+      card.className = 'ncard in' + (n.url ? ' link' : '');
       if (n.image) {
-        const im = new Image();
-        im.onload = () => {
-          c.classList.add('img');
-          c.style.backgroundImage = `url("${n.image}")`;
-        };
-        im.src = n.image;
+        const im = document.createElement('span');
+        im.className = 'nimg';
+        im.style.backgroundImage = `url("${n.image}")`;
+        card.append(im);
       }
-      const cap = document.createElement('div');
-      cap.className = 'cap';
       const sm = document.createElement('small');
       sm.textContent = [n.tag, n.date].filter(Boolean).join(' · ');
-      cap.append(sm, document.createTextNode(n.title || ''));
-      c.append(cap);
-      if (n.url) c.addEventListener('click', () => K.openUrl(n.url));
-      else c.style.cursor = 'default';
-      box.append(c);
+      const b = document.createElement('b');
+      b.textContent = n.title || '';
+      card.append(sm, b);
+      card.onclick = n.url ? () => K.openUrl(n.url) : null;
+      [...$('ndots').children].forEach((d, k) => d.classList.toggle('on', k === newsAt));
+      const bar = $('nfill');
+      bar.classList.remove('run');
+      void bar.offsetWidth;
+      if (newsList.length > 1) {
+        bar.style.animationDuration = NEWS_MS + 'ms';
+        bar.classList.add('run');
+      }
+    };
+    if (first) fill();
+    else {
+      card.className = 'ncard out';
+      setTimeout(fill, 300);
     }
   }
+  $('nfill').addEventListener('animationend', () => newsList.length > 1 && showNews(newsAt + 1));
 
   function renderHero() {
     const idx = state.servers.findIndex((x) => x.id === state.selected);
@@ -223,6 +255,8 @@
       $('online').textContent = '';
       $('chips').hidden = true;
       $('tagline').textContent = '';
+      $('desc').textContent = '';
+      $('tags').innerHTML = '';
       renderChannels(null);
       Scene.set('絆');
       updateDock();
@@ -240,6 +274,15 @@
     st.textContent = kanji;
     $('title').textContent = s.name;
     $('tagline').textContent = s.tagline || '';
+    $('desc').textContent = s.description || '';
+    const tags = $('tags');
+    tags.innerHTML = '';
+    for (const g of s.tags || []) {
+      const c = document.createElement('span');
+      c.className = 'tag-chip';
+      c.textContent = g;
+      tags.append(c);
+    }
     renderChannels(s);
     renderOnline(s);
     refreshPing(s);

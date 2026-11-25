@@ -1,4 +1,9 @@
 {
+  "1.3.4": [
+    "News floats over the cover art as a slideshow",
+    "Each game has a short description and genre tags",
+    "Simpler, roomier build picker"
+  ],
   "1.3.3": [
     "Team test builds of servers that are still coming soon can be played with their code (Kata)"
   ],
