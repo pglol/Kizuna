@@ -115,8 +115,8 @@ public final class Animator {
         s.shown.gait = want.gait;
 
         // The body faces where they look (Minecraft lets it drift towards the way they walk), so strafing
-        // is a side-step and backing off is a backpedal. The head takes that turn back off, and takes back
-        // the body's lean, twist and bank, so it sits steady on the shoulders looking where the camera does.
+        // is a side-step and backing off is a backpedal. The head doesn't inherit any of the body's turning
+        // (see Rig.neck), so it keeps Minecraft's own look exactly; nothing to undo, nothing to roll.
         Pose sh = s.shown;
         float turn = 0;
         if (want.gait) {
@@ -124,12 +124,8 @@ public final class Animator {
             float face = MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw);
             turn = MathHelper.wrapDegrees(face - body);
         }
-        sh.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn);
-        float headPitch = sh.get(Bone.HEAD, Pose.PITCH) - 0.9f * (sh.get(Bone.ROOT, Pose.PITCH) + sh.get(Bone.CHEST, Pose.PITCH));
-        float headYaw = sh.get(Bone.HEAD, Pose.YAW) - turn - 0.95f * (sh.get(Bone.CHEST, Pose.YAW) + sh.get(Bone.ROOT, Pose.YAW) - turn);
-        float headRoll = sh.get(Bone.HEAD, Pose.ROLL) - 0.95f * (sh.get(Bone.ROOT, Pose.ROLL) + sh.get(Bone.CHEST, Pose.ROLL));
         Pose out = sh.copy();
-        out.set(Bone.HEAD, headPitch, headYaw, headRoll);
+        out.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn);
         s.out = out;
         return out;
     }
@@ -194,14 +190,16 @@ public final class Animator {
         // ---- Gait ----
         float phase = limb * 0.6662f;
         float c = MathHelper.cos(phase), sn = MathHelper.sin(phase);
-        float stride = (30 + 22 * run) * (1 - 0.5f * Math.abs(sideK)) * (1 - 0.35f * backK);
+        float stride = (30 + 22 * run) * (1 - 0.75f * Math.abs(sideK)) * (1 - 0.35f * backK);
         // Legs: Minecraft's swing is taken out (gait), ours put in: right leg forward when c < 0.
         float rHip = c * stride * w, lHip = -c * stride * w;
         o.set(Bone.RIGHT_LEG, Pose.PITCH, rHip);
         o.set(Bone.LEFT_LEG, Pose.PITCH, lHip);
         // Side-steps: legs reach out sideways in turn.
-        o.set(Bone.RIGHT_LEG, Pose.ROLL, w * sideK * Math.max(0, sn) * 22);
-        o.set(Bone.LEFT_LEG, Pose.ROLL, w * sideK * Math.max(0, -sn) * 22);
+        // Side-steps: the lead leg reaches out the way they're going, the other follows it in.
+        float step = w * Math.abs(sideK) * 24;
+        o.set(Bone.RIGHT_LEG, Pose.ROLL, sideK > 0 ? step * Math.max(0, sn) : -step * 0.35f * Math.max(0, sn));
+        o.set(Bone.LEFT_LEG, Pose.ROLL, sideK < 0 ? -step * Math.max(0, -sn) : step * 0.35f * Math.max(0, -sn));
         // Knees: fold through the swing (more running), give a little on contact.
         float swingFold = 32 + 48 * run;
         float rKnee = w * (Math.max(0, sn) * swingFold + (1 - Math.abs(sn)) * 9);
@@ -231,7 +229,8 @@ public final class Animator {
         // Momentum: lean with speed and into speeding up, back when stopping or backpedalling; bank into turns.
         float lean = w * (1.5f + 7 * run) - backK * w * 5 + MathHelper.clamp(s.accFwd * 0.7f, -5, 5);
         o.set(Bone.ROOT, Pose.PITCH, lean);
-        float bank = MathHelper.clamp(s.yawRate * 0.012f * w, -6, 6) + MathHelper.clamp(-s.accSide * 0.6f, -4, 4);
+        // Strafing leans into the way they're going (more as they set off), turning banks into the turn.
+        float bank = MathHelper.clamp(s.yawRate * 0.012f * w, -6, 6) + sideK * w * 5 + MathHelper.clamp(s.accSide * 0.4f, -3, 3);
         add(o, Bone.ROOT, Pose.ROLL, bank);
 
         // Idle: weight shifting from foot to foot, breathing that lifts the shoulders.

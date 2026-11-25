@@ -49,7 +49,7 @@
   document.querySelectorAll('.overlay').forEach((o) => o.addEventListener('mousedown', (e) => {
     if (e.target !== o) return;
     if (o.id === 'ask') return asking && asking(false);
-    if (o.id === 'update' && document.getElementById('upd-later').onclick) return document.getElementById('upd-later').click();
+    if (o.id === 'update') return; // required: stays until updated
     o.hidden = true;
   }));
   document.addEventListener('mousedown', (e) => {
@@ -504,7 +504,6 @@
 
   // Pressing Play first checks for a newer launcher; if there is one you're asked (Update now / Later),
   // and Later carries on into the game.
-  let playAfterPrompt = false;
   async function play(skipCheck) {
     const s = current();
     if (!s || state.busy) return;
@@ -522,10 +521,10 @@
     if (skipCheck !== true) {
       $('ptext').textContent = 'Checking for updates';
       const u = await K.checkUpdate().catch(() => null);
-      if (u && u.version && updDismissed !== u.version) {
+      if (u && u.version) {
+        // Launcher updates are required: Play waits until it's installed.
         state.busy = false;
         updateDock();
-        playAfterPrompt = true;
         showUpdate(u.version);
         return;
       }
@@ -574,9 +573,12 @@
     }
   });
   // Launcher updates: ask, then show the download, then restart into the new version.
-  let updDismissed = '';
+  let updStarted = false;
+  let updReady = false;
   function showUpdate(version) {
-      $('upd-text').textContent = `Version ${shownVersion(version)} of the launcher is out.`;
+      if (updReady) return show('update', true);
+      $('upd-text').textContent = `Launcher ${shownVersion(version)} is out. Update to keep playing; it only takes a moment.`;
+      $('upd-later').hidden = true;
       $('upd-bar').hidden = true;
       $('upd-go').textContent = 'Update now';
       $('upd-go').disabled = false;
@@ -586,23 +588,24 @@
         $('upd-bar').hidden = false;
         K.downloadUpdate();
       };
-      $('upd-later').onclick = () => {
-        updDismissed = version;
-        show('update', false);
-        if (playAfterPrompt) {
-          playAfterPrompt = false;
-          play(true);
-        }
-      };
       show('update', true);
+      // Required update: start downloading straight away.
+      if (!updStarted) {
+        updStarted = true;
+        $('upd-go').onclick();
+      } else {
+        $('upd-go').disabled = true;
+        $('upd-go').textContent = 'Downloading…';
+        $('upd-bar').hidden = false;
+      }
   }
   K.on('update', (d) => {
     if (d.state === 'available') {
-      if (updDismissed === d.version) return;
       showUpdate(d.version);
     } else if (d.state === 'downloading') {
       $('upd-fill').style.width = (d.percent || 0) + '%';
     } else if (d.state === 'ready') {
+      updReady = true;
       $('upd-text').textContent = state.playing ? `Update downloaded. Restarting closes ${state.playingName}.` : 'Update downloaded.';
       $('upd-bar').hidden = true;
       $('upd-go').disabled = false;

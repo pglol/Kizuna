@@ -197,6 +197,10 @@ Nothing is near 1.0 yet. Every game and the launcher use the same scheme:
 - **Updates** are 0.1, 0.2, 0.3… Their release notes collect every patch since the previous update.
 - **Patches** for serious issues move by 0.01: 0.1 → 0.11 → 0.12 → … → the next update, 0.2.
 
+Where things stand: the launcher is at 0.6 (`0.60.0`), Paradis at 0.75, Kata at 0.01. Launcher
+updates are required: they download as soon as they're found and Play waits for the restart. Launchers
+older than 1.3.9 can't move to 0.x on their own (they won't step down from 1.x) and need a one-time reinstall.
+
 Where each lives:
 
 - **Launcher:** `launcher/package.json` holds it in three-part form (0.11 is `0.11.0`, 0.2 is `0.20.0`) so

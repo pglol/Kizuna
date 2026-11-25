@@ -24,19 +24,24 @@ public final class Rig {
     private Rig() {}
 
     public enum Role {
-        HEAD(true, Kind.NONE), HAT(true, Kind.NONE),
+        HEAD(true, Kind.NONE, true), HAT(true, Kind.NONE, true),
         BODY(false, Kind.TORSO), JACKET(false, Kind.TORSO),
         RIGHT_ARM(true, Kind.RIGHT_ELBOW), RIGHT_SLEEVE(true, Kind.RIGHT_ELBOW),
         LEFT_ARM(true, Kind.LEFT_ELBOW), LEFT_SLEEVE(true, Kind.LEFT_ELBOW),
         RIGHT_LEG(false, Kind.RIGHT_KNEE), RIGHT_PANTS(false, Kind.RIGHT_KNEE),
         LEFT_LEG(false, Kind.LEFT_KNEE), LEFT_PANTS(false, Kind.LEFT_KNEE);
 
-        final boolean followsChest;
+        final boolean followsChest, head;
         final Kind kind;
 
         Role(boolean followsChest, Kind kind) {
+            this(followsChest, kind, false);
+        }
+
+        Role(boolean followsChest, Kind kind, boolean head) {
             this.followsChest = followsChest;
             this.kind = kind;
+            this.head = head;
         }
     }
 
@@ -72,6 +77,18 @@ public final class Rig {
             m.multiply(euler(p, Bone.ROOT));
             m.translate(0, -FEET_Y / 16f, 0);
         }
+    }
+
+    /** Moves the head to where the neck ends up after the body's offset, lean and chest bend, without turning it. */
+    static void neck(MatrixStack m, Pose p, ModelPart head) {
+        if (p == null) return;
+        Matrix4f b = new Matrix4f();
+        b.translate(p.offset[0] / 16f, p.offset[1] / 16f, p.offset[2] / 16f);
+        if (p.moves(Bone.ROOT)) b.translate(0, FEET_Y / 16f, 0).rotate(euler(p, Bone.ROOT)).translate(0, -FEET_Y / 16f, 0);
+        if (p.moves(Bone.CHEST)) b.translate(0, WAIST_Y / 16f, 0).rotate(euler(p, Bone.CHEST)).translate(0, -WAIST_Y / 16f, 0);
+        Vector3f at = new Vector3f(head.pivotX / 16f, head.pivotY / 16f, head.pivotZ / 16f);
+        Vector3f moved = b.transformPosition(new Vector3f(at));
+        m.translate(moved.x - at.x, moved.y - at.y, moved.z - at.z);
     }
 
     /** Head and arms ride on the chest: turn them about the waist before their own rotation. */
@@ -137,8 +154,14 @@ public final class Rig {
         if (!part.visible) return true;
         ModelPartAccessor acc = (ModelPartAccessor) (Object) part;
         m.push();
-        root(m, p);
-        if (role.followsChest) chest(m, p);
+        if (role.head) {
+            // The head rides on the neck (it moves with the body's lean, twist and bob) but keeps its
+            // own turn, which is where the player is looking: it never inherits the body's rotation.
+            neck(m, p, part);
+        } else {
+            root(m, p);
+            if (role.followsChest) chest(m, p);
+        }
         part.rotate(m);
         if (!part.hidden) {
             Quaternionf q = bend(role, p);
