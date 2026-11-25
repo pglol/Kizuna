@@ -57,6 +57,9 @@ public final class Rig {
         return new Quaternionf().rotationZYX(p.rad(b, Pose.ROLL), p.rad(b, Pose.YAW), p.rad(b, Pose.PITCH));
     }
 
+    /** Extra forearm length in model pixels (arms are 12; this makes them reach a little further). */
+    public static final float ARM_EXTRA = 1.5f;
+
     /** Where the whole body leans and banks from: the feet, in model pixels. */
     public static final float FEET_Y = 24f;
 
@@ -105,14 +108,24 @@ public final class Rig {
     public static void forearm(MatrixStack m, ModelPart arm, boolean right, Pose p) {
         if (p == null) return;
         Quaternionf q = elbow(p, right ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM);
-        if (q == null) return;
-        var cubes = ((ModelPartAccessor) (Object) arm).kata$cuboids();
-        if (cubes.isEmpty()) return;
-        ModelPart.Cuboid c = cubes.get(0);
-        float px = (c.minX + c.maxX) / 2f, py = (c.minY + c.maxY) / 2f, pz = (c.minZ + c.maxZ) / 2f;
-        m.translate(px / 16f, py / 16f, pz / 16f);
-        m.multiply(q);
-        m.translate(-px / 16f, -py / 16f, -pz / 16f);
+        if (q != null) {
+            var cubes = ((ModelPartAccessor) (Object) arm).kata$cuboids();
+            if (!cubes.isEmpty()) {
+                ModelPart.Cuboid c = cubes.get(0);
+                float px = (c.minX + c.maxX) / 2f, py = (c.minY + c.maxY) / 2f, pz = (c.minZ + c.maxZ) / 2f;
+                m.translate(px / 16f, py / 16f, pz / 16f);
+                m.multiply(q);
+                m.translate(-px / 16f, -py / 16f, -pz / 16f);
+            }
+        }
+        // The hand sits at the end of the longer forearm.
+        m.translate(0, ARM_EXTRA / 16f, 0);
+    }
+
+    /** Lengthens the forearm half of an arm box: the elbow stays put, the hand end moves down. */
+    private static Vector3f stretch(Vector3f pos, float split, float maxY, float extra) {
+        if (extra != 0 && pos.y > split && maxY > split) pos.y += extra * (pos.y - split) / (maxY - split);
+        return pos;
     }
 
     /** Draws a tagged part of the player being posed. Returns false to let Minecraft draw it. */
@@ -141,10 +154,15 @@ public final class Rig {
 
     private static void cuboid(ModelPart.Cuboid c, MatrixStack.Entry e, VertexConsumer vc, int light, int overlay, int color, Kind kind, Quaternionf q) {
         ModelPart.Quad[] sides = ((CuboidAccessor) (Object) c).kata$sides();
+        boolean arm = kind == Kind.RIGHT_ELBOW || kind == Kind.LEFT_ELBOW;
+        float extra = arm ? ARM_EXTRA : 0, mid = (c.minY + c.maxY) / 2f;
         if (q == null) {
             for (ModelPart.Quad quad : sides) {
                 Vector3f n = e.transformNormal(quad.direction, new Vector3f());
-                for (ModelPart.Vertex v : quad.vertices) emit(e, vc, v.pos.x(), v.pos.y(), v.pos.z(), v.u, v.v, n, light, overlay, color);
+                for (ModelPart.Vertex v : quad.vertices) {
+                    Vector3f pos = stretch(new Vector3f(v.pos), mid, c.maxY, extra);
+                    emit(e, vc, pos.x, pos.y, pos.z, v.u, v.v, n, light, overlay, color);
+                }
             }
             return;
         }
@@ -165,7 +183,7 @@ public final class Rig {
                 Quaternionf r = moving ? q : null;
                 Vector3f n = normal(e, quad.direction, r);
                 for (ModelPart.Vertex v : vs) {
-                    Vector3f pos = turn(new Vector3f(v.pos), pivot, r);
+                    Vector3f pos = turn(stretch(new Vector3f(v.pos), split, c.maxY, extra), pivot, r);
                     emit(e, vc, pos.x, pos.y, pos.z, v.u, v.v, n, light, overlay, color);
                 }
                 continue;
@@ -185,7 +203,7 @@ public final class Rig {
                 for (ModelPart.Vertex v : vs) {
                     boolean atTop = Math.abs(v.pos.y() - qMin) < 1e-4f;
                     boolean farEdgeMoves = torso ? atTop : !atTop;
-                    Vector3f pos = new Vector3f(v.pos);
+                    Vector3f pos = stretch(new Vector3f(v.pos), split, c.maxY, extra);
                     float vv = v.v;
                     if (farEdgeMoves == movingHalf) {
                         // This corner belongs to this half's own end.
