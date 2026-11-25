@@ -90,6 +90,10 @@ public final class Move {
 
     /** Multiplier on the local player's ground speed. */
     public static float speedFactor(PlayerEntity p) {
+        return Parkour.speedScale() * baseFactor(p);
+    }
+
+    private static float baseFactor(PlayerEntity p) {
         if (p.isInSneakingPose() && p instanceof net.minecraft.client.network.ClientPlayerEntity cp && !p.getAbilities().flying) {
             boolean shuffle = cp.input.movementForward < 0 || (cp.input.movementForward == 0 && cp.input.movementSideways != 0);
             return (shuffle ? CROUCH_SHUFFLE : CROUCH_WALK) / VANILLA_SNEAK;

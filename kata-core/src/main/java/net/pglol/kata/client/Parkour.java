@@ -40,11 +40,12 @@ public final class Parkour {
     private Parkour() {}
 
     /** Synced by ordinal: add new moves at the end. */
-    public enum Mode { NONE, VAULT, HANG, RUNUP, PULL, MANTLE, HOP, CORNER }
+    public enum Mode { NONE, VAULT, HANG, RUNUP, PULL, MANTLE, HOP, CORNER, LAND, FACEPLANT }
 
     /** What the animator needs: the move, how far into it (0..1), shuffle side, step phase, seconds in. */
-    public record View(Mode mode, float progress, int side, float phase, float secs) {
-        static final View NONE = new View(Mode.NONE, 0, 0, 0, 0);
+    /** rough: how hard a landing was (0..1). */
+    public record View(Mode mode, float progress, int side, float phase, float secs, float rough) {
+        static final View NONE = new View(Mode.NONE, 0, 0, 0, 0, 0);
     }
 
     private static final int VAULT_TICKS = 9, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 8;
@@ -55,6 +56,24 @@ public final class Parkour {
     private static Direction cornerTo = Direction.NORTH;
     private static float yawFrom, yawTo;
     private static Vec3d[] handsFrom, handsTo, pullHands;
+    private static Vec3d cornerMid;
+
+    // Ledge jumps wind up first (a coil on the arms) for this many ticks.
+    private static int hopWind;
+
+    // Landings: a crouch pressed just before touching down catches it (rougher the higher you fell);
+    // too high, or a high fall without the crouch, and you go down on your face.
+    private static final int CATCH_WINDOW = 6, FACEPLANT_TICKS = 28;
+    private static final double LAND_MIN = 2.6, FACEPLANT_UNCAUGHT = 6, FACEPLANT_ALWAYS = 12;
+    private static double peakY;
+    private static int sneakAge = 99, landTicks = 12;
+    private static boolean lastSneak;
+    private static float landRough;
+
+    /** Movement while landing: slowed through a caught landing, none while face down. */
+    public static float speedScale() {
+        return mode == Mode.FACEPLANT ? 0 : mode == Mode.LAND ? 0.45f : 1;
+    }
 
     // Shuffling, hand over hand: the lead hand reaches out (REACH ticks), then the body follows while the
     // other hand comes in (FOLLOW ticks). Let go of the key and the step in progress finishes, quicker.
@@ -199,14 +218,14 @@ public final class Parkour {
         if (mc.player != null && p.getId() == mc.player.getId()) {
             if (mode == Mode.NONE) return View.NONE;
             float secs = (System.nanoTime() - started) / 1e9f;
-            return new View(mode, progress(mode, secs), side, phase, secs);
+            return new View(mode, progress(mode, secs), side, phase, secs, landRough);
         }
         Remote r = REMOTE.get(p.getId());
         if (r == null) return View.NONE;
         float secs = (System.nanoTime() - r.started) / 1e9f;
         if (r.mode != Mode.HANG && secs > 2) return View.NONE;
         float moved = (float) Math.sqrt(p.squaredDistanceTo(p.prevX, p.prevY, p.prevZ));
-        return new View(r.mode, progress(r.mode, secs), r.side, secs * 9 * Math.min(1, moved * 12), secs);
+        return new View(r.mode, progress(r.mode, secs), r.side, secs * 9 * Math.min(1, moved * 12), secs, 0.5f);
     }
 
     private static float progress(Mode m, float secs) {
@@ -214,7 +233,9 @@ public final class Parkour {
             case VAULT -> VAULT_TICKS;
             case PULL -> PULL_TICKS;
             case MANTLE -> MANTLE_TICKS;
-            case HOP -> HOP_TICKS;
+            case HOP -> HOP_TICKS + hopWind;
+            case LAND -> landTicks;
+            case FACEPLANT -> FACEPLANT_TICKS;
             case RUNUP -> RUNUP_TICKS;
             case CORNER -> CORNER_TICKS;
             default -> 0;
@@ -320,6 +341,15 @@ public final class Parkour {
         if (intent != Intent.NONE && ++intentAge > INTENT && !jump) intent = Intent.NONE;
         boolean climbAsk = intent == Intent.CLIMB;
         boolean away = away(p);
+        sneakAge++;
+        if (sneak && !lastSneak) sneakAge = 0;
+        lastSneak = sneak;
+        // Landings.
+        boolean airMode = mode == Mode.NONE || mode == Mode.VAULT;
+        if (!airMode || ground) {
+            if (ground && !lastGround && airMode && !free) land(p, peakY - p.getY());
+            peakY = p.getY();
+        } else peakY = Math.max(peakY, p.getY());
 
         boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater() || p.isFallFlying() || p.isDead();
         if (free && mode != Mode.NONE) set(Mode.NONE);
@@ -389,6 +419,12 @@ public final class Parkour {
                 if (sneak) set(Mode.NONE);
                 else if (jumpEdge && away) kickOff(p);
             }
+            case LAND -> {
+                if (++ticks >= landTicks) set(Mode.NONE);
+            }
+            case FACEPLANT -> {
+                if (++ticks >= FACEPLANT_TICKS) set(Mode.NONE);
+            }
             default -> { }
         }
         if (ground) {
@@ -398,6 +434,19 @@ public final class Parkour {
         lastGround = ground;
         updateMarker(p, ground);
         syncOut();
+    }
+
+    private static void land(ClientPlayerEntity p, double h) {
+        boolean caught = sneakAge <= CATCH_WINDOW;
+        if (h >= FACEPLANT_ALWAYS || (!caught && h >= FACEPLANT_UNCAUGHT)) {
+            landRough = 1;
+            set(Mode.FACEPLANT);
+            p.setVelocity(Vec3d.ZERO);
+        } else if (caught && h >= LAND_MIN) {
+            landRough = (float) MathHelper.clamp((h - LAND_MIN) / (FACEPLANT_ALWAYS - LAND_MIN), 0, 1);
+            landTicks = 9 + Math.round(landRough * 10);
+            set(Mode.LAND);
+        }
     }
 
     /** In the air at a wall with space pressed: climb onto it (hold / double tap) or catch its lip. */
@@ -440,6 +489,7 @@ public final class Parkour {
         from = at;
         to = hang;
         ledgeY = l;
+        hopWind = 2;
         set(Mode.HOP);
     }
 
@@ -459,7 +509,9 @@ public final class Parkour {
                 from = at;
                 to = hang;
                 ledgeY = l;
+                hopWind = 4;
                 set(Mode.HOP);
+                Parkour.side = side;
                 return;
             }
         }
@@ -472,23 +524,13 @@ public final class Parkour {
         p.setVelocity(-dir.getOffsetX() * 0.38, 0.42, -dir.getOffsetZ() * 0.38);
     }
 
-    /** The movement keys point at the wall you're on (judged from where the camera faces). */
+    /** On a wall the keys are the wall's: W climbs (towards it), S is away, A/D along it; the camera doesn't matter. */
     private static boolean toward(ClientPlayerEntity p) {
-        float f = p.input.movementForward, s = p.input.movementSideways;
-        if (f * f + s * s < 0.01f) return false;
-        double yaw = Math.toRadians(p.getYaw());
-        double x = s * Math.cos(yaw) - f * Math.sin(yaw), z = f * Math.cos(yaw) + s * Math.sin(yaw);
-        return (x * dir.getOffsetX() + z * dir.getOffsetZ()) / Math.sqrt(x * x + z * z) > 0.6;
+        return p.input.movementForward > 0.5f;
     }
 
-    /** The movement keys point away from the wall you're on (judged from where the camera faces). */
     private static boolean away(ClientPlayerEntity p) {
-        float f = p.input.movementForward, s = p.input.movementSideways;
-        if (f * f + s * s < 0.01f) return false;
-        double yaw = Math.toRadians(p.getYaw());
-        double x = s * Math.cos(yaw) - f * Math.sin(yaw), z = f * Math.cos(yaw) + s * Math.sin(yaw);
-        double len = Math.sqrt(x * x + z * z);
-        return (x * dir.getOffsetX() + z * dir.getOffsetZ()) / len < -0.5;
+        return p.input.movementForward < -0.5f;
     }
 
     /** Where the marker goes: the lip you're holding, or the nearest one in front you could catch. */
@@ -661,14 +703,20 @@ public final class Parkour {
                 p.move(MovementType.SELF, new Vec3d(0, vy, 0));
                 return true;
             }
+            case FACEPLANT -> {
+                p.setVelocity(0, Math.min(0, p.getVelocity().y), 0);
+                return false;
+            }
             case CORNER -> {
                 ticks++;
                 float k = ease(Math.min(1, ticks / (float) CORNER_TICKS));
-                Vec3d target = from.lerp(to, k);
+                // Two legs round the outside of the corner (a straight line would cut through the block).
+                Vec3d target = k < 0.5f ? from.lerp(cornerMid, k * 2) : cornerMid.lerp(to, (k - 0.5f) * 2);
                 p.setVelocity(Vec3d.ZERO);
                 p.fallDistance = 0;
                 p.move(MovementType.SELF, target.subtract(p.getPos()));
                 if (ticks >= CORNER_TICKS) {
+                    p.setPosition(to);
                     dir = cornerTo;
                     set(Mode.HANG);
                     ticks = 3;
@@ -678,7 +726,13 @@ public final class Parkour {
             case PULL, MANTLE, HOP -> {
                 int total = mode == Mode.PULL ? PULL_TICKS : mode == Mode.MANTLE ? MANTLE_TICKS : HOP_TICKS;
                 ticks++;
-                float k = Math.min(1, ticks / (float) total);
+                if (mode == Mode.HOP && ticks <= hopWind) {
+                    // The wind-up: hold on and coil before the leap.
+                    p.setVelocity(Vec3d.ZERO);
+                    p.fallDistance = 0;
+                    return true;
+                }
+                float k = Math.min(1, (ticks - (mode == Mode.HOP ? hopWind : 0)) / (float) total);
                 Vec3d target;
                 if (mode == Mode.HOP) {
                     // A spring straight up, fast off the hands, easing into the catch.
@@ -700,7 +754,10 @@ public final class Parkour {
                 if (p.getPos().squaredDistanceTo(target) > 0.04) set(Mode.NONE); // something got in the way
                 else if (k >= 1) {
                     if (mode == Mode.HOP) {
+                        int s = side;
+                        p.setPosition(to);
                         set(Mode.HANG);
+                        side = s; // the animator swings the catch on in the direction of the leap
                         ticks = 0;
                     } else set(Mode.NONE);
                 }
@@ -758,6 +815,9 @@ public final class Parkour {
         cornerTo = now;
         from = at;
         to = hang;
+        // The way round: via the outside point that's clear (the middle if neither is).
+        Vec3d m1 = new Vec3d(hang.x, at.y, at.z), m2 = new Vec3d(at.x, at.y, hang.z);
+        cornerMid = empty(p, column(m1.x, m1.y, m1.z, 1.8)) ? m1 : empty(p, column(m2.x, m2.y, m2.z, 1.8)) ? m2 : at.lerp(hang, 0.5);
         set(Mode.CORNER);
         return true;
     }

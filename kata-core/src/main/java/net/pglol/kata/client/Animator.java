@@ -78,6 +78,7 @@ public final class Animator {
         float dp, dr, vp, vr, hvR, accR;
         // ...and the legs swinging from the hips a beat behind it (relative to the body).
         float lp, lr, lvp, lvr;
+        float sag, sagV;
         boolean wasHang;
         int lastHurt;
         // Hand over hand: where each hand is planted, and a hand on its way to a new spot.
@@ -366,7 +367,29 @@ public final class Animator {
                 }
                 case HANG, CORNER -> want = Presets.HANG;
                 case RUNUP -> want = Presets.runUp(pv.phase());
-                case HOP -> want = k < 0.3f ? Pose.lerp(Presets.HANG, Presets.PULL, k / 0.3f) : Pose.lerp(Presets.PULL, Presets.REACH, Math.min(1, (k - 0.3f) / 0.4f));
+                case HOP -> {
+                    // Wind up (coil, leaning away from the leap), then stretch out for the next lip.
+                    float wind = pv.side() != 0 ? 0.36f : 0.22f;
+                    Pose coil = Presets.coil(-pv.side());
+                    want = k < wind ? Pose.lerp(Presets.HANG, coil, k / wind) : Pose.lerp(coil, Presets.REACH, Math.min(1, (k - wind) / 0.4f));
+                }
+                case LAND -> {
+                    // A caught landing: in hard, wobbling (more the rougher it was), then easing back up.
+                    float r = pv.rough();
+                    float sway = MathHelper.sin(pv.secs() * (11 + 6 * r)) * (0.4f + r) * (1 - k);
+                    want = Presets.caught(r, sway);
+                    weight = k < 0.12f ? k / 0.12f : 1 - MathHelper.clamp((k - 0.55f) / 0.45f, 0, 1);
+                }
+                case FACEPLANT -> {
+                    // Down on the face, a bounce, lie there a beat, push up onto a knee and stand.
+                    if (k < 0.18f) want = Pose.lerp(new Pose(), Presets.SPLAT, ease(k / 0.18f));
+                    else if (k < 0.55f) {
+                        want = Presets.SPLAT.copy();
+                        float b = MathHelper.sin(MathHelper.PI * MathHelper.clamp((k - 0.18f) / 0.12f, 0, 1)) * 6;
+                        want.set(Bone.ROOT, Pose.PITCH, want.get(Bone.ROOT, Pose.PITCH) - b);
+                    } else if (k < 0.8f) want = Pose.lerp(Presets.SPLAT, Presets.KNEEL, ease((k - 0.55f) / 0.25f));
+                    else want = Pose.lerp(Presets.KNEEL, new Pose(), ease((k - 0.8f) / 0.2f));
+                }
                 case PULL -> want = k < 0.45f ? Pose.lerp(Presets.HANG, Presets.PULL, k / 0.45f)
                     : k < 0.8f ? Pose.lerp(Presets.PULL, Presets.KNEE, (k - 0.45f) / 0.35f)
                     : Pose.lerp(Presets.KNEE, stand, (k - 0.8f) / 0.2f);
@@ -407,10 +430,13 @@ public final class Animator {
             if (dt > 0) s.accR += ((float) ((vR - s.hvR) / dt) - s.accR) * Math.min(1, dt * 12);
             s.hvR = (float) vR;
             if (!s.wasHang && mode == Parkour.Mode.HANG) {
-                // The catch: the legs carry on in towards the wall.
-                s.dp = s.dr = s.vr = 0;
+                // The catch: the legs carry on in towards the wall (and on sideways after a leap), and
+                // the body sags onto the arms before they take it.
+                s.dp = s.dr = 0;
                 s.vp = -1.1f;
+                s.vr = Parkour.view(p).side() * 2.2f;
                 s.lp = s.lr = s.lvp = s.lvr = 0;
+                s.sagV = 34;
             }
             if (p.hurtTime > s.lastHurt) {
                 // Hit: knocked swinging away from where it came from.
@@ -441,6 +467,8 @@ public final class Animator {
                 s.lvr += (-lw2 * s.lr - lc * s.lvr - ar * 0.8f) * h;
                 s.lp = MathHelper.clamp(s.lp + s.lvp * h, -0.6f, 0.6f);
                 s.lr = MathHelper.clamp(s.lr + s.lvr * h, -0.6f, 0.6f);
+                s.sagV += (-70 * s.sag - 11 * s.sagV) * h;
+                s.sag = MathHelper.clamp(s.sag + s.sagV * h, -1, 3);
             }
         } else {
             float k = (float) Math.exp(-dt * 10);
@@ -448,11 +476,14 @@ public final class Animator {
             s.dr *= k;
             s.lp *= k;
             s.lr *= k;
+            s.sag *= k;
+            s.sagV = 0;
             s.vp = s.vr = s.lvp = s.lvr = 0;
             s.accR = 0;
         }
         s.wasHang = hanging;
         s.lastHurt = p.hurtTime;
+        out.offset[1] += s.sag;
         if (Math.abs(s.dp) + Math.abs(s.dr) + Math.abs(s.lp) + Math.abs(s.lr) > 1e-4f) {
             // Swing the body about the grip (keep the grip where it was).
             float pitch0 = out.get(Bone.ROOT, Pose.PITCH), roll0 = out.get(Bone.ROOT, Pose.ROLL), yaw0 = out.get(Bone.ROOT, Pose.YAW);
@@ -581,6 +612,11 @@ public final class Animator {
         x *= 0x85EBCA6B;
         x ^= x >>> 13;
         return ((x & 0xFFFF) / 32767.5f) - 1;
+    }
+
+    private static float ease(float x) {
+        x = MathHelper.clamp(x, 0, 1);
+        return x * x * (3 - 2 * x);
     }
 
     private static float approach(float v, float target, float step) {

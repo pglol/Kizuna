@@ -108,6 +108,54 @@ public final class Presets {
         REACH.set(Bone.LEFT_LEG, -14, 0, 0).set(Bone.LEFT_SHIN, 30, 0, 0);
     }
 
+    /** Coiling for a ledge jump: elbows pull in, knees tuck, leaning away from where you'll go (side). */
+    public static Pose coil(int side) {
+        Pose p = HANG.copy();
+        p.set(Bone.RIGHT_FOREARM, 70, 0, 0).set(Bone.LEFT_FOREARM, 70, 0, 0);
+        p.set(Bone.RIGHT_ARM, -120, 0, 6).set(Bone.LEFT_ARM, -120, 0, -6);
+        p.set(Bone.RIGHT_LEG, -45, 0, 0).set(Bone.RIGHT_SHIN, 75, 0, 0);
+        p.set(Bone.LEFT_LEG, -35, 0, 0).set(Bone.LEFT_SHIN, 65, 0, 0);
+        p.set(Bone.CHEST, 12, 0, side * 8);
+        p.set(Bone.ROOT, 0, 0, side * 10);
+        return p;
+    }
+
+    /** A caught landing, rough by r (0..1): deep staggered crouch, a hand down, the other out (both down
+     *  when it's rough), leaning into it. sway adds the wobble. */
+    public static Pose caught(float r, float sway) {
+        Pose p = new Pose();
+        p.set(Bone.HEAD, 15 - 10 * r, 0, 0);
+        p.set(Bone.CHEST, 32 + 16 * r, 4 * sway, 6 * sway);
+        p.set(Bone.ROOT, 8 + 8 * r, 0, 5 * sway * r);
+        p.set(Bone.RIGHT_ARM, -38 - 8 * r, 0, 12).set(Bone.RIGHT_FOREARM, 18, 0, 0);
+        p.set(Bone.LEFT_ARM, -60 + 25 * r, 0, -50 + 35 * r).set(Bone.LEFT_FOREARM, 20, 0, 0);
+        p.set(Bone.RIGHT_LEG, -72 - 10 * r, 0, 8).set(Bone.RIGHT_SHIN, 112 + 12 * r, 0, 0);
+        p.set(Bone.LEFT_LEG, -28 + 6 * sway, 0, -10).set(Bone.LEFT_SHIN, 82 + 10 * r, 0, 0);
+        p.offset[1] = 5.5f + 3 * r;
+        return p;
+    }
+
+    /** Face down on the ground, arms out in front where they broke the fall. */
+    public static final Pose SPLAT = new Pose(), KNEEL = new Pose();
+
+    static {
+        SPLAT.set(Bone.ROOT, 84, 0, 4);
+        SPLAT.set(Bone.HEAD, -45, 0, 0);
+        SPLAT.set(Bone.RIGHT_ARM, -150, -10, 30).set(Bone.RIGHT_FOREARM, 35, 0, 0);
+        SPLAT.set(Bone.LEFT_ARM, -140, 10, -35).set(Bone.LEFT_FOREARM, 45, 0, 0);
+        SPLAT.set(Bone.RIGHT_LEG, 6, 0, 6).set(Bone.RIGHT_SHIN, 10, 0, 0);
+        SPLAT.set(Bone.LEFT_LEG, -4, 0, -8).set(Bone.LEFT_SHIN, 25, 0, 0);
+        SPLAT.offset[1] = 1.5f;
+
+        KNEEL.set(Bone.ROOT, 35, 0, 0);
+        KNEEL.set(Bone.CHEST, 25, 0, 0);
+        KNEEL.set(Bone.RIGHT_ARM, -55, 0, 10).set(Bone.RIGHT_FOREARM, 15, 0, 0);
+        KNEEL.set(Bone.LEFT_ARM, -50, 0, -10).set(Bone.LEFT_FOREARM, 15, 0, 0);
+        KNEEL.set(Bone.RIGHT_LEG, -85, 0, 4).set(Bone.RIGHT_SHIN, 115, 0, 0);
+        KNEEL.set(Bone.LEFT_LEG, 20, 0, -4).set(Bone.LEFT_SHIN, 100, 0, 0);
+        KNEEL.offset[1] = 6;
+    }
+
     public static Pose of(String name) {
         return switch (name) {
             case "Guard" -> GUARD;
