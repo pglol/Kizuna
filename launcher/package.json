@@ -1,7 +1,7 @@
 {
   "name": "kizuna-launcher",
   "productName": "Kizuna Launcher",
-  "version": "0.72.0",
+  "version": "0.73.0",
   "description": "Sign in, pick a server, press Play.",
   "main": "src/main.js",
   "author": "pglol",

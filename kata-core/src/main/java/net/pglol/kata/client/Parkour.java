@@ -40,7 +40,7 @@ public final class Parkour {
     private Parkour() {}
 
     /** Synced by ordinal: add new moves at the end. */
-    public enum Mode { NONE, VAULT, HANG, RUNUP, PULL, MANTLE, HOP }
+    public enum Mode { NONE, VAULT, HANG, RUNUP, PULL, MANTLE, HOP, CORNER }
 
     /** What the animator needs: the move, how far into it (0..1), shuffle side, step phase, seconds in. */
     public record View(Mode mode, float progress, int side, float phase, float secs) {
@@ -49,6 +49,12 @@ public final class Parkour {
 
     private static final int VAULT_TICKS = 9, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 8;
     private static final float RUNUP_COST = 0.12f;
+    /** Hanging: the lip is this far above your feet, so straight-ish arms reach it (shoulders at 1.29). */
+    public static final double HANG_H = 1.78;
+    private static final int CORNER_TICKS = 6;
+    private static Direction cornerTo = Direction.NORTH;
+    private static float yawFrom, yawTo;
+    private static Vec3d[] handsFrom, handsTo, pullHands;
 
     // ---- your own state ----
     private static Mode mode = Mode.NONE;
@@ -89,7 +95,7 @@ public final class Parkour {
      * slides in towards the middle so it never grips air. Returns {right, left}.
      */
     public static Vec3d[] handPoints(net.minecraft.world.World w, Vec3d at, Direction d, double y) {
-        Vec3d face = new Vec3d(at.x + d.getOffsetX() * 0.39, y, at.z + d.getOffsetZ() * 0.39);
+        Vec3d face = new Vec3d(at.x + d.getOffsetX() * 0.36, y, at.z + d.getOffsetZ() * 0.36);
         Vec3d r = new Vec3d(-d.getOffsetZ(), 0, d.getOffsetX());
         Vec3d[] out = new Vec3d[2];
         for (int i = 0; i < 2; i++) {
@@ -106,11 +112,31 @@ public final class Parkour {
         return out;
     }
 
-    /** The wall you hang on faces this way (yaw), for turning the body to it. */
+    /** The wall you're on faces this way (yaw), for turning the body to it (turning smoothly round corners). */
     public static float hangYaw(PlayerEntity p) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        Direction d = mc.player != null && p.getId() == mc.player.getId() ? dir : p.getHorizontalFacing();
-        return d.asRotation();
+        if (mc.player != null && p.getId() == mc.player.getId()) {
+            if (mode == Mode.CORNER) return MathHelper.lerpAngleDegrees(ease(progress(Mode.CORNER, (System.nanoTime() - started) / 1e9f)), yawFrom, yawTo);
+            return dir.asRotation();
+        }
+        return p.getHorizontalFacing().asRotation();
+    }
+
+    /** On a wall (hanging, rounding a corner, pulling up, springing up): the body faces it. */
+    public static boolean onWall(PlayerEntity p) {
+        Mode m = view(p).mode();
+        return m == Mode.HANG || m == Mode.CORNER || m == Mode.PULL || m == Mode.MANTLE || m == Mode.HOP;
+    }
+
+    /** How much the hands are planted (1 hanging; letting go late in a pull-up as the body comes over). */
+    public static float handWeight(PlayerEntity p) {
+        View v = view(p);
+        return switch (v.mode()) {
+            case HANG, CORNER -> 1;
+            case PULL -> 1 - MathHelper.clamp((v.progress() - 0.6f) / 0.25f, 0, 1);
+            case MANTLE -> 1 - MathHelper.clamp((v.progress() - 0.45f) / 0.3f, 0, 1);
+            default -> 0;
+        };
     }
 
     /** Where this hanging player's hands hold, or null if they aren't hanging. */
@@ -118,12 +144,17 @@ public final class Parkour {
         MinecraftClient mc = MinecraftClient.getInstance();
         Vec3d at = p.getLerpedPos(td);
         if (mc.player != null && p.getId() == mc.player.getId()) {
-            if (mode != Mode.HANG) return null;
-            return handPoints(p.getWorld(), at, dir, ledgeY);
+            if (mode == Mode.HANG) return handPoints(p.getWorld(), at, dir, ledgeY);
+            if (mode == Mode.CORNER && handsFrom != null) {
+                float k = ease(progress(Mode.CORNER, (System.nanoTime() - started) / 1e9f));
+                return new Vec3d[] {handsFrom[0].lerp(handsTo[0], k), handsFrom[1].lerp(handsTo[1], k)};
+            }
+            if ((mode == Mode.PULL || mode == Mode.MANTLE) && pullHands != null) return pullHands;
+            return null;
         }
         Remote r = REMOTE.get(p.getId());
-        if (r == null || r.mode != Mode.HANG) return null;
-        return handPoints(p.getWorld(), at, p.getHorizontalFacing(), at.y + 2.05);
+        if (r == null || (r.mode != Mode.HANG && r.mode != Mode.CORNER)) return null;
+        return handPoints(p.getWorld(), at, p.getHorizontalFacing(), at.y + HANG_H);
     }
 
     // ---- everyone else, from the server ----
@@ -159,6 +190,7 @@ public final class Parkour {
             case MANTLE -> MANTLE_TICKS;
             case HOP -> HOP_TICKS;
             case RUNUP -> RUNUP_TICKS;
+            case CORNER -> CORNER_TICKS;
             default -> 0;
         };
         return t == 0 ? 0 : Math.min(1, secs / (t / 20f));
@@ -313,7 +345,7 @@ public final class Parkour {
                         Double up = lip(p, at, ledgeY, 0.5, 3.1);
                         if (up != null) hop(p, at, up);
                     }
-                } else if (lip(p, at, at.y, 1.9, 2.2) == null) drop(p, 0); // the lip went (broken, or slid off the end)
+                } else if (lip(p, at, at.y, HANG_H - 0.15, HANG_H + 0.15) == null) drop(p, 0); // the lip went (broken, or slid off the end)
             }
             case RUNUP -> {
                 if (sneak) set(Mode.NONE);
@@ -352,7 +384,7 @@ public final class Parkour {
     /** Catch the lip whose top is at l: hands on it, body hanging below. */
     private static boolean grab(ClientPlayerEntity p, Vec3d at, double l) {
         Vec3d hold = snap(at, l - 0.03);
-        Vec3d hang = new Vec3d(hold.x, l - 2.05, hold.z);
+        Vec3d hang = new Vec3d(hold.x, l - HANG_H, hold.z);
         if (!empty(p, column(hang.x, hang.y, hang.z, 1.8))) return false;
         ledgeY = l;
         p.setPosition(hang);
@@ -365,7 +397,7 @@ public final class Parkour {
     /** Spring up from a hang to the lip at l above. */
     private static void hop(ClientPlayerEntity p, Vec3d at, double l) {
         Vec3d hold = snap(at, l - 0.03);
-        Vec3d hang = new Vec3d(hold.x, l - 2.05, hold.z);
+        Vec3d hang = new Vec3d(hold.x, l - HANG_H, hold.z);
         if (!empty(p, column(at.x, at.y, at.z, hang.y + 1.8 - at.y)) || !empty(p, column(hang.x, hang.y, hang.z, 1.8))) return;
         from = at;
         to = hang;
@@ -451,6 +483,7 @@ public final class Parkour {
         from = at;
         to = end;
         ledgeY = top;
+        pullHands = handPoints(p.getWorld(), snap(at, top - 0.03), dir, top);
         p.setVelocity(Vec3d.ZERO);
         p.fallDistance = 0;
         set(m);
@@ -484,7 +517,7 @@ public final class Parkour {
                 if (side != 0) {
                     Vec3d along = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(side * 0.055);
                     Vec3d next = p.getPos().add(along);
-                    if (empty(p, column(next.x, next.y, next.z, 1.8)) && lip(p, next, next.y, 1.9, 2.2) != null) {
+                    if (empty(p, column(next.x, next.y, next.z, 1.8)) && lip(p, next, next.y, HANG_H - 0.15, HANG_H + 0.15) != null) {
                         p.move(MovementType.SELF, along);
                         phase += 0.55f;
                     } else if (corner(p, side)) phase += 0.55f;
@@ -517,6 +550,20 @@ public final class Parkour {
                     return true;
                 }
                 p.move(MovementType.SELF, new Vec3d(0, vy, 0));
+                return true;
+            }
+            case CORNER -> {
+                ticks++;
+                float k = ease(Math.min(1, ticks / (float) CORNER_TICKS));
+                Vec3d target = from.lerp(to, k);
+                p.setVelocity(Vec3d.ZERO);
+                p.fallDistance = 0;
+                p.move(MovementType.SELF, target.subtract(p.getPos()));
+                if (ticks >= CORNER_TICKS) {
+                    dir = cornerTo;
+                    set(Mode.HANG);
+                    ticks = 3;
+                }
                 return true;
             }
             case PULL, MANTLE, HOP -> {
@@ -568,9 +615,8 @@ public final class Parkour {
         if (wall(p, at, 0.6, 1.9)) {
             Vec3d hold = snap(at, ledgeY - 0.03);
             Vec3d hang = new Vec3d(hold.x, at.y, hold.z);
-            if (empty(p, column(hang.x, hang.y, hang.z, 1.8)) && lip(p, hang, hang.y, 1.9, 2.2) != null) {
-                p.setPosition(hang);
-                return true;
+            if (empty(p, column(hang.x, hang.y, hang.z, 1.8)) && lip(p, hang, hang.y, HANG_H - 0.15, HANG_H + 0.15) != null) {
+                return startCorner(p, keep, inner, at, hang);
             }
         }
         // Outside corner.
@@ -582,13 +628,27 @@ public final class Parkour {
             if (!empty(p, column(probe.x, probe.y, probe.z, 1.8)) || !wall(p, probe, 1.2, 1.9)) continue;
             Vec3d hold = snap(probe, ledgeY - 0.03);
             Vec3d hang = new Vec3d(hold.x, at.y, hold.z);
-            if (empty(p, column(hang.x, hang.y, hang.z, 1.8)) && lip(p, hang, hang.y, 1.9, 2.2) != null) {
-                p.setPosition(hang);
-                return true;
+            if (empty(p, column(hang.x, hang.y, hang.z, 1.8)) && lip(p, hang, hang.y, HANG_H - 0.15, HANG_H + 0.15) != null) {
+                return startCorner(p, keep, outer, at, hang);
             }
         }
         dir = keep;
         return false;
+    }
+
+    /** Hand over hand round the corner: the body moves and turns there over a few ticks. */
+    private static boolean startCorner(ClientPlayerEntity p, Direction old, Direction now, Vec3d at, Vec3d hang) {
+        net.minecraft.world.World w = p.getWorld();
+        handsFrom = handPoints(w, at, old, ledgeY);
+        handsTo = handPoints(w, hang, now, ledgeY);
+        yawFrom = old.asRotation();
+        yawTo = now.asRotation();
+        dir = old;
+        cornerTo = now;
+        from = at;
+        to = hang;
+        set(Mode.CORNER);
+        return true;
     }
 
     private static float ease(float x) {

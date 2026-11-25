@@ -681,7 +681,6 @@
   $('friend-search').addEventListener('input', renderFriends);
   document.querySelectorAll('.stab').forEach((b) => b.addEventListener('click', () => {
     const tab = b.dataset.stab;
-    if (tab === 'chat') return toast('Chat is coming soon.');
     document.querySelectorAll('.stab').forEach((x) => x.classList.toggle('on', x === b));
     $('friend-form').hidden = tab !== 'add';
     $('requests').hidden = tab !== 'add' || !((state.pty && state.pty.requests) || []).length;

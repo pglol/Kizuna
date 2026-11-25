@@ -1,4 +1,7 @@
 {
+  "0.73.0": [
+    "The friends panel no longer has a chat tab (there are no messages in the launcher)."
+  ],
   "0.72.0": [
     "Parties: invite online friends from the friends panel, accept invites with one click, and see what everyone in your party is doing.",
     "Joining a party takes you straight into the leader's game, and with Follow leader on you go wherever they go.",

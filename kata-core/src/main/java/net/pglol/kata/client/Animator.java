@@ -76,8 +76,13 @@ public final class Animator {
         float land, run, fast, crouch, air, gaitW;
         // Hanging: the body as a pendulum under the hands (radians, radians per second).
         float dp, dr, vp, vr, hvR, accR;
+        // ...and the legs swinging from the hips a beat behind it (relative to the body).
+        float lp, lr, lvp, lvr;
         boolean wasHang;
         int lastHurt;
+        // Hand over hand: where each hand is planted, and a hand on its way to a new spot.
+        Vec3d[] plant, stepFrom;
+        float[] stepT = {-1, -1};
         boolean leadRight;
         // Movement, from position (works for other players too).
         float fwd, side, accFwd, accSide, lastYaw, yawRate;
@@ -359,7 +364,7 @@ public final class Animator {
                     want = Presets.VAULT;
                     weight = MathHelper.sin(MathHelper.PI * Math.min(1, k * 1.1f));
                 }
-                case HANG -> want = Presets.HANG;
+                case HANG, CORNER -> want = Presets.HANG;
                 case RUNUP -> want = Presets.runUp(pv.phase());
                 case HOP -> want = k < 0.3f ? Pose.lerp(Presets.HANG, Presets.PULL, k / 0.3f) : Pose.lerp(Presets.PULL, Presets.REACH, Math.min(1, (k - 0.3f) / 0.4f));
                 case PULL -> want = k < 0.45f ? Pose.lerp(Presets.HANG, Presets.PULL, k / 0.45f)
@@ -388,56 +393,67 @@ public final class Animator {
      * spot on the ledge, whatever the body is doing.
      */
     private static void hang(PlayerEntity p, float td, State s, float dt, Pose out) {
-        boolean hanging = Parkour.view(p).mode() == Parkour.Mode.HANG;
+        Parkour.Mode mode = Parkour.view(p).mode();
+        boolean hanging = mode == Parkour.Mode.HANG || mode == Parkour.Mode.CORNER;
         float body = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
+        if (Parkour.onWall(p)) {
+            // Face the wall, not the camera (turning smoothly round corners).
+            out.set(Bone.ROOT, Pose.YAW, s.shown.get(Bone.ROOT, Pose.YAW) + MathHelper.wrapDegrees(Parkour.hangYaw(p) - body));
+        }
         if (hanging) {
-            // Face the wall, not the camera.
-            float wall = Parkour.hangYaw(p);
-            out.set(Bone.ROOT, Pose.YAW, s.shown.get(Bone.ROOT, Pose.YAW) + MathHelper.wrapDegrees(wall - body));
-            double yaw = Math.toRadians(wall);
+            double yaw = Math.toRadians(Parkour.hangYaw(p));
             double rx = -Math.cos(yaw), rz = -Math.sin(yaw); // the wall's right, as you face it
             double vR = ((p.getX() - p.prevX) * rx + (p.getZ() - p.prevZ) * rz) * 20;
             if (dt > 0) s.accR += ((float) ((vR - s.hvR) / dt) - s.accR) * Math.min(1, dt * 12);
             s.hvR = (float) vR;
-            if (!s.wasHang) {
+            if (!s.wasHang && mode == Parkour.Mode.HANG) {
                 // The catch: the legs carry on in towards the wall.
-                s.dp = 0;
-                s.dr = 0;
-                s.vp = -1.6f;
-                s.vr = 0;
+                s.dp = s.dr = s.vr = 0;
+                s.vp = -1.1f;
+                s.lp = s.lr = s.lvp = s.lvr = 0;
             }
             if (p.hurtTime > s.lastHurt) {
                 // Hit: knocked swinging away from where it came from.
                 float a = (float) Math.toRadians(p.getDamageTiltYaw());
-                s.vp += 2.6f * MathHelper.cos(a);
-                s.vr += 2.6f * MathHelper.sin(a);
+                s.vp += 2.4f * MathHelper.cos(a);
+                s.vr += 2.4f * MathHelper.sin(a);
             }
+            // Body: a pendulum from the hands (about half critically damped: a swing or two, then still).
+            // Legs: a shorter pendulum from the hips, pushed by the body's swing, so they follow it.
             int steps = Math.max(1, (int) Math.ceil(dt / (1 / 240f)));
-            float h = dt / steps, w2 = 16f, c = 1.5f, len = 1.9f;
+            float h = dt / steps, w2 = 16f, c = 4.2f, lw2 = 30f, lc = 6.5f, len = 1.9f;
             float drive = MathHelper.clamp(s.accR, -25, 25) / len;
             for (int i = 0; i < steps; i++) {
-                s.vp += (-w2 * MathHelper.sin(s.dp) - c * s.vp) * h;
-                s.vr += (-w2 * MathHelper.sin(s.dr) - c * s.vr - drive) * h;
+                float ap = -w2 * MathHelper.sin(s.dp) - c * s.vp;
+                float ar = -w2 * MathHelper.sin(s.dr) - c * s.vr - drive;
+                s.vp += ap * h;
+                s.vr += ar * h;
                 s.dp += s.vp * h;
                 s.dr += s.vr * h;
                 // The wall: feet can't swing through it; they bump off it.
-                if (s.dp < -0.05f) {
-                    s.dp = -0.05f;
-                    if (s.vp < 0) s.vp = -s.vp * 0.35f;
+                if (s.dp < -0.04f) {
+                    s.dp = -0.04f;
+                    if (s.vp < 0) s.vp = -s.vp * 0.3f;
                 }
-                s.dp = MathHelper.clamp(s.dp, -0.05f, 1.1f);
-                s.dr = MathHelper.clamp(s.dr, -1.1f, 1.1f);
+                s.dp = MathHelper.clamp(s.dp, -0.04f, 0.9f);
+                s.dr = MathHelper.clamp(s.dr, -0.9f, 0.9f);
+                s.lvp += (-lw2 * s.lp - lc * s.lvp - ap * 0.8f) * h;
+                s.lvr += (-lw2 * s.lr - lc * s.lvr - ar * 0.8f) * h;
+                s.lp = MathHelper.clamp(s.lp + s.lvp * h, -0.6f, 0.6f);
+                s.lr = MathHelper.clamp(s.lr + s.lvr * h, -0.6f, 0.6f);
             }
         } else {
             float k = (float) Math.exp(-dt * 10);
             s.dp *= k;
             s.dr *= k;
-            s.vp = s.vr = 0;
+            s.lp *= k;
+            s.lr *= k;
+            s.vp = s.vr = s.lvp = s.lvr = 0;
             s.accR = 0;
         }
         s.wasHang = hanging;
         s.lastHurt = p.hurtTime;
-        if (Math.abs(s.dp) + Math.abs(s.dr) > 1e-4f) {
+        if (Math.abs(s.dp) + Math.abs(s.dr) + Math.abs(s.lp) + Math.abs(s.lr) > 1e-4f) {
             // Swing the body about the grip (keep the grip where it was).
             float pitch0 = out.get(Bone.ROOT, Pose.PITCH), roll0 = out.get(Bone.ROOT, Pose.ROLL), yaw0 = out.get(Bone.ROOT, Pose.YAW);
             float pitch1 = pitch0 + (float) Math.toDegrees(s.dp), roll1 = roll0 + (float) Math.toDegrees(s.dr);
@@ -449,20 +465,66 @@ public final class Animator {
             out.offset[0] += a0.x - a1.x;
             out.offset[1] += a0.y - a1.y;
             out.offset[2] += a0.z - a1.z;
-            // Legs hang a beat behind the body, closer to straight down.
-            float lp = (float) Math.toDegrees(s.dp) * 0.45f, lr = (float) Math.toDegrees(s.dr) * 0.45f;
+            // The legs follow the body a beat late; the knees give a little as they swing.
+            float lp = (float) Math.toDegrees(s.lp), lr = (float) Math.toDegrees(s.lr);
             for (Bone b : new Bone[] {Bone.RIGHT_LEG, Bone.LEFT_LEG}) {
-                out.set(b, Pose.PITCH, out.get(b, Pose.PITCH) - lp);
-                out.set(b, Pose.ROLL, out.get(b, Pose.ROLL) - lr);
+                out.set(b, Pose.PITCH, out.get(b, Pose.PITCH) + lp);
+                out.set(b, Pose.ROLL, out.get(b, Pose.ROLL) + lr);
             }
+            float give = Math.min(25, Math.abs(lp) * 0.6f);
+            out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) + give);
+            out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) + give);
         }
-        if (!hanging) return;
-        Vec3d[] hands = Parkour.hands(p, td);
-        if (hands == null) return;
+        float weight = Parkour.handWeight(p);
+        Vec3d[] ideal = weight > 0 ? Parkour.hands(p, td) : null;
+        if (ideal == null) {
+            s.plant = null;
+            return;
+        }
+        Vec3d[] hands = step(s, ideal, dt);
         Vec3d pos = p.getLerpedPos(td);
         Matrix4f frame = armFrame(out).invert();
-        reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, new Vector3f(-5, 2, 0), toModel(hands[0], pos, body), frame);
-        reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, new Vector3f(5, 2, 0), toModel(hands[1], pos, body), frame);
+        reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, new Vector3f(-5, 2, 0), toModel(hands[0], pos, body), frame, weight);
+        reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, new Vector3f(5, 2, 0), toModel(hands[1], pos, body), frame, weight);
+    }
+
+    /**
+     * Hand over hand: a hand stays planted until its spot has moved on a bit, then reaches over to the new
+     * spot in a quick little arc. One hand at a time, the one that's furthest behind first.
+     */
+    private static Vec3d[] step(State s, Vec3d[] ideal, float dt) {
+        if (s.plant == null) {
+            s.plant = new Vec3d[] {ideal[0], ideal[1]};
+            s.stepFrom = new Vec3d[2];
+            s.stepT[0] = s.stepT[1] = -1;
+        }
+        Vec3d[] shown = new Vec3d[2];
+        boolean busy = s.stepT[0] >= 0 || s.stepT[1] >= 0;
+        if (!busy) {
+            int far = s.plant[0].squaredDistanceTo(ideal[0]) >= s.plant[1].squaredDistanceTo(ideal[1]) ? 0 : 1;
+            if (s.plant[far].squaredDistanceTo(ideal[far]) > 0.15 * 0.15) {
+                s.stepFrom[far] = s.plant[far];
+                s.stepT[far] = 0;
+            }
+        }
+        for (int i = 0; i < 2; i++) {
+            if (s.stepT[i] >= 0) {
+                s.stepT[i] += dt / 0.13f;
+                float k = Math.min(1, s.stepT[i]);
+                float e = k * k * (3 - 2 * k);
+                Vec3d v = s.stepFrom[i].lerp(ideal[i], e);
+                shown[i] = v.add(0, 0.07 * MathHelper.sin(MathHelper.PI * k), 0);
+                if (k >= 1) {
+                    s.plant[i] = ideal[i];
+                    s.stepT[i] = -1;
+                }
+            } else {
+                // A planted hand stays put on the edge (only drifting if the spot itself jumps far away).
+                if (s.plant[i].squaredDistanceTo(ideal[i]) > 0.6 * 0.6) s.plant[i] = ideal[i];
+                shown[i] = s.plant[i];
+            }
+        }
+        return shown;
     }
 
     private static Quaternionf rot(float rollDeg, float yawDeg, float pitchDeg) {
@@ -493,7 +555,7 @@ public final class Animator {
      * the distance (law of cosines), then the shoulder turns the bent arm onto the target. Out of reach,
      * the arm points straight at it.
      */
-    private static void reach(Pose out, Bone arm, Bone fore, Vector3f shoulder, Vector3f target, Matrix4f invFrame) {
+    private static void reach(Pose out, Bone arm, Bone fore, Vector3f shoulder, Vector3f target, Matrix4f invFrame, float weight) {
         Vector3f d = invFrame.transformPosition(new Vector3f(target)).sub(shoulder);
         float dist = MathHelper.clamp(d.length(), Math.abs(FORE - UPPER) + 0.2f, UPPER + FORE - 0.05f);
         float cosIn = MathHelper.clamp((UPPER * UPPER + FORE * FORE - dist * dist) / (2 * UPPER * FORE), -1, 1);
@@ -507,8 +569,9 @@ public final class Animator {
         if (Math.abs(y1) < 1e-4f) y1 = -1e-4f;
         float roll = (float) Math.atan2(-d.x / y1, d.y / y1);
         float pitch = (float) (Math.atan2(d.z, y1) - Math.atan2(hz, hy));
-        out.set(arm, MathHelper.wrapDegrees((float) Math.toDegrees(pitch)), 0, (float) Math.toDegrees(roll));
-        out.set(fore, (float) Math.toDegrees(bend), 0, 0);
+        float pd = MathHelper.wrapDegrees((float) Math.toDegrees(pitch)), rd = (float) Math.toDegrees(roll), bd = (float) Math.toDegrees(bend);
+        out.set(arm, MathHelper.lerp(weight, out.get(arm, Pose.PITCH), pd), MathHelper.lerp(weight, out.get(arm, Pose.YAW), 0), MathHelper.lerp(weight, out.get(arm, Pose.ROLL), rd));
+        out.set(fore, MathHelper.lerp(weight, out.get(fore, Pose.PITCH), bd), 0, 0);
     }
 
     /** A steady random number in -1..1 for each step. */
