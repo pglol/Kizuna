@@ -32,7 +32,10 @@ public final class ExtractionHud {
     /** On an island in a run right now. */
     public static boolean active() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        return view != null && mc.world != null && mc.world.getRegistryKey().getValue().getPath().equals(view.island());
+        // The island's world can be named after it with a suffix (Verdant Reach lives in "verdant2").
+        if (view == null || view.island().isEmpty() || mc.world == null) return false;
+        var key = mc.world.getRegistryKey().getValue();
+        return key.getNamespace().equals("aot_rpg") && key.getPath().startsWith(view.island());
     }
 
     static int secondsLeft() {

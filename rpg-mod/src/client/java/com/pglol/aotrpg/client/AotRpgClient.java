@@ -504,7 +504,10 @@ public final class AotRpgClient implements ClientModInitializer {
         });
         ClientPlayNetworking.registerGlobalReceiver(Net.Areas.ID, (payload, ctx) -> ClientState.areas = payload.areas());
         ClientPlayNetworking.registerGlobalReceiver(Net.MapFiles.ID, (payload, ctx) -> MapData.onFiles(payload));
-        ClientPlayNetworking.registerGlobalReceiver(Net.MapChunk.ID, (payload, ctx) -> MapData.onChunk(payload));
+        ClientPlayNetworking.registerGlobalReceiver(Net.MapChunk.ID, (payload, ctx) -> {
+            if (payload.name().startsWith("island:")) IslandChart.onChunk(payload);
+            else MapData.onChunk(payload);
+        });
         ClientPlayNetworking.registerGlobalReceiver(Net.Markers.ID, (payload, ctx) -> ClientState.markers = payload.markers());
         ClientPlayNetworking.registerGlobalReceiver(Net.Quests.ID, (payload, ctx) -> {
             ClientState.quests = payload.quests();

@@ -29,6 +29,8 @@ public final class QuestTracker {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (!Settings.tracker || mc.player == null || mc.options.hudHidden || mc.currentScreen != null || ClientState.profile == null) return;
         if (com.pglol.aotrpg.client.story.CutscenePlayer.active() || mc.getDebugHud().shouldShowDebugHud()) return;
+        // Out on an extraction island the run's own tasks (under the radar) are what count.
+        if (ExtractionHud.active() || mc.world == null || mc.world.getRegistryKey() != net.minecraft.world.World.OVERWORLD) return;
         boolean fight = mc.player.age - mc.player.getLastAttackedTime() < 160 || mc.player.hurtTime > 0;
         int w = 168, x = c.getScaledWindowWidth() - w - 8, y = Minimap.bottom + 8;
         Net.Objective o = ClientState.objective;

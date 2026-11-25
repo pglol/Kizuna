@@ -13,8 +13,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.Heightmap;
 
 /**
- * A chart of the island that fills in as the squad goes: the ground you've seen, coloured and
- * hill-shaded, with water and shorelines, drawn smooth (filtered) under the map's markers.
+ * A chart of the whole island: the server's picture of it (IslandMaps), kept current by what you see
+ * around you, coloured and hill-shaded, with water and shorelines, drawn smooth under the markers.
  */
 public final class IslandChart {
     private IslandChart() {}
@@ -28,6 +28,35 @@ public final class IslandChart {
     private static double x0, z0, bpt;
     private static int scan, dirtyTicks;
     private static boolean dirty;
+    private static String name = "";
+    private static byte[][] parts;
+
+    /** A piece of the server's picture of the whole island. */
+    public static void onChunk(Net.MapChunk c) {
+        if (!c.name().equals(name) || img == null) return;
+        if (parts == null || parts.length != c.total()) parts = new byte[c.total()][];
+        parts[c.index()] = c.data();
+        for (byte[] p : parts) if (p == null) return;
+        java.io.ByteArrayOutputStream all = new java.io.ByteArrayOutputStream();
+        for (byte[] p : parts) all.writeBytes(p);
+        parts = null;
+        try (NativeImage full = NativeImage.read(new java.io.ByteArrayInputStream(all.toByteArray()))) {
+            int w = Math.min(TEX, full.getWidth()), h = Math.min(TEX, full.getHeight());
+            for (int z = 0; z < h; z++) {
+                for (int x = 0; x < w; x++) {
+                    int i = z * TEX + x;
+                    if (known[i]) continue;
+                    int col = full.getColor(x, z);
+                    if ((col >>> 24) == 0) continue;
+                    img.setColor(x, z, col);
+                    known[i] = true;
+                }
+            }
+            tex.upload();
+        } catch (Exception e) {
+            com.pglol.aotrpg.AotRpg.LOG.warn("Could not read the island map", e);
+        }
+    }
 
     public static void tick(MinecraftClient mc) {
         Net.RunView v = ExtractionHud.view;
@@ -43,6 +72,10 @@ public final class IslandChart {
             key = k;
             img.fillRect(0, 0, TEX, TEX, 0);
             java.util.Arrays.fill(known, false);
+            // The whole island, rendered by the server; what you see around you keeps it current.
+            parts = null;
+            name = "island:" + k;
+            net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new Net.MapRequest(name));
             double half = v.radius() + 48;
             x0 = v.cx() - half;
             z0 = v.cz() - half;

@@ -155,6 +155,7 @@ public final class AotRpg implements ModInitializer {
         Prestige.register();
         BuildId.register();
         ServerUpdate.register();
+        IslandMaps.register();
         Weekly.register();
         RankedSeasons.register();
         WorldActivities.register();
@@ -467,6 +468,10 @@ public final class AotRpg implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(Net.QuestAction.ID, (payload, ctx) -> QUESTS.action(ctx.player(), payload.quest(), payload.action()));
         ServerPlayNetworking.registerGlobalReceiver(Net.SetWaypoint.ID, (payload, ctx) -> QUESTS.setWaypoint(ctx.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(Net.MapRequest.ID, (payload, ctx) -> {
+            if (payload.name().startsWith("island:")) {
+                IslandMaps.request(ctx.player(), payload.name());
+                return;
+            }
             byte[] data = PLACES.mapBytes(payload.name());
             if (data == null) return;
             int size = 512 * 1024, total = (data.length + size - 1) / size;
