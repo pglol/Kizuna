@@ -1,4 +1,8 @@
 {
+  "0.74.0": [
+    "Sign in with your Microsoft account: the launcher now uses Kizuna's approved Microsoft app, so you play as your real Minecraft account (the test sign-in is gone).",
+    "Your party and friends are tied to your real Minecraft name."
+  ],
   "0.73.0": [
     "The friends panel no longer has a chat tab (there are no messages in the launcher)."
   ],
