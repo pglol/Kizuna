@@ -108,21 +108,6 @@ public final class Presets {
         REACH.set(Bone.LEFT_LEG, -14, 0, 0).set(Bone.LEFT_SHIN, 30, 0, 0);
     }
 
-    /** Hanging, shuffling towards side (1 right, -1 left): the lead hand and foot open out that way in
-     *  steps and the others follow in. */
-    public static Pose hang(int side, float phase) {
-        Pose p = HANG.copy();
-        if (side == 0) return p;
-        float w = Math.abs((float) Math.sin(phase));
-        Bone leadArm = side > 0 ? Bone.RIGHT_ARM : Bone.LEFT_ARM, tailArm = side > 0 ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
-        Bone leadLeg = side > 0 ? Bone.RIGHT_LEG : Bone.LEFT_LEG, tailLeg = side > 0 ? Bone.LEFT_LEG : Bone.RIGHT_LEG;
-        p.set(leadArm, Pose.ROLL, p.get(leadArm, Pose.ROLL) + side * 22 * w);
-        p.set(tailArm, Pose.ROLL, p.get(tailArm, Pose.ROLL) + side * 10 * w);
-        p.set(leadLeg, Pose.ROLL, p.get(leadLeg, Pose.ROLL) + side * 18 * w);
-        p.set(tailLeg, Pose.ROLL, p.get(tailLeg, Pose.ROLL) + side * 8 * w);
-        return p;
-    }
-
     public static Pose of(String name) {
         return switch (name) {
             case "Guard" -> GUARD;

@@ -72,6 +72,59 @@ public final class Parkour {
     public static volatile Vec3d marker;
     public static volatile boolean markerReady;
     public static volatile Direction markerDir = Direction.NORTH;
+    /** Where each hand would hold (right, left), for the marker. */
+    public static volatile Vec3d[] markerHands;
+
+    // ---- the hands ----
+
+    /** Can a hand hold here: something solid just under the point, a little room above it. */
+    private static boolean holdable(net.minecraft.world.World w, Vec3d q) {
+        return !w.isSpaceEmpty(new Box(q.x - 0.03, q.y - 0.1, q.z - 0.03, q.x + 0.03, q.y - 0.01, q.z + 0.03))
+            && w.isSpaceEmpty(new Box(q.x - 0.03, q.y + 0.01, q.z - 0.03, q.x + 0.03, q.y + 0.25, q.z + 0.03));
+    }
+
+    /**
+     * Where the two hands go on a lip whose top is at y, in front of a body at 'at' facing d: a hand's
+     * width either side of centre, just over the edge. A hand whose side runs out (an end, a corner)
+     * slides in towards the middle so it never grips air. Returns {right, left}.
+     */
+    public static Vec3d[] handPoints(net.minecraft.world.World w, Vec3d at, Direction d, double y) {
+        Vec3d face = new Vec3d(at.x + d.getOffsetX() * 0.39, y, at.z + d.getOffsetZ() * 0.39);
+        Vec3d r = new Vec3d(-d.getOffsetZ(), 0, d.getOffsetX());
+        Vec3d[] out = new Vec3d[2];
+        for (int i = 0; i < 2; i++) {
+            int s = i == 0 ? 1 : -1;
+            out[i] = face;
+            for (double o = 0.24; o >= -0.001; o -= 0.04) {
+                Vec3d q = face.add(r.multiply(s * o));
+                if (holdable(w, q)) {
+                    out[i] = q;
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The wall you hang on faces this way (yaw), for turning the body to it. */
+    public static float hangYaw(PlayerEntity p) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        Direction d = mc.player != null && p.getId() == mc.player.getId() ? dir : p.getHorizontalFacing();
+        return d.asRotation();
+    }
+
+    /** Where this hanging player's hands hold, or null if they aren't hanging. */
+    public static Vec3d[] hands(PlayerEntity p, float td) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        Vec3d at = p.getLerpedPos(td);
+        if (mc.player != null && p.getId() == mc.player.getId()) {
+            if (mode != Mode.HANG) return null;
+            return handPoints(p.getWorld(), at, dir, ledgeY);
+        }
+        Remote r = REMOTE.get(p.getId());
+        if (r == null || r.mode != Mode.HANG) return null;
+        return handPoints(p.getWorld(), at, p.getHorizontalFacing(), at.y + 2.05);
+    }
 
     // ---- everyone else, from the server ----
     private record Remote(Mode mode, int side, long started) { }
@@ -376,6 +429,7 @@ public final class Parkour {
         Vec3d c = snap(at, y - 0.03);
         dir = keep;
         marker = new Vec3d(c.x + d.getOffsetX() * 0.31, y, c.z + d.getOffsetZ() * 0.31);
+        markerHands = handPoints(MinecraftClient.getInstance().world, c, d, y);
         markerDir = d;
         markerReady = ready;
     }
@@ -433,7 +487,8 @@ public final class Parkour {
                     if (empty(p, column(next.x, next.y, next.z, 1.8)) && lip(p, next, next.y, 1.9, 2.2) != null) {
                         p.move(MovementType.SELF, along);
                         phase += 0.55f;
-                    } else side = 0;
+                    } else if (corner(p, side)) phase += 0.55f;
+                    else side = 0;
                 }
                 return true;
             }
@@ -497,6 +552,43 @@ public final class Parkour {
                 return false;
             }
         }
+    }
+
+    /**
+     * Round a corner while shuffling towards side (1 right, -1 left): an inside corner (a wall that way)
+     * turns you to face it; an outside corner (the lip turns away) wraps you round onto the next face.
+     */
+    private static boolean corner(ClientPlayerEntity p, int side) {
+        Direction keep = dir;
+        Vec3d at = p.getPos();
+        Vec3d move = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(side);
+        // Inside corner.
+        Direction inner = side > 0 ? keep.rotateYClockwise() : keep.rotateYCounterclockwise();
+        dir = inner;
+        if (wall(p, at, 0.6, 1.9)) {
+            Vec3d hold = snap(at, ledgeY - 0.03);
+            Vec3d hang = new Vec3d(hold.x, at.y, hold.z);
+            if (empty(p, column(hang.x, hang.y, hang.z, 1.8)) && lip(p, hang, hang.y, 1.9, 2.2) != null) {
+                p.setPosition(hang);
+                return true;
+            }
+        }
+        // Outside corner.
+        Direction outer = side > 0 ? keep.rotateYCounterclockwise() : keep.rotateYClockwise();
+        Vec3d fwd = new Vec3d(keep.getOffsetX(), 0, keep.getOffsetZ());
+        for (double k = 0.35; k <= 0.75; k += 0.1) {
+            Vec3d probe = at.add(fwd.multiply(0.62)).add(move.multiply(k));
+            dir = outer;
+            if (!empty(p, column(probe.x, probe.y, probe.z, 1.8)) || !wall(p, probe, 1.2, 1.9)) continue;
+            Vec3d hold = snap(probe, ledgeY - 0.03);
+            Vec3d hang = new Vec3d(hold.x, at.y, hold.z);
+            if (empty(p, column(hang.x, hang.y, hang.z, 1.8)) && lip(p, hang, hang.y, 1.9, 2.2) != null) {
+                p.setPosition(hang);
+                return true;
+            }
+        }
+        dir = keep;
+        return false;
     }
 
     private static float ease(float x) {

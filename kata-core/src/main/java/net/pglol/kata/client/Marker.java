@@ -28,13 +28,15 @@ public final class Marker {
         VertexConsumer lines = ctx.consumers().getBuffer(RenderLayer.getLines());
         float pulse = 0.65f + 0.35f * (float) Math.sin(System.nanoTime() / 2.5e8);
         float r = Parkour.markerReady ? 0.35f : 1f, g = 1f, b = Parkour.markerReady ? 0.5f : 1f, a = Parkour.markerReady ? 0.95f : 0.55f * pulse + 0.2f;
-        // Along the edge, either side of the centre.
-        double ax = -d.getOffsetZ(), az = d.getOffsetX();
-        for (int s = -1; s <= 1; s += 2) {
-            double cx = m.x + ax * 0.25 * s, cz = m.z + az * 0.25 * s;
-            double hw = 0.08, depth = 0.06;
-            Box box = new Box(cx - Math.abs(ax) * hw - Math.abs(d.getOffsetX()) * depth, m.y, cz - Math.abs(az) * hw - Math.abs(d.getOffsetZ()) * depth,
-                cx + Math.abs(ax) * hw + Math.abs(d.getOffsetX()) * depth, m.y + 0.03, cz + Math.abs(az) * hw + Math.abs(d.getOffsetZ()) * depth);
+        // A bracket at each hand's spot (they slide in from ends and corners, so they're always on stone).
+        Vec3d[] hands = Parkour.markerHands;
+        if (hands == null) hands = new Vec3d[] {m};
+        double ax = Math.abs(d.getOffsetZ()), az = Math.abs(d.getOffsetX());
+        for (Vec3d h : hands) {
+            if (h == null) continue;
+            double hw = 0.07, depth = 0.05;
+            Box box = new Box(h.x - ax * hw - az * depth, h.y, h.z - az * hw - ax * depth,
+                h.x + ax * hw + az * depth, h.y + 0.03, h.z + az * hw + ax * depth);
             WorldRenderer.drawBox(ms, lines, box, r, g, b, a);
         }
         ms.pop();
