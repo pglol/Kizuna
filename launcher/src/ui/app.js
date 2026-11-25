@@ -56,7 +56,7 @@
     b.innerHTML = '';
     b.classList.toggle('none', !state.account);
     if (!state.account) {
-      b.textContent = state.test ? 'Test' : 'Sign in';
+      b.textContent = state.test ? `${(state.settings && state.settings.testName) || 'Tester'} · test` : 'Sign in';
       return;
     }
     b.append(face(state.account.name), document.createTextNode(state.account.name));
@@ -559,16 +559,28 @@
       $('signin-err').textContent = 'Pick a test name (3+ letters), different from your friends.';
       return;
     }
-    state.settings = await K.settings({ testName: n });
+    state.settings = await K.settings({ testName: n, testLogin: true });
     state.test = true;
     show('signin', false);
     renderAccount();
     updateDock();
   });
   $('folder').addEventListener('click', () => current() && K.openFolder(current().id, channelOf(current()).id));
-  $('account').addEventListener('click', () => (state.account ? openSettings() : show('signin', true)));
+  $('account').addEventListener('click', () => (state.account || state.test ? openSettings() : show('signin', true)));
   $('open-settings').addEventListener('click', openSettings);
   $('logs').addEventListener('click', () => K.openLogs());
+  $('check-update').addEventListener('click', async () => {
+    const b = $('check-update');
+    b.disabled = true;
+    b.textContent = 'Checking…';
+    const u = await K.checkUpdate().catch(() => null);
+    b.disabled = false;
+    b.textContent = 'Check now';
+    if (u && u.version) {
+      show('settings', false);
+      showUpdate(u.version);
+    } else toast(`You're on the newest version (${state.version || ''}).`);
+  });
   $('enter-code').addEventListener('click', () => {
     show('settings', false);
     openCode();
@@ -730,8 +742,8 @@
     $('ram').value = s.ram;
     $('ram-label').textContent = s.ram + ' GB';
     $('close-on-play').checked = !!s.closeOnPlay;
-    $('who').textContent = state.account ? state.account.name : 'Not signed in';
-    $('logout').hidden = !state.account;
+    $('who').textContent = state.account ? state.account.name : state.test ? `${state.settings.testName || 'Tester'} (test)` : 'Not signed in';
+    $('logout').hidden = !state.account && !state.test;
     show('settings', true);
   }
   $('ram').addEventListener('input', async (e) => {
@@ -740,6 +752,15 @@
   });
   $('close-on-play').addEventListener('change', async (e) => (state.settings = await K.settings({ closeOnPlay: e.target.checked })));
   $('logout').addEventListener('click', async () => {
+    if (state.test && !state.account) {
+      state.test = false;
+      state.settings = await K.settings({ testLogin: false });
+      renderAccount();
+      updateDock();
+      show('settings', false);
+      show('signin', true);
+      return;
+    }
     await K.logout();
     state.account = null;
     renderAccount();
@@ -781,6 +802,7 @@
     state.settings = init.settings;
     state.selected = init.settings.selected;
     state.testMode = !!init.testMode;
+    state.version = init.version;
     $('test-go').hidden = !state.testMode;
     $('test-name').hidden = !state.testMode;
     $('test-name').value = (state.settings && state.settings.testName) || '';
@@ -788,7 +810,11 @@
     state.friends = await K.friends();
     renderAccount();
     renderFriends();
+    // A test login is remembered: no sign-in window every time.
+    if (!state.account && state.testMode && state.settings.testLogin && state.settings.testName) state.test = true;
+    renderAccount();
+    updateDock();
     await loadHub();
-    if (!state.account) show('signin', true);
+    if (!state.account && !state.test) show('signin', true);
   })();
 })();
