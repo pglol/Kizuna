@@ -126,7 +126,7 @@ moves the body somewhere the physics wouldn't.
 6. **Joint limits.** Knees bend only forward; elbows only back. A joint folded the wrong way is mirrored back. Limbs keep at least 62 % of full length (they don't fold flat).
 7. **The body lays out cleanly.** Feet stay at least 0.78 from the neck, knees 0.62, and hands 0.3 from the pelvis. Parts that aren't joined never overlap: the minimum distance between them is 0.2.
 8. **IK has a natural pole.** Elbows hang down and slightly back and out; knees point forward. Solving is flip-free: no snapping when a target crosses shoulder height.
-9. **The head only translates with the body.** The look direction belongs to the player; the head's roll is reset every frame.
+9. **The head turns like a neck allows.** It translates with the body and turns towards the look only up to 75° either side of the chest, 60° up and 70° down. A limp head isn't looking anywhere. Its roll is reset every frame.
 
 ### 3.3 Control and loss of control
 10. **Ragdoll triggers** (any of these):
@@ -135,7 +135,9 @@ moves the body somewhere the physics wouldn't.
     - landing from 13 blocks or more, or from 7 or more without a brace
     - slamming into a wall at more than 0.55 blocks/tick (about 11 m/s)
     - landing at more than 0.62 blocks/tick across the ground (a tumble)
-    - flung through the air at more than 1.4 blocks/tick for 3 ticks
+    - flung through the air at more than 0.9 blocks/tick for 2 ticks
+    - stopping flight in mid-air while moving faster than 0.6 blocks/tick
+10b. **Real friction.** Sliding along a surface loses speed in proportion to how hard the part presses into it (μ = 0.6). A hand brushing a wall slides freely; a body lying on the ground stops.
 10a. **Bodies bounce.** A ragdoll part hitting a surface faster than about 4 m/s rebounds 30–45 % of that speed; slower contacts stop dead so the body settles. Only the parts that hit are pushed back, so striking an edge or a fence flips the body over it.
 11. **Limp means no will.** No walking, no sprinting, no sprint FOV. Position follows the pelvis.
 12. **Getting up** starts once the body has been still for 0.2 s (after at least 0.55 s), or after 2.2 s at most. It runs push-up or sit-up, then kneel, then stand, over 1.15 s. No part of the body goes below the ground while getting up.
@@ -152,7 +154,7 @@ moves the body somewhere the physics wouldn't.
     - If there's ground all the way to the wall, walk in and hop straight up, only as high as the hands need.
     - If there's a gap, leap it with just enough distance and height to arrive at the lip.
     - Otherwise it's an ordinary jump.
-19. **Leaps complete.** A ledge jump is planned through clear air before it starts: the lowest arc that's clear along the whole path. A leap that only grazes an edge slides past it; only a real block in the path ends it.
+19. **Leaps complete.** A ledge jump is planned through clear air before it starts: the lowest arc that's clear along the whole path. The body moves with the path's real velocity. A graze slides past. A real block in the way turns the leap into a free flight that keeps its speed, and for a second the hands still catch the lip it was aimed at.
 20. **Corners are hand over hand.** The leading hand reaches round the edge onto the next face first. The body follows; then the trailing hand lets go and comes round. Hands travel round the corner's edge, never through the block or across open air.
 21. **Shuffle rhythm.** One hand extends to its maximum and only then does the other close in. Stopping eases the cycle out smoothly.
 22. **Keys are wall-relative while hanging.**

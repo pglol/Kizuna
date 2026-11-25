@@ -43,10 +43,15 @@ public final class Parkour {
     /** Synced by ordinal: add new moves at the end. */
     // Momentum: last tick's velocity (what you hit things with), and how long you've been flying fast.
     private static Vec3d lastVel = Vec3d.ZERO;
+    private static boolean lastFlying;
+    // A leap cut short in the air carries on as a real flight: for a while the hands still go for the
+    // lip it was aimed at, in the direction it was aimed.
+    private static int flightTicks;
+    private static Direction flightDir = Direction.NORTH;
     private static int fastAir;
     /** Hitting a wall this fast (blocks a tick, ~11 m/s) knocks you flat; landing this fast across the
      *  ground tumbles you; flung through the air this fast you lose control. */
-    private static final double SLAM_SPEED = 0.55, TUMBLE_SPEED = 0.62, FLUNG_SPEED = 1.4;
+    private static final double SLAM_SPEED = 0.55, TUMBLE_SPEED = 0.62, FLUNG_SPEED = 0.9;
     // Walking in to a ledge before the hop: ticks so far (0 = not), its height and the way.
     private static int stepIn;
     private static double stepRise;
@@ -414,7 +419,9 @@ public final class Parkour {
             boolean slam = !ground && p.horizontalCollision && hs > SLAM_SPEED;
             boolean tumble = ground && !lastGround && hs > TUMBLE_SPEED;
             fastAir = !ground && p.getVelocity().horizontalLength() > FLUNG_SPEED ? fastAir + 1 : 0;
-            if (slam || tumble || fastAir >= 3) {
+            // Stopping flight at speed: nothing is holding you up any more and you're still going.
+            boolean dropped = lastFlying && !ground && p.getVelocity().length() > 0.6;
+            if (slam || tumble || dropped || fastAir >= 2) {
                 airVel = slam || tumble ? lastVel : p.getVelocity();
                 landRough = 1;
                 stoodUp = false;
@@ -463,6 +470,18 @@ public final class Parkour {
                         set(Mode.RUNUP);
                         break;
                     }
+                }
+                if (flightTicks > 0 && (ground || --flightTicks <= 0)) flightTicks = 0;
+                if (flightTicks > 0) {
+                    dir = flightDir;
+                    if (wall(p, at, 0.3, 1.7)) {
+                        Double l = lip(p, at, at.y, 1.3, 2.3);
+                        if (l != null && grab(p, at, l)) {
+                            flightTicks = 0;
+                            break;
+                        }
+                    }
+                    dir = p.getHorizontalFacing();
                 }
                 if (!ground && intent != Intent.NONE && wall(p, at, 0.3, 1.7)) reach(p, at, climbAsk);
                 else if (!ground && mode == Mode.NONE) reflex(p, sneak, false);
@@ -532,6 +551,7 @@ public final class Parkour {
         }
         lastGround = ground;
         lastVel = p.getVelocity();
+        lastFlying = p.getAbilities().flying;
         updateMarker(p, ground);
         syncOut();
     }
@@ -1162,14 +1182,24 @@ public final class Parkour {
                     float u = ease((k - 0.62f) / 0.38f);
                     target = new Vec3d(MathHelper.lerp(u, from.x, to.x), to.y, MathHelper.lerp(u, from.z, to.z));
                 }
-                p.setVelocity(Vec3d.ZERO);
                 p.fallDistance = 0;
-                p.move(MovementType.SELF, target.subtract(p.getPos()));
+                Vec3d was = p.getPos();
+                p.move(MovementType.SELF, target.subtract(was));
+                // The body really moves at the speed of the path, so whatever happens next, it carries.
+                p.setVelocity(p.getPos().subtract(was));
                 if (p.getPos().squaredDistanceTo(target) > 0.04) {
                     // Brushed something on the way: a leap slides past an edge it only grazes (the path
-                    // was checked clear before it started); only a real block in the way ends it.
-                    if (mode == Mode.HOP && empty(p, column(target.x, target.y + 0.05, target.z, 1.7))) p.setPosition(target);
-                    else set(Mode.NONE);
+                    // was checked clear before it started); a real block in the way turns it into a free
+                    // flight that keeps its speed and still catches the lip it was aimed at.
+                    if (mode == Mode.HOP && empty(p, column(target.x, target.y + 0.05, target.z, 1.7))) {
+                        p.setPosition(target);
+                        p.setVelocity(target.subtract(was));
+                    } else if (mode == Mode.HOP) {
+                        flightDir = hopTurn != null ? hopTurn : dir;
+                        flightTicks = 20;
+                        p.setVelocity(target.subtract(was).multiply(0.8));
+                        set(Mode.NONE);
+                    } else set(Mode.NONE);
                 }
                 else if (k >= 1) {
                     if (mode == Mode.HOP) {

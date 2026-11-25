@@ -819,7 +819,7 @@ public final class Animator {
         // Keep the shoulder (and the arm on it) out of a wall at the side: lean the whole body clear.
         for (int i = 0; i < 2; i++) {
             float w = smooth(s.sideW[i]);
-            double push = Math.max(0, 0.47 - s.sideHit[i]) * w;
+            double push = Math.min(0.05, Math.max(0, 0.36 - s.sideHit[i])) * w; // just off it: hug the wall, don't stand off
             if (push < 1e-4) continue;
             double sx = i == 0 ? rx : -rx, sz = i == 0 ? rz : -rz;
             Vector3f d = toModel(pos.add(-sx * push, 0, -sz * push), pos, body).sub(toModel(pos, pos, body));

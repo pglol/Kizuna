@@ -69,6 +69,16 @@ public abstract class PlayerModelMixin {
         // tilt (from a ragdoll, say) would stay on forever.
         m.head.roll = 0;
         add(m.head, p, Bone.HEAD);
+        // The look turns the head only as far as a neck can: about 75 degrees either side of where the
+        // chest faces, 60 up and 70 down. (A limp body's head isn't looking anywhere; Ragdoll poses it.)
+        if (net.pglol.kata.client.Parkour.view((net.minecraft.entity.player.PlayerEntity) entity).mode() != net.pglol.kata.client.Parkour.Mode.RAGDOLL) {
+            float bodyYaw = p.rad(Bone.ROOT, Pose.YAW) + p.rad(Bone.CHEST, Pose.YAW);
+            float bodyPitch = p.rad(Bone.ROOT, Pose.PITCH) + p.rad(Bone.CHEST, Pose.PITCH);
+            float y = net.minecraft.util.math.MathHelper.wrapDegrees((float) Math.toDegrees(m.head.yaw - bodyYaw));
+            m.head.yaw = bodyYaw + (float) Math.toRadians(net.minecraft.util.math.MathHelper.clamp(y, -75, 75));
+            float pt = (float) Math.toDegrees(m.head.pitch - bodyPitch);
+            m.head.pitch = bodyPitch + (float) Math.toRadians(net.minecraft.util.math.MathHelper.clamp(pt, -60, 70));
+        }
         add(m.rightArm, p, Bone.RIGHT_ARM);
         add(m.leftArm, p, Bone.LEFT_ARM);
         add(m.rightLeg, p, Bone.RIGHT_LEG);

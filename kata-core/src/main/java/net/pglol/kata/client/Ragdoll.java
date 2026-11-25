@@ -54,7 +54,7 @@ public final class Ragdoll {
         {RF, LF, 0.14}, {RK, LK, 0.14},
         {RH, PELVIS, 0.3}, {LH, PELVIS, 0.3}, {RH, LS, 0.3}, {LH, RS, 0.3}, {RE, LS, 0.25}, {LE, RS, 0.25},
     };
-    private static final float RADIUS = 0.09f, GRAVITY = 28.8f, FRICTION = 0.72f;
+    private static final float RADIUS = 0.09f, GRAVITY = 28.8f, MU = 0.6f; // MU: friction against the ground and walls
     private static final float MIN_TIME = 0.55f, MAX_TIME = 2.2f, GET_UP = 1.15f;
 
     private static final Map<Integer, Ragdoll> ACTIVE = new HashMap<>();
@@ -368,21 +368,35 @@ public final class Ragdoll {
             for (int k = 0; k < 6; k++) if (d[k] < d[best]) best = k;
         }
         // Hard hits rebound some of the speed going into the surface (a body bounces and, struck on one
-        // side only, flips over what it hit); soft contacts give it all up so the body settles.
-        switch (best) {
-            case 0 -> { double v = x[i] - px[i]; x[i] = b.minX; px[i] = x[i] + rebound(v); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
-            case 1 -> { double v = x[i] - px[i]; x[i] = b.maxX; px[i] = x[i] + rebound(v); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
-            case 2 -> { double v = y[i] - py[i]; y[i] = b.minY; py[i] = y[i] + rebound(v); px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
-            case 3 -> { double v = y[i] - py[i]; y[i] = b.maxY; py[i] = y[i] + rebound(v); px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
-            case 4 -> { double v = z[i] - pz[i]; z[i] = b.minZ; pz[i] = z[i] + rebound(v); px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); }
-            default -> { double v = z[i] - pz[i]; z[i] = b.maxZ; pz[i] = z[i] + rebound(v); px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); }
-        }
+        // side only, flips over what it hit); soft contacts give it all up so the body settles. Sliding
+        // along the surface, friction takes speed in proportion to how hard the point presses into it
+        // (real friction): a hand brushing a wall slides freely, a body lying on the ground stops.
+        int axis = best / 2;
+        double face = switch (best) { case 0 -> b.minX; case 1 -> b.maxX; case 2 -> b.minY; case 3 -> b.maxY; case 4 -> b.minZ; default -> b.maxZ; };
+        double[] pos = {x[i], y[i], z[i]};
+        double[] v = {x[i] - px[i], y[i] - py[i], z[i] - pz[i]};
+        double vn = v[axis];
+        boolean inward = best % 2 == 0 ? vn > 0 : vn < 0;
+        double into = inward ? Math.abs(vn) : 0;
+        pos[axis] = face;
+        int a1 = (axis + 1) % 3, a2 = (axis + 2) % 3;
+        double vt = Math.sqrt(v[a1] * v[a1] + v[a2] * v[a2]);
+        double keepT = vt > 1e-9 ? Math.max(0, 1 - MU * into / vt) : 0;
+        v[a1] *= keepT;
+        v[a2] *= keepT;
+        v[axis] = inward ? -rebound(vn) : v[axis];
+        x[i] = pos[0];
+        y[i] = pos[1];
+        z[i] = pos[2];
+        px[i] = pos[0] - v[0];
+        py[i] = pos[1] - v[1];
+        pz[i] = pos[2] - v[2];
     }
 
     /**
      * What comes back out of a hit going in at v (distance a step): above about 4 m/s, a third of it
-     * (a little more the harder the hit, up to 45 %); below that nothing. Returned as the previous
-     * position's offset, so the point moves back out at that speed.
+     * (a little more the harder the hit, up to 45 %); below that nothing. Returned as the
+     * speed into the surface times the share that comes back out.
      */
     private static double rebound(double v) {
         double s = Math.abs(v) * 240; // m/s
