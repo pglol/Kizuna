@@ -1,0 +1,16 @@
+hash-format = "sha256"
+
+[[files]]
+file = "mods/fabric-api.pw.toml"
+hash = "9e884d3ed93f3309077173c94a551b9cce6a0809ca668fc4a0b5aa94c89815c4"
+metafile = true
+
+[[files]]
+file = "mods/kata-core.pw.toml"
+hash = "74bc3aebbe238eeff46fd226f5b6e662a6615f0743fe27690281fc2322ec6052"
+metafile = true
+
+[[files]]
+file = "mods/modmenu.pw.toml"
+hash = "4df57770819b5d7283735b85d79162c86fdb13d9484a0074c5e11ac6eef39b9a"
+metafile = true

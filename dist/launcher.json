@@ -76,12 +76,12 @@
       "id": "kata",
       "name": "Kata",
       "short": "KT",
-      "tagline": "Martial arts duels in a ruined kingdom.",
-      "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
+      "tagline": "High school martial arts.",
+      "description": "A martial arts high school where every student fights in their own style: learn stances, chain your own combos, run the rooftops, and settle it on the mat.",
       "status": "soon",
       "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
-      "fabric": "0.16.10",
+      "fabric": "0.17.2",
       "accent": "#2f5d8a",
       "kanji": "\u578b",
       "theme": "peaks",
@@ -96,9 +96,27 @@
           "id": "public",
           "name": "Public",
           "note": "",
-          "address": "25.52.234.232:25565",
+          "address": "CHANGE_ME_KATA:25565",
           "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata/pack.toml",
           "addresses": []
+        },
+        {
+          "id": "dev",
+          "name": "Development",
+          "note": "Team test build. Test world: make a creative world and run /kata testzone.",
+          "address": "",
+          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata-dev/pack.toml",
+          "addresses": [
+            {
+              "label": "Test world",
+              "address": ""
+            },
+            {
+              "label": "Hamachi",
+              "address": "25.52.234.232:25566"
+            }
+          ],
+          "codeHash": "24844d566607d685f630522b6857a01d77fcf6e89837a82bdaf82700cbc320ff"
         }
       ]
     }
