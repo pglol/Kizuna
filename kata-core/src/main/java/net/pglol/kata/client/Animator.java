@@ -47,6 +47,13 @@ public final class Animator {
         set(Bone.LEFT_SHIN, 380, 0.8f);
     }
 
+    /** Arms tighten up when running, so they snap and fling instead of floating behind. */
+    private static final boolean[] ARM = new boolean[N];
+
+    static {
+        for (Bone b : new Bone[] {Bone.RIGHT_ARM, Bone.LEFT_ARM, Bone.RIGHT_FOREARM, Bone.LEFT_FOREARM}) ARM[b.ordinal()] = true;
+    }
+
     private static void set(Bone b, float k, float zeta) {
         STIFF[b.ordinal()] = k;
         DAMP[b.ordinal()] = zeta;
@@ -63,6 +70,7 @@ public final class Animator {
         boolean wasGround = true, first = true;
         double fallSpeed;
         float land, run, fast, crouch, air, gaitW;
+        boolean leadRight;
         // Movement, from position (works for other players too).
         float fwd, side, accFwd, accSide, lastYaw, yawRate;
     }
@@ -96,7 +104,8 @@ public final class Animator {
         for (int i = 0; i < steps; i++) {
             for (Bone b : Bone.values()) {
                 int bi = b.ordinal();
-                float k = STIFF[bi], c = 2 * DAMP[bi] * (float) Math.sqrt(k);
+                float k = STIFF[bi] * (ARM[bi] ? 1 + 1.6f * s.run : 1);
+                float c = 2 * DAMP[bi] * (ARM[bi] ? 1 - 0.2f * s.run : 1) * (float) Math.sqrt(k);
                 for (int a = 0; a < 3; a++) {
                     float acc = k * (want.get(b, a) - s.ang[bi][a]) - c * s.vel[bi][a];
                     s.vel[bi][a] += acc * h;
@@ -164,14 +173,17 @@ public final class Animator {
         float limb = p.limbAnimator.getPos(td);
         float speed = MathHelper.clamp(p.limbAnimator.getSpeed(td), 0, 1.2f);
         s.gaitW = approach(s.gaitW, special ? 0 : Math.min(1, speed), dt * 6);
-        float w = s.gaitW;
+        // In the air the stride stops and the jump pose takes over (quick in, so it reads on take-off).
+        boolean airborne = !(ground || special || p.isTouchingWater());
+        s.air = approach(s.air, airborne ? 1 : 0, dt * (airborne ? 12 : 9));
+        if (airborne && s.wasGround && p.getVelocity().y > 0) s.leadRight = MathHelper.cos(limb * 0.6662f) < 0;
+        float w = s.gaitW * (1 - s.air);
         // Fast walk (double-tap forward) and run (holding sprint) look different: see Move.
         float mvNow = (float) Math.sqrt(s.fwd * s.fwd + s.side * s.side);
         Move.Mode md = Move.of(p, mvNow);
         s.run = approach(s.run, md == Move.Mode.RUN && ground ? 1 : 0, dt * 4);
         s.fast = approach(s.fast, md == Move.Mode.FAST && ground ? 1 : 0, dt * 4);
         s.crouch = approach(s.crouch, p.isInSneakingPose() ? 1 : 0, dt * 7);
-        s.air = approach(s.air, ground || special || p.isTouchingWater() ? 0 : 1, dt * 7);
 
         // Landing: the body sinks into it and comes back up, deeper after a long fall.
         double vy = p.getVelocity().y;
@@ -216,10 +228,18 @@ public final class Animator {
         float armAmp = (34 + 24 * fast) * rough * (1 - 0.6f * Math.abs(sideK));
         float rSwing = -c * armAmp * w, lSwing = c * armAmp * w;
         float back = 68 * rough;
-        o.set(Bone.RIGHT_ARM, Pose.PITCH, MathHelper.lerp(run, rSwing, w * (back + c * 9)));
-        o.set(Bone.LEFT_ARM, Pose.PITCH, MathHelper.lerp(run, lSwing, w * (back - c * 9)));
-        o.set(Bone.RIGHT_ARM, Pose.ROLL, 5 + w * (2 + 9 * fast + 13 * run));
-        o.set(Bone.LEFT_ARM, Pose.ROLL, -5 - w * (2 + 9 * fast + 13 * run));
+        o.set(Bone.RIGHT_ARM, Pose.PITCH, MathHelper.lerp(run, rSwing, w * (back + c * 15)));
+        o.set(Bone.LEFT_ARM, Pose.PITCH, MathHelper.lerp(run, lSwing, w * (back - c * 15)));
+        o.set(Bone.RIGHT_ARM, Pose.ROLL, 5 + w * (2 + 9 * fast + 22 * run));
+        o.set(Bone.LEFT_ARM, Pose.ROLL, -5 - w * (2 + 9 * fast + 22 * run));
+        // The arms answer the body: flung out of turns, dragged behind a strafe, thrown back harder as
+        // you set off. Both swing the same way (same roll as the body's lean, so the hands trail it).
+        float swingOut = w * (MathHelper.clamp(s.yawRate * 0.05f, -16, 16) + sideK * 14) * (0.5f + 0.5f * (fast + run));
+        add(o, Bone.RIGHT_ARM, Pose.ROLL, swingOut);
+        add(o, Bone.LEFT_ARM, Pose.ROLL, swingOut);
+        float kick = run * w * MathHelper.clamp(s.accFwd * 1.6f, -10, 16);
+        add(o, Bone.RIGHT_ARM, Pose.PITCH, kick);
+        add(o, Bone.LEFT_ARM, Pose.PITCH, kick);
         // Swept back, the arms turn so the palms face up and back.
         o.set(Bone.RIGHT_ARM, Pose.YAW, w * run * 12);
         o.set(Bone.LEFT_ARM, Pose.YAW, -w * run * 12);
@@ -273,20 +293,32 @@ public final class Animator {
             o.offset[1] += Presets.CROUCH_DROP * s.crouch;
         }
 
-        // In the air: tuck going up, reach for the ground coming down, arms out for balance.
+        // In the air: one leg out. The leg that was forward at take-off drives up, knee high; the other
+        // trails behind; the opposite arm reaches forward. Coming down, the legs gather under the body
+        // and the arms open for balance, ready for the landing.
         float rising = (float) MathHelper.clamp(vy / 0.42, -1, 1);
-        float up = Math.max(0, rising), down = Math.max(0, -rising);
-        rKnee += s.air * (60 * up + 14 * down);
-        lKnee += s.air * (28 * up + 20 * down);
-        add(o, Bone.RIGHT_LEG, Pose.PITCH, s.air * (-34 * up + 6 * down));
-        add(o, Bone.LEFT_LEG, Pose.PITCH, s.air * (8 * up - 10 * down));
-        add(o, Bone.RIGHT_ARM, Pose.ROLL, s.air * (6 + 22 * down));
-        add(o, Bone.LEFT_ARM, Pose.ROLL, -s.air * (6 + 22 * down));
-        add(o, Bone.RIGHT_ARM, Pose.PITCH, -s.air * 18 * up);
-        add(o, Bone.LEFT_ARM, Pose.PITCH, -s.air * 12 * up);
-        add(o, Bone.RIGHT_FOREARM, Pose.PITCH, s.air * 30);
-        add(o, Bone.LEFT_FOREARM, Pose.PITCH, s.air * 30);
-        add(o, Bone.CHEST, Pose.PITCH, s.air * (6 * up - 4 * down));
+        float up = Math.max(0, rising), down = Math.max(0, -rising), mid = 1 - up - down;
+        float ai = s.air;
+        float leadHip = -55 * up - 42 * mid - 24 * down, leadKnee = 88 * up + 70 * mid + 38 * down;
+        float trailHip = 30 * up + 18 * mid + 4 * down, trailKnee = 32 * up + 34 * mid + 26 * down;
+        Bone leadLeg = s.leadRight ? Bone.RIGHT_LEG : Bone.LEFT_LEG, trailLeg = s.leadRight ? Bone.LEFT_LEG : Bone.RIGHT_LEG;
+        add(o, leadLeg, Pose.PITCH, ai * leadHip);
+        add(o, trailLeg, Pose.PITCH, ai * trailHip);
+        if (s.leadRight) {
+            rKnee += ai * leadKnee;
+            lKnee += ai * trailKnee;
+        } else {
+            lKnee += ai * leadKnee;
+            rKnee += ai * trailKnee;
+        }
+        Bone fwdArm = s.leadRight ? Bone.LEFT_ARM : Bone.RIGHT_ARM, backArm = s.leadRight ? Bone.RIGHT_ARM : Bone.LEFT_ARM;
+        add(o, fwdArm, Pose.PITCH, ai * (-48 * up - 34 * mid - 18 * down));
+        add(o, backArm, Pose.PITCH, ai * (32 * up + 20 * mid - 8 * down));
+        add(o, Bone.RIGHT_ARM, Pose.ROLL, ai * (8 + 20 * down));
+        add(o, Bone.LEFT_ARM, Pose.ROLL, -ai * (8 + 20 * down));
+        add(o, Bone.RIGHT_FOREARM, Pose.PITCH, ai * 28);
+        add(o, Bone.LEFT_FOREARM, Pose.PITCH, ai * 28);
+        add(o, Bone.CHEST, Pose.PITCH, ai * (9 * up + 4 * mid - 2 * down));
 
         // Landing: sink, with the legs bending just enough to keep the feet down (simple leg IK).
         float sink = land * 4.5f;

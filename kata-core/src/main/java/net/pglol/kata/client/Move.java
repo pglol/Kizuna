@@ -21,7 +21,7 @@ public final class Move {
     public enum Mode { WALK, FAST, RUN }
 
     /** Ground speed against Minecraft's sprint speed (walking is 0.77 of it). */
-    private static final float FAST_SPEED = 0.885f, RUN_SPEED = 1.12f;
+    private static final float FAST_SPEED = 0.885f, RUN_SPEED = 1.25f;
     private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (5f * 20), FAST_REGEN = 1 / (12f * 20);
 
     public static Mode mode = Mode.WALK;
@@ -71,6 +71,19 @@ public final class Move {
         };
     }
 
+    /**
+     * Where your next footstep sound falls (Minecraft's distance units, 0.6 a block): one per footfall of
+     * the animation, which steps once every half cycle of the limb swing, instead of Minecraft's fixed
+     * one per 1.67 blocks that falls behind the feet when running.
+     */
+    public static float nextStep(PlayerEntity p, float traveled) {
+        double perTick = p.getVelocity().horizontalLength();
+        float limb = Math.max(0.3f, p.limbAnimator.getSpeed());
+        float ticksPerStep = (float) Math.PI / (0.6662f * limb);
+        float units = (float) (perTick * ticksPerStep * 0.6);
+        return traveled + Math.max(0.35f, Math.min(1, units));
+    }
+
     /** Multiplier on the local player's ground speed. */
     public static float speedFactor(PlayerEntity p) {
         if (!p.isSprinting()) return 1;
@@ -86,6 +99,6 @@ public final class Move {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && p.getId() == mc.player.getId()) return mode;
         if (!p.isSprinting()) return Mode.WALK;
-        return speed > 5.9f ? Mode.RUN : Mode.FAST;
+        return speed > 6.4f ? Mode.RUN : Mode.FAST;
     }
 }

@@ -14,7 +14,8 @@
     "HudMixin",
     "HotbarScrollMixin",
     "RunFeelMixin",
-    "SprintDustMixin"
+    "SprintDustMixin",
+    "StepSoundMixin"
   ],
   "injectors": {
     "defaultRequire": 1
