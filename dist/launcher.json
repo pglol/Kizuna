@@ -45,6 +45,7 @@
         "name": "AoT RPG mod"
       },
       "hostMode": "mod",
+      "version": "0.1",
       "channels": [
         {
           "id": "public",
@@ -135,6 +136,7 @@
         "name": "Kata Core"
       },
       "hostMode": "pack",
+      "version": "0.01",
       "channels": [
         {
           "id": "public",

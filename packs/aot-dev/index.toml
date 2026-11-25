@@ -55,7 +55,7 @@ metafile = true
 
 [[files]]
 file = "mods/aot-rpg.pw.toml"
-hash = "f3fbd95ad999290f273a60334451d8f0cda03312a3706d7fafac4ff73f12165f"
+hash = "5cf701964de64d3ba5f7272422044bfc2334785e3be38d12e5763fbba46662f8"
 metafile = true
 
 [[files]]
