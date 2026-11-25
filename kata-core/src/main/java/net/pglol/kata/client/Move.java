@@ -3,6 +3,9 @@ package net.pglol.kata.client;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.minecraft.client.util.InputUtil;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * How you're moving and how much you have left.
@@ -18,8 +21,8 @@ public final class Move {
     public enum Mode { WALK, FAST, RUN }
 
     /** Ground speed against Minecraft's sprint speed (walking is 0.77 of it). */
-    private static final float FAST_SPEED = 0.885f, RUN_SPEED = 0.95f;
-    private static final float DRAIN = 1 / (7f * 20), REGEN = 1 / (5f * 20), FAST_REGEN = 1 / (12f * 20);
+    private static final float FAST_SPEED = 0.885f, RUN_SPEED = 1.12f;
+    private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (5f * 20), FAST_REGEN = 1 / (12f * 20);
 
     public static Mode mode = Mode.WALK;
     /** 0..1 */
@@ -34,7 +37,9 @@ public final class Move {
             mode = Mode.WALK;
             return;
         }
-        boolean held = mc.options.sprintKey.isPressed() && mc.currentScreen == null;
+        // The sprint key physically held down (with "Sprint: Toggle" the key reads as held after one
+        // press, which would make double-tapping forward a run).
+        boolean held = mc.currentScreen == null && physicallyHeld(mc);
         boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater();
         if (!p.isSprinting() || free) mode = Mode.WALK;
         else mode = held && !winded ? Mode.RUN : Mode.FAST;
@@ -46,6 +51,24 @@ public final class Move {
         } else if (rest > 0) rest--;
         else stamina = Math.min(1, stamina + (mode == Mode.FAST ? FAST_REGEN : REGEN));
         if (winded && stamina >= 0.25f) winded = false;
+    }
+
+    private static boolean physicallyHeld(MinecraftClient mc) {
+        InputUtil.Key k = KeyBindingHelper.getBoundKeyOf(mc.options.sprintKey);
+        long win = mc.getWindow().getHandle();
+        if (k.getCategory() == InputUtil.Type.MOUSE) return GLFW.glfwGetMouseButton(win, k.getCode()) == GLFW.GLFW_PRESS;
+        if (k.getCode() < 0) return false;
+        return InputUtil.isKeyPressed(win, k.getCode());
+    }
+
+    /** Field of view: a fast walk barely widens it; a run pushes it out a little more than a sprint. */
+    public static float fov(PlayerEntity p, float vanilla) {
+        if (!p.isSprinting() || vanilla <= 1) return vanilla;
+        return switch (mode) {
+            case FAST -> 1 + (vanilla - 1) * 0.25f;
+            case RUN -> 1 + (vanilla - 1) * 1.35f;
+            default -> vanilla;
+        };
     }
 
     /** Multiplier on the local player's ground speed. */
@@ -63,6 +86,6 @@ public final class Move {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && p.getId() == mc.player.getId()) return mode;
         if (!p.isSprinting()) return Mode.WALK;
-        return speed > 5.25f ? Mode.RUN : Mode.FAST;
+        return speed > 5.9f ? Mode.RUN : Mode.FAST;
     }
 }

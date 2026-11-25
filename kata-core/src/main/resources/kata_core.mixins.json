@@ -12,7 +12,9 @@
     "PlayerRendererMixin",
     "MoveSpeedMixin",
     "HudMixin",
-    "HotbarScrollMixin"
+    "HotbarScrollMixin",
+    "RunFeelMixin",
+    "SprintDustMixin"
   ],
   "injectors": {
     "defaultRequire": 1
