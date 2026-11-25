@@ -14,7 +14,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class KataClient implements ClientModInitializer {
     private static KeyBinding editorKey;
-    public static KeyBinding lockKey;
+    public static KeyBinding lockKey, deckKey;
     private static long lastFrame;
     private static boolean openEditor;
 
@@ -25,6 +25,7 @@ public final class KataClient implements ClientModInitializer {
             openEditor = true;
             return 1;
         })));
+        deckKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.deck", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_K, "category.kata_core"));
         lockKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.lock_on", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.kata_core"));
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.FightOf.ID,
             (payload, ctx) -> Fight.remote(payload.entity(), payload.kind(), payload.a()));
@@ -57,6 +58,7 @@ public final class KataClient implements ClientModInitializer {
         // Kata is played in third person, always (the body is the point).
         if (mc.player != null && mc.options.getPerspective() != Perspective.THIRD_PERSON_BACK) mc.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         while (editorKey.wasPressed()) if (mc.currentScreen == null) openEditor = true;
+        while (deckKey.wasPressed()) if (mc.currentScreen == null && mc.player != null) mc.setScreen(new DeckScreen());
         if (openEditor && mc.player != null) {
             openEditor = false;
             mc.setScreen(new PoseEditorScreen());

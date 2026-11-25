@@ -45,6 +45,34 @@ public final class Hud {
         float st = Move.shownStamina;
         bar(c, sx, sy, sw, 2, 0, 0);
         fill(c, sx, sy, sw, 2, st, Move.stamina < 0.25f ? 0xFF9C8F6A : 0xFFF2E6B8);
+
+        style(c, mc, w, h);
+    }
+
+    /**
+     * Bottom left: the style you fight in and the key for the deck. Squared up to someone, what your
+     * next click throws (and the heavy behind a hold), with the heavy's charge while you wind it up.
+     */
+    private static void style(DrawContext c, MinecraftClient mc, int w, int h) {
+        var tr = mc.textRenderer;
+        int x = 8, y = h - 24;
+        String name = Deck.style().name().toUpperCase();
+        String key = KataClient.deckKey.getBoundKeyLocalizedText().getString();
+        c.fill(x - 3, y - 3, x + tr.getWidth(name) + 4, y + 10, 0x70000000);
+        c.drawText(tr, name, x, y, 0xFFE8D6C8, false);
+        c.drawText(tr, "[" + key + "] Deck", x + tr.getWidth(name) + 8, y, 0xFF9AA0AC, true);
+        if (!Fight.locked() && !Fight.chargingHeavy()) return;
+        var light = Fight.nextLight();
+        var heavy = Fight.nextHeavy();
+        int ly = y - 12;
+        c.drawText(tr, "Click  " + (light == null ? "-" : light.name()), x, ly - 10, 0xFFF2F2F5, true);
+        c.drawText(tr, "Hold   " + (heavy == null ? "-" : heavy.name()), x, ly, 0xFFE0A060, true);
+        if (Fight.chargingHeavy()) {
+            float k = Fight.charge();
+            int bw = 60;
+            c.fill(x, ly + 10, x + bw, ly + 12, 0x60000000);
+            c.fill(x, ly + 10, x + Math.round(bw * k), ly + 12, k >= 1 ? 0xFFFFD27A : 0xFFE0A060);
+        }
     }
 
     /** The track (dark, with a thin outline), and optionally a trail fill. */

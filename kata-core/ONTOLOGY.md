@@ -181,34 +181,52 @@ moves the body somewhere the physics wouldn't.
 
 ---
 
-### 3.9 Hand to hand (fists)
+### 3.9 Hand to hand
+
+**Entities:**
+- **Style:** a fighting style, such as Taijutsu. It has a pool of moves (its move tree) and a starter deck.
+- **Move:** a strike, with these properties:
+  - path: straight, hook, uppercut, overhand, palm, backfist or elbow
+  - lead or rear hand
+  - light or heavy
+  - front or back (back moves spin you round)
+  - contact and recovery time
+  - damage and knockback
+- **Deck:** for each of the four stance quadrants, three light slots (a chain thrown in order) and one heavy slot. You choose the moves on the deck screen (K); each slot only takes moves that fit it.
+- **StanceQuadrant:** top-right, top-left, bottom-right or bottom-left, as body orientation relative to the locked opponent.
+
+**Rules:**
 31. **Controls.** With bare hands:
-    - left click punches (no block breaking)
-    - right click held guards
-    - R locks onto an opponent, nearest the middle of the view; raising a guard with no lock locks onto whoever's in front
-    Locked on, the camera holds the opponent and the mouse no longer turns you.
-32. **Stance is body orientation, not guard direction.** There are four quadrants relative to the locked opponent:
-    - top-right and top-left: chest to them, the body turned about 30° either way
-    - bottom-right and bottom-left: back to them, turned about 145°
-    The stance diamond at your feet (shown only while locked on) points at the opponent and shades the quadrant you're in.
-33. **Guarding is omnidirectional.** Every hit with an attacker is blocked while guarding, whatever the stance; only damage that bypasses shields gets through. A blocked hit still shoves you. It jolts the guard, and it turns you: the stance changes side.
-34. **Manual stance switching.** Locked on and guarding, a mouse flick turns you into the quadrant it points at: up = top, down = bottom, left/right = side.
-35. **Attack routing (Combat Deck, fists).** The stance you're in picks the punch, and each punch ends in a new stance:
-
-    | From | Punch | Ends in | Damage |
-    |---|---|---|---|
-    | Top-right | Jab (lead hand) | Top-left | 2 |
-    | Top-left | Cross (rear hand) | Top-right | 3 |
-    | Bottom-right | Spinning backfist | Top-right | 4 |
-    | Bottom-left | Spinning back elbow | Top-left | 3.5 |
-
-    So repeated clicks flow jab, cross, jab, cross. A click during a punch chains the next as soon as it's done. You can't punch with the guard up.
-36. **Landing a punch.** It must be within 3 blocks of the eyes and in front of you; the server checks both. Combos aren't eaten by hit invulnerability. A landed punch knocks the target back a little.
-37. **Footwork.** Locked on:
-    - in a top stance you walk in 15 % faster and back off 15 % slower
-    - in a bottom stance it's the reverse
+    - left click: a quick click (released within 0.16 s) throws the next light in the chain; holding winds up the heavy, thrown on release
+    - right click held: guard
+    - R: lock on; raising a guard with no lock locks onto whoever's in front
+    - K: the deck
+    Locked on, the camera holds the opponent.
+32. **Stance is body orientation, not guard direction.**
+    - top stances: chest to them, turned about 30°
+    - back stances: back turned, about 145°
+    The diamond at your feet (shown while locked on) shades the quadrant you're in.
+33. **Stance changes only by intent.** A distinct mouse drag while locked on turns you into that quadrant: up = top, down = back, left/right = side. Clicking never switches sides by itself. Only a spinning back move turns you, from a back stance to the top stance on the same side.
+34. **Chains.** Quick clicks run the quadrant's light chain in order, and a click during a strike queues the next one. The chain resets after 0.55 s without a strike, or after a heavy.
+35. **Light vs heavy.**
+    - **Lights:** fast, with contact 75–160 ms after the press, and low damage.
+    - **Heavies:** wound up by holding, with contact about 130–170 ms after the release. Power grows with hold time up to 0.8 s: 0.5–1× damage and up to 1.2× knockback. A fully charged heavy breaks guard: the guard drops for 0.7 s and the hit lands.
+    - Getting hit while winding up cancels the heavy.
+36. **Strikes have mass.**
+    - The fist travels a real path from the guard to the target. IK solves the arm, with the elbow behind straight punches and out to the side for hooks, backfists and elbows.
+    - It accelerates into contact, then holds briefly on a hit: 50 ms for a light, 90 ms for a heavy.
+    - Hips and chest turn through the strike, the weight shifts forward, and the body steps in behind it, a step that grows with a heavy's charge.
+37. **Guarding is omnidirectional.** It blocks every hit with an attacker except shield-bypassing damage and full heavies. A block still shoves you and jolts the guard. You can't strike with the guard up.
+38. **Landing a strike.** The target must be within 3 blocks of the eyes and in front of you; the server checks both. Combos aren't eaten by hit invulnerability.
+39. **Footwork.** Locked on:
+    - a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse
     - guarding multiplies speed by 0.75
-38. **Training dummy** (`/kata dummy`, and three on the test zone's dojo mat). It turns to face the nearest player, takes hits and knockback, never goes down (a finishing hit resets it), and heals when left alone.
+    - winding up a heavy multiplies it by 0.8
+40. **HUD.** Bottom left shows your style and the deck key. While locked on or winding up, it shows what a click and a hold will throw, plus the heavy's charge.
+41. **Taijutsu move pool.**
+    - Lights: jab, straight, lead hook, rear hook, uppercut, palm jab; and from the back stances, spinning backfist.
+    - Heavies: driving palm, overhand; and from the back stances, spinning elbow.
+42. **Training dummy** (`/kata dummy`, and three on the test zone's dojo mat). It faces the nearest player, takes hits and knockback, never goes down, and heals when left alone.
 
 ## 4. Not yet covered (next for the core)
 - **More of the Combat Deck:** kicks, grabs, weapon decks, guard breaks.

@@ -1,0 +1,127 @@
+package net.pglol.kata.client;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import net.fabricmc.loader.api.FabricLoader;
+import net.pglol.kata.Fighting;
+import net.pglol.kata.Fighting.Move;
+import net.pglol.kata.Fighting.Style;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+/**
+ * Your combat deck: the style you fight in and, for each stance quadrant, which of its moves sit in
+ * the three light slots (the chain, in order) and the heavy slot. Kept in config/kizuna/kata_deck.json.
+ */
+public final class Deck {
+    private Deck() {}
+
+    private static final class Saved {
+        String style;
+        int[][] slots;
+    }
+
+    private static Style style = Fighting.TAIJUTSU;
+    private static int[][] slots = copy(Fighting.TAIJUTSU.starter());
+    private static boolean loaded;
+
+    private static Path file() {
+        return FabricLoader.getInstance().getConfigDir().resolve("kizuna").resolve("kata_deck.json");
+    }
+
+    static void load() {
+        if (loaded) return;
+        loaded = true;
+        try {
+            Path f = file();
+            if (!Files.exists(f)) return;
+            Saved s = new Gson().fromJson(Files.readString(f), Saved.class);
+            for (Style st : Fighting.STYLES) if (st.name().equals(s.style)) style = st;
+            if (s.slots != null && s.slots.length == 4) {
+                int[][] in = copy(style.starter());
+                for (int q = 0; q < 4; q++) {
+                    for (int i = 0; i < Fighting.SLOTS && s.slots[q] != null && i < s.slots[q].length; i++) {
+                        Move m = style.move(s.slots[q][i]);
+                        in[q][i] = m != null && m.fits(q, i) ? s.slots[q][i] : -1;
+                    }
+                    if (lights(in[q]) == 0) in[q] = style.starter()[q].clone(); // a quadrant always has a light
+                }
+                slots = in;
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    static void save() {
+        try {
+            Saved s = new Saved();
+            s.style = style.name();
+            s.slots = copy(slots);
+            Path f = file();
+            Files.createDirectories(f.getParent());
+            Files.writeString(f, new GsonBuilder().setPrettyPrinting().create().toJson(s));
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static Style style() {
+        load();
+        return style;
+    }
+
+    public static int slot(int stance, int i) {
+        load();
+        return slots[stance][i];
+    }
+
+    /** Put move (an index into the style's pool, or -1 to empty it) in a slot. False if it doesn't fit there. */
+    public static boolean set(int stance, int i, int move) {
+        load();
+        Move m = style.move(move);
+        if (move >= 0 && (m == null || !m.fits(stance, i))) return false;
+        int keep = slots[stance][i];
+        slots[stance][i] = move;
+        if (lights(slots[stance]) == 0) {
+            slots[stance][i] = keep; // never leave a quadrant with nothing to throw
+            return false;
+        }
+        save();
+        return true;
+    }
+
+    public static void reset() {
+        load();
+        slots = copy(style.starter());
+        save();
+    }
+
+    /** The move a press throws from this stance: the heavy, or step `step` of the light chain (skipping empty slots). */
+    public static Move pick(int stance, boolean heavy, int step) {
+        load();
+        int[] q = slots[stance];
+        if (heavy) {
+            Move h = style.move(q[Fighting.HEAVY_SLOT]);
+            return h != null ? h : pick(stance, false, step);
+        }
+        int n = lights(q);
+        int want = Math.floorMod(step, Math.max(1, n));
+        for (int i = 0, seen = 0; i < Fighting.HEAVY_SLOT; i++) {
+            if (q[i] < 0) continue;
+            if (seen++ == want) return style.move(q[i]);
+        }
+        return style.pool()[0];
+    }
+
+    static int lights(int[] q) {
+        int n = 0;
+        for (int i = 0; i < Fighting.HEAVY_SLOT; i++) if (q[i] >= 0) n++;
+        return n;
+    }
+
+    private static int[][] copy(int[][] a) {
+        int[][] o = new int[a.length][];
+        for (int i = 0; i < a.length; i++) o[i] = a[i].clone();
+        return o;
+    }
+}

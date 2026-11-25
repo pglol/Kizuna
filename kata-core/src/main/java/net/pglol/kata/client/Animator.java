@@ -208,12 +208,12 @@ public final class Animator {
         }
         Pose out = sh.copy();
         out.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn + Fight.bodyTurn(p, dt));
-        // A punch lands on top of the springs: crisp out and back.
-        Pose strike = Fight.strikeDelta(p);
-        if (strike != null) add(out, strike);
+
         follow(p, s, dt, out);
         hang(p, td, s, dt, out);
         touch(p, td, s, dt, out);
+        // A strike lands on top of the springs: the body drives it, the fist travels its path.
+        Fight.apply(p, td, out);
         s.out = out;
         return out;
     }
@@ -754,6 +754,11 @@ public final class Animator {
      * the distance (law of cosines), then the shoulder turns the bent arm onto the target. Out of reach,
      * the arm points straight at it.
      */
+    /** As reach, with the elbow pointing towards pole (in the arm's parent frame) instead of hanging down. */
+    static void reach(Pose out, Bone arm, Bone fore, Vector3f shoulder, Vector3f target, Matrix4f invFrame, float weight, Vector3f pole) {
+        solve(out, arm, fore, shoulder, target, invFrame, weight, UPPER, FORE, -1, (float) Math.toRadians(-90), pole);
+    }
+
     static void reach(Pose out, Bone arm, Bone fore, Vector3f shoulder, Vector3f target, Matrix4f invFrame, float weight) {
         // Elbows hang down and a little back and out, like a relaxed arm's do.
         Vector3f pole = new Vector3f(Math.signum(shoulder.x) * 0.3f, 1, 0.45f);
