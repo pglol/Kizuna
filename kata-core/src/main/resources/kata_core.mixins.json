@@ -18,6 +18,8 @@
     "StepSoundMixin",
     "TravelMixin",
     "JumpMixin",
+    "FightInputMixin",
+    "LookMixin",
     "GravityMixin"
   ],
   "injectors": {

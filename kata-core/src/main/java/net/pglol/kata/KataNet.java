@@ -38,6 +38,30 @@ public final class KataNet {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /** Client -> server: a fighting action. kind GUARD (a: 1 on, 0 off), STRIKE (a: move, b: target entity or -1), STANCE (a: stance). */
+    public record Fight(int kind, int a, int b) implements CustomPayload {
+        public static final Id<Fight> ID = new Id<>(Identifier.of(KataCore.ID, "fight"));
+        public static final PacketCodec<RegistryByteBuf, Fight> CODEC = PacketCodec.of((v, buf) -> {
+            buf.writeVarInt(v.kind);
+            buf.writeVarInt(v.a);
+            buf.writeVarInt(v.b);
+        }, buf -> new Fight(buf.readVarInt(), buf.readVarInt(), buf.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Server -> client: that player's fighting action (to show it), or GUARD_HIT to the guard (a: side, 1 right, -1 left). */
+    public record FightOf(int entity, int kind, int a) implements CustomPayload {
+        public static final Id<FightOf> ID = new Id<>(Identifier.of(KataCore.ID, "fight_of"));
+        public static final PacketCodec<RegistryByteBuf, FightOf> CODEC = PacketCodec.of((v, buf) -> {
+            buf.writeVarInt(v.entity);
+            buf.writeVarInt(v.kind);
+            buf.writeVarInt(v.a);
+        }, buf -> new FightOf(buf.readVarInt(), buf.readVarInt(), buf.readVarInt()));
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    public static final int GUARD = 0, STRIKE = 1, STANCE = 2, GUARD_HIT = 3;
+
     /** Act mode meaning "crouched to catch a landing" (for the server's fall damage; not shown). */
     public static final int BRACE = 31;
     /** Act mode meaning "slammed into a wall"; side carries the speed (twentieths of a block a tick). */
@@ -46,6 +70,17 @@ public final class KataNet {
     static void register() {
         PayloadTypeRegistry.playC2S().register(Act.ID, Act.CODEC);
         PayloadTypeRegistry.playS2C().register(ActOf.ID, ActOf.CODEC);
+        PayloadTypeRegistry.playC2S().register(Fight.ID, Fight.CODEC);
+        PayloadTypeRegistry.playS2C().register(FightOf.ID, FightOf.CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(Fight.ID, (payload, ctx) -> {
+            ServerPlayerEntity p = ctx.player();
+            switch (payload.kind()) {
+                case GUARD -> Fighting.guard(p, payload.a() != 0);
+                case STRIKE -> Fighting.strike(p, payload.a(), payload.b());
+                case STANCE -> Fighting.stance(p, payload.a());
+                default -> { }
+            }
+        });
         ServerPlayNetworking.registerGlobalReceiver(Act.ID, (payload, ctx) -> {
             ServerPlayerEntity p = ctx.player();
             if (payload.mode() == BRACE) {

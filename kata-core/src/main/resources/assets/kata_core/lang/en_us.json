@@ -1,4 +1,6 @@
 {
   "category.kata_core": "Kata",
-  "key.kata_core.pose_editor": "Pose editor (test)"
+  "key.kata_core.pose_editor": "Pose editor (test)",
+  "key.kata_core.lock_on": "Lock on",
+  "entity.kata_core.dummy": "Training dummy"
 }

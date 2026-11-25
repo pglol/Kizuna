@@ -66,13 +66,25 @@ public final class KataCore implements ModInitializer {
     public void onInitialize() {
         CommandRegistrationCallback.EVENT.register((d, reg, env) -> d.register(CommandManager.literal("kata")
             .requires(s -> s.hasPermissionLevel(2))
+            .then(CommandManager.literal("dummy").executes(c -> {
+                ServerPlayerEntity p = c.getSource().getPlayerOrThrow();
+                Dummy d = new Dummy(KataEntities.DUMMY, p.getWorld());
+                net.minecraft.util.math.Vec3d at = p.getPos().add(net.minecraft.util.math.Vec3d.fromPolar(0, p.getYaw()).multiply(2.5));
+                d.refreshPositionAndAngles(at.x, p.getY(), at.z, p.getYaw() + 180, 0);
+                d.setCustomName(Text.literal("Training dummy"));
+                p.getWorld().spawnEntity(d);
+                c.getSource().sendFeedback(() -> Text.literal("Training dummy placed. Right click to guard, R to lock on, left click to punch."), false);
+                return 1;
+            }))
             .then(CommandManager.literal("testzone").executes(c -> {
                 ServerPlayerEntity p = c.getSource().getPlayerOrThrow();
                 int n = TestZone.build(p);
                 c.getSource().sendFeedback(() -> Text.literal("Test zone built (" + n + " blocks). Press O for the pose editor."), false);
                 return 1;
             }))));
+        KataEntities.init();
         KataNet.register();
+        Fighting.register();
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((h, s, server) -> body(h.getPlayer()));
         net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldP, newP, alive) -> body(newP));
         ServerTickEvents.END_SERVER_TICK.register(server -> {

@@ -119,7 +119,7 @@ public final class Move {
 
     /** Multiplier on the local player's ground speed. */
     public static float speedFactor(PlayerEntity p) {
-        return Parkour.speedScale() * baseFactor(p);
+        return Parkour.speedScale() * baseFactor(p) * Fight.speedScale(p);
     }
 
     private static float baseFactor(PlayerEntity p) {

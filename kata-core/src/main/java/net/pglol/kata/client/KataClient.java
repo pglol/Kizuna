@@ -14,6 +14,8 @@ import org.lwjgl.glfw.GLFW;
 
 public final class KataClient implements ClientModInitializer {
     private static KeyBinding editorKey;
+    public static KeyBinding lockKey;
+    private static long lastFrame;
     private static boolean openEditor;
 
     @Override
@@ -23,6 +25,17 @@ public final class KataClient implements ClientModInitializer {
             openEditor = true;
             return 1;
         })));
+        lockKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.lock_on", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.kata_core"));
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.FightOf.ID,
+            (payload, ctx) -> Fight.remote(payload.entity(), payload.kind(), payload.a()));
+        net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.START.register(ctx -> {
+            long now = System.nanoTime();
+            float dt = lastFrame == 0 ? 0 : Math.min(0.1f, (now - lastFrame) / 1e9f);
+            lastFrame = now;
+            Fight.frame(MinecraftClient.getInstance(), ctx.tickCounter().getTickDelta(false), dt);
+        });
+        net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(Stance::render);
+        net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry.register(net.pglol.kata.KataEntities.DUMMY, DummyRenderer::new);
         ClientTickEvents.START_CLIENT_TICK.register(KataClient::early);
         ClientTickEvents.END_CLIENT_TICK.register(KataClient::tick);
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.ActOf.ID,
@@ -40,6 +53,7 @@ public final class KataClient implements ClientModInitializer {
     private static void tick(MinecraftClient mc) {
         Move.tick(mc);
         Parkour.tick(mc);
+        Fight.tick(mc);
         // Kata is played in third person, always (the body is the point).
         if (mc.player != null && mc.options.getPerspective() != Perspective.THIRD_PERSON_BACK) mc.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         while (editorKey.wasPressed()) if (mc.currentScreen == null) openEditor = true;

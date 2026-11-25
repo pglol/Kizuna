@@ -136,9 +136,11 @@ public final class TestZone {
     }
 
     private static void dummy(int x, int y, int z) {
-        ArmorStandEntity a = new ArmorStandEntity(w, o.getX() + x + 0.5, o.getY() + y, o.getZ() + z + 0.5);
-        a.setCustomName(Text.literal("Dummy"));
-        w.spawnEntity(a);
+        Dummy d = new Dummy(KataEntities.DUMMY, w);
+        // Facing into the mat.
+        d.refreshPositionAndAngles(o.getX() + x + 0.5, o.getY() + y, o.getZ() + z + 0.5, 180, 0);
+        d.setCustomName(Text.literal("Training dummy"));
+        w.spawnEntity(d);
     }
 
     private static void label(int x, int y, int z, String text, Formatting color) {

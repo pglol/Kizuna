@@ -64,6 +64,8 @@ public final class Animator {
     }
 
     private static final float ROOT_K = 260, ROOT_Z = 0.7f;
+    /** The upper body a guard takes over (the legs keep walking). */
+    private static final Bone[] FIGHT_BONES = {Bone.CHEST, Bone.RIGHT_ARM, Bone.LEFT_ARM, Bone.RIGHT_FOREARM, Bone.LEFT_FOREARM};
 
     private static final class State {
         final float[][] ang = new float[N][3], vel = new float[N][3];
@@ -157,6 +159,12 @@ public final class Animator {
         Pose want = target(p, td, s, dt);
         Pose overlay = PoseStore.of(p);
         if (overlay != null) add(want, overlay);
+        // Fighting: the guard comes up through the springs like any pose.
+        float[] fw = new float[1];
+        Pose guard = Fight.pose(p, fw);
+        if (guard != null && fw[0] > 0) {
+            for (Bone b : FIGHT_BONES) for (int a = 0; a < 3; a++) want.set(b, a, MathHelper.lerp(fw[0], want.get(b, a), guard.get(b, a)));
+        }
 
         if (s.first) {
             s.first = false;
@@ -199,7 +207,10 @@ public final class Animator {
             turn = MathHelper.wrapDegrees(face - body);
         }
         Pose out = sh.copy();
-        out.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn);
+        out.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn + Fight.bodyTurn(p, dt));
+        // A punch lands on top of the springs: crisp out and back.
+        Pose strike = Fight.strikeDelta(p);
+        if (strike != null) add(out, strike);
         follow(p, s, dt, out);
         hang(p, td, s, dt, out);
         touch(p, td, s, dt, out);
