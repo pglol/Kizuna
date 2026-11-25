@@ -1,0 +1,46 @@
+name: Party service
+
+# Deploys party/ (the Cloudflare Worker launchers connect to for friends and parties).
+# Needs two repository secrets: CLOUDFLARE_API_TOKEN (an "Edit Cloudflare Workers" token) and
+# CLOUDFLARE_ACCOUNT_ID. Without them the job says so and stops.
+on:
+  push:
+    paths:
+      - 'party/**'
+      - '.github/workflows/party.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: party
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: party
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Test against a local copy
+        run: |
+          npx wrangler dev --port 8787 --ip 127.0.0.1 > dev.log 2>&1 &
+          for i in $(seq 1 60); do curl -s http://127.0.0.1:8787/health | grep -q ok && break; sleep 1; done
+          node test.mjs
+      - name: Deploy
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::Add the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets to deploy the party service."
+            exit 0
+          fi
+          npx wrangler deploy | tee deploy.log
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          echo "Party service: ${url}/ws" >> "$GITHUB_STEP_SUMMARY"
+          echo "PARTY_URL=${url}"

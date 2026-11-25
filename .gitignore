@@ -8,3 +8,5 @@ rpg-mod/run/
 servers/.bootstrap.jar
 _site/
 .gradle/
+party/node_modules/
+party/.wrangler/

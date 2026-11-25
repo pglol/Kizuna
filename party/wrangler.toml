@@ -1,0 +1,15 @@
+# Kizuna party service: launchers connect here to see friends, form parties and follow each other
+# into games. Deployed by .github/workflows/party.yml (needs the CLOUDFLARE_API_TOKEN and
+# CLOUDFLARE_ACCOUNT_ID repository secrets).
+name = "kizuna-party"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "Hub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hub"]

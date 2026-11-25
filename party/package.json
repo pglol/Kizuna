@@ -1,0 +1,11 @@
+{
+  "name": "kizuna-party",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "test": "node test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.42.0"
+  }
+}
