@@ -66,7 +66,7 @@
         },
         {
           "id": "dev",
-          "name": "Development",
+          "name": "Development Build",
           "note": "Team builds",
           "address": "25.52.234.232:25565",
           "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/aot-dev/pack.toml",
@@ -148,20 +148,11 @@
         },
         {
           "id": "dev",
-          "name": "Development",
-          "note": "Team test build. Test world: make a creative world and run /kata testzone.",
-          "address": "",
+          "name": "Development Build",
+          "note": "Team test build. For the test zone, make a creative world and run /kata testzone.",
+          "address": "25.52.234.232:25566",
           "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata-dev/pack.toml",
-          "addresses": [
-            {
-              "label": "Test world",
-              "address": ""
-            },
-            {
-              "label": "Hamachi",
-              "address": "25.52.234.232:25566"
-            }
-          ],
+          "addresses": [],
           "codeHash": "24844d566607d685f630522b6857a01d77fcf6e89837a82bdaf82700cbc320ff"
         }
       ]
