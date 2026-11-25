@@ -378,7 +378,10 @@ public final class Parkour {
         if (!airMode || ground) {
             if (ground && !lastGround && airMode && !free) land(p, peakY - p.getY());
             peakY = p.getY();
-        } else peakY = Math.max(peakY, p.getY());
+        } else {
+            peakY = Math.max(peakY, p.getY());
+            if (mode == Mode.NONE && !free && p.getVelocity().y < -0.5) brace(p);
+        }
 
         switch (mode) {
             case NONE -> {
@@ -471,6 +474,29 @@ public final class Parkour {
         lastGround = ground;
         updateMarker(p, ground);
         syncOut();
+    }
+
+    /**
+     * Falling: how far to the ground below, and whether this fall is a ragdoll. A really high one goes
+     * limp before it lands (a block or two up) so the body falls into the impact; a crouch timed
+     * just before touching down turns a merely high one into a caught landing instead.
+     */
+    private static void brace(ClientPlayerEntity p) {
+        double below = -1;
+        for (double d = 0; d <= 2.5; d += 0.125) {
+            if (!empty(p, new Box(p.getX() - 0.25, p.getY() - d - 0.01, p.getZ() - 0.25, p.getX() + 0.25, p.getY() - d, p.getZ() + 0.25))) {
+                below = d;
+                break;
+            }
+        }
+        if (below < 0) return;
+        double total = peakY - p.getY() + below;
+        boolean huge = total >= FACEPLANT_ALWAYS, caught = sneakAge <= CATCH_WINDOW;
+        if ((huge && below <= 2.0) || (!caught && total >= FACEPLANT_UNCAUGHT && below <= 0.9)) {
+            landRough = 1;
+            stoodUp = false;
+            set(Mode.RAGDOLL);
+        }
     }
 
     private static void land(ClientPlayerEntity p, double h) {

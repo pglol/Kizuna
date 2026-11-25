@@ -118,20 +118,23 @@ public final class Animator {
                 Pose shown;
                 if (!r.resting()) shown = limp;
                 else {
-                    // Getting up from however it landed: onto a knee, then up.
-                    float k = r.getUp;
-                    Pose kneel = Presets.KNEEL.copy();
-                    kneel.set(Bone.ROOT, Pose.YAW, MathHelper.wrapDegrees(limp.get(Bone.ROOT, Pose.YAW)) * (1 - k));
-                    shown = k < 0.55f ? Pose.lerp(limp, kneel, ease(k / 0.55f)) : Pose.lerp(kneel, new Pose(), ease((k - 0.55f) / 0.45f));
-                    shown.gait = true;
+                    // Getting up from however it landed (pushing up, or sitting up), onto a knee, then up.
+                    float lookP = MathHelper.lerp(td, p.prevPitch, p.getPitch());
+                    float lookY = MathHelper.wrapDegrees(MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw) - by);
+                    shown = r.getUpPose(limp, r.getUp, lookP, lookY);
                 }
                 s.out = shown;
                 s.first = true; // the springs pick up from wherever this leaves the body
                 return shown;
             }
+            if (r != null && r.finished()) Ragdoll.stop(p);
         } else if (s.ragdolled) {
             s.ragdolled = false;
             Ragdoll.stop(p);
+            // Nothing from before the fall carries on in the springs.
+            for (float[] v : s.vel) java.util.Arrays.fill(v, 0);
+            java.util.Arrays.fill(s.offVel, 0);
+            s.first = true;
         }
 
         motion(p, td, s, dt);

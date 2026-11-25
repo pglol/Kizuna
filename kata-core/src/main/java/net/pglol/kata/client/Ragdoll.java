@@ -45,7 +45,7 @@ public final class Ragdoll {
     };
     /** Limbs that may not fold flat: shoulder-hand and hip-foot keep at least this share of full length. */
     private static final int[][] SPANS = {{RS, RH}, {LS, LH}, {RHIP, RF}, {LHIP, LF}};
-    private static final float RADIUS = 0.09f, GRAVITY = 26f, FRICTION = 0.55f;
+    private static final float RADIUS = 0.09f, GRAVITY = 26f, FRICTION = 0.72f;
     private static final float MIN_TIME = 0.9f, MAX_TIME = 3.2f, GET_UP = 1.15f;
 
     private static final Map<Integer, Ragdoll> ACTIVE = new HashMap<>();
@@ -54,7 +54,60 @@ public final class Ragdoll {
     final double[] px = new double[N], py = new double[N], pz = new double[N];
     final double[] rest = new double[LINKS.length], span = new double[SPANS.length];
     float age, still, getUp = -1;
-    Pose frozen;
+    boolean faceUp;
+
+    // Getting up: face down push up onto the hands; face up sit up; then onto a knee and stand.
+    static final Pose PUSH = new Pose(), SIT = new Pose();
+
+    static {
+        PUSH.set(Bone.ROOT, 58, 0, 0);
+        PUSH.set(Bone.CHEST, -12, 0, 0);
+        PUSH.set(Bone.HEAD, -30, 0, 0);
+        PUSH.set(Bone.RIGHT_ARM, -62, 0, 8).set(Bone.RIGHT_FOREARM, 12, 0, 0);
+        PUSH.set(Bone.LEFT_ARM, -62, 0, -8).set(Bone.LEFT_FOREARM, 12, 0, 0);
+        PUSH.set(Bone.RIGHT_LEG, -15, 0, 3).set(Bone.RIGHT_SHIN, 75, 0, 0);
+        PUSH.set(Bone.LEFT_LEG, -5, 0, -3).set(Bone.LEFT_SHIN, 60, 0, 0);
+        PUSH.offset[1] = 9;
+
+        SIT.set(Bone.ROOT, -12, 0, 0);
+        SIT.set(Bone.CHEST, 18, 0, 0);
+        SIT.set(Bone.RIGHT_ARM, 35, 0, 18).set(Bone.RIGHT_FOREARM, 10, 0, 0);
+        SIT.set(Bone.LEFT_ARM, 35, 0, -18).set(Bone.LEFT_FOREARM, 10, 0, 0);
+        SIT.set(Bone.RIGHT_LEG, -80, 0, 6).set(Bone.RIGHT_SHIN, 40, 0, 0);
+        SIT.set(Bone.LEFT_LEG, -88, 0, -6).set(Bone.LEFT_SHIN, 15, 0, 0);
+        SIT.offset[1] = 11;
+    }
+
+    /** Getting up from limp at k (0..1): through the keyframes for how it lies, rotations blended as
+     *  rotations (no spinning through odd angles), the head easing back to where the player looks. */
+    Pose getUpPose(Pose limp, float k, float lookPitch, float lookYaw) {
+        Pose[] keys = {limp, faceUp ? SIT : PUSH, Presets.KNEEL, new Pose()};
+        float[] at = {0, 0.34f, 0.68f, 1};
+        int seg = k < at[1] ? 0 : k < at[2] ? 1 : 2;
+        float u = MathHelper.clamp((k - at[seg]) / (at[seg + 1] - at[seg]), 0, 1);
+        u = u * u * (3 - 2 * u);
+        Pose a = keys[seg], b = keys[seg + 1];
+        Pose out = Pose.lerp(a, b, u);
+        Quaternionf qa = rot(a, Bone.ROOT), qb = rot(b, Bone.ROOT);
+        setRot(out, Bone.ROOT, qa.slerp(qb, u));
+        // Head: the whole head's turn, from the body's (limp) to the player's look.
+        float hk = MathHelper.clamp(k / 0.5f, 0, 1);
+        Quaternionf limpHead = rot(limp, Bone.ROOT);
+        Quaternionf look = new Quaternionf().rotationZYX(0, (float) Math.toRadians(lookYaw), (float) Math.toRadians(lookPitch));
+        Vector3f he = new Matrix3f().set(limpHead.slerp(look, hk * hk * (3 - 2 * hk))).getEulerAnglesZYX(new Vector3f());
+        out.set(Bone.HEAD, (float) Math.toDegrees(he.x) - lookPitch, (float) Math.toDegrees(he.y) - lookYaw, (float) Math.toDegrees(he.z));
+        out.gait = true;
+        return out;
+    }
+
+    private static Quaternionf rot(Pose p, Bone b) {
+        return new Quaternionf().rotationZYX(p.rad(b, Pose.ROLL), p.rad(b, Pose.YAW), p.rad(b, Pose.PITCH));
+    }
+
+    private static void setRot(Pose p, Bone b, Quaternionf q) {
+        Vector3f e = new Matrix3f().set(q).getEulerAnglesZYX(new Vector3f());
+        p.set(b, (float) Math.toDegrees(e.x), (float) Math.toDegrees(e.y), (float) Math.toDegrees(e.z));
+    }
 
     public static Ragdoll of(PlayerEntity p) {
         return ACTIVE.get(p.getId());
@@ -84,7 +137,7 @@ public final class Ragdoll {
         double spin = (p.getRandom().nextDouble() - 0.5) * 0.8;
         for (int i = 0; i < N; i++) {
             double up = r.y[i] - pos.y;
-            double vx = v.x + fx * up * 1.4 + fz * up * spin, vz = v.z + fz * up * 1.4 - fx * up * spin;
+            double vx = v.x + fx * up * 0.5 + fz * up * spin * 0.4, vz = v.z + fz * up * 0.5 - fx * up * spin * 0.4;
             r.px[i] = r.x[i] - vx * h;
             r.py[i] = r.y[i] - v.y * h;
             r.pz[i] = r.z[i] - vz * h;
@@ -117,12 +170,18 @@ public final class Ragdoll {
             getUp = Math.min(1, getUp + dt / GET_UP);
             return;
         }
-        int steps = Math.max(1, (int) Math.ceil(dt / (1 / 120f)));
+        int steps = Math.max(1, (int) Math.ceil(dt / (1 / 240f)));
         double h = dt / steps;
         double moved = 0;
         for (int s = 0; s < steps; s++) {
             for (int i = 0; i < N; i++) {
                 double vx = (x[i] - px[i]) * 0.996, vy = (y[i] - py[i]) * 0.996, vz = (z[i] - pz[i]) * 0.996;
+                double sp = Math.sqrt(vx * vx + vy * vy + vz * vz), cap = 0.06;
+                if (sp > cap) {
+                    vx *= cap / sp;
+                    vy *= cap / sp;
+                    vz *= cap / sp;
+                }
                 px[i] = x[i];
                 py[i] = y[i];
                 pz[i] = z[i];
@@ -139,7 +198,15 @@ public final class Ragdoll {
         }
         double speed = moved / N / dt;
         still = speed < 0.35 ? still + dt : 0;
-        if ((age > MIN_TIME && still > 0.35) || age > MAX_TIME) getUp = 0;
+        if ((age > MIN_TIME && still > 0.35) || age > MAX_TIME) {
+            getUp = 0;
+            // Which way up it ended: chest towards the sky (on its back) or not.
+            double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];
+            double rx = x[RS] - x[LS], ry = y[RS] - y[LS], rz = z[RS] - z[LS];
+            // Front = up x right (world, y up): pointing up means lying on the back.
+            double fy = uz * rx - ux * rz;
+            faceUp = fy > 0.25 * Math.sqrt(ux * ux + uy * uy + uz * uz) * Math.sqrt(rx * rx + ry * ry + rz * rz);
+        }
     }
 
     /** Hold points a and b at length len (only pushing apart when min). */
@@ -177,9 +244,19 @@ public final class Ragdoll {
 
     private void push(int i, Box b) {
         if (!b.contains(x[i], y[i], z[i])) return;
-        double[] d = {x[i] - b.minX, b.maxX - x[i], y[i] - b.minY, b.maxY - y[i], z[i] - b.minZ, b.maxZ - z[i]};
-        int best = 0;
-        for (int k = 1; k < 6; k++) if (d[k] < d[best]) best = k;
+        // Out through the face it came in by (where it was last step), else the nearest face.
+        int best = -1;
+        if (py[i] >= b.maxY - 1e-4) best = 3;
+        else if (py[i] <= b.minY + 1e-4) best = 2;
+        else if (px[i] <= b.minX + 1e-4) best = 0;
+        else if (px[i] >= b.maxX - 1e-4) best = 1;
+        else if (pz[i] <= b.minZ + 1e-4) best = 4;
+        else if (pz[i] >= b.maxZ - 1e-4) best = 5;
+        if (best < 0) {
+            double[] d = {x[i] - b.minX, b.maxX - x[i], y[i] - b.minY, b.maxY - y[i], z[i] - b.minZ, b.maxZ - z[i]};
+            best = 3;
+            for (int k = 0; k < 6; k++) if (d[k] < d[best]) best = k;
+        }
         switch (best) {
             case 0 -> { x[i] = b.minX; px[i] = x[i]; py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
             case 1 -> { x[i] = b.maxX; px[i] = x[i]; py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
