@@ -6,7 +6,6 @@ import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Arm;
-import net.pglol.kata.client.PoseStore;
 import net.pglol.kata.client.Rig;
 import net.pglol.kata.rig.Bone;
 import net.pglol.kata.rig.Pose;
@@ -40,8 +39,9 @@ public abstract class PlayerModelMixin {
 
     @Inject(method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V", at = @At("TAIL"))
     private void kata$pose(LivingEntity entity, float limbAngle, float limbDistance, float age, float headYaw, float headPitch, CallbackInfo ci) {
-        Pose p = PoseStore.of(entity);
-        if (p == null) return;
+        // The pose of the player being drawn (set by the renderer for this frame).
+        Pose p = Rig.current;
+        if (p == null || !(entity instanceof net.minecraft.entity.player.PlayerEntity)) return;
         BipedEntityModel<?> m = (BipedEntityModel<?>) (Object) this;
         add(m.head, p, Bone.HEAD);
         add(m.rightArm, p, Bone.RIGHT_ARM);

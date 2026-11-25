@@ -13,36 +13,38 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Test screen for the skeleton: a slider for every joint, your character large on the right, and a
- * few starting poses (guard, kick, crouch, ledge hang). The pose stays on you after you close it, so
- * you can walk around and look at it in the world; Reset puts you back to normal.
+ * Test screen for the skeleton: a slider for every joint grouped by body part, your character large on
+ * the right, and starting poses (guard, kick, crouch, hang) that blend in rather than snap. The pose
+ * stays on you after closing, laid over your footwork as you move; Reset puts you back to normal.
  */
 public final class PoseEditorScreen extends Screen {
     private record Joint(Bone bone, int axis, String label, float min, float max) { }
+    private record Group(String title, Joint... joints) { }
 
-    private static final Joint[] JOINTS = {
-        new Joint(Bone.HEAD, Pose.PITCH, "Head nod", -60, 60),
-        new Joint(Bone.HEAD, Pose.YAW, "Head turn", -80, 80),
-        new Joint(Bone.CHEST, Pose.PITCH, "Waist bend", -45, 80),
-        new Joint(Bone.CHEST, Pose.YAW, "Waist twist", -60, 60),
-        new Joint(Bone.CHEST, Pose.ROLL, "Waist lean", -35, 35),
-        new Joint(Bone.RIGHT_ARM, Pose.PITCH, "R shoulder raise", -180, 60),
-        new Joint(Bone.RIGHT_ARM, Pose.YAW, "R shoulder turn", -90, 90),
-        new Joint(Bone.RIGHT_ARM, Pose.ROLL, "R shoulder out", -10, 170),
-        new Joint(Bone.RIGHT_FOREARM, Pose.PITCH, "R elbow bend", 0, 150),
-        new Joint(Bone.LEFT_ARM, Pose.PITCH, "L shoulder raise", -180, 60),
-        new Joint(Bone.LEFT_ARM, Pose.YAW, "L shoulder turn", -90, 90),
-        new Joint(Bone.LEFT_ARM, Pose.ROLL, "L shoulder out", -170, 10),
-        new Joint(Bone.LEFT_FOREARM, Pose.PITCH, "L elbow bend", 0, 150),
-        new Joint(Bone.RIGHT_LEG, Pose.PITCH, "R hip raise", -120, 60),
-        new Joint(Bone.RIGHT_LEG, Pose.ROLL, "R hip out", -10, 70),
-        new Joint(Bone.RIGHT_SHIN, Pose.PITCH, "R knee bend", 0, 150),
-        new Joint(Bone.LEFT_LEG, Pose.PITCH, "L hip raise", -120, 60),
-        new Joint(Bone.LEFT_LEG, Pose.ROLL, "L hip out", -70, 10),
-        new Joint(Bone.LEFT_SHIN, Pose.PITCH, "L knee bend", 0, 150)};
+    /** Two columns of body parts; short labels so they fit at any GUI scale. */
+    private static final Group[][] COLUMNS = {
+        {
+            new Group("Head", new Joint(Bone.HEAD, Pose.PITCH, "Nod", -60, 60), new Joint(Bone.HEAD, Pose.YAW, "Turn", -80, 80)),
+            new Group("Waist", new Joint(Bone.CHEST, Pose.PITCH, "Bend", -45, 80), new Joint(Bone.CHEST, Pose.YAW, "Twist", -60, 60),
+                new Joint(Bone.CHEST, Pose.ROLL, "Lean", -35, 35)),
+            new Group("Right arm", new Joint(Bone.RIGHT_ARM, Pose.PITCH, "Raise", -180, 60), new Joint(Bone.RIGHT_ARM, Pose.YAW, "Turn", -90, 90),
+                new Joint(Bone.RIGHT_ARM, Pose.ROLL, "Out", -10, 170), new Joint(Bone.RIGHT_FOREARM, Pose.PITCH, "Elbow", 0, 150)),
+        },
+        {
+            new Group("Left arm", new Joint(Bone.LEFT_ARM, Pose.PITCH, "Raise", -180, 60), new Joint(Bone.LEFT_ARM, Pose.YAW, "Turn", -90, 90),
+                new Joint(Bone.LEFT_ARM, Pose.ROLL, "Out", -170, 10), new Joint(Bone.LEFT_FOREARM, Pose.PITCH, "Elbow", 0, 150)),
+            new Group("Right leg", new Joint(Bone.RIGHT_LEG, Pose.PITCH, "Raise", -120, 60), new Joint(Bone.RIGHT_LEG, Pose.ROLL, "Out", -10, 70),
+                new Joint(Bone.RIGHT_SHIN, Pose.PITCH, "Knee", 0, 150)),
+            new Group("Left leg", new Joint(Bone.LEFT_LEG, Pose.PITCH, "Raise", -120, 60), new Joint(Bone.LEFT_LEG, Pose.ROLL, "Out", -70, 10),
+                new Joint(Bone.LEFT_SHIN, Pose.PITCH, "Knee", 0, 150)),
+        }};
+
+    private record Heading(String text, int x, int y) { }
 
     private final List<JointSlider> sliders = new ArrayList<>();
+    private final List<Heading> headings = new ArrayList<>();
     private float turn = 30;
+    private int panelW;
 
     public PoseEditorScreen() {
         super(Text.literal("Pose editor"));
@@ -51,20 +53,38 @@ public final class PoseEditorScreen extends Screen {
     @Override
     protected void init() {
         sliders.clear();
-        int col = Math.min(150, (width / 2 - 24) / 2), rows = (JOINTS.length + 1) / 2;
-        int h = Math.max(14, Math.min(18, (height - 80) / rows - 2));
-        for (int i = 0; i < JOINTS.length; i++) {
-            int x = 10 + (i / rows) * (col + 6), y = 26 + (i % rows) * (h + 2);
-            JointSlider s = new JointSlider(x, y, col, h, JOINTS[i]);
-            sliders.add(addDrawableChild(s));
+        headings.clear();
+        panelW = Math.max(220, Math.min(width / 2, 360));
+        int col = (panelW - 26) / 2, top = 24, head = 11, bottom = 48;
+        // Fit the taller column in the height there is.
+        int rows = 0, heads = 0;
+        for (Group[] c : COLUMNS) {
+            int r = 0;
+            for (Group g : c) r += g.joints.length;
+            if (r > rows) {
+                rows = r;
+                heads = c.length;
+            }
         }
-        int by = 26 + rows * (h + 2) + 6, bw = (col * 2 + 6 - 3 * 4) / 5;
-        String[] names = {"Reset", "Guard", "Kick", "Crouch", "Ledge hang"};
+        int h = Math.max(10, Math.min(16, (height - top - bottom - heads * head) / rows - 2));
+        for (int ci = 0; ci < COLUMNS.length; ci++) {
+            int x = 8 + ci * (col + 10), y = top;
+            for (Group g : COLUMNS[ci]) {
+                headings.add(new Heading(g.title, x, y + 1));
+                y += head;
+                for (Joint j : g.joints) {
+                    sliders.add(addDrawableChild(new JointSlider(x, y, col, h, j)));
+                    y += h + 2;
+                }
+            }
+        }
+        int by = height - bottom + 6, bw = (panelW - 16 - 4 * 3) / 5;
+        String[] names = {"Reset", "Guard", "Kick", "Crouch", "Hang"};
         for (int i = 0; i < names.length; i++) {
             String n = names[i];
-            addDrawableChild(ButtonWidget.builder(Text.literal(n), b -> preset(n)).dimensions(10 + i * (bw + 3), by, bw, 18).build());
+            addDrawableChild(ButtonWidget.builder(Text.literal(n), b -> preset(n)).dimensions(8 + i * (bw + 3), by, bw, 16).build());
         }
-        addDrawableChild(new SliderWidget(10, by + 24, col * 2 + 6, 16, Text.empty(), (turn + 180) / 360.0) {
+        addDrawableChild(new SliderWidget(8, by + 20, panelW - 16, 14, Text.empty(), (turn + 180) / 360.0) {
             {
                 updateMessage();
             }
@@ -107,7 +127,7 @@ public final class PoseEditorScreen extends Screen {
                 p.set(Bone.RIGHT_ARM, -40, 0, 0).set(Bone.RIGHT_FOREARM, 60, 0, 0);
                 p.set(Bone.LEFT_ARM, -40, 0, 0).set(Bone.LEFT_FOREARM, 60, 0, 0);
             }
-            case "Ledge hang" -> {
+            case "Hang" -> {
                 p.set(Bone.RIGHT_ARM, -170, 0, 10).set(Bone.RIGHT_FOREARM, 25, 0, 0);
                 p.set(Bone.LEFT_ARM, -170, 0, -10).set(Bone.LEFT_FOREARM, 25, 0, 0);
                 p.set(Bone.CHEST, -10, 0, 0);
@@ -122,17 +142,16 @@ public final class PoseEditorScreen extends Screen {
 
     @Override
     public void render(DrawContext c, int mouseX, int mouseY, float delta) {
-        c.fill(0, 0, width / 2 + 10, height, 0xC0101010);
-        c.drawTextWithShadow(textRenderer, Text.literal("POSE EDITOR").formatted(net.minecraft.util.Formatting.GOLD), 10, 10, 0xFFFFFFFF);
-        c.drawTextWithShadow(textRenderer, Text.literal("Drag a slider to bend that joint").formatted(net.minecraft.util.Formatting.GRAY), 90, 10, 0xFFFFFFFF);
+        c.fill(0, 0, panelW, height, 0xC0101010);
+        c.drawTextWithShadow(textRenderer, Text.literal("POSE EDITOR").formatted(net.minecraft.util.Formatting.GOLD), 8, 8, 0xFFFFFFFF);
+        for (Heading hd : headings) c.drawTextWithShadow(textRenderer, Text.literal(hd.text).formatted(net.minecraft.util.Formatting.YELLOW), hd.x + 1, hd.y, 0xFFFFFFFF);
         super.render(c, mouseX, mouseY, delta);
         if (client != null && client.player != null) {
-            int x0 = width / 2 + 20, x1 = width - 10, y0 = 10, y1 = height - 10;
-            int size = (int) ((y1 - y0) * 0.36f);
-            // The preview looks towards the "mouse": put that point to its side to turn it.
+            int x0 = panelW + 10, x1 = width - 10, y0 = 10, y1 = height - 10;
+            int size = (int) Math.min((y1 - y0) * 0.36f, (x1 - x0) * 0.5f);
             float cx = (x0 + x1) / 2f, cy = y0 + (y1 - y0) * 0.35f;
-            float fx = cx + (float) Math.sin(Math.toRadians(turn)) * 400, fy = cy;
-            InventoryScreen.drawEntity(c, x0, y0, x1, y1, size, 0.0625f, fx, fy, client.player);
+            float fx = cx + (float) Math.sin(Math.toRadians(turn)) * 400;
+            InventoryScreen.drawEntity(c, x0, y0, x1, y1, size, 0.0625f, fx, cy, client.player);
         }
     }
 
@@ -166,7 +185,7 @@ public final class PoseEditorScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            setMessage(Text.literal(j.label + ": " + (int) degrees() + "°"));
+            setMessage(Text.literal(j.label + "  " + (int) degrees() + "°"));
         }
 
         @Override
