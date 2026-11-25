@@ -258,3 +258,6 @@ pre { max-height: 300px; overflow: auto; font-size: 11px; background: #fff; bord
 .ndots button.on { background: var(--ink); }
 .ndots:has(button:only-child) { display: none; }
 .cover .dots { bottom: auto; top: 12px; right: 12px; left: auto; }
+
+.keepopen { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; height: 34px; font-size: 12px; font-weight: 700; color: var(--ink2); background: rgba(255, 253, 248, 0.92); border: 2px solid var(--ink); border-radius: 8px; cursor: pointer; user-select: none; }
+.keepopen input { accent-color: var(--accent); width: 14px; height: 14px; margin: 0; }

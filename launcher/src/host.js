@@ -58,15 +58,15 @@ function setAsideDuplicates(folder, packFiles, log) {
  * "AoT RPG mod only": leave the server's own mods and configs as they are and just bring the AoT RPG
  * jar up to date (older copies of it under other names are moved to mods-disabled/).
  */
-async function updateModOnly(packUrl, folder, line) {
+async function updateModOnly(packUrl, folder, line, mod) {
   const base = packUrl.slice(0, packUrl.lastIndexOf('/') + 1);
   const p = TOML.parse(await net.text(packUrl));
-  const meta = TOML.parse(await net.text(base + 'mods/aot-rpg.pw.toml'));
+  const meta = TOML.parse(await net.text(base + `mods/${mod.file}.pw.toml`));
   const mods = path.join(folder, 'mods');
   fs.mkdirSync(mods, { recursive: true });
   for (const f of fs.readdirSync(mods)) {
     if (!f.endsWith('.jar') || f === meta.filename) continue;
-    if (modIds(path.join(mods, f)).includes('aot_rpg')) {
+    if (modIds(path.join(mods, f)).includes(mod.id)) {
       fs.mkdirSync(path.join(folder, 'mods-disabled'), { recursive: true });
       fs.renameSync(path.join(mods, f), path.join(folder, 'mods-disabled', f));
       line(`Moved the old ${f} to mods-disabled`);
@@ -74,7 +74,7 @@ async function updateModOnly(packUrl, folder, line) {
   }
   const d = meta.download || {};
   const fetched = await net.file(d.url, path.join(mods, meta.filename), d.hash, d['hash-format'] || 'sha256');
-  line(fetched ? 'AoT RPG mod updated to the newest build' : 'AoT RPG mod already on the newest build');
+  line(fetched ? `${mod.name} updated to the newest build` : `${mod.name} already on the newest build`);
   return { minecraft: p.versions && p.versions.minecraft, fabric: p.versions && p.versions.fabric };
 }
 
@@ -121,7 +121,7 @@ async function start(k, opts, on) {
     const sha = await net.pinLatest(opts.hubUrl);
     if (sha) line(`Newest build: ${sha.slice(0, 8)}`);
     let p;
-    if (opts.mode === 'pack') {
+    if (opts.mode === 'pack' || !opts.mainMod) {
       p = await pack.sync(opts.packUrl, folder, (t) => line(t), { side: 'server' });
       line(`Server files up to date (${p.files} files, ${p.fetched} updated)`);
       let ledger = [];
@@ -130,7 +130,7 @@ async function start(k, opts, on) {
       } catch {}
       setAsideDuplicates(folder, ledger, line);
     } else {
-      p = await updateModOnly(opts.packUrl, folder, line);
+      p = await updateModOnly(opts.packUrl, folder, line, opts.mainMod);
     }
     const javaPath = await java.ensure(opts.root, p.minecraft, (d, t) => line(`Installing Java (${d}/${t})`));
     const jar = await serverJar(folder, p.minecraft, p.fabric);

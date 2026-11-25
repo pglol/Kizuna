@@ -354,7 +354,13 @@ function hostTarget(id, channelId) {
   const ch = chans.find((c) => c.id === channelId) || chans[0];
   const k = host.key(s.id, ch.id);
   const dirs = store.settings.get().hostDirs || {};
-  return { k, name: `${s.name} (${ch.name || ch.id})`, pack: ch.pack || s.pack, folder: dirs[k] || path.join(store.dir(), 'servers', dirName(s.id, ch.id)) };
+  // The port this build's players connect to (e.g. Hamachi :25566), so two hosted servers don't clash.
+  const addr = [ch.address, ...(ch.addresses || []).map((a) => a.address), s.address].find((a) => a && /:\d+$/.test(a) && !a.includes('CHANGE_ME'));
+  return {
+    k, name: `${s.name} (${ch.name || ch.id})`, title: s.name, pack: ch.pack || s.pack, mainMod: s.mainMod || null, hostMode: s.hostMode || 'pack',
+    port: addr ? addr.split(':').pop() : '25565',
+    folder: dirs[k] || path.join(store.dir(), 'servers', dirName(s.id, ch.id)),
+  };
 }
 
 const PROPS = 'server.properties';
@@ -387,12 +393,20 @@ function writeProps(folder, values) {
   fs.writeFileSync(file, lines.join('\n').replace(/\n*$/, '\n'));
 }
 
+/** A new server's starting settings: its own port, flight allowed (parkour and gear), test accounts allowed in test builds. */
+function defaultProps(t) {
+  return { motd: t.title, 'server-port': t.port, 'allow-flight': 'true', 'spawn-protection': '0', difficulty: 'normal', 'online-mode': config.testMode ? 'false' : 'true' };
+}
+function propsOf(t) {
+  return fs.existsSync(path.join(t.folder, PROPS)) ? readProps(t.folder) : defaultProps(t);
+}
+
 ipcMain.handle('host-info', (_e, id, channel) => {
   if (!hostAllowed()) return null;
   const t = hostTarget(id, channel);
   if (!t) return null;
   const s = store.settings.get();
-  return { key: t.k, name: t.name, folder: t.folder, ram: (s.hostRam || {})[t.k] || 6, mode: (s.hostMode || {})[t.k] || 'mod', eula: !!s.hostEula, props: readProps(t.folder), ...host.info(t.k) };
+  return { key: t.k, name: t.name, folder: t.folder, ram: (s.hostRam || {})[t.k] || 6, mode: t.mainMod ? (s.hostMode || {})[t.k] || t.hostMode : 'pack', mainMod: t.mainMod, eula: !!s.hostEula, props: propsOf(t), ...host.info(t.k) };
 });
 ipcMain.handle('host-folder', async (_e, id, channel) => {
   if (!hostAllowed()) return null;
@@ -435,7 +449,8 @@ ipcMain.handle('host-start', (_e, id, channel) => {
   const t = hostTarget(id, channel);
   openConsole(id, channel, t.k, t.name);
   const s = store.settings.get();
-  host.start(t.k, { packUrl: t.pack, folder: t.folder, root: path.join(store.dir(), 'minecraft'), ram: (s.hostRam || {})[t.k] || 6, mode: (s.hostMode || {})[t.k] || 'mod', eula: !!s.hostEula, hubUrl: config.hubUrl }, {
+  if (!fs.existsSync(path.join(t.folder, PROPS))) writeProps(t.folder, defaultProps(t));
+  host.start(t.k, { packUrl: t.pack, folder: t.folder, root: path.join(store.dir(), 'minecraft'), ram: (s.hostRam || {})[t.k] || 6, mode: (s.hostMode || {})[t.k] || t.hostMode, mainMod: t.mainMod, eula: !!s.hostEula, hubUrl: config.hubUrl }, {
     line: (l) => send('host', { key: t.k, line: l }),
     state: (st) => send('host', { key: t.k, state: st }),
   });
@@ -445,7 +460,7 @@ ipcMain.handle('host-props-file', (_e, id, channel) => {
   if (!hostAllowed()) return;
   const t = hostTarget(id, channel);
   const f = path.join(t.folder, PROPS);
-  if (!fs.existsSync(f)) writeProps(t.folder, {});
+  if (!fs.existsSync(f)) writeProps(t.folder, defaultProps(t));
   shell.openPath(f);
 });
 ipcMain.handle('host-stop', (_e, id, channel) => hostAllowed() && host.stop(hostTarget(id, channel).k));

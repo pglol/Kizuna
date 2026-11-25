@@ -1,4 +1,8 @@
 {
+  "1.3.6": [
+    "Keep launcher open: a switch next to Play",
+    "Hosting: each game's own mod in the update choice (Kata Core, AoT RPG mod); new servers start on their own port with flight on and test accounts allowed"
+  ],
   "1.3.5": [
     "Attack on Titan RPG is now Paradis",
     "Settings: Check for updates now",

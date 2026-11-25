@@ -670,7 +670,10 @@
     $('host-eula').checked = i.eula;
     $('host-ram').value = i.ram;
     $('host-ram-label').textContent = i.ram + ' GB';
-    setMode(i.mode || 'mod');
+    // "<the game's own mod> only" when the game has one; otherwise the whole pack.
+    $('host-mode-mod').hidden = !i.mainMod;
+    if (i.mainMod) $('host-mode-mod').textContent = `${i.mainMod.name} only`;
+    setMode(i.mode || 'pack');
     $('host-log').innerHTML = '';
     i.log.forEach(logLine);
     $('host-props').innerHTML = propsHtml(i.props || {});
@@ -750,7 +753,11 @@
     $('ram-label').textContent = e.target.value + ' GB';
     state.settings = await K.settings({ ram: Number(e.target.value) });
   });
-  $('close-on-play').addEventListener('change', async (e) => (state.settings = await K.settings({ closeOnPlay: e.target.checked })));
+  $('close-on-play').addEventListener('change', async (e) => {
+    state.settings = await K.settings({ closeOnPlay: e.target.checked });
+    $('keep-open').checked = !state.settings.closeOnPlay;
+  });
+  $('keep-open').addEventListener('change', async (e) => (state.settings = await K.settings({ closeOnPlay: !e.target.checked })));
   $('logout').addEventListener('click', async () => {
     if (state.test && !state.account) {
       state.test = false;
@@ -801,6 +808,7 @@
     state.account = init.account;
     state.settings = init.settings;
     state.selected = init.settings.selected;
+    $('keep-open').checked = !init.settings.closeOnPlay;
     state.testMode = !!init.testMode;
     state.version = init.version;
     $('test-go').hidden = !state.testMode;

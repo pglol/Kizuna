@@ -75,7 +75,13 @@
         "Open-World",
         "RPG",
         "Action"
-      ]
+      ],
+      "mainMod": {
+        "id": "aot_rpg",
+        "file": "aot-rpg",
+        "name": "AoT RPG mod"
+      },
+      "hostMode": "mod"
     },
     {
       "id": "kata",
@@ -148,7 +154,13 @@
         "Martial Arts",
         "Action",
         "Parkour"
-      ]
+      ],
+      "mainMod": {
+        "id": "kata_core",
+        "file": "kata-core",
+        "name": "Kata Core"
+      },
+      "hostMode": "pack"
     }
   ]
 }

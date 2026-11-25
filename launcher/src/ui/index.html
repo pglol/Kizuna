@@ -63,6 +63,7 @@
         <div class="ptext" id="ptext"></div>
         <div class="ptrack"><div class="pfill" id="pfill"></div></div>
       </div>
+      <label class="keepopen" title="Leave the launcher up while you play (e.g. to watch a server console)"><input type="checkbox" id="keep-open"> Keep launcher open</label>
       <button class="plain" id="folder">Open game folder</button>
       <button class="plain" id="host-btn" hidden>Host server</button>
       <button class="play" id="play"><span>PLAY</span></button>
@@ -134,7 +135,7 @@
       </div>
       <div class="row split hfolder"><span class="fine" id="host-folder"></span><span><button class="box small" id="host-folder-change">Change folder</button> <button class="box small" id="host-folder-open">Open</button></span></div>
       <div class="row split hopts">
-        <span class="seg" id="host-mode"><span class="seglabel">Keep updated</span><button data-mode="mod">AoT RPG mod only</button><button data-mode="pack">Whole pack</button></span>
+        <span class="seg" id="host-mode"><span class="seglabel">Keep updated</span><button data-mode="mod" id="host-mode-mod">Game mod only</button><button data-mode="pack">Whole pack</button></span>
         <label class="ramrow">Memory <input type="range" id="host-ram" min="2" max="16" step="1"> <b id="host-ram-label"></b></label>
       </div>
       <div class="row split">
