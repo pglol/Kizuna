@@ -1,4 +1,7 @@
 {
+  "1.3.3": [
+    "Team test builds of servers that are still coming soon can be played with their code (Kata)"
+  ],
   "1.3.2": [
     "Hosting: the server console opens in its own window, which stays up while you play"
   ],
