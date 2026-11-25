@@ -104,38 +104,10 @@ public final class PoseEditorScreen extends Screen {
     private void preset(String name) {
         Pose p = PoseStore.mine;
         p.clear();
-        switch (name) {
-            case "Guard" -> {
-                p.set(Bone.CHEST, 5, 20, 0);
-                p.set(Bone.RIGHT_ARM, -75, -25, 10).set(Bone.RIGHT_FOREARM, 115, 0, 0);
-                p.set(Bone.LEFT_ARM, -60, 20, -10).set(Bone.LEFT_FOREARM, 125, 0, 0);
-                p.set(Bone.RIGHT_LEG, 15, 0, 8).set(Bone.RIGHT_SHIN, 25, 0, 0);
-                p.set(Bone.LEFT_LEG, -20, 0, -6).set(Bone.LEFT_SHIN, 15, 0, 0);
-                p.set(Bone.HEAD, 10, -15, 0);
-            }
-            case "Kick" -> {
-                p.set(Bone.CHEST, -15, 0, 8);
-                p.set(Bone.RIGHT_LEG, -95, 0, 10).set(Bone.RIGHT_SHIN, 10, 0, 0);
-                p.set(Bone.LEFT_SHIN, 20, 0, 0);
-                p.set(Bone.RIGHT_ARM, -30, 0, 40).set(Bone.RIGHT_FOREARM, 90, 0, 0);
-                p.set(Bone.LEFT_ARM, -50, 0, -30).set(Bone.LEFT_FOREARM, 110, 0, 0);
-            }
-            case "Crouch" -> {
-                p.set(Bone.CHEST, 30, 0, 0);
-                p.set(Bone.RIGHT_LEG, -70, 0, 6).set(Bone.RIGHT_SHIN, 120, 0, 0);
-                p.set(Bone.LEFT_LEG, -40, 0, -6).set(Bone.LEFT_SHIN, 90, 0, 0);
-                p.set(Bone.RIGHT_ARM, -40, 0, 0).set(Bone.RIGHT_FOREARM, 60, 0, 0);
-                p.set(Bone.LEFT_ARM, -40, 0, 0).set(Bone.LEFT_FOREARM, 60, 0, 0);
-            }
-            case "Hang" -> {
-                p.set(Bone.RIGHT_ARM, -170, 0, 10).set(Bone.RIGHT_FOREARM, 25, 0, 0);
-                p.set(Bone.LEFT_ARM, -170, 0, -10).set(Bone.LEFT_FOREARM, 25, 0, 0);
-                p.set(Bone.CHEST, -10, 0, 0);
-                p.set(Bone.RIGHT_LEG, 10, 0, 0).set(Bone.RIGHT_SHIN, 35, 0, 0);
-                p.set(Bone.LEFT_LEG, -5, 0, 0).set(Bone.LEFT_SHIN, 20, 0, 0);
-                p.set(Bone.HEAD, -30, 0, 0);
-            }
-            default -> { }
+        Pose preset = Presets.of(name);
+        if (preset != null) {
+            Pose c = preset.copy();
+            for (Bone b : Bone.values()) p.set(b, c.get(b, Pose.PITCH), c.get(b, Pose.YAW), c.get(b, Pose.ROLL));
         }
         for (JointSlider s : sliders) s.sync();
     }

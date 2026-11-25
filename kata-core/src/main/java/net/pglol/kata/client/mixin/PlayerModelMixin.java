@@ -50,6 +50,20 @@ public abstract class PlayerModelMixin {
             m.leftArm.pitch -= c * limbDistance;
             m.rightLeg.pitch -= c * 1.4f * limbDistance;
             m.leftLeg.pitch -= -c * 1.4f * limbDistance;
+            // Sneaking is our Crouch pose (Animator); take out Minecraft's stiff forward tilt so they don't stack.
+            if (m.sneaking) {
+                m.body.pitch = 0;
+                m.rightArm.pitch -= 0.4f;
+                m.leftArm.pitch -= 0.4f;
+                m.rightLeg.pivotZ = 0;
+                m.leftLeg.pivotZ = 0;
+                m.rightLeg.pivotY = 12;
+                m.leftLeg.pivotY = 12;
+                m.head.pivotY = 0;
+                m.body.pivotY = 0;
+                m.rightArm.pivotY = 2;
+                m.leftArm.pivotY = 2;
+            }
         }
         add(m.head, p, Bone.HEAD);
         add(m.rightArm, p, Bone.RIGHT_ARM);

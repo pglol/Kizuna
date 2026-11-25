@@ -62,7 +62,7 @@ public final class Animator {
         long last = System.nanoTime();
         boolean wasGround = true, first = true;
         double fallSpeed;
-        float land, run, crouch, air, gaitW;
+        float land, run, fast, crouch, air, gaitW;
         // Movement, from position (works for other players too).
         float fwd, side, accFwd, accSide, lastYaw, yawRate;
     }
@@ -165,7 +165,11 @@ public final class Animator {
         float speed = MathHelper.clamp(p.limbAnimator.getSpeed(td), 0, 1.2f);
         s.gaitW = approach(s.gaitW, special ? 0 : Math.min(1, speed), dt * 6);
         float w = s.gaitW;
-        s.run = approach(s.run, p.isSprinting() && ground ? 1 : 0, dt * 4);
+        // Fast walk (double-tap forward) and run (holding sprint) look different: see Move.
+        float mvNow = (float) Math.sqrt(s.fwd * s.fwd + s.side * s.side);
+        Move.Mode md = Move.of(p, mvNow);
+        s.run = approach(s.run, md == Move.Mode.RUN && ground ? 1 : 0, dt * 4);
+        s.fast = approach(s.fast, md == Move.Mode.FAST && ground ? 1 : 0, dt * 4);
         s.crouch = approach(s.crouch, p.isInSneakingPose() ? 1 : 0, dt * 7);
         s.air = approach(s.air, ground || special || p.isTouchingWater() ? 0 : 1, dt * 7);
 
@@ -181,7 +185,7 @@ public final class Animator {
         s.land = Math.max(0, s.land - dt * 2.4f);
         float land = s.land * (2 - s.land);
 
-        float run = s.run;
+        float run = s.run, fast = s.fast;
         // How much of the motion is sideways or backwards (strafing, backpedalling).
         float mv = (float) Math.sqrt(s.fwd * s.fwd + s.side * s.side);
         float sideK = mv > 0.3f ? MathHelper.clamp(Math.abs(s.side) / mv, 0, 1) * Math.signum(s.side) : 0;
@@ -190,7 +194,9 @@ public final class Animator {
         // ---- Gait ----
         float phase = limb * 0.6662f;
         float c = MathHelper.cos(phase), sn = MathHelper.sin(phase);
-        float stride = (30 + 22 * run) * (1 - 0.75f * Math.abs(sideK)) * (1 - 0.35f * backK);
+        // Rough: no two steps quite the same when pushing it (a little more or less on each one).
+        float rough = 1 + 0.16f * jitter(MathHelper.floor(phase / MathHelper.PI)) * (fast + run);
+        float stride = (30 + 12 * fast + 24 * run) * rough * (1 - 0.75f * Math.abs(sideK)) * (1 - 0.35f * backK);
         // Legs: Minecraft's swing is taken out (gait), ours put in: right leg forward when c < 0.
         float rHip = c * stride * w, lHip = -c * stride * w;
         o.set(Bone.RIGHT_LEG, Pose.PITCH, rHip);
@@ -201,33 +207,36 @@ public final class Animator {
         o.set(Bone.RIGHT_LEG, Pose.ROLL, sideK > 0 ? step * Math.max(0, sn) : -step * 0.35f * Math.max(0, sn));
         o.set(Bone.LEFT_LEG, Pose.ROLL, sideK < 0 ? -step * Math.max(0, -sn) : step * 0.35f * Math.max(0, -sn));
         // Knees: fold through the swing (more running), give a little on contact.
-        float swingFold = 32 + 48 * run;
+        float swingFold = 32 + 26 * fast + 56 * run;
         float rKnee = w * (Math.max(0, sn) * swingFold + (1 - Math.abs(sn)) * 9);
         float lKnee = w * (Math.max(0, -sn) * swingFold + (1 - Math.abs(sn)) * 9);
         // Arms: opposite the legs, elbows bend more as the arm comes forward and when running.
         // Arms: a free swing opposite the legs, held a little out from the body; straighter on the back
         // swing, bending as they come forward; a full pump when running.
-        float armAmp = (34 + 26 * run) * (1 - 0.6f * Math.abs(sideK));
+        // Fast walk: big, loose, wide swings with the shoulders thrown into them. Run: a hard, tight pump.
+        float armAmp = (34 + 24 * fast + 32 * run) * rough * (1 - 0.6f * Math.abs(sideK));
         o.set(Bone.RIGHT_ARM, Pose.PITCH, -c * armAmp * w);
         o.set(Bone.LEFT_ARM, Pose.PITCH, c * armAmp * w);
-        o.set(Bone.RIGHT_ARM, Pose.ROLL, 5 + w * (2 + 7 * run));
-        o.set(Bone.LEFT_ARM, Pose.ROLL, -5 - w * (2 + 7 * run));
-        float elbowBase = 6 + 70 * run;
-        o.set(Bone.RIGHT_FOREARM, Pose.PITCH, w * (elbowBase + Math.max(0, c) * (24 - 10 * run)));
-        o.set(Bone.LEFT_FOREARM, Pose.PITCH, w * (elbowBase + Math.max(0, -c) * (24 - 10 * run)));
+        o.set(Bone.RIGHT_ARM, Pose.ROLL, 5 + w * (2 + 9 * fast + 4 * run));
+        o.set(Bone.LEFT_ARM, Pose.ROLL, -5 - w * (2 + 9 * fast + 4 * run));
+        float elbowBase = 6 + 38 * fast + 78 * run;
+        o.set(Bone.RIGHT_FOREARM, Pose.PITCH, w * (elbowBase + Math.max(0, c) * (24 + 6 * fast - 12 * run)));
+        o.set(Bone.LEFT_FOREARM, Pose.PITCH, w * (elbowBase + Math.max(0, -c) * (24 + 6 * fast - 12 * run)));
 
         // The body: drops as far as the planted leg is angled (feet stay down), bobbing twice a stride;
         // sways over the planted foot; shoulders turn against the hips.
         float planted = (float) Math.toRadians(Math.abs(c) * stride * w);
-        float drop = 12 * (1 - MathHelper.cos(planted)) + w * (0.4f + 0.6f * run) * (1 - Math.abs(sn) * 0.5f);
+        float drop = 12 * (1 - MathHelper.cos(planted)) + w * (0.4f + 0.6f * fast + 0.9f * run) * (1 - Math.abs(sn) * 0.5f);
         o.offset[1] = drop;
-        o.offset[0] = w * sn * (0.3f + 0.15f * run);
-        o.set(Bone.ROOT, Pose.ROLL, -w * sn * 0.8f);
-        o.set(Bone.CHEST, Pose.YAW, w * c * (6 + 5 * run));
-        o.set(Bone.CHEST, Pose.ROLL, w * sn * 1.2f);
+        o.offset[0] = w * sn * (0.3f + 0.35f * fast + 0.15f * run);
+        o.set(Bone.ROOT, Pose.ROLL, -w * sn * (0.8f + 1.8f * fast + 0.7f * run));
+        o.set(Bone.CHEST, Pose.YAW, w * c * (6 + 10 * fast + 7 * run) * rough);
+        o.set(Bone.CHEST, Pose.ROLL, w * sn * (1.2f + 2.8f * fast + 1.6f * run));
+        // Pushing forward: shoulders hunched over it.
+        o.set(Bone.CHEST, Pose.PITCH, w * (5 * fast + 7 * run));
 
         // Momentum: lean with speed and into speeding up, back when stopping or backpedalling; bank into turns.
-        float lean = w * (1.5f + 7 * run) - backK * w * 5 + MathHelper.clamp(s.accFwd * 0.7f, -5, 5);
+        float lean = w * (1.5f + 5 * fast + 11 * run) - backK * w * 5 + MathHelper.clamp(s.accFwd * 0.7f, -5, 5);
         o.set(Bone.ROOT, Pose.PITCH, lean);
         // Strafing leans into the way they're going (more as they set off), turning banks into the turn.
         float bank = MathHelper.clamp(s.yawRate * 0.012f * w, -6, 6) + sideK * w * 5 + MathHelper.clamp(s.accSide * 0.4f, -3, 3);
@@ -247,11 +256,16 @@ public final class Animator {
         rKnee += idle * (5 + Math.max(0, shift) * 6);
         lKnee += idle * (5 + Math.max(0, -shift) * 6);
 
-        // Crouch: deep knees, elbows in, head up to keep looking ahead.
-        rKnee += s.crouch * 38;
-        lKnee += s.crouch * 38;
-        add(o, Bone.RIGHT_FOREARM, Pose.PITCH, s.crouch * 30);
-        add(o, Bone.LEFT_FOREARM, Pose.PITCH, s.crouch * 30);
+        // Crouch (sneaking): the Crouch pose, hips lowered so the feet stay down.
+        if (s.crouch > 0) {
+            for (Bone b : Bone.values()) {
+                if (b == Bone.RIGHT_SHIN || b == Bone.LEFT_SHIN) continue;
+                for (int ax = 0; ax < 3; ax++) add(o, b, ax, Presets.CROUCH.get(b, ax) * s.crouch);
+            }
+            rKnee += Presets.CROUCH.get(Bone.RIGHT_SHIN, Pose.PITCH) * s.crouch;
+            lKnee += Presets.CROUCH.get(Bone.LEFT_SHIN, Pose.PITCH) * s.crouch;
+            o.offset[1] += Presets.CROUCH_DROP * s.crouch;
+        }
 
         // In the air: tuck going up, reach for the ground coming down, arms out for balance.
         float rising = (float) MathHelper.clamp(vy / 0.42, -1, 1);
@@ -286,6 +300,15 @@ public final class Animator {
         o.set(Bone.LEFT_SHIN, Pose.PITCH, lKnee);
 
         return o;
+    }
+
+    /** A steady random number in -1..1 for each step. */
+    private static float jitter(int step) {
+        int x = step * 0x9E3779B1;
+        x ^= x >>> 15;
+        x *= 0x85EBCA6B;
+        x ^= x >>> 13;
+        return ((x & 0xFFFF) / 32767.5f) - 1;
     }
 
     private static float approach(float v, float target, float step) {

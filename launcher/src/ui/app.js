@@ -165,8 +165,8 @@
   function channelOf(s) {
     const list = (s && s.channels) || [];
     const want = (state.settings.channels || {})[s && s.id];
-    const c = list.find((x) => x.id === want && !x.locked);
-    return c || list.find((x) => !x.locked) || list[0] || { id: 'public', name: 'Public' };
+    const c = list.find((x) => x.id === want && !x.locked && !x.soon);
+    return c || list.find((x) => !x.locked && !x.soon) || list[0] || { id: 'public', name: 'Public' };
   }
 
   function renderChannels(s) {
@@ -181,10 +181,11 @@
     $('chans').previousElementSibling.hidden = list.length < 2;
     for (const c of list) {
       const b = document.createElement('button');
-      b.className = 'chan' + (c.id === cur.id ? ' on' : '') + (c.locked ? ' locked' : '');
+      b.className = 'chan' + (c.id === cur.id ? ' on' : '') + (c.locked ? ' locked' : '') + (c.soon ? ' soon' : '');
       b.innerHTML = c.locked ? LOCK : '';
       b.append(document.createTextNode(c.name));
-      b.title = c.note || c.name;
+      b.title = c.soon ? `${c.name} isn't open yet` : c.note || c.name;
+      if (c.soon) b.disabled = true;
       b.addEventListener('click', async () => {
         if (state.busy || (state.playing && s.id === state.playingId)) return;
         if (c.locked) return openCode(`${s.name}: ${c.name}`);

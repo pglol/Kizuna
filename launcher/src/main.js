@@ -258,10 +258,11 @@ ipcMain.handle('hub', async () => {
       locked: !!c.codeHash && !unlocked.has(c.codeHash),
     }));
     // A server that's still "coming soon" opens for the team: only its coded builds they've unlocked.
+    // The other builds stay in the picker, marked as not open yet, so every game shows the same choices.
     if (s.status === 'soon') {
       const team = s.channels.filter((c) => c.codeHash && !c.locked);
       if (team.length) {
-        s.channels = team;
+        s.channels = s.channels.map((c) => (team.includes(c) ? c : { ...c, soon: true }));
         s.status = 'testing';
       }
     }
