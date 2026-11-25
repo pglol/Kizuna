@@ -11,7 +11,7 @@ metafile = true
 
 [[files]]
 file = "mods/kata-core.pw.toml"
-hash = "62f15b45ed615ef90ca782bfe36c76e0072c46e922b4e67ef4f9876c373b02c0"
+hash = "50f56d30b34a409abe31024a1ac5920b521bfdb8bcfdc809271e5acad5dad262"
 metafile = true
 
 [[files]]
