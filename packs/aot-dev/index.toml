@@ -26,7 +26,7 @@ hash = "5986efada30e7f010293f88598f1d36c6011fc270172fdae52c69c91f34ef34b"
 
 [[files]]
 file = "config/modmenu.json"
-hash = "18a3ac5282758f7e45d8381bae6df93035f6e7629c72a0871fcea6809bf1f2ba"
+hash = "5207f1b2c56f66bd1b637485347d47b17e829576c9a216e47198360c3e124ca0"
 
 [[files]]
 file = "config/sodium-extra-options.json"
