@@ -237,6 +237,14 @@ ipcMain.handle('hub', async () => {
       ...c,
       locked: !!c.codeHash && !unlocked.has(c.codeHash),
     }));
+    // A server that's still "coming soon" opens for the team: only its coded builds they've unlocked.
+    if (s.status === 'soon') {
+      const team = s.channels.filter((c) => c.codeHash && !c.locked);
+      if (team.length) {
+        s.channels = team;
+        s.status = 'testing';
+      }
+    }
   }
   return hub;
 });
@@ -476,9 +484,9 @@ ipcMain.handle('play', async (_e, id, test, channelId, hostLabel) => {
   const hub = store.read('hub-cache.json', { servers: [] });
   const found = (hub.servers || []).find((s) => s.id === id);
   if (!found) return { ok: false, error: 'That server is not available right now.' };
-  if (found.status === 'soon') return { ok: false, error: `${found.name} isn't open yet.` };
   const chans = found.channels && found.channels.length ? found.channels : [{ id: 'public', pack: found.pack, address: found.address }];
   const ch = chans.find((c) => c.id === channelId) || chans[0];
+  if (found.status === 'soon' && !(ch.codeHash && (store.settings.get().unlocked || []).includes(ch.codeHash))) return { ok: false, error: `${found.name} isn't open yet.` };
   if (ch.codeHash && !(store.settings.get().unlocked || []).includes(ch.codeHash)) return { ok: false, error: `${ch.name} needs an access code.`, code: 'locked' };
   const host = (ch.addresses || []).find((a) => a.label === hostLabel);
   const server = { ...found, pack: ch.pack || found.pack, address: (host && host.address) || ch.address || found.address, dir: dirName(found.id, ch.id), channel: ch.id };

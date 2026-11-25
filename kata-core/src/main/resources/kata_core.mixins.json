@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.pglol.kata.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["ModelPartMixin", "ModelPartAccessor", "CuboidAccessor", "BipedModelMixin", "PlayerModelMixin", "PlayerRendererMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

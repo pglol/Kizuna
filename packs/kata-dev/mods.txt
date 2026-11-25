@@ -1,0 +1,5 @@
+# Kata team test build: the combat and movement core and what it needs.
+#   modrinth <slug> [both|client|server]   ·   file <path-in-repo> [side]
+modrinth fabric-api both
+modrinth modmenu client
+file dist/kata-core.jar both

@@ -1,0 +1,17 @@
+package net.pglol.kata.client.mixin;
+
+import net.minecraft.client.model.ModelPart;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Accessor;
+
+import java.util.List;
+import java.util.Map;
+
+@Mixin(ModelPart.class)
+public interface ModelPartAccessor {
+    @Accessor("cuboids")
+    List<ModelPart.Cuboid> kata$cuboids();
+
+    @Accessor("children")
+    Map<String, ModelPart> kata$children();
+}

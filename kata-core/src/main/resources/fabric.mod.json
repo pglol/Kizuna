@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "kata_core",
+  "version": "${version}",
+  "name": "Kata Core",
+  "description": "The body, movement and combat core for Kizuna's fighting games: a bendable player skeleton, stances, parkour and melee that other mods build their weapons and powers on.",
+  "authors": ["pglol"],
+  "license": "All-Rights-Reserved",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["net.pglol.kata.KataCore"],
+    "client": ["net.pglol.kata.client.KataClient"]
+  },
+  "mixins": ["kata_core.mixins.json"],
+  "depends": { "fabricloader": ">=0.16.0", "minecraft": "~1.21.1", "java": ">=21", "fabric-api": "*" }
+}

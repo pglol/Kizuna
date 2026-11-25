@@ -1,0 +1,75 @@
+package net.pglol.kata.client.mixin;
+
+import net.minecraft.client.model.ModelPart;
+import net.minecraft.client.render.entity.model.BipedEntityModel;
+import net.minecraft.client.render.entity.model.PlayerEntityModel;
+import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.util.Arm;
+import net.pglol.kata.client.PoseStore;
+import net.pglol.kata.client.Rig;
+import net.pglol.kata.rig.Bone;
+import net.pglol.kata.rig.Pose;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+/**
+ * The player model: its outer skin layer gets roles too, the pose's shoulder, hip and head turns are
+ * added after Minecraft's own animation, and held items follow the chest and the forearm.
+ */
+@Mixin(PlayerEntityModel.class)
+public abstract class PlayerModelMixin {
+    @Shadow @Final public ModelPart leftSleeve;
+    @Shadow @Final public ModelPart rightSleeve;
+    @Shadow @Final public ModelPart leftPants;
+    @Shadow @Final public ModelPart rightPants;
+    @Shadow @Final public ModelPart jacket;
+
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void kata$roles(ModelPart root, boolean thinArms, CallbackInfo ci) {
+        Rig.tag(leftSleeve, Rig.Role.LEFT_SLEEVE);
+        Rig.tag(rightSleeve, Rig.Role.RIGHT_SLEEVE);
+        Rig.tag(leftPants, Rig.Role.LEFT_PANTS);
+        Rig.tag(rightPants, Rig.Role.RIGHT_PANTS);
+        Rig.tag(jacket, Rig.Role.JACKET);
+    }
+
+    @Inject(method = "setAngles(Lnet/minecraft/entity/LivingEntity;FFFFF)V", at = @At("TAIL"))
+    private void kata$pose(LivingEntity entity, float limbAngle, float limbDistance, float age, float headYaw, float headPitch, CallbackInfo ci) {
+        Pose p = PoseStore.of(entity);
+        if (p == null) return;
+        BipedEntityModel<?> m = (BipedEntityModel<?>) (Object) this;
+        add(m.head, p, Bone.HEAD);
+        add(m.rightArm, p, Bone.RIGHT_ARM);
+        add(m.leftArm, p, Bone.LEFT_ARM);
+        add(m.rightLeg, p, Bone.RIGHT_LEG);
+        add(m.leftLeg, p, Bone.LEFT_LEG);
+        m.hat.copyTransform(m.head);
+        rightSleeve.copyTransform(m.rightArm);
+        leftSleeve.copyTransform(m.leftArm);
+        rightPants.copyTransform(m.rightLeg);
+        leftPants.copyTransform(m.leftLeg);
+        jacket.copyTransform(m.body);
+    }
+
+    private static void add(ModelPart part, Pose p, Bone b) {
+        part.pitch += p.rad(b, Pose.PITCH);
+        part.yaw += p.rad(b, Pose.YAW);
+        part.roll += p.rad(b, Pose.ROLL);
+    }
+
+    @Inject(method = "setArmAngle", at = @At("HEAD"))
+    private void kata$itemChest(Arm arm, MatrixStack matrices, CallbackInfo ci) {
+        Rig.chest(matrices, Rig.current);
+    }
+
+    @Inject(method = "setArmAngle", at = @At("TAIL"))
+    private void kata$itemForearm(Arm arm, MatrixStack matrices, CallbackInfo ci) {
+        BipedEntityModel<?> m = (BipedEntityModel<?>) (Object) this;
+        Rig.forearm(matrices, arm == Arm.RIGHT ? m.rightArm : m.leftArm, arm == Arm.RIGHT, Rig.current);
+    }
+}

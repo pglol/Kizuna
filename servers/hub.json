@@ -75,13 +75,13 @@
     {
       "id": "kata",
       "name": "Kata",
-      "tagline": "Martial arts duels in a ruined kingdom.",
-      "description": "A melee combat server built around fighting styles: learn stances, chain attacks into your own combo deck, and prove it in duels and wandering fights.",
+      "tagline": "High school martial arts.",
+      "description": "A martial arts high school where every student fights in their own style: learn stances, chain your own combos, run the rooftops, and settle it on the mat.",
       "status": "soon",
       "pack": "packs/kata",
       "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",
-      "fabric": "0.16.10",
+      "fabric": "0.17.2",
       "accent": "#2f5d8a",
       "short": "KT",
       "icon": "",
@@ -94,8 +94,26 @@
           "id": "public",
           "name": "Public",
           "pack": "packs/kata",
-          "address": "25.52.234.232:25565",
+          "address": "CHANGE_ME_KATA:25565",
           "note": ""
+        },
+        {
+          "id": "dev",
+          "name": "Development",
+          "pack": "packs/kata-dev",
+          "address": "",
+          "addresses": [
+            {
+              "label": "Test world",
+              "address": ""
+            },
+            {
+              "label": "Hamachi",
+              "address": "25.52.234.232:25566"
+            }
+          ],
+          "codeHash": "24844d566607d685f630522b6857a01d77fcf6e89837a82bdaf82700cbc320ff",
+          "note": "Team test build. Test world: make a creative world and run /kata testzone."
         }
       ],
       "theme": "peaks"

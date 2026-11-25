@@ -1,0 +1,2 @@
+# Kata (public): not open yet. The team build is packs/kata-dev.
+modrinth fabric-api both

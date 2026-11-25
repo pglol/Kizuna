@@ -48,6 +48,7 @@
     beta: ['BETA', '#6b3fa0'],
     private: ['PRIVATE', '#15120f'],
     soon: ['COMING SOON', '#7a7064'],
+    testing: ['TEAM TEST', '#a8432a'],
   };
 
   function renderAccount() {
