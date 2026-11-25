@@ -8,7 +8,8 @@ out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(repo, "_site")
 hub = json.load(open(os.path.join(repo, "servers", "hub.json")))
 servers = [s for s in hub["servers"] if s.get("status") != "private"]
 REPO_URL = "https://github.com/pglol/minecraft"
-RELEASES = REPO_URL + "/releases/latest"
+# The Windows installer always has the same name, so this link downloads the newest one directly.
+RELEASES = REPO_URL + "/releases/latest/download/Kizuna-Launcher-Setup.exe"
 e = html.escape
 
 shutil.rmtree(out, ignore_errors=True)
@@ -42,6 +43,19 @@ def page(title, body, depth=0, desc=""):
 <link rel="icon" type="image/png" href="{up}favicon.png"><link rel="apple-touch-icon" href="{up}icon.png"><meta property="og:image" content="{up}icon.png"><link rel="stylesheet" href="{up}fonts.css?v={VER}"><link rel="stylesheet" href="{up}style.css?v={VER}"></head>
 <body><header><a class="brand" href="{up}index.html"><img src="{up}icon.png" width="40" height="40" alt=""><b>KIZUNA</b></a><nav>{nav}<a class="tag red" data-dl href="{RELEASES}">Download</a></nav></header>
 {body}
+<div class="modal" id="install" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="install-h">
+<button class="x" data-close aria-label="Close">×</button>
+<h2 id="install-h">Your download has started</h2>
+<p class="small">Kizuna Launcher for Windows. If nothing downloaded, <a data-dl data-again href="{RELEASES}">click here to try again</a>.</p>
+<ol class="steps">
+<li><b>Open the installer.</b> It's <code data-exe>Kizuna-Launcher-Setup.exe</code>, in your browser's downloads (top right in Chrome and Edge) or your Downloads folder. If your browser says it isn't commonly downloaded, choose <b>Keep</b>.</li>
+<li><b>Let Windows run it.</b> If a blue "Windows protected your PC" box appears, click <b>More info</b>, then <b>Run anyway</b>. Kizuna is new, so Windows doesn't know it yet.</li>
+<li><b>That's the install.</b> There are no steps: it installs in a few seconds and opens by itself, with a shortcut on your desktop and Start menu.</li>
+<li><b>Sign in</b> with the Microsoft account that owns Minecraft: Java Edition.</li>
+<li><b>Pick a game and press Play.</b> The first time, the launcher fetches Java, Minecraft and the game's mods for you. It keeps itself up to date after that.</li>
+</ol>
+<button class="tag red" data-close>Got it</button>
+</div></div>
 <footer><a href="{up}index.html">Kizuna</a><a href="{up}privacy.html">Privacy</a><a href="{REPO_URL}">GitHub</a><br>
 Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</footer>
 <script>
@@ -49,8 +63,19 @@ Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Syne
 fetch('https://api.github.com/repos/pglol/minecraft/releases/latest').then(r => r.ok ? r.json() : null).then(r => {{
   const a = r && (r.assets || []).find(x => /\\.exe$/i.test(x.name));
   if (a) document.querySelectorAll('[data-dl]').forEach(el => el.href = a.browser_download_url);
+  if (a) document.querySelectorAll('[data-exe]').forEach(el => el.textContent = a.name);
   if (r && r.tag_name) document.querySelectorAll('[data-ver]').forEach(el => el.textContent = r.tag_name);
 }}).catch(() => {{}});
+// Downloading: the installer downloads straight away and the install steps pop up.
+const modal = document.getElementById('install');
+const closeModal = () => {{ modal.hidden = true; document.body.classList.remove('locked'); }};
+document.querySelectorAll('[data-dl]').forEach(el => el.addEventListener('click', () => {{
+  if (el.hasAttribute('data-again')) return;
+  setTimeout(() => {{ modal.hidden = false; document.body.classList.add('locked'); modal.querySelector('.x').focus(); }}, 150);
+}}));
+modal.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeModal));
+modal.addEventListener('click', ev => {{ if (ev.target === modal) closeModal(); }});
+document.addEventListener('keydown', ev => {{ if (ev.key === 'Escape' && !modal.hidden) closeModal(); }});
 // Launcher release notes, newest first.
 const box = document.getElementById('releases');
 if (box) fetch('https://api.github.com/repos/pglol/minecraft/releases?per_page=4').then(r => r.ok ? r.json() : []).then(list => {{
@@ -60,7 +85,7 @@ if (box) fetch('https://api.github.com/repos/pglol/minecraft/releases?per_page=4
     const when = new Date(r.published_at).toLocaleDateString(undefined, {{ month: 'short', day: 'numeric', year: 'numeric' }});
     d.innerHTML = '<small style="color:#1c1712">LAUNCHER · ' + when + '</small>';
     const b = document.createElement('b'); b.textContent = r.name || r.tag_name; d.append(b);
-    const notes = (r.body || '').split('\n').map(x => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
+    const notes = (r.body || '').split('\\n').map(x => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
     if (notes.length) {{ const ul = document.createElement('ul'); for (const n of notes) {{ const li = document.createElement('li'); li.textContent = n; ul.append(li); }} d.append(ul); }}
     box.append(d);
   }}
@@ -87,7 +112,7 @@ for s in servers:
 index = f"""<section class="splash"{hero_style}><div class="splash-ink">
 <div class="seal"><img src="icon.png" width="64" height="64" alt=""></div>
 <h1>Our anime servers.<br>One launcher.</h1>
-<a class="cta" data-dl href="{RELEASES}">DOWNLOAD</a><span class="small light">Kizuna <span data-ver>launcher</span> · Windows, Mac, Linux</span>
+<a class="cta" data-dl href="{RELEASES}">DOWNLOAD</a><span class="small light">Kizuna <span data-ver>launcher</span> · Windows</span>
 </div></section>
 <h2 id="servers">Servers</h2><div class="grid big">{cards}</div>
 <h2 id="news">What's new</h2><div class="feed"><div class="col">{"".join(posts) or '<div class="post"><b>Nothing yet.</b></div>'}</div><div class="col" id="releases"></div></div>"""

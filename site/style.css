@@ -71,3 +71,18 @@ header .brand img { width: 40px; height: 40px; }
 .post ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink2); font-size: 14px; }
 body > main.page { margin-top: 0; }
 @media (max-width: 760px) { .feed { grid-template-columns: 1fr; } .grid.big { grid-template-columns: 1fr; } .splash { min-height: 360px; } }
+
+/* Install steps, shown when the download starts */
+.modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(28, 23, 18, 0.55); animation: fade 0.18s ease-out; }
+.modal[hidden] { display: none; }
+.modal .sheet { position: relative; width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--page); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 6px 6px 0 var(--ink); padding: 26px 26px 22px; animation: pop 0.22s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.modal h2 { margin: 0 32px 6px 0; }
+.modal .x { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border: 2px solid var(--ink); border-radius: 6px; background: var(--page); font-size: 20px; line-height: 1; cursor: pointer; }
+.modal .steps { margin: 16px 0 20px; padding-left: 22px; display: grid; gap: 12px; line-height: 1.45; }
+.modal .steps li::marker { font-weight: 700; }
+.modal code { font-size: 0.92em; padding: 1px 5px; border: 1px solid var(--ink); border-radius: 4px; background: #fff; }
+.modal .tag { cursor: pointer; }
+body.locked { overflow: hidden; }
+@keyframes fade { from { opacity: 0; } }
+@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+@media (max-width: 520px) { .modal .sheet { padding: 22px 18px 18px; } }

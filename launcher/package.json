@@ -1,7 +1,7 @@
 {
   "name": "kizuna-launcher",
   "productName": "Kizuna Launcher",
-  "version": "0.62.0",
+  "version": "0.63.0",
   "description": "Sign in, pick a server, press Play.",
   "main": "src/main.js",
   "author": "pglol",
@@ -48,7 +48,7 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "Kizuna-Launcher-Setup.${ext}"
     },
     "mac": {
       "target": [

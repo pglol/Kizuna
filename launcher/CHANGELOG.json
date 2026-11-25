@@ -1,4 +1,7 @@
 {
+  "0.63.0": [
+    "The website's Download button now downloads the installer straight away and shows how to install it."
+  ],
   "0.62.0": [
     "Games that aren't open yet still show every build in the picker: the ones you can't play yet are greyed out as not open."
   ],
