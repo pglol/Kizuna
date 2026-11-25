@@ -16,29 +16,39 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Basic parkour, worked out on your own game (that's where Minecraft moves you) and shown to everyone.
+ * Basic parkour, grounded in what a person can do: no sticking to flat walls. You get up things by
+ * jumping, running a couple of steps up a wall, catching lips with your hands, pulling yourself up and
+ * springing from one ledge to the next. Worked out on your own game (that's where Minecraft moves you)
+ * and shown to everyone.
+ *
+ * Space decides how far you go: a tap near a ledge just catches it (hang); holding space or tapping it
+ * twice climbs all the way. A small marker shows where your hands will go (white: a jump away, green:
+ * grab now).
  *
  *  - Vault: running or fast walking at something low and thin (up to 1.5 blocks), press jump: over it
  *    with one hand planted, keeping your speed.
- *  - Climb onto: jump at something up to about 2.4 blocks high (or too thick to vault): pull up onto it.
- *  - Ledge hang: jump at a taller wall holding jump and forward, and you catch the top if your hands
- *    reach it. A/D shuffle along, W or jump pulls up, sneak drops.
- *  - Wall climb: no ledge in reach, you grip the wall itself. W/S up and down, A/D sideways; it costs
- *    stamina. Reaching the top pulls you up; jump kicks off backwards; sneak lets go.
- *  - Run-up: at a full run into a tall wall, jump to run a couple of blocks up it before grabbing on.
+ *  - Climb onto: hold or double-tap jump at something up to about 2.3 blocks high: pull up onto it.
+ *  - Ledge hang: tap jump near a lip you can reach. A/D shuffle along it, sneak drops.
+ *  - Up from a hang: hold or double-tap jump. Room on top: pull up onto it. No room (a window sill
+ *    with wall above): spring up to the next lip in reach.
+ *  - Wall run-up: at a full run into a wall, jump and you run two or three steps up it, catching any
+ *    lip your hands reach on the way.
+ *  - Kicking off: only jump together with the movement key pointing away from the wall throws you
+ *    back off it (whichever way the camera faces). Jump alone never does.
  */
 public final class Parkour {
     private Parkour() {}
 
-    public enum Mode { NONE, VAULT, HANG, CLIMB, PULL, MANTLE }
+    /** Synced by ordinal: add new moves at the end. */
+    public enum Mode { NONE, VAULT, HANG, RUNUP, PULL, MANTLE, HOP }
 
-    /** What the animator needs for a player: the move, how far into it (0..1), shuffle side, step phase. */
-    public record View(Mode mode, float progress, int side, float phase) {
-        static final View NONE = new View(Mode.NONE, 0, 0, 0);
+    /** What the animator needs: the move, how far into it (0..1), shuffle side, step phase, seconds in. */
+    public record View(Mode mode, float progress, int side, float phase, float secs) {
+        static final View NONE = new View(Mode.NONE, 0, 0, 0, 0);
     }
 
-    private static final int VAULT_TICKS = 9, PULL_TICKS = 13, MANTLE_TICKS = 9;
-    private static final float CLIMB_COST = 1 / (9f * 20), RUNUP_COST = 0.08f;
+    private static final int VAULT_TICKS = 9, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 8;
+    private static final float RUNUP_COST = 0.12f;
 
     // ---- your own state ----
     private static Mode mode = Mode.NONE;
@@ -52,6 +62,16 @@ public final class Parkour {
     private static long started;
     private static Mode sentMode = Mode.NONE;
     private static int sentSide;
+    // Space: a tap grabs; holding it (HOLD ticks) or a second tap within DOUBLE ticks climbs.
+    private static final int HOLD = 5, DOUBLE = 8, INTENT = 16;
+    private enum Intent { NONE, GRAB, CLIMB }
+    private static Intent intent = Intent.NONE;
+    private static int pressAge = 99, intentAge;
+
+    /** The marker: where your hands would go (the lip's edge), and whether space grabs it right now. */
+    public static volatile Vec3d marker;
+    public static volatile boolean markerReady;
+    public static volatile Direction markerDir = Direction.NORTH;
 
     // ---- everyone else, from the server ----
     private record Remote(Mode mode, int side, long started) { }
@@ -68,23 +88,27 @@ public final class Parkour {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && p.getId() == mc.player.getId()) {
             if (mode == Mode.NONE) return View.NONE;
-            return new View(mode, progress(mode, (System.nanoTime() - started) / 1e9f), side, phase);
+            float secs = (System.nanoTime() - started) / 1e9f;
+            return new View(mode, progress(mode, secs), side, phase, secs);
         }
         Remote r = REMOTE.get(p.getId());
         if (r == null) return View.NONE;
         float secs = (System.nanoTime() - r.started) / 1e9f;
-        if ((r.mode == Mode.VAULT || r.mode == Mode.PULL || r.mode == Mode.MANTLE) && secs > 2) return View.NONE;
+        if (r.mode != Mode.HANG && secs > 2) return View.NONE;
         float moved = (float) Math.sqrt(p.squaredDistanceTo(p.prevX, p.prevY, p.prevZ));
-        return new View(r.mode, progress(r.mode, secs), r.side, secs * 9 * Math.min(1, moved * 12));
+        return new View(r.mode, progress(r.mode, secs), r.side, secs * 9 * Math.min(1, moved * 12), secs);
     }
 
     private static float progress(Mode m, float secs) {
-        return switch (m) {
-            case VAULT -> Math.min(1, secs / (VAULT_TICKS / 20f));
-            case PULL -> Math.min(1, secs / (PULL_TICKS / 20f));
-            case MANTLE -> Math.min(1, secs / (MANTLE_TICKS / 20f));
+        int t = switch (m) {
+            case VAULT -> VAULT_TICKS;
+            case PULL -> PULL_TICKS;
+            case MANTLE -> MANTLE_TICKS;
+            case HOP -> HOP_TICKS;
+            case RUNUP -> RUNUP_TICKS;
             default -> 0;
         };
+        return t == 0 ? 0 : Math.min(1, secs / (t / 20f));
     }
 
     // ---- geometry ----
@@ -108,9 +132,15 @@ public final class Parkour {
         return !empty(p, new Box(a.x - 0.2, at.y + y0, a.z - 0.2, a.x + 0.2, at.y + y1, a.z + 0.2));
     }
 
+    /** Room straight up beside the wall, from the feet (or where you are) to y. */
+    private static boolean clearUp(ClientPlayerEntity p, Vec3d at, double feetY, double y) {
+        double from = Math.max(feetY, p.getY());
+        return y <= from || empty(p, column(at.x, from, at.z, y - from));
+    }
+
     /**
-     * The top of whatever is in front: the lowest height (between lo and hi above feetY) where a player
-     * could stand on it, with room straight up beside it to get there. null if there's none.
+     * The top of whatever is in front where a player could stand on it: the lowest height between lo
+     * and hi above feetY, with room straight up beside it to get there. null if there's none.
      */
     private static Double ledge(ClientPlayerEntity p, Vec3d at, double feetY, double lo, double hi) {
         Vec3d top = ahead(at, 0.8);
@@ -118,15 +148,28 @@ public final class Parkour {
             double y = feetY + dy;
             if (!empty(p, column(top.x, y, top.z, 1.8))) continue;
             if (empty(p, column(top.x, y - 0.07, top.z, 0.07))) continue;
-            if (!empty(p, column(at.x, Math.max(feetY, p.getY()), at.z, y + 1.8 - Math.max(feetY, p.getY())))) return null;
-            return y;
+            return clearUp(p, at, feetY, y + 1.8) ? y : null;
+        }
+        return null;
+    }
+
+    /** A lip the hands can hold: a top edge in front with a little room above it (no need to stand). */
+    private static Double lip(ClientPlayerEntity p, Vec3d at, double feetY, double lo, double hi) {
+        Vec3d top = ahead(at, 0.55);
+        for (double dy = lo; dy <= hi + 1e-6; dy += 1 / 16.0) {
+            double y = feetY + dy;
+            Box hands = new Box(top.x - 0.2, y, top.z - 0.2, top.x + 0.2, y + 0.35, top.z + 0.2);
+            if (!empty(p, hands)) continue;
+            if (empty(p, new Box(top.x - 0.2, y - 0.07, top.z - 0.2, top.x + 0.2, y, top.z + 0.2))) continue;
+            return clearUp(p, at, feetY, y + 0.2) ? y : null;
         }
         return null;
     }
 
     /** Where to hold on: centred 0.31 from the face of the block in front at height y. */
-    private static Vec3d snap(ClientPlayerEntity p, Vec3d at, double y) {
-        BlockPos b = BlockPos.ofFloored(ahead(at, 0.6).x, y, ahead(at, 0.6).z);
+    private static Vec3d snap(Vec3d at, double y) {
+        Vec3d a = ahead(at, 0.6);
+        BlockPos b = BlockPos.ofFloored(a.x, y, a.z);
         double x = at.x, z = at.z;
         switch (dir) {
             case EAST -> x = b.getX() - 0.31;
@@ -144,6 +187,7 @@ public final class Parkour {
         ClientPlayerEntity p = mc.player;
         if (p == null) {
             mode = Mode.NONE;
+            marker = null;
             return;
         }
         boolean jump = mc.options.jumpKey.isPressed() && mc.currentScreen == null;
@@ -153,6 +197,18 @@ public final class Parkour {
         boolean ground = p.isOnGround();
         float fwd = p.input.movementForward;
         if (cooldown > 0) cooldown--;
+
+        // Tap, hold or double tap.
+        pressAge++;
+        if (jumpEdge) {
+            boolean twice = pressAge <= DOUBLE;
+            pressAge = 0;
+            intent = twice ? Intent.CLIMB : Intent.GRAB;
+            intentAge = 0;
+        } else if (jump && pressAge >= HOLD && intent == Intent.GRAB) intent = Intent.CLIMB;
+        if (intent != Intent.NONE && ++intentAge > INTENT && !jump) intent = Intent.NONE;
+        boolean climbAsk = intent == Intent.CLIMB;
+        boolean away = away(p);
 
         boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater() || p.isFallFlying() || p.isDead();
         if (free && mode != Mode.NONE) set(Mode.NONE);
@@ -166,49 +222,27 @@ public final class Parkour {
                 if (justJumped && fwd > 0.1) {
                     double feet = groundY;
                     Double low = ledge(p, at, feet, 0.5, 1.6);
-                    if (low != null) {
+                    if (low != null && Move.mode != Move.Mode.WALK) {
                         double h = low - feet;
                         boolean thin = empty(p, column(ahead(at, 1.9).x, feet, ahead(at, 1.9).z, 1.8))
                             && empty(p, column(ahead(at, 1.05).x, low + 0.05, ahead(at, 1.05).z, 1.8));
-                        if (thin && Move.mode != Move.Mode.WALK) {
+                        if (thin) {
                             double speed = Math.max(0.34, p.getVelocity().horizontalLength());
                             p.setVelocity(dir.getOffsetX() * speed, 0.42 + Math.max(0, h - 1.0) * 0.36, dir.getOffsetZ() * speed);
                             set(Mode.VAULT);
-                        } else startPath(p, Mode.MANTLE, low);
-                        break;
-                    }
-                    Double mid = ledge(p, at, feet, 1.6, 2.4);
-                    if (mid != null) {
-                        startPath(p, Mode.MANTLE, mid);
-                        break;
-                    }
-                    if (Move.mode == Move.Mode.RUN && wall(p, at, 0.3, 1.8) && Move.stamina > RUNUP_COST) {
-                        // Run up the wall: a strong kick up it, then catch on below.
-                        Move.stamina -= RUNUP_COST;
-                        p.setVelocity(p.getVelocity().x * 0.3, 0.62, p.getVelocity().z * 0.3);
-                    }
-                } else if (!ground && jump && fwd > 0.1 && wall(p, at, 0.6, 1.7)) {
-                    Double l = ledge(p, at, at.y, 1.3, 2.3);
-                    if (l != null) {
-                        Vec3d hold = snap(p, at, l - 0.03);
-                        Vec3d hang = new Vec3d(hold.x, l - 2.05, hold.z);
-                        if (empty(p, column(hang.x, hang.y, hang.z, 1.8))) {
-                            ledgeY = l;
-                            p.setPosition(hang);
-                            p.setVelocity(Vec3d.ZERO);
-                            p.fallDistance = 0;
-                            set(Mode.HANG);
+                            break;
                         }
-                    } else if (p.getVelocity().y < 0.25 && (Move.stamina > 0.1 || p.isCreative())) {
-                        Vec3d hold = snap(p, at, at.y + 1.2);
-                        if (empty(p, column(hold.x, at.y, hold.z, 1.8))) {
-                            p.setPosition(hold.x, at.y, hold.z);
-                            p.setVelocity(Vec3d.ZERO);
-                            p.fallDistance = 0;
-                            set(Mode.CLIMB);
-                        }
+                    }
+                    // Full run into a wall with nothing low to get onto: run up it.
+                    if (low == null && Move.mode == Move.Mode.RUN && wall(p, at, 0.2, 1.8) && (Move.stamina > RUNUP_COST || p.isCreative())) {
+                        if (!p.isCreative()) Move.stamina -= RUNUP_COST;
+                        from = at;
+                        p.setVelocity(Vec3d.ZERO);
+                        set(Mode.RUNUP);
+                        break;
                     }
                 }
+                if (!ground && intent != Intent.NONE && wall(p, at, 0.3, 1.7)) reach(p, at, climbAsk);
             }
             case VAULT -> {
                 ticks++;
@@ -216,47 +250,157 @@ public final class Parkour {
             }
             case HANG -> {
                 Vec3d at = p.getPos();
-                if (sneak) {
-                    drop(p, 0.08);
-                } else if (jumpEdge || fwd > 0.5) {
-                    startPath(p, Mode.PULL, ledgeY);
-                } else if (ledge(p, at, at.y, 1.8, 2.3) == null) {
-                    drop(p, 0); // the ledge went (broken, or slid off the end)
-                }
+                ticks++;
+                if (sneak) drop(p, 0.08);
+                else if (jumpEdge && away) kickOff(p);
+                else if (climbAsk && ticks > 2) {
+                    intent = Intent.NONE;
+                    // Room on top: up and over. Otherwise spring for the next lip above.
+                    if (!startPath(p, Mode.PULL, ledgeY)) {
+                        Double up = lip(p, at, ledgeY, 0.5, 3.1);
+                        if (up != null) hop(p, at, up);
+                    }
+                } else if (lip(p, at, at.y, 1.9, 2.2) == null) drop(p, 0); // the lip went (broken, or slid off the end)
             }
-            case CLIMB -> {
-                if (sneak || (!p.isCreative() && Move.stamina <= 0)) drop(p, 0.1);
-                else if (jumpEdge) {
-                    // Kick off backwards.
-                    set(Mode.NONE);
-                    cooldown = 8;
-                    p.setVelocity(-dir.getOffsetX() * 0.38, 0.45, -dir.getOffsetZ() * 0.38);
-                } else if (ground && fwd < 0) set(Mode.NONE);
+            case RUNUP -> {
+                if (sneak) set(Mode.NONE);
+                else if (jumpEdge && away) kickOff(p);
             }
             default -> { }
         }
-        if (ground) groundY = p.getY();
+        if (ground) {
+            groundY = p.getY();
+            if (intent != Intent.NONE && !jump && pressAge > DOUBLE) intent = Intent.NONE;
+        }
         lastGround = ground;
+        updateMarker(p, ground);
         syncOut();
+    }
+
+    /** In the air at a wall with space pressed: climb onto it (hold / double tap) or catch its lip. */
+    private static void reach(ClientPlayerEntity p, Vec3d at, boolean climbAsk) {
+        if (climbAsk) {
+            Double top = ledge(p, at, at.y, 0.3, 2.3);
+            if (top != null && startPath(p, Mode.MANTLE, top)) {
+                intent = Intent.NONE;
+                return;
+            }
+        }
+        Double l = lip(p, at, at.y, 1.3, 2.3);
+        if (l != null && grab(p, at, l) && climbAsk) {
+            intent = Intent.NONE;
+            if (!startPath(p, Mode.PULL, ledgeY)) {
+                Double up = lip(p, p.getPos(), ledgeY, 0.5, 3.1);
+                if (up != null) hop(p, p.getPos(), up);
+            }
+        }
+    }
+
+    /** Catch the lip whose top is at l: hands on it, body hanging below. */
+    private static boolean grab(ClientPlayerEntity p, Vec3d at, double l) {
+        Vec3d hold = snap(at, l - 0.03);
+        Vec3d hang = new Vec3d(hold.x, l - 2.05, hold.z);
+        if (!empty(p, column(hang.x, hang.y, hang.z, 1.8))) return false;
+        ledgeY = l;
+        p.setPosition(hang);
+        p.setVelocity(Vec3d.ZERO);
+        p.fallDistance = 0;
+        set(Mode.HANG);
+        return true;
+    }
+
+    /** Spring up from a hang to the lip at l above. */
+    private static void hop(ClientPlayerEntity p, Vec3d at, double l) {
+        Vec3d hold = snap(at, l - 0.03);
+        Vec3d hang = new Vec3d(hold.x, l - 2.05, hold.z);
+        if (!empty(p, column(at.x, at.y, at.z, hang.y + 1.8 - at.y)) || !empty(p, column(hang.x, hang.y, hang.z, 1.8))) return;
+        from = at;
+        to = hang;
+        ledgeY = l;
+        set(Mode.HOP);
+    }
+
+    private static void kickOff(ClientPlayerEntity p) {
+        set(Mode.NONE);
+        cooldown = 8;
+        intent = Intent.NONE;
+        p.setVelocity(-dir.getOffsetX() * 0.38, 0.42, -dir.getOffsetZ() * 0.38);
+    }
+
+    /** The movement keys point away from the wall you're on (judged from where the camera faces). */
+    private static boolean away(ClientPlayerEntity p) {
+        float f = p.input.movementForward, s = p.input.movementSideways;
+        if (f * f + s * s < 0.01f) return false;
+        double yaw = Math.toRadians(p.getYaw());
+        double x = s * Math.cos(yaw) - f * Math.sin(yaw), z = f * Math.cos(yaw) + s * Math.sin(yaw);
+        double len = Math.sqrt(x * x + z * z);
+        return (x * dir.getOffsetX() + z * dir.getOffsetZ()) / len < -0.5;
+    }
+
+    /** Where the marker goes: the lip you're holding, or the nearest one in front you could catch. */
+    private static void updateMarker(ClientPlayerEntity p, boolean ground) {
+        if (mode == Mode.HANG) {
+            setMarker(p.getPos(), ledgeY, true, dir);
+            return;
+        }
+        if (mode != Mode.NONE && mode != Mode.RUNUP) {
+            marker = null;
+            return;
+        }
+        Direction keep = dir;
+        dir = p.getHorizontalFacing();
+        Vec3d at = p.getPos();
+        try {
+            for (double k = 0; k <= 0.9; k += 0.45) {
+                Vec3d probe = ahead(at, k);
+                if (k > 0 && !empty(p, column(probe.x, at.y, probe.z, 1.8))) break;
+                if (!wall(p, probe, 0.3, 2.6)) continue;
+                // Hanging reach now (in the air), or with a jump (or a run-up) from the ground.
+                Double now = !ground && k == 0 ? lip(p, probe, at.y, 1.3, 2.3) : null;
+                Double reach = now != null ? now : lip(p, probe, at.y, 1.3, ground ? (Move.mode == Move.Mode.RUN ? 4.4 : 3.3) : 2.3);
+                if (reach != null) {
+                    setMarker(probe, reach, now != null, dir);
+                    return;
+                }
+                break;
+            }
+            marker = null;
+        } finally {
+            dir = keep;
+        }
+    }
+
+    private static void setMarker(Vec3d at, double y, boolean ready, Direction d) {
+        Direction keep = dir;
+        dir = d;
+        Vec3d c = snap(at, y - 0.03);
+        dir = keep;
+        marker = new Vec3d(c.x + d.getOffsetX() * 0.31, y, c.z + d.getOffsetZ() * 0.31);
+        markerDir = d;
+        markerReady = ready;
     }
 
     private static void drop(ClientPlayerEntity p, double push) {
         set(Mode.NONE);
         cooldown = 10;
+        intent = Intent.NONE;
         p.setVelocity(-dir.getOffsetX() * push, 0, -dir.getOffsetZ() * push);
     }
 
-    private static void startPath(ClientPlayerEntity p, Mode m, double top) {
+    /** Up beside the wall to top, then over onto it. false if there isn't room. */
+    private static boolean startPath(ClientPlayerEntity p, Mode m, double top) {
         Vec3d at = p.getPos();
         Vec3d up = new Vec3d(at.x, top + 0.01, at.z);
         Vec3d end = ahead(up, 0.8);
-        if (!empty(p, column(at.x, at.y, at.z, top + 1.8 - at.y)) || !empty(p, column(end.x, end.y, end.z, 1.8))) return;
+        if (!empty(p, column(at.x, at.y, at.z, top + 1.8 - at.y)) || !empty(p, column(end.x, end.y, end.z, 1.8))) return false;
+        if (empty(p, column(end.x, end.y - 0.1, end.z, 0.1))) return false; // nothing to stand on
         from = at;
         to = end;
         ledgeY = top;
         p.setVelocity(Vec3d.ZERO);
         p.fallDistance = 0;
         set(m);
+        return true;
     }
 
     private static void set(Mode m) {
@@ -280,52 +424,57 @@ public final class Parkour {
             case HANG -> {
                 p.setVelocity(Vec3d.ZERO);
                 p.fallDistance = 0;
-                // Shuffle along the ledge (left is +sideways), if it carries on that way.
+                // Shuffle along the lip (left is +sideways), if it carries on that way.
                 float s = p.input.movementSideways;
                 side = s > 0.1f ? -1 : s < -0.1f ? 1 : 0;
                 if (side != 0) {
                     Vec3d along = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(side * 0.055);
                     Vec3d next = p.getPos().add(along);
-                    if (empty(p, column(next.x, next.y, next.z, 1.8)) && ledge(p, next, next.y, 1.8, 2.3) != null) {
+                    if (empty(p, column(next.x, next.y, next.z, 1.8)) && lip(p, next, next.y, 1.9, 2.2) != null) {
                         p.move(MovementType.SELF, along);
                         phase += 0.55f;
                     } else side = 0;
                 }
                 return true;
             }
-            case CLIMB -> {
+            case RUNUP -> {
+                // Two or three hard steps up the wall, slowing as they go, catching any lip in reach.
+                ticks++;
+                double vy = Math.max(0, 0.34 - ticks * 0.04);
                 p.setVelocity(Vec3d.ZERO);
                 p.fallDistance = 0;
-                float f = p.input.movementForward, s = p.input.movementSideways;
-                double dy = f > 0.1f ? 0.06 : f < -0.1f ? -0.08 : 0;
-                Vec3d along = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(s > 0.1f ? -0.05 : s < -0.1f ? 0.05 : 0);
-                side = s > 0.1f ? -1 : s < -0.1f ? 1 : 0;
-                if (dy == 0 && along.lengthSquared() == 0) return true;
-                Vec3d at = p.getPos(), next = at.add(along.x, dy, along.z);
-                if (dy > 0) {
-                    // Hands over the top: pull up onto it.
-                    Double top = ledge(p, at, at.y, 1.5, 2.1);
-                    if (top != null) {
-                        startPath(p, Mode.PULL, top);
+                phase += 0.9f;
+                Vec3d at = p.getPos();
+                if (intent != Intent.NONE || MinecraftClient.getInstance().options.jumpKey.isPressed()) {
+                    Double l = lip(p, at, at.y, 1.3, 2.3);
+                    if (l != null) {
+                        boolean climb = intent == Intent.CLIMB;
+                        if (grab(p, at, l) && climb) {
+                            intent = Intent.NONE;
+                            startPath(p, Mode.PULL, ledgeY);
+                        }
                         return true;
                     }
                 }
-                if (!empty(p, column(next.x, next.y, next.z, 1.8)) || !wall(p, next, 0.3, 1.6)) {
-                    if (!wall(p, at, 0.3, 1.6)) set(Mode.NONE); // nothing left to hold
+                if (vy <= 0 || ticks > RUNUP_TICKS || !wall(p, at, 0.2, 1.6) || !empty(p, column(at.x, at.y + vy, at.z, 1.8))) {
+                    set(Mode.NONE);
+                    p.setVelocity(-dir.getOffsetX() * 0.04, 0.05, -dir.getOffsetZ() * 0.04);
                     return true;
                 }
-                p.move(MovementType.SELF, next.subtract(at));
-                phase += 0.5f;
-                if (!p.isCreative()) Move.stamina = Math.max(0, Move.stamina - CLIMB_COST);
+                p.move(MovementType.SELF, new Vec3d(0, vy, 0));
                 return true;
             }
-            case PULL, MANTLE -> {
-                int total = mode == Mode.PULL ? PULL_TICKS : MANTLE_TICKS;
+            case PULL, MANTLE, HOP -> {
+                int total = mode == Mode.PULL ? PULL_TICKS : mode == Mode.MANTLE ? MANTLE_TICKS : HOP_TICKS;
                 ticks++;
                 float k = Math.min(1, ticks / (float) total);
-                // Up first (most of it), then over onto the top.
                 Vec3d target;
-                if (k < 0.62f) {
+                if (mode == Mode.HOP) {
+                    // A spring straight up, fast off the hands, easing into the catch.
+                    float u = 1 - (1 - k) * (1 - k);
+                    target = new Vec3d(MathHelper.lerp(u, from.x, to.x), MathHelper.lerp(u, from.y, to.y), MathHelper.lerp(u, from.z, to.z));
+                } else if (k < 0.62f) {
+                    // Up first (most of it), then over onto the top.
                     float u = ease(k / 0.62f);
                     target = new Vec3d(from.x, MathHelper.lerp(u, from.y, to.y), from.z);
                 } else {
@@ -334,10 +483,14 @@ public final class Parkour {
                 }
                 p.setVelocity(Vec3d.ZERO);
                 p.fallDistance = 0;
-                Vec3d before = p.getPos();
-                p.move(MovementType.SELF, target.subtract(before));
+                p.move(MovementType.SELF, target.subtract(p.getPos()));
                 if (p.getPos().squaredDistanceTo(target) > 0.04) set(Mode.NONE); // something got in the way
-                else if (k >= 1) set(Mode.NONE);
+                else if (k >= 1) {
+                    if (mode == Mode.HOP) {
+                        set(Mode.HANG);
+                        ticks = 0;
+                    } else set(Mode.NONE);
+                }
                 return true;
             }
             default -> {

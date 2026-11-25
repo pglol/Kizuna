@@ -83,6 +83,31 @@ public final class Presets {
         return p;
     }
 
+    /** Running up a wall: high driving knees, arms reaching up for the top in turn. */
+    public static Pose runUp(float phase) {
+        float s = (float) Math.sin(phase);
+        Pose p = new Pose();
+        p.set(Bone.HEAD, -30, 0, 0);
+        p.set(Bone.CHEST, -6, 0, 0);
+        p.set(Bone.RIGHT_ARM, -120 - 45 * s, 0, 14).set(Bone.RIGHT_FOREARM, 30 + 25 * s, 0, 0);
+        p.set(Bone.LEFT_ARM, -120 + 45 * s, 0, -14).set(Bone.LEFT_FOREARM, 30 - 25 * s, 0, 0);
+        p.set(Bone.RIGHT_LEG, -70 - 30 * s, 0, 4).set(Bone.RIGHT_SHIN, 80 + 30 * s, 0, 0);
+        p.set(Bone.LEFT_LEG, -70 + 30 * s, 0, -4).set(Bone.LEFT_SHIN, 80 - 30 * s, 0, 0);
+        return p;
+    }
+
+    /** Springing up for the next ledge: fully stretched, arms high, legs long beneath. */
+    public static final Pose REACH = new Pose();
+
+    static {
+        REACH.set(Bone.HEAD, -40, 0, 0);
+        REACH.set(Bone.CHEST, -10, 0, 0);
+        REACH.set(Bone.RIGHT_ARM, -172, 8, 6).set(Bone.RIGHT_FOREARM, 6, 0, 0);
+        REACH.set(Bone.LEFT_ARM, -172, -8, -6).set(Bone.LEFT_FOREARM, 6, 0, 0);
+        REACH.set(Bone.RIGHT_LEG, 8, 0, 0).set(Bone.RIGHT_SHIN, 12, 0, 0);
+        REACH.set(Bone.LEFT_LEG, -14, 0, 0).set(Bone.LEFT_SHIN, 30, 0, 0);
+    }
+
     /** Hanging, shuffling towards side (1 right, -1 left): the lead hand and foot open out that way in
      *  steps and the others follow in. */
     public static Pose hang(int side, float phase) {

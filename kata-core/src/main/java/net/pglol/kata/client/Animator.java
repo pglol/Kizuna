@@ -350,8 +350,16 @@ public final class Animator {
                     want = Presets.VAULT;
                     weight = MathHelper.sin(MathHelper.PI * Math.min(1, k * 1.1f));
                 }
-                case HANG -> want = Presets.hang(pv.side(), pv.phase());
-                case CLIMB -> want = Presets.climb(pv.phase());
+                case HANG -> {
+                    // Catching a ledge: the body keeps swinging a moment, legs first, and settles.
+                    want = Presets.hang(pv.side(), pv.phase()).copy();
+                    float swing = 26 * (float) Math.exp(-pv.secs() * 3.2f) * MathHelper.cos(pv.secs() * 9);
+                    want.set(Bone.RIGHT_LEG, Pose.PITCH, want.get(Bone.RIGHT_LEG, Pose.PITCH) - swing);
+                    want.set(Bone.LEFT_LEG, Pose.PITCH, want.get(Bone.LEFT_LEG, Pose.PITCH) - swing * 0.8f);
+                    want.set(Bone.CHEST, Pose.PITCH, want.get(Bone.CHEST, Pose.PITCH) + swing * 0.25f);
+                }
+                case RUNUP -> want = Presets.runUp(pv.phase());
+                case HOP -> want = k < 0.3f ? Pose.lerp(Presets.HANG, Presets.PULL, k / 0.3f) : Pose.lerp(Presets.PULL, Presets.REACH, Math.min(1, (k - 0.3f) / 0.4f));
                 case PULL -> want = k < 0.45f ? Pose.lerp(Presets.HANG, Presets.PULL, k / 0.45f)
                     : k < 0.8f ? Pose.lerp(Presets.PULL, Presets.KNEE, (k - 0.45f) / 0.35f)
                     : Pose.lerp(Presets.KNEE, stand, (k - 0.8f) / 0.2f);

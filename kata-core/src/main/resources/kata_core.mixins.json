@@ -16,7 +16,8 @@
     "RunFeelMixin",
     "SprintDustMixin",
     "StepSoundMixin",
-    "TravelMixin"
+    "TravelMixin",
+    "GravityMixin"
   ],
   "injectors": {
     "defaultRequire": 1

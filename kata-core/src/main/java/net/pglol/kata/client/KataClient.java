@@ -27,6 +27,7 @@ public final class KataClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(KataClient::tick);
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.ActOf.ID,
             (payload, ctx) -> Parkour.remote(payload.entity(), payload.mode(), payload.side()));
+        net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(Marker::render);
         HudRenderCallback.EVENT.register((c, tick) -> Hud.render(c, tick.getTickDelta(false)));
     }
 

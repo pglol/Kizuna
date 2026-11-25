@@ -15,6 +15,16 @@ public final class KataCore implements ModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Kata Core");
     /** No hunger: food stays full (so it never stops anyone running) and there's no hunger bar. */
     public static boolean noHunger = true;
+    /** Body physics: a touch less gravity (falls a little slower) and a slightly stronger jump, so a
+     *  jump has more air under it without clearing 1.5-block fences (Minecraft: 0.08 and 0.42). */
+    public static final double GRAVITY = 0.072, JUMP = 0.43;
+
+    public static void body(ServerPlayerEntity p) {
+        var g = p.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_GRAVITY);
+        if (g != null) g.setBaseValue(GRAVITY);
+        var j = p.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_JUMP_STRENGTH);
+        if (j != null) j.setBaseValue(JUMP);
+    }
 
     @Override
     public void onInitialize() {
@@ -27,6 +37,8 @@ public final class KataCore implements ModInitializer {
                 return 1;
             }))));
         KataNet.register();
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((h, s, server) -> body(h.getPlayer()));
+        net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldP, newP, alive) -> body(newP));
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (!noHunger) return;
             for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
