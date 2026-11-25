@@ -2,10 +2,10 @@
   "servers": [
     {
       "id": "aot",
-      "name": "Attack on Titan RPG",
-      "short": "AOT",
-      "tagline": "Hunt titans across Paradis.",
-      "description": "Swing through cities and giant forests on ODM gear, cut down titans with your squad, and push past the walls.",
+      "name": "Paradis",
+      "short": "PRD",
+      "tagline": "Beyond the walls, the titans wait.",
+      "description": "An Attack on Titan world to live in. Swing through the cities and giant forests on ODM gear, hunt titans with your squad, follow the story from the 104th onward, and take on extraction runs past the walls.",
       "status": "public",
       "address": "25.52.234.232:25565",
       "minecraft": "1.21.1",

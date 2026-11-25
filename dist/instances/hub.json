@@ -2,8 +2,8 @@
   "servers": [
     {
       "id": "aot",
-      "name": "Attack on Titan RPG",
-      "tagline": "Hunt titans across Paradis.",
+      "name": "Paradis",
+      "tagline": "Beyond the walls, the titans wait.",
       "status": "public",
       "instance": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/dist/instances/aot.zip",
       "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml"
