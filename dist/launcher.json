@@ -39,6 +39,12 @@
         "RPG",
         "Action"
       ],
+      "mainMod": {
+        "id": "aot_rpg",
+        "file": "aot-rpg",
+        "name": "AoT RPG mod"
+      },
+      "hostMode": "mod",
       "channels": [
         {
           "id": "public",
@@ -123,6 +129,12 @@
         "Action",
         "Parkour"
       ],
+      "mainMod": {
+        "id": "kata_core",
+        "file": "kata-core",
+        "name": "Kata Core"
+      },
+      "hostMode": "pack",
       "channels": [
         {
           "id": "public",
