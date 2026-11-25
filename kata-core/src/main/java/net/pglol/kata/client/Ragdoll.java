@@ -367,14 +367,28 @@ public final class Ragdoll {
             best = 3;
             for (int k = 0; k < 6; k++) if (d[k] < d[best]) best = k;
         }
+        // Hard hits rebound some of the speed going into the surface (a body bounces and, struck on one
+        // side only, flips over what it hit); soft contacts give it all up so the body settles.
         switch (best) {
-            case 0 -> { x[i] = b.minX; px[i] = x[i]; py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
-            case 1 -> { x[i] = b.maxX; px[i] = x[i]; py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
-            case 2 -> { y[i] = b.minY; py[i] = y[i]; px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
-            case 3 -> { y[i] = b.maxY; py[i] = y[i]; px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
-            case 4 -> { z[i] = b.minZ; pz[i] = z[i]; px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); }
-            default -> { z[i] = b.maxZ; pz[i] = z[i]; px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); }
+            case 0 -> { double v = x[i] - px[i]; x[i] = b.minX; px[i] = x[i] + rebound(v); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
+            case 1 -> { double v = x[i] - px[i]; x[i] = b.maxX; px[i] = x[i] + rebound(v); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
+            case 2 -> { double v = y[i] - py[i]; y[i] = b.minY; py[i] = y[i] + rebound(v); px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
+            case 3 -> { double v = y[i] - py[i]; y[i] = b.maxY; py[i] = y[i] + rebound(v); px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); pz[i] = MathHelper.lerp(FRICTION, pz[i], z[i]); }
+            case 4 -> { double v = z[i] - pz[i]; z[i] = b.minZ; pz[i] = z[i] + rebound(v); px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); }
+            default -> { double v = z[i] - pz[i]; z[i] = b.maxZ; pz[i] = z[i] + rebound(v); px[i] = MathHelper.lerp(FRICTION, px[i], x[i]); py[i] = MathHelper.lerp(FRICTION, py[i], y[i]); }
         }
+    }
+
+    /**
+     * What comes back out of a hit going in at v (distance a step): above about 4 m/s, a third of it
+     * (a little more the harder the hit, up to 45 %); below that nothing. Returned as the previous
+     * position's offset, so the point moves back out at that speed.
+     */
+    private static double rebound(double v) {
+        double s = Math.abs(v) * 240; // m/s
+        if (s < 4) return 0;
+        double e = Math.min(0.45, 0.3 + (s - 4) * 0.012);
+        return v * e;
     }
 
     private void settleOut(World w) {

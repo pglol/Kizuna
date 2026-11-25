@@ -136,6 +136,7 @@ moves the body somewhere the physics wouldn't.
     - slamming into a wall at more than 0.55 blocks/tick (about 11 m/s)
     - landing at more than 0.62 blocks/tick across the ground (a tumble)
     - flung through the air at more than 1.4 blocks/tick for 3 ticks
+10a. **Bodies bounce.** A ragdoll part hitting a surface faster than about 4 m/s rebounds 30–45 % of that speed; slower contacts stop dead so the body settles. Only the parts that hit are pushed back, so striking an edge or a fence flips the body over it.
 11. **Limp means no will.** No walking, no sprinting, no sprint FOV. Position follows the pelvis.
 12. **Getting up** starts once the body has been still for 0.2 s (after at least 0.55 s), or after 2.2 s at most. It runs push-up or sit-up, then kneel, then stand, over 1.15 s. No part of the body goes below the ground while getting up.
 
