@@ -2,7 +2,7 @@ hash-format = "sha256"
 
 [[files]]
 file = "config/kizuna/brand.json"
-hash = "bab831d2cb0938a6f09d0c0f6c309b0882d79313139cf61ada8dbe41d68e8727"
+hash = "20b1fd6b635b2b4c9181081e740b4d5b4cab4f400a06821ad9d1345e47be178a"
 
 [[files]]
 file = "config/kizuna/logo.png"
