@@ -5,7 +5,7 @@
   const cv = document.getElementById('scene');
   const img = document.getElementById('art');
   const g = cv.getContext('2d');
-  const INK = '#15120f', PAPER = '#faf7f0';
+  const INK = '#15120f', PAPER = '#101013';
   let W = 0, H = 0, dpr = 1;
   let cur = { theme: '絆', accent: '#c42b1f' };
   let seed = 1;
@@ -78,16 +78,20 @@
   /** No picture yet: a typographic cover (big brush kanji, the series name) instead of a drawing. */
   function cover() {
     const k = cur.theme || '絆';
-    g.fillStyle = 'rgba(21,18,15,0.07)';
+    // Dark stage: a glow of the game's colour behind a huge faint kanji.
+    const glow = g.createRadialGradient(W * 0.62, H * 0.42, 0, W * 0.62, H * 0.42, Math.max(W, H) * 0.7);
+    glow.addColorStop(0, cur.accent + '66');
+    glow.addColorStop(1, 'rgba(16,16,19,0)');
+    g.fillStyle = glow;
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(255,255,255,0.05)';
     g.font = `${Math.min(W, H) * 0.95}px 'Yuji Syuku', serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(k, W * 0.55, H * 0.5);
-    g.fillStyle = INK;
-    g.font = `${Math.min(W, H) * 0.5}px 'Yuji Syuku', serif`;
-    g.fillText(k, W * 0.5, H * 0.46);
-    g.fillStyle = cur.accent;
-    g.fillRect(W * 0.5 - 22, H * 0.78, 44, 4);
+    g.fillText(k, W * 0.7, H * 0.5);
+    g.fillStyle = 'rgba(255,255,255,0.14)';
+    g.font = `${Math.min(W, H) * 0.55}px 'Yuji Syuku', serif`;
+    g.fillText(k, W * 0.64, H * 0.44);
   }
 
   function draw() {

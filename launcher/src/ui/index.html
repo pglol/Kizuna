@@ -8,14 +8,23 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  
-  <header class="bar">
-    <div class="brand"><span class="kanji">絆</span><b>KIZUNA</b><span class="testtag" id="testtag" hidden>TEST</span></div>
-    <nav class="tabs" id="rail" aria-label="Servers"></nav>
+  <!-- The game's cover, full bleed behind everything. -->
+  <div class="backdrop" aria-hidden="true">
+    <canvas id="scene"></canvas>
+    <img id="art" alt="" hidden>
+    <div class="shade"></div>
+    <div class="dots" id="dots"></div>
+  </div>
+
+  <!-- Left rail: the brand, a tab per game, settings. -->
+  <aside class="rail">
+    <div class="brand" title="Kizuna"><span class="kanji">絆</span><b>KIZUNA</b><span class="testtag" id="testtag" hidden>TEST</span></div>
+    <nav class="tabs" id="rail" aria-label="Games"></nav>
+    <button class="rbtn" id="open-settings" title="Settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.4 4.6-1.9-.3a6.6 6.6 0 0 1-.6 1.5l1.1 1.6-1.6 1.6-1.6-1.1c-.5.3-1 .5-1.5.6l-.3 1.9h-2.2l-.3-1.9a6.6 6.6 0 0 1-1.5-.6l-1.6 1.1-1.6-1.6 1.1-1.6a6.6 6.6 0 0 1-.6-1.5l-1.9-.3v-2.2l1.9-.3c.1-.5.3-1 .6-1.5L4.8 6.9l1.6-1.6 1.6 1.1c.5-.3 1-.5 1.5-.6l.3-1.9h2.2l.3 1.9c.5.1 1 .3 1.5.6l1.6-1.1 1.6 1.6-1.1 1.6c.3.5.5 1 .6 1.5l1.9.3z"/></svg></button>
+  </aside>
+
+  <header class="topbar">
     <div class="drag"></div>
-    <button class="tag" id="friends-btn" title="Friends">Friends <span class="count" id="friends-count">0</span></button>
-    <button class="tag" id="account" title="Account"></button>
-    <button class="wbtn" id="open-settings" title="Settings">Settings</button>
     <div class="wctl">
       <button class="wbtn" data-win="min" title="Minimise"><svg viewBox="0 0 12 12"><path d="M2 6.5h8"/></svg></button>
       <button class="wbtn" data-win="max" title="Maximise"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7"/></svg></button>
@@ -23,58 +32,59 @@
     </div>
   </header>
 
-  <main class="book" id="hero">
-    <section class="panel cover">
-      <canvas id="scene"></canvas>
-      <img id="art" alt="" hidden>
-      <span class="vol" id="vol">VOL.1</span>
-      <span class="stamp-status" id="chips"></span>
-      <div class="dots" id="dots"></div>
+  <!-- The chosen game: title, what it is, its builds, and the way in. -->
+  <main class="stage" id="hero">
+    <div class="meta"><span class="no" id="no"></span><span class="stamp-status" id="chips"></span><span class="vol" id="vol" hidden></span></div>
+    <h1 id="title"></h1>
+    <p class="blurb" id="tagline"></p>
+    <div class="tags" id="tags"></div>
+    <p class="desc" id="desc"></p>
+    <span class="live" id="online"></span>
+
+    <div class="builds">
+      <div class="chans" id="chans"></div>
+      <div class="hostrow"><span class="hostlabel">Server</span><div class="hosts" id="hosts"></div></div>
+      <p class="chan-note" id="chan-note"></p>
+    </div>
+
+    <div class="launch">
       <div class="newsfloat" id="news" hidden>
         <div class="ncard" id="ncard"></div>
         <div class="nbar"><i id="nfill"></i></div>
         <div class="ndots" id="ndots"></div>
       </div>
-    </section>
-
-    <section class="side">
-      <div class="panel head">
-        <span class="no" id="no"></span>
-        <h1 id="title"></h1>
-        <p class="blurb" id="tagline"></p>
-        <div class="tags" id="tags"></div>
-        <p class="desc" id="desc"></p>
-        <span class="live" id="online"></span>
+      <i class="tether" aria-hidden="true"></i>
+      <button class="play" id="play"><span>PLAY</span></button>
+      <div class="tools">
+        <label class="keepopen" title="Leave the launcher up while you play (e.g. to watch a server console)"><input type="checkbox" id="keep-open"> Keep launcher open</label>
+        <button class="plain" id="folder">Game folder</button>
+        <button class="plain" id="host-btn" hidden>Host server</button>
       </div>
-
-      <div class="builds">
-        <div class="label">Build</div>
-        <div class="chans" id="chans"></div>
-        <div class="hostrow"><span class="hostlabel">Server</span><div class="hosts" id="hosts"></div></div>
-        <p class="chan-note" id="chan-note"></p>
-      </div>
-    </section>
+    </div>
   </main>
 
-  <footer class="ground">
-    <canvas class="scenery" id="ground" aria-hidden="true"></canvas>
-    <div class="dock">
-      <div class="xp">
-        <div class="ptext" id="ptext"></div>
-        <div class="ptrack"><div class="pfill" id="pfill"></div></div>
-      </div>
-      <label class="keepopen" title="Leave the launcher up while you play (e.g. to watch a server console)"><input type="checkbox" id="keep-open"> Keep launcher open</label>
-      <button class="plain" id="folder">Open game folder</button>
-      <button class="plain" id="host-btn" hidden>Host server</button>
-      <button class="play" id="play"><span>PLAY</span></button>
-    </div>
-  </footer>
+  <!-- Progress: a bar along the bottom with what's happening under it. -->
+  <div class="xp idle">
+    <div class="ptrack"><div class="pfill" id="pfill"></div></div>
+    <div class="ptext" id="ptext"></div>
+  </div>
 
-  <aside class="drawer" id="friends" hidden>
-    <div class="drawer-head"><h2>Friends</h2><button class="wbtn" id="friends-close" title="Close"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></button></div>
-    <form class="add" id="friend-form"><input class="field small" id="friend-input" placeholder="Minecraft name" maxlength="16" autocomplete="off" spellcheck="false"><button class="box red small">Add</button></form>
+  <!-- Social: who you are, your friends by game. Folds away to a button. -->
+  <aside class="social" id="friends">
+    <div class="shead">
+      <button class="me" id="account" title="Account"></button>
+      <button class="fold" id="friends-close" title="Hide"><svg viewBox="0 0 24 24"><path d="M5 12h11M12 7l5 5-5 5M20 5v14"/></svg></button>
+    </div>
+    <div class="stabs">
+      <button class="stab on" data-stab="list" title="Friends"><svg viewBox="0 0 24 24"><path d="M4 6h2M9 6h11M4 12h2M9 12h11M4 18h2M9 18h11"/></svg></button>
+      <button class="stab" data-stab="chat" title="Chat (coming soon)"><svg viewBox="0 0 24 24"><path d="M4 5h12v8H9l-3 3v-3H4zM18 9h2v8h-2v3l-3-3h-4"/></svg></button>
+      <button class="stab" data-stab="add" title="Add a friend"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 19c.8-3.4 3.4-5 6.5-5s5.7 1.6 6.5 5M18 7v6M15 10h6"/></svg></button>
+    </div>
+    <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg><input id="friend-search" placeholder="Search" autocomplete="off" spellcheck="false"></label>
+    <form class="add" id="friend-form" hidden><input class="field small" id="friend-input" placeholder="Minecraft name" maxlength="16" autocomplete="off" spellcheck="false"><button class="box red small">Add</button></form>
     <div class="flist" id="flist"></div>
   </aside>
+  <button class="social-open" id="friends-btn" title="Friends" hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19c.8-3.4 3.4-5 6.5-5s5.7 1.6 6.5 5M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2 .6 3.2 2.3 3.5 5"/></svg><span class="count" id="friends-count">0</span></button>
 
   <section class="overlay" id="update" hidden>
     <div class="sheet upd">
@@ -175,7 +185,6 @@
   </section>
 
   <script src="scene.js"></script>
-  <script src="ground.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

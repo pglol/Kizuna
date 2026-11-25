@@ -52,11 +52,6 @@
     if (o.id === 'update') return; // required: stays until updated
     o.hidden = true;
   }));
-  document.addEventListener('mousedown', (e) => {
-    const d = document.getElementById('friends');
-    if (d.hidden || d.contains(e.target) || document.getElementById('friends-btn').contains(e.target)) return;
-    d.hidden = true;
-  });
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => (b.closest('.overlay').hidden = true)));
   document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => K.win(b.dataset.win)));
   const current = () => state.servers.find((s) => s.id === state.selected);
@@ -95,14 +90,19 @@
   };
 
   function renderAccount() {
+    // The profile card at the top of the social panel: face, name, and how you're signed in.
     const b = $('account');
     b.innerHTML = '';
-    b.classList.toggle('none', !state.account);
-    if (!state.account) {
-      b.textContent = state.test ? `${(state.settings && state.settings.testName) || 'Tester'} · test` : 'Sign in';
-      return;
-    }
-    b.append(face(state.account.name), document.createTextNode(state.account.name));
+    b.classList.toggle('none', !state.account && !state.test);
+    const name = state.account ? state.account.name : state.test ? (state.settings && state.settings.testName) || 'Tester' : 'Sign in';
+    const who = document.createElement('div');
+    const nb = document.createElement('b');
+    nb.textContent = name;
+    const st = document.createElement('span');
+    st.className = 'status' + (state.account || state.test ? ' on' : '');
+    st.textContent = state.account ? (state.playing ? `Playing ${state.playingName || ''}`.trim() : 'Online') : state.test ? 'Test login' : 'Not signed in';
+    who.append(nb, st);
+    b.append(face(state.account || state.test ? name : '?'), who);
   }
 
   const LOCK = '<svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2h1v11H6V10h1zm2 0h6V8a3 3 0 0 0-6 0v2z"/></svg>';
@@ -178,7 +178,6 @@
     const hosts = (cur && cur.addresses) || [];
     $('chans').closest('.builds').hidden = !s || s.status === 'soon' || (list.length < 2 && hosts.length < 2);
     $('chans').hidden = list.length < 2;
-    $('chans').previousElementSibling.hidden = list.length < 2;
     for (const c of list) {
       const b = document.createElement('button');
       b.className = 'chan' + (c.id === cur.id ? ' on' : '') + (c.locked ? ' locked' : '') + (c.soon ? ' soon' : '');
@@ -309,7 +308,7 @@
     }
     document.documentElement.style.setProperty('--accent', s.accent || '#c42b1f');
     Scene.set(s.kanji || '絆', s.accent, [s.background, ...(s.gallery || [])]);
-    Ground.set(s.theme, s.accent);
+    document.documentElement.style.setProperty('--art', s.background ? `url("${s.background}")` : 'none');
     $('vol').textContent = `VOL.${idx + 1}`;
     $('no').textContent = `#${String(idx + 1).padStart(2, '0')}` + (s.version ? `  ·  v${s.version}` : '');
     const [kanji, color] = STAMP[s.status] || STAMP.public;
@@ -372,22 +371,42 @@
     return null;
   }
 
+  /** Friends: online ones grouped under the game they're in (with a count), then everyone offline. */
   function renderFriends() {
     const list = $('flist');
     list.innerHTML = '';
+    const q = ($('friend-search').value || '').trim().toLowerCase();
     const rows = state.friends.map((f) => ({ n: f.name, from: f.from, at: whereIs(f.name) }));
-    const on = rows.filter((r) => r.at), off = rows.filter((r) => !r.at);
+    const on = rows.filter((r) => r.at);
     $('friends-count').textContent = on.length;
+    $('friends-count').hidden = !on.length;
+    const shown = rows.filter((r) => !q || r.n.toLowerCase().includes(q));
     if (!rows.length) {
-      list.innerHTML = '<div class="fempty">No friends yet.</div>';
+      list.innerHTML = '<div class="fempty">No friends yet. Add one with the <b>+</b> tab.</div>';
       return;
     }
-    for (const [label, group] of [['ONLINE ' + on.length, on], ['OFFLINE ' + off.length, off]]) {
-      if (!group.length) continue;
+    if (!shown.length) {
+      list.innerHTML = '<div class="fempty">Nobody by that name.</div>';
+      return;
+    }
+    const groups = [];
+    for (const s of state.servers) {
+      const g = shown.filter((r) => r.at && r.at.id === s.id);
+      if (g.length) groups.push([s.name, g, s]);
+    }
+    const off = shown.filter((r) => !r.at);
+    if (off.length) groups.push(['Offline', off, null]);
+    for (const [label, group, srv] of groups) {
       const g = document.createElement('div');
       g.className = 'fgroup';
-      g.textContent = label;
-      list.append(g);
+      const gl = document.createElement('span');
+      gl.textContent = label;
+      const gc = document.createElement('i');
+      gc.textContent = group.length;
+      g.append(gl, gc);
+      const box = document.createElement('div');
+      box.className = 'fbox' + (srv ? '' : ' off');
+      if (srv) box.style.setProperty('--fc', srv.accent || '#c4372a');
       for (const r of group) {
         const row = document.createElement('div');
         row.className = 'friend ' + (r.at ? 'on' : 'off');
@@ -397,28 +416,56 @@
         b.textContent = r.n;
         const sm = document.createElement('small');
         const src = r.from && state.servers.find((x) => x.id === r.from);
-        sm.textContent = (r.at ? r.at.name : 'offline') + (src ? ` · friend in ${src.short || src.name}` : '');
+        sm.textContent = (r.at ? 'In game' : 'Offline') + (src ? ` · from ${src.short || src.name}` : '');
         txt.append(b, sm);
-        const x = document.createElement('button');
-        x.className = 'x';
-        x.title = 'Remove';
-        x.textContent = '✕';
-        x.addEventListener('click', async () => {
-          state.friends = await K.friends(state.friends.filter((f) => !f.from && f.name !== r.n).map((f) => f.name));
-          renderFriends();
-        });
         row.append(img, txt);
-        if (!r.from) row.append(x);
-        if (r.at) row.addEventListener('dblclick', () => select(r.at.id));
-        list.append(row);
+        if (!r.from) {
+          const x = document.createElement('button');
+          x.className = 'x';
+          x.title = 'Remove';
+          x.textContent = '✕';
+          x.addEventListener('click', async () => {
+            state.friends = await K.friends(state.friends.filter((f) => !f.from && f.name !== r.n).map((f) => f.name));
+            renderFriends();
+          });
+          row.append(x);
+        }
+        if (r.at) {
+          row.title = `Double-click to open ${r.at.name}`;
+          row.addEventListener('dblclick', () => select(r.at.id));
+        }
+        box.append(row);
       }
+      list.append(g, box);
     }
   }
+  // The panel stays docked on the right; folding it leaves a small button (remembered).
+  function setSocial(open) {
+    $('friends').hidden = !open;
+    $('friends-btn').hidden = open;
+    document.body.classList.toggle('social-folded', !open);
+    try {
+      localStorage.setItem('kz.social', open ? '1' : '0');
+    } catch {}
+  }
+  let socialOpen = true;
+  try {
+    socialOpen = localStorage.getItem('kz.social') !== '0';
+  } catch {}
+  setSocial(socialOpen);
   $('friends-btn').addEventListener('click', () => {
-    show('friends', $('friends').hidden);
+    setSocial(true);
     renderFriends();
   });
-  $('friends-close').addEventListener('click', () => show('friends', false));
+  $('friends-close').addEventListener('click', () => setSocial(false));
+  $('friend-search').addEventListener('input', renderFriends);
+  document.querySelectorAll('.stab').forEach((b) => b.addEventListener('click', () => {
+    const tab = b.dataset.stab;
+    if (tab === 'chat') return toast('Chat is coming soon.');
+    document.querySelectorAll('.stab').forEach((x) => x.classList.toggle('on', x === b));
+    $('friend-form').hidden = tab !== 'add';
+    if (tab === 'add') setTimeout(() => $('friend-input').focus(), 30);
+  }));
   $('friend-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('friend-input').value.trim();
@@ -569,6 +616,7 @@
     state.playingId = null;
     state.busy = false;
     updateDock();
+    renderAccount();
     const stopped = state.stopping;
     state.stopping = false;
     if (d.code && !stopped) {
@@ -884,8 +932,7 @@
   $('code-input').addEventListener('keydown', (e) => e.key === 'Enter' && unlock());
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    document.querySelectorAll('.overlay').forEach((o) => o.id !== 'signin' && (o.hidden = true));
-    show('friends', false);
+    document.querySelectorAll('.overlay').forEach((o) => o.id !== 'signin' && o.id !== 'update' && (o.hidden = true));
   });
 
   (async () => {
