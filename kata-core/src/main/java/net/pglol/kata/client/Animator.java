@@ -125,7 +125,7 @@ public final class Animator {
             s.lastYaw = p.bodyYaw;
             return;
         }
-        Vec3d v = pos.subtract(s.lastPos).multiply(1 / Math.max(dt, 1e-3));
+        Vec3d v = pos.subtract(s.lastPos).multiply(1 / Math.max(dt, 1e-3f));
         s.lastPos = pos;
         float yaw = MathHelper.lerp(td, p.prevBodyYaw, p.bodyYaw);
         double r = Math.toRadians(yaw);
@@ -133,12 +133,12 @@ public final class Animator {
         float fwd = (float) (v.x * fx + v.z * fz), side = (float) (v.x * fz - v.z * fx);
         float k = 1 - (float) Math.exp(-10 * dt);
         float nf = s.fwd + (fwd - s.fwd) * k, ns = s.side + (side - s.side) * k;
-        float af = (nf - s.fwd) / Math.max(dt, 1e-3), as = (ns - s.side) / Math.max(dt, 1e-3);
+        float af = (nf - s.fwd) / Math.max(dt, 1e-3f), as = (ns - s.side) / Math.max(dt, 1e-3f);
         s.accFwd += (af - s.accFwd) * (1 - (float) Math.exp(-6 * dt));
         s.accSide += (as - s.accSide) * (1 - (float) Math.exp(-6 * dt));
         s.fwd = nf;
         s.side = ns;
-        float yr = MathHelper.wrapDegrees(yaw - s.lastYaw) / Math.max(dt, 1e-3);
+        float yr = MathHelper.wrapDegrees(yaw - s.lastYaw) / Math.max(dt, 1e-3f);
         s.lastYaw = yaw;
         s.yawRate += (yr - s.yawRate) * (1 - (float) Math.exp(-8 * dt));
     }
