@@ -566,7 +566,7 @@
     updateDock();
   });
   $('folder').addEventListener('click', () => current() && K.openFolder(current().id, channelOf(current()).id));
-  $('account').addEventListener('click', () => (state.account || state.test ? openSettings() : show('signin', true)));
+  $('account').addEventListener('click', () => (state.account || state.test ? openAccount() : show('signin', true)));
   $('open-settings').addEventListener('click', openSettings);
   $('logs').addEventListener('click', () => K.openLogs());
   $('check-update').addEventListener('click', async () => {
@@ -744,18 +744,27 @@
     const s = state.settings;
     $('ram').value = s.ram;
     $('ram-label').textContent = s.ram + ' GB';
-    $('close-on-play').checked = !!s.closeOnPlay;
-    $('who').textContent = state.account ? state.account.name : state.test ? `${state.settings.testName || 'Tester'} (test)` : 'Not signed in';
-    $('logout').hidden = !state.account && !state.test;
     show('settings', true);
   }
+
+  /** Who you're playing as: your face and name, switch to a Microsoft account, sign out. */
+  function openAccount() {
+    const name = state.account ? state.account.name : (state.settings.testName || 'Tester');
+    const f = $('acct-face');
+    f.innerHTML = '';
+    f.append(face(name));
+    $('acct-name').textContent = name;
+    $('acct-kind').textContent = state.account ? 'Microsoft account' : 'Test login (offline)';
+    $('acct-ms').hidden = !!state.account;
+    show('acct', true);
+  }
+  $('acct-login').addEventListener('click', () => {
+    show('acct', false);
+    show('signin', true);
+  });
   $('ram').addEventListener('input', async (e) => {
     $('ram-label').textContent = e.target.value + ' GB';
     state.settings = await K.settings({ ram: Number(e.target.value) });
-  });
-  $('close-on-play').addEventListener('change', async (e) => {
-    state.settings = await K.settings({ closeOnPlay: e.target.checked });
-    $('keep-open').checked = !state.settings.closeOnPlay;
   });
   $('keep-open').addEventListener('change', async (e) => (state.settings = await K.settings({ closeOnPlay: !e.target.checked })));
   $('logout').addEventListener('click', async () => {
@@ -764,7 +773,7 @@
       state.settings = await K.settings({ testLogin: false });
       renderAccount();
       updateDock();
-      show('settings', false);
+      show('acct', false);
       show('signin', true);
       return;
     }
@@ -772,7 +781,7 @@
     state.account = null;
     renderAccount();
     updateDock();
-    show('settings', false);
+    show('acct', false);
   });
 
   async function unlock() {
@@ -804,7 +813,7 @@
   (async () => {
     const init = await K.init();
     document.title = init.name;
-    $('about').textContent = `${init.name} ${init.version}`;
+    $('about').textContent = `You have ${init.name} ${init.version}`;
     state.account = init.account;
     state.settings = init.settings;
     state.selected = init.settings.selected;

@@ -97,17 +97,30 @@
   </section>
 
   <section class="overlay" id="settings" hidden>
-    <div class="sheet">
-      <h2>Settings</h2>
-      <label class="row">Memory <b id="ram-label"></b></label>
-      <input type="range" id="ram" min="2" max="16" step="1">
-      <label class="row toggle"><input type="checkbox" id="close-on-play"> Hide launcher while playing</label>
-      <div class="row split"><span>Access code</span><button class="box small" id="enter-code">Enter code</button></div>
-      <div class="row split"><span id="who"></span><button class="box small" id="logout">Sign out</button></div>
-      <div class="row split"><span>Launcher updates</span><button class="box small" id="check-update">Check now</button></div>
-      <div class="row split"><span>Logs</span><button class="box small" id="logs">Open</button></div>
-      <p class="fine" id="about"></p>
-      <button class="box small" data-close>Done</button>
+    <div class="sheet pane">
+      <div class="phead"><h2>Settings</h2><button class="wbtn" data-close title="Close"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></button></div>
+      <div class="pgroup">
+        <h3>Game</h3>
+        <div class="prow"><div class="ptxt"><b>Memory</b><span>How much RAM the game can use</span></div><div class="pctl ram"><input type="range" id="ram" min="2" max="16" step="1"><b id="ram-label"></b></div></div>
+      </div>
+      <div class="pgroup">
+        <h3>Access</h3>
+        <div class="prow"><div class="ptxt"><b>Access code</b><span>Early Access, Development or hosting</span></div><button class="box small" id="enter-code">Enter code</button></div>
+      </div>
+      <div class="pgroup">
+        <h3>Launcher</h3>
+        <div class="prow"><div class="ptxt"><b>Updates</b><span id="about"></span></div><button class="box small" id="check-update">Check now</button></div>
+        <div class="prow"><div class="ptxt"><b>Logs</b><span>Helpful when reporting a problem</span></div><button class="box small" id="logs">Open</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="overlay" id="acct" hidden>
+    <div class="sheet pane small">
+      <div class="phead"><h2>Account</h2><button class="wbtn" data-close title="Close"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></button></div>
+      <div class="whois"><span id="acct-face"></span><div><b id="acct-name"></b><span id="acct-kind"></span></div></div>
+      <div class="prow" id="acct-ms"><div class="ptxt"><b>Microsoft account</b><span>Play on your own Minecraft account</span></div><button class="box red small" id="acct-login">Sign in</button></div>
+      <div class="prow"><div class="ptxt"><b>Sign out</b><span>Forget this login on this computer</span></div><button class="box small" id="logout">Sign out</button></div>
     </div>
   </section>
 

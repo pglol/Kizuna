@@ -261,3 +261,24 @@ pre { max-height: 300px; overflow: auto; font-size: 11px; background: #fff; bord
 
 .keepopen { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; height: 34px; font-size: 12px; font-weight: 700; color: var(--ink2); background: rgba(255, 253, 248, 0.92); border: 2px solid var(--ink); border-radius: 8px; cursor: pointer; user-select: none; }
 .keepopen input { accent-color: var(--accent); width: 14px; height: 14px; margin: 0; }
+
+/* Settings and Account panes */
+.sheet.pane { width: 460px; padding: 18px 22px 20px; }
+.sheet.pane.small { width: 400px; }
+.phead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.phead h2 { margin: 0; }
+.pgroup { padding: 12px 0 4px; border-top: 1.5px dashed rgba(28, 23, 18, 0.18); }
+.phead + .pgroup { border-top: 0; }
+.pgroup h3 { margin: 0 0 4px; font-family: var(--head); font-weight: 400; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--soft); }
+.prow { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; }
+.ptxt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ptxt b { font-size: 14px; }
+.ptxt span { font-size: 12px; color: var(--soft); }
+.pctl.ram { display: flex; align-items: center; gap: 10px; }
+.pctl.ram input { width: 150px; accent-color: var(--red); }
+.pctl.ram b { min-width: 44px; text-align: right; font-family: var(--head); font-size: 14px; color: var(--red); }
+.prow .box.small { min-width: 104px; }
+.whois { display: flex; align-items: center; gap: 12px; padding: 8px 0 14px; border-bottom: 1.5px dashed rgba(28, 23, 18, 0.18); margin-bottom: 4px; }
+.whois .face { width: 44px; height: 44px; font-size: 18px; }
+.whois b { display: block; font-size: 16px; }
+.whois span { font-size: 12px; color: var(--soft); }

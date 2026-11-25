@@ -1,4 +1,7 @@
 {
+  "1.3.7": [
+    "Your name opens Account (who you're playing as, switch to Microsoft, sign out); Settings is just settings, grouped and tidied"
+  ],
   "1.3.6": [
     "Keep launcher open: a switch next to Play",
     "Hosting: each game's own mod in the update choice (Kata Core, AoT RPG mod); new servers start on their own port with flight on and test accounts allowed"
