@@ -414,7 +414,9 @@ public final class Parkour {
         if (!ground) airVel = p.getVelocity();
 
         boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater() || p.isFallFlying() || p.isDead();
-        if (free && mode != Mode.NONE) set(Mode.NONE);
+        // Water ends any move, except going limp: a limp body lands in it and floats (see Ragdoll).
+        boolean wetOnly = p.isTouchingWater() && !(p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isFallFlying() || p.isDead());
+        if (free && mode != Mode.NONE && !(mode == Mode.RAGDOLL && wetOnly)) set(Mode.NONE);
         // Speed: slamming into a wall, landing fast across the ground, or being flung hard through the
         // air puts you down, with all the speed you had.
         if (!free && (mode == Mode.NONE || mode == Mode.VAULT)) {
@@ -540,10 +542,24 @@ public final class Parkour {
                 }
                 if (ticks > 4 && (r == null || r.finished())) set(Mode.NONE);
                 else if (r != null && r.resting() && !stoodUp) {
-                    // Get up where the body ended up.
+                    // Coming round. Get up where the body ended up; afloat with nothing to stand on, just swim.
                     stoodUp = true;
                     Vec3d pel = r.pelvis();
-                    if (empty(p, column(pel.x, p.getY(), pel.z, 1.8))) p.setPosition(pel.x, p.getY(), pel.z);
+                    if (r.inWater()) {
+                        Double floor = null;
+                        for (double d = 0; d <= 1.6; d += 0.1) {
+                            if (!empty(p, new Box(pel.x - 0.25, pel.y - d - 0.05, pel.z - 0.25, pel.x + 0.25, pel.y - d, pel.z + 0.25))) {
+                                floor = pel.y - d;
+                                break;
+                            }
+                        }
+                        if (floor == null) {
+                            set(Mode.NONE);
+                            p.setVelocity(0, 0.05, 0);
+                            break;
+                        }
+                        if (empty(p, column(pel.x, floor, pel.z, 1.8))) p.setPosition(pel.x, floor, pel.z);
+                    } else if (empty(p, column(pel.x, p.getY(), pel.z, 1.8))) p.setPosition(pel.x, p.getY(), pel.z);
                 }
             }
             default -> { }

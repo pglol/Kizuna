@@ -1,6 +1,11 @@
 package net.pglol.kata.client;
 
 import net.minecraft.block.BlockState;
+import net.minecraft.fluid.FluidState;
+import net.minecraft.particle.ParticleTypes;
+import net.minecraft.registry.tag.FluidTags;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -63,6 +68,9 @@ public final class Ragdoll {
     final double[] px = new double[N], py = new double[N], pz = new double[N];
     final double[] rest = new double[LINKS.length], span = new double[SPANS.length];
     float age, still, getUp = -1, acc;
+    /** Which points are under water (for the smack on the way in), and when it last splashed. */
+    final boolean[] wet = new boolean[N];
+    float lastSplash = -1;
     /** Which way the body lay when it started getting up (degrees, like a player's yaw). */
     float lieYaw;
     boolean faceUp;
@@ -238,6 +246,7 @@ public final class Ragdoll {
                 z[i] += vz;
                 moved += Math.abs(vx) + Math.abs(vy) + Math.abs(vz);
             }
+            for (int i = 0; i < N; i++) water(w, i, h);
             for (int it = 0; it < 4; it++) {
                 for (int k = 0; k < LINKS.length; k++) keep(LINKS[k][0], LINKS[k][1], rest[k], false);
                 for (int k = 0; k < SPANS.length; k++) keep(SPANS[k][0], SPANS[k][1], span[k], true);
@@ -317,6 +326,67 @@ public final class Ragdoll {
         px[m] += mx;
         py[m] += my;
         pz[m] += mz;
+    }
+
+    /** How much each point floats against its weight (torso and head float, limbs about neutral). */
+    private static final double[] FLOAT = new double[N];
+
+    static {
+        java.util.Arrays.fill(FLOAT, 1.0);
+        for (int i : new int[] {PELVIS, NECK, RS, LS, RHIP, LHIP}) FLOAT[i] = 1.25;
+        FLOAT[HEAD] = 1.4;
+    }
+
+    /**
+     * Water: a point going in fast smacks the surface (most of its speed gone, a splash); under the
+     * surface the water drags it and holds it up, more the deeper it is, so the body floats.
+     */
+    private void water(World w, int i, double h) {
+        BlockPos bp = BlockPos.ofFloored(x[i], y[i], z[i]);
+        FluidState fs = w.getFluidState(bp);
+        double depth = fs.isIn(FluidTags.WATER) ? bp.getY() + fs.getHeight(w, bp) - y[i] : -1;
+        boolean in = depth > 0;
+        if (in) {
+            double vx = x[i] - px[i], vy = y[i] - py[i], vz = z[i] - pz[i];
+            if (!wet[i]) {
+                double sp = Math.sqrt(vx * vx + vy * vy + vz * vz) / h;
+                if (sp > 3) {
+                    // The smack: the water doesn't get out of the way.
+                    vx *= 0.45;
+                    vy *= 0.3;
+                    vz *= 0.45;
+                    splash(w, x[i], bp.getY() + fs.getHeight(w, bp), z[i], sp);
+                }
+            }
+            double keep = Math.exp(-3.5 * h);
+            vx *= keep;
+            vy *= keep;
+            vz *= keep;
+            vy += GRAVITY * FLOAT[i] * Math.min(1, depth / 0.3) * h * h;
+            px[i] = x[i] - vx;
+            py[i] = y[i] - vy;
+            pz[i] = z[i] - vz;
+        }
+        wet[i] = in;
+    }
+
+    private void splash(World w, double sx, double sy, double sz, double speed) {
+        int n = (int) Math.min(24, 4 + speed * 1.2);
+        for (int k = 0; k < n; k++) {
+            double a = w.random.nextDouble() * Math.PI * 2, r = w.random.nextDouble() * 0.4;
+            w.addParticle(ParticleTypes.SPLASH, sx + Math.cos(a) * r, sy, sz + Math.sin(a) * r, Math.cos(a) * 0.1, 0.2 + speed * 0.01, Math.sin(a) * 0.1);
+            if (k % 3 == 0) w.addParticle(ParticleTypes.BUBBLE, sx, sy - 0.2, sz, 0, -0.05, 0);
+        }
+        if (lastSplash < 0 || age - lastSplash > 0.3f) {
+            lastSplash = age;
+            w.playSound(sx, sy, sz, speed > 10 ? SoundEvents.ENTITY_PLAYER_SPLASH_HIGH_SPEED : SoundEvents.ENTITY_PLAYER_SPLASH,
+                SoundCategory.PLAYERS, (float) Math.min(1, 0.3 + speed * 0.05), 0.9f + w.random.nextFloat() * 0.2f, false);
+        }
+    }
+
+    /** Is the body in water (any of its torso)? */
+    boolean inWater() {
+        return wet[PELVIS] || wet[NECK];
     }
 
     /** Hold points a and b at length len (only pushing apart when min). */

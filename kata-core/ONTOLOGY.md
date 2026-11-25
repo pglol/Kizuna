@@ -139,6 +139,7 @@ moves the body somewhere the physics wouldn't.
     - stopping flight in mid-air while moving faster than 0.6 blocks/tick
 10b. **Real friction.** Sliding along a surface loses speed in proportion to how hard the part presses into it (μ = 0.6). A hand brushing a wall slides freely; a body lying on the ground stops.
 10a. **Bodies bounce.** A ragdoll part hitting a surface faster than about 4 m/s rebounds 30–45 % of that speed; slower contacts stop dead so the body settles. Only the parts that hit are pushed back, so striking an edge or a fence flips the body over it.
+10c. **Limp in water.** A limp body hitting water fast smacks the surface: most of its speed is lost on impact and it splashes. Under the surface the water drags it and holds it up (torso and head float, limbs about neutral), so it floats. Coming round, it stands if there's ground within reach, otherwise it swims.
 11. **Limp means no will.** No walking, no sprinting, no sprint FOV. Position follows the pelvis.
 12. **Getting up** starts once the body has been still for 0.2 s (after at least 0.55 s), or after 2.2 s at most. It runs push-up or sit-up, then kneel, then stand, over 1.15 s. No part of the body goes below the ground while getting up.
 
