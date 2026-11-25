@@ -1,4 +1,8 @@
 {
+  "0.61.0": [
+    "The Play button says PLAY on Public and Early Access builds; TEST only shows on a Development Build.",
+    "Builds are named the same way for every game: Public, Early Access and Development Build."
+  ],
   "0.60.0": [
     "New version numbers: the launcher is now 0.6. Fixes move by 0.01, updates by 0.1, with notes from every fix in between.",
     "Launcher updates are now required: they download as soon as they're found and Play waits until you restart into them.",

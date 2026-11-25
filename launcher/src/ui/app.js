@@ -191,6 +191,7 @@
         state.settings = await K.settings({ channels: { ...(state.settings.channels || {}), [s.id]: c.id } });
         renderChannels(s);
         refreshPing(s);
+        updateDock();
       });
       box.append(b);
     }
@@ -442,7 +443,9 @@
     if (state.playing && (!s || s.id === state.playingId)) [play.disabled, label.textContent] = [true, 'PLAYING'];
     else if (state.busy) [play.disabled, label.textContent] = [true, 'LOADING'];
     else if (!s || s.status === 'soon') [play.disabled, label.textContent] = [true, s ? 'SOON' : 'PLAY'];
-    else [play.disabled, label.textContent] = [false, state.account ? 'PLAY' : state.test ? 'TEST' : 'SIGN IN'];
+    // TEST only on development builds; Public and Early Access always say PLAY.
+    else if (!state.account && !state.test) [play.disabled, label.textContent] = [false, 'SIGN IN'];
+    else [play.disabled, label.textContent] = [false, channelOf(s).id === 'dev' ? 'TEST' : 'PLAY'];
   }
 
   function select(id) {

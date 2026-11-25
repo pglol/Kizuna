@@ -53,7 +53,7 @@
         },
         {
           "id": "dev",
-          "name": "Development",
+          "name": "Development Build",
           "pack": "packs/aot-dev",
           "address": "25.52.234.232:25565",
           "note": "Team builds",
@@ -133,21 +133,11 @@
         },
         {
           "id": "dev",
-          "name": "Development",
+          "name": "Development Build",
           "pack": "packs/kata-dev",
-          "address": "",
-          "addresses": [
-            {
-              "label": "Test world",
-              "address": ""
-            },
-            {
-              "label": "Hamachi",
-              "address": "25.52.234.232:25566"
-            }
-          ],
+          "address": "25.52.234.232:25566",
           "codeHash": "24844d566607d685f630522b6857a01d77fcf6e89837a82bdaf82700cbc320ff",
-          "note": "Team test build. Test world: make a creative world and run /kata testzone."
+          "note": "Team test build. For the test zone, make a creative world and run /kata testzone."
         }
       ],
       "theme": "peaks",
