@@ -56,6 +56,16 @@ public final class Parkour {
     private static float yawFrom, yawTo;
     private static Vec3d[] handsFrom, handsTo, pullHands;
 
+    // Shuffling, hand over hand: the lead hand reaches out (REACH ticks), then the body follows while the
+    // other hand comes in (FOLLOW ticks). Let go of the key and the step in progress finishes, quicker.
+    private static final double STEP = 0.3;
+    private static final float REACH = 4, FOLLOW = 5, HURRY = 2.5f;
+    private static int cyc, cycSide, lead;
+    private static float cycK, cycRate;
+    private static boolean hurry;
+    private static Vec3d cycFrom, cycTo, handFrom, handTo;
+    private static Vec3d[] plant;
+
     // ---- your own state ----
     private static Mode mode = Mode.NONE;
     private static int ticks, side, cooldown;
@@ -128,6 +138,12 @@ public final class Parkour {
         return m == Mode.HANG || m == Mode.CORNER || m == Mode.PULL || m == Mode.MANTLE || m == Mode.HOP;
     }
 
+    /** Your own hands are placed exactly by parkour (hand over hand); others' are smoothed by the animator. */
+    public static boolean exactHands(PlayerEntity p) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        return mc.player != null && p.getId() == mc.player.getId() && mode != Mode.NONE;
+    }
+
     /** How much the hands are planted (1 hanging; letting go late in a pull-up as the body comes over). */
     public static float handWeight(PlayerEntity p) {
         View v = view(p);
@@ -144,7 +160,17 @@ public final class Parkour {
         MinecraftClient mc = MinecraftClient.getInstance();
         Vec3d at = p.getLerpedPos(td);
         if (mc.player != null && p.getId() == mc.player.getId()) {
-            if (mode == Mode.HANG) return handPoints(p.getWorld(), at, dir, ledgeY);
+            if (mode == Mode.HANG) {
+                if (plant == null) plant = handPoints(p.getWorld(), at, dir, ledgeY);
+                Vec3d[] h = {plant[0], plant[1]};
+                if (cyc != 0 && handFrom != null) {
+                    // The hand on its way: a quick little arc, between ticks too.
+                    float k = MathHelper.clamp(cycK + cycRate * td, 0, 1);
+                    float e = ease(k);
+                    h[cyc == 1 ? lead : 1 - lead] = handFrom.lerp(handTo, e).add(0, 0.06 * MathHelper.sin(MathHelper.PI * k), 0);
+                }
+                return h;
+            }
             if (mode == Mode.CORNER && handsFrom != null) {
                 float k = ease(progress(Mode.CORNER, (System.nanoTime() - started) / 1e9f));
                 return new Vec3d[] {handsFrom[0].lerp(handsTo[0], k), handsFrom[1].lerp(handsTo[1], k)};
@@ -338,7 +364,7 @@ public final class Parkour {
                 ticks++;
                 if (sneak) drop(p, 0.08);
                 else if (jumpEdge && away) kickOff(p);
-                else if (climbAsk && ticks > 2) {
+                else if ((climbAsk && ticks > 2) || (toward(p) && ticks > 4 && cyc == 0)) {
                     intent = Intent.NONE;
                     // Room on top: up and over. Otherwise spring for the next lip above.
                     if (!startPath(p, Mode.PULL, ledgeY)) {
@@ -410,6 +436,15 @@ public final class Parkour {
         cooldown = 8;
         intent = Intent.NONE;
         p.setVelocity(-dir.getOffsetX() * 0.38, 0.42, -dir.getOffsetZ() * 0.38);
+    }
+
+    /** The movement keys point at the wall you're on (judged from where the camera faces). */
+    private static boolean toward(ClientPlayerEntity p) {
+        float f = p.input.movementForward, s = p.input.movementSideways;
+        if (f * f + s * s < 0.01f) return false;
+        double yaw = Math.toRadians(p.getYaw());
+        double x = s * Math.cos(yaw) - f * Math.sin(yaw), z = f * Math.cos(yaw) + s * Math.sin(yaw);
+        return (x * dir.getOffsetX() + z * dir.getOffsetZ()) / Math.sqrt(x * x + z * z) > 0.6;
     }
 
     /** The movement keys point away from the wall you're on (judged from where the camera faces). */
@@ -492,6 +527,8 @@ public final class Parkour {
 
     private static void set(Mode m) {
         mode = m;
+        cyc = 0;
+        plant = null;
         ticks = 0;
         side = 0;
         started = System.nanoTime();
@@ -511,17 +548,55 @@ public final class Parkour {
             case HANG -> {
                 p.setVelocity(Vec3d.ZERO);
                 p.fallDistance = 0;
-                // Shuffle along the lip (left is +sideways), if it carries on that way.
+                // Shuffle along the lip, hand over hand (left is +sideways), if it carries on that way.
                 float s = p.input.movementSideways;
-                side = s > 0.1f ? -1 : s < -0.1f ? 1 : 0;
-                if (side != 0) {
-                    Vec3d along = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(side * 0.055);
-                    Vec3d next = p.getPos().add(along);
-                    if (empty(p, column(next.x, next.y, next.z, 1.8)) && lip(p, next, next.y, HANG_H - 0.15, HANG_H + 0.15) != null) {
-                        p.move(MovementType.SELF, along);
-                        phase += 0.55f;
-                    } else if (corner(p, side)) phase += 0.55f;
-                    else side = 0;
+                int want = s > 0.1f ? -1 : s < -0.1f ? 1 : 0;
+                Vec3d at = p.getPos();
+                if (plant == null) plant = handPoints(p.getWorld(), at, dir, ledgeY);
+                if (cyc == 0 && want != 0) {
+                    Vec3d r = new Vec3d(-dir.getOffsetZ(), 0, dir.getOffsetX()).multiply(want);
+                    Vec3d next = null;
+                    for (double d = STEP; d > 0.05; d -= 0.1) {
+                        Vec3d n = at.add(r.multiply(d));
+                        if (empty(p, column(n.x, n.y, n.z, 1.8)) && lip(p, n, n.y, HANG_H - 0.15, HANG_H + 0.15) != null) {
+                            next = n;
+                            break;
+                        }
+                    }
+                    if (next != null) {
+                        cycSide = want;
+                        lead = want > 0 ? 0 : 1;
+                        cycFrom = at;
+                        cycTo = next;
+                        handFrom = plant[lead];
+                        handTo = handPoints(p.getWorld(), next, dir, ledgeY)[lead];
+                        cyc = 1;
+                        cycK = 0;
+                        hurry = false;
+                    } else if (corner(p, want)) return true;
+                }
+                side = cyc != 0 ? cycSide : 0;
+                if (cyc != 0) {
+                    if (want != cycSide) hurry = true;
+                    cycRate = (cyc == 1 ? 1 / REACH : 1 / FOLLOW) * (hurry ? HURRY : 1);
+                    cycK += cycRate;
+                    phase += 0.4f;
+                    if (cyc == 1 && cycK >= 1) {
+                        // Lead hand planted: now the body comes across and the other hand follows it in.
+                        plant[lead] = handTo;
+                        int trail = 1 - lead;
+                        handFrom = plant[trail];
+                        handTo = handPoints(p.getWorld(), cycTo, dir, ledgeY)[trail];
+                        cyc = 2;
+                        cycK = 0;
+                    } else if (cyc == 2) {
+                        Vec3d target = cycFrom.lerp(cycTo, ease(Math.min(1, cycK)));
+                        p.move(MovementType.SELF, target.subtract(at));
+                        if (cycK >= 1) {
+                            plant[1 - lead] = handTo;
+                            cyc = 0;
+                        }
+                    }
                 }
                 return true;
             }

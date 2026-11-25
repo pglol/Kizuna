@@ -481,7 +481,7 @@ public final class Animator {
             s.plant = null;
             return;
         }
-        Vec3d[] hands = step(s, ideal, dt);
+        Vec3d[] hands = Parkour.exactHands(p) ? ideal : step(s, ideal, dt);
         Vec3d pos = p.getLerpedPos(td);
         Matrix4f frame = armFrame(out).invert();
         reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, new Vector3f(-5, 2, 0), toModel(hands[0], pos, body), frame, weight);
