@@ -90,6 +90,37 @@ public final class Hitbox {
         return best;
     }
 
+    public record Contact(Entity entity, Hit hit) { }
+
+    /**
+     * The first body among others that a moving fist (from a to b, radius r) touches: any part of anyone,
+     * whoever it was aimed at. null if it touches nobody.
+     */
+    public static Contact sweep(Iterable<Entity> others, float td, Vec3d a, Vec3d b, double r) {
+        Contact best = null;
+        for (Entity e : others) {
+            for (Capsule c : of(e, td)) {
+                double[] st = closest(a, b, c.a, c.b);
+                Vec3d p1 = a.add(b.subtract(a).multiply(st[0]));
+                Vec3d p2 = c.a.add(c.b.subtract(c.a).multiply(st[1]));
+                if (p1.distanceTo(p2) > c.r + r) continue;
+                if (best == null || st[0] < best.hit.along()) {
+                    Vec3d contact = p2.add(p1.subtract(p2).normalize().multiply(c.r));
+                    best = new Contact(e, new Hit(c.part, contact, st[0]));
+                }
+            }
+        }
+        return best;
+    }
+
+    /** The first body along a strike's line from `from` towards `to` (up to reach), among others. */
+    public static Contact traceAll(Iterable<Entity> others, float td, Vec3d from, Vec3d to, double reach) {
+        Vec3d dir = to.subtract(from);
+        double len = dir.length();
+        if (len < 1e-4) return null;
+        return sweep(others, td, from, from.add(dir.multiply(reach / len)), 0.06);
+    }
+
     /** Closest points between segments p1-q1 and p2-q2, as their parameters (0..1) along each. */
     private static double[] closest(Vec3d p1, Vec3d q1, Vec3d p2, Vec3d q2) {
         Vec3d d1 = q1.subtract(p1), d2 = q2.subtract(p2), r = p1.subtract(p2);

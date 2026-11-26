@@ -224,7 +224,8 @@ moves the body somewhere the physics wouldn't.
     - It accelerates into contact, then holds briefly on a hit: 50 ms for a light, 90 ms for a heavy.
     - Hips and chest turn through the strike, the weight shifts forward, and the body steps in behind it, a step that grows with a heavy's charge.
 37. **Guarding is omnidirectional.** It blocks every hit with an attacker except shield-bypassing damage and full heavies. A block still shoves you and jolts the guard. You can't strike with the guard up.
-38. **Landing a strike.** A strike is traced from the shoulder along its line, up to 3 blocks, and lands on the first body part it meets, which can be a guarding forearm. The fist stops on that part. Damage by part: head 1.25×, torso 1×, legs 0.7×, arms 0.45×. The server checks reach and facing. Combos aren't eaten by hit invulnerability.
+38. **Any contact counts.** While a strike is in motion, the fist's real path is swept against the body parts of everyone nearby, whoever it was aimed at. The first part it touches takes the hit, and the strike stops there. If it hasn't touched anyone by its contact moment, it lands on the first body along its line.
+38a. **Landing a strike.** A strike is traced from the shoulder along its line, up to 3 blocks, and lands on the first body part it meets, which can be a guarding forearm. The fist stops on that part. Damage by part: head 1.25×, torso 1×, legs 0.7×, arms 0.45×. The server checks reach and facing. Combos aren't eaten by hit invulnerability.
 39. **Footwork.**
     - Locked on, a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse.
     - Guarding multiplies speed by 0.75 and winding up a heavy by 0.8, whether locked on or not.

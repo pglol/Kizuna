@@ -4,7 +4,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.MathHelper;
-import net.pglol.kata.Fighting.Move;
 
 /**
  * The HUD, kept to the edges and out of the way.
@@ -80,7 +79,7 @@ public final class Hud {
         if (engage < 0.02f) return;
 
         // What a click and a hold will throw.
-        Move light = Fight.nextLight(), heavy = Fight.nextHeavy();
+        net.pglol.kata.Fighting.Move light = Fight.nextLight(), heavy = Fight.nextHeavy();
         float a = engage;
         int rowY = y - 22;
         chip(c, tr, x, rowY, "TAP", light == null ? "—" : light.name(), Ui.alpha(Ui.TEXT, a), Ui.alpha(acc, a), a);

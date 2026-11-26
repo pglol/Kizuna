@@ -156,9 +156,18 @@ public final class Fight {
         // The strike in progress: contact (and a beat held if it lands), then done.
         if (cur != null) {
             float s = secs(curStart);
-            if (!hitSent && s >= cur.contact()) {
+            int early = -1;
+            // On its way out, the fist runs into whoever's in its path: the first body it touches takes it.
+            if (!hitSent && s >= cur.contact() * 0.4f && fistPrev != null && fistNow != null && fistPrev.squaredDistanceTo(fistNow) > 1e-6) {
+                Hitbox.Contact touch = Hitbox.sweep(nearby(p), td, fistPrev, fistNow, 0.07);
+                if (touch != null) {
+                    lastPart = touch.hit().part();
+                    early = touch.entity().getId();
+                }
+            }
+            if (!hitSent && (early >= 0 || s >= cur.contact())) {
                 hitSent = true;
-                int hit = struck(mc, p);
+                int hit = early >= 0 ? early : struck(mc, p);
                 int packed = Fighting.id(cur) | (curRight ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9) | (lastPart.ordinal() << 16);
                 send(KataNet.STRIKE, packed, hit);
                 // It lands: the strike holds still for a moment (the impact), longer for a heavy.
@@ -216,6 +225,7 @@ public final class Fight {
         curPower = m.heavy() ? Math.max(0.3f, power) : 1;
         curStart = System.nanoTime();
         hitSent = false;
+        fistNow = fistPrev = null;
         if (m.heavy()) chain = 0;
         // A spinning strike turns you as you throw it, the striking arm's side leading the turn.
         if (m.turns()) {
@@ -234,6 +244,9 @@ public final class Fight {
         send(KataNet.STANCE, s, 0);
     }
 
+    /** Where the striking fist is in the world, this frame and last (for what it runs into on the way). */
+    private static Vec3d fistNow, fistPrev;
+
     /** The body part the last strike landed on. */
     private static Fighting.Part lastPart = Fighting.Part.TORSO;
 
@@ -244,11 +257,20 @@ public final class Fight {
     private static int struck(MinecraftClient mc, ClientPlayerEntity p) {
         Entity t = targetEntity(mc);
         if (t == null && mc.targetedEntity instanceof LivingEntity c) t = c;
-        if (t == null) return -1;
-        Hitbox.Hit h = Hitbox.trace(t, 1, shoulder(p, 1), wanted(p, 1, cur, t), Fighting.REACH);
+        Vec3d want = t != null ? wanted(p, 1, cur, t) : p.getCameraPosVec(1).add(p.getRotationVec(1).multiply(2)).add(0, -0.2, 0);
+        Hitbox.Contact h = Hitbox.traceAll(nearby(p), 1, shoulder(p, 1), want, Fighting.REACH);
         if (h == null) return -1;
-        lastPart = h.part();
-        return t.getId();
+        lastPart = h.hit().part();
+        return h.entity().getId();
+    }
+
+    /** Bodies a strike could touch: anyone alive within reach but you. */
+    private static java.util.List<Entity> nearby(ClientPlayerEntity p) {
+        java.util.List<Entity> out = new java.util.ArrayList<>();
+        for (Entity e : p.getWorld().getOtherEntities(p, p.getBoundingBox().expand(Fighting.REACH + 1))) {
+            if (e instanceof LivingEntity && e.isAlive() && !(e instanceof ArmorStandEntity) && !e.isSpectator()) out.add(e);
+        }
+        return out;
     }
 
     /** Roughly where the striking shoulder is (world). */
@@ -521,6 +543,11 @@ public final class Fight {
             : m.path() == Path.BACKFIST ? new Vector3f(out_ * 0.3f, 0.2f, 1) // arm out straight, elbow back
             : new Vector3f(out_ * 0.3f, 1, 0.45f);        // elbow down, behind the punch
         Animator.reach(out, arm, fore, shoulder, fist, frame, 1, pole);
+        if (mine(p) && cur != null) {
+            Vector3f hand = Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH];
+            fistPrev = fistNow;
+            fistNow = Ragdoll.toWorld(hand, pos, bodyYaw);
+        }
     }
 
     /**

@@ -263,7 +263,8 @@ public final class Fighting {
         Vec3d to = t.getPos().subtract(p.getPos());
         Vec3d look = Vec3d.fromPolar(0, p.getYaw());
         double len = Math.hypot(to.x, to.z);
-        if (len > 0.3 && (to.x * look.x + to.z * look.z) / len < 0.3) return;
+        // Anywhere in front, wide: hooks, spins and glancing contacts land off to the side too.
+        if (len > 0.3 && (to.x * look.x + to.z * look.z) / len < -0.2) return;
         Part part = Part.values()[Math.min(3, (packed >> 16) & 0x3)];
         float dmg = m.damage() * (m.heavy() ? 0.5f + 0.5f * power : 1) * part.share;
         t.timeUntilRegen = 0; // strings land: no invulnerability gap between hits
