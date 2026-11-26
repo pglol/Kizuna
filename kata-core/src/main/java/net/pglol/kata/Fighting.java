@@ -302,6 +302,9 @@ public final class Fighting {
             ServerPlayNetworking.send(viewer, new KataNet.FightOf(p.getId(), KataNet.GUARD, GUARD.getOrDefault(p.getUuid(), false) ? 1 : 0));
             Integer st = STANCE.get(p.getUuid());
             if (st != null) ServerPlayNetworking.send(viewer, new KataNet.FightOf(p.getId(), KataNet.STANCE, st));
+            int[] md = KataNet.MODES.get(p.getUuid()); // down, hanging...: as they are now
+            if (md != null && md[0] != 0 && ServerPlayNetworking.canSend(viewer, KataNet.ActOf.ID))
+                ServerPlayNetworking.send(viewer, new KataNet.ActOf(p.getId(), md[0], md[1]));
         });
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((victim, source, amount) -> {
             boolean ok = allow(victim, source, amount);

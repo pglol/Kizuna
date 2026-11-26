@@ -67,6 +67,9 @@ public final class KataNet {
     /** Act mode meaning "slammed into a wall"; side carries the speed (twentieths of a block a tick). */
     public static final int IMPACT = 32;
 
+    /** Each player's current movement mode (as their game last said), for anyone who starts watching them. */
+    public static final java.util.Map<java.util.UUID, int[]> MODES = new java.util.HashMap<>();
+
     static void register() {
         PayloadTypeRegistry.playC2S().register(Act.ID, Act.CODEC);
         PayloadTypeRegistry.playS2C().register(ActOf.ID, ActOf.CODEC);
@@ -98,6 +101,8 @@ public final class KataNet {
                 return;
             }
             int mode = Math.max(0, Math.min(15, payload.mode())), side = Math.max(-1, Math.min(1, payload.side()));
+            MODES.put(p.getUuid(), new int[] {mode, side});
+            if (MODES.size() > 1024) MODES.clear();
             for (ServerPlayerEntity other : PlayerLookup.tracking(p)) {
                 if (other != p && ServerPlayNetworking.canSend(other, ActOf.ID)) ServerPlayNetworking.send(other, new ActOf(p.getId(), mode, side));
             }

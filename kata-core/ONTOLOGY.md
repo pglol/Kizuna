@@ -475,3 +475,6 @@ moves the body somewhere the physics wouldn't.
 - A move's later hits (a flurry, a one-two) are taken as fast as the move throws them, up to its number of hits; only a new move waits for the last to run its course.
 - The touch also follows the elbow (or knee) along its path, so the whole forearm (or shin) counts as it travels, hand to hand through a flurry.
 - Strike reports in chat are back to /kdebug only.
+
+## Ragdolls are always in step for everyone
+- A limp body (and a ledge hang) shows on every screen for as long as it lasts: the owner's game says so again every second, everyone keeps showing it until told otherwise (or nothing's heard for 4 s), and anyone who comes into view while someone's down gets told straight away. (Short moves like vaults still fade on their own.)

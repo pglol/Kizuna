@@ -275,13 +275,18 @@ public final class Parkour {
     }
 
     // ---- everyone else, from the server ----
-    private record Remote(Mode mode, int side, long started) { }
+    private record Remote(Mode mode, int side, long started, long heard) { }
     private static final Map<Integer, Remote> REMOTE = new HashMap<>();
 
     public static void remote(int entity, int m, int s) {
         Mode md = m >= 0 && m < Mode.values().length ? Mode.values()[m] : Mode.NONE;
         if (md == Mode.NONE) REMOTE.remove(entity);
-        else REMOTE.put(entity, new Remote(md, s, System.nanoTime()));
+        else {
+            // The same mode again (their heartbeat): keep when it started, note we heard it.
+            Remote was = REMOTE.get(entity);
+            long start = was != null && was.mode == md ? was.started : System.nanoTime();
+            REMOTE.put(entity, new Remote(md, s, start, System.nanoTime()));
+        }
         if (REMOTE.size() > 512) REMOTE.clear();
     }
 
@@ -295,7 +300,10 @@ public final class Parkour {
         Remote r = REMOTE.get(p.getId());
         if (r == null) return View.NONE;
         float secs = (System.nanoTime() - r.started) / 1e9f;
-        if (r.mode != Mode.HANG && secs > 2) return View.NONE;
+        // Short moves fade on their own; a hang or a ragdoll lasts until their game says otherwise (it
+        // keeps saying so every second; if that stops for 4 s, they are let go of).
+        boolean lasting = r.mode == Mode.HANG || r.mode == Mode.RAGDOLL;
+        if (lasting ? (System.nanoTime() - r.heard) / 1e9f > 4 : secs > 2) return View.NONE; // lasting: until their heartbeat stops
         float moved = (float) Math.sqrt(p.squaredDistanceTo(p.prevX, p.prevY, p.prevZ));
         return new View(r.mode, progress(r.mode, secs), r.side, secs * 9 * Math.min(1, moved * 12), secs, 0.5f);
     }
@@ -1172,7 +1180,16 @@ public final class Parkour {
         started = System.nanoTime();
     }
 
+    private static int beatTicks;
+
     private static void syncOut() {
+        // Down or hanging: say so again every second, so everyone watching stays in step (a lost packet,
+        // someone who just came into view).
+        boolean beat = (mode == Mode.RAGDOLL || mode == Mode.HANG) && ++beatTicks >= 20;
+        if (beat) {
+            beatTicks = 0;
+            if (ClientPlayNetworking.canSend(KataNet.Act.ID)) ClientPlayNetworking.send(new KataNet.Act(mode.ordinal(), side));
+        }
         if (mode == sentMode && side == sentSide) return;
         sentMode = mode;
         sentSide = side;
