@@ -57,7 +57,7 @@ public final class Fight {
     /** A blocked hit's jolt (seconds left) and the side it came from (+1 right, -1 left). */
     private static float jolt;
     private static int joltSide;
-    private static long brokenUntil, staggerUntil, parryAt;
+    private static long brokenUntil, staggerUntil, parryAt, flinchUntil;
     private static int parryKind, lastHurt;
     /** Where the striking fist or foot is in the world, this frame and last (what it runs into on the way). */
     private static Vec3d limbNow, limbPrev;
@@ -125,12 +125,16 @@ public final class Fight {
     }
 
     /** Out of a dodge and not yet able to act (its i-frames are over, the step not finished). */
+    static boolean flinching() {
+        return System.nanoTime() < flinchUntil;
+    }
+
     static boolean recovering() {
         return dodgeAt != 0 && secs(dodgeAt) < DODGE_RECOVER;
     }
 
     private static void dodge(ClientPlayerEntity p) {
-        if (!p.isOnGround() || limp(p) || cur != null || charging || staggered() || recovering() || p.getAbilities().flying) return;
+        if (!p.isOnGround() || limp(p) || cur != null || charging || staggered() || recovering() || flinching() || p.getAbilities().flying) return;
         if (net.pglol.kata.client.Move.winded() || net.pglol.kata.client.Move.stamina < DODGE_COST) return;
         float f = p.input.movementForward, sdw = p.input.movementSideways;
         int dir;
@@ -280,7 +284,7 @@ public final class Fight {
         if (p == null) return false;
         if (limp(p)) return true; // a limp body throws nothing (and doesn't swing either)
         if (!fists(p)) return false;
-        if (guard || staggered() || recovering()) return true; // hands up, off balance or out of a dodge: nothing to throw
+        if (guard || staggered() || recovering() || flinching()) return true; // hands up, off balance, out of a dodge or reeling: nothing to throw
         pressing = true;
         pressAt = System.nanoTime();
         return true;
@@ -299,6 +303,7 @@ public final class Fight {
     }
 
     private static void begin(ClientPlayerEntity p, Move m, float power) {
+        if (flinching()) return; // reeling from a hit: block or parry, not throw
         if (m == null || staggered()) return;
         // In the air only air moves; on the ground none of them.
         if ((m.from() == Fighting.From.AIR) != airborne(p)) return;
@@ -476,6 +481,14 @@ public final class Fight {
                     // The hit pushes the stance the other way: struck on the right, you're turned to the left.
                     boolean top = Fighting.top(stance);
                     stanceTo(a > 0 ? (top ? Fighting.TL : Fighting.BL) : (top ? Fighting.TR : Fighting.BR));
+                }
+                case KataNet.FLINCH -> {
+                    // Hit: the strike you were throwing is gone and you can't throw for a moment. Guard or
+                    // parry to get out of their string.
+                    flinchUntil = Math.max(flinchUntil, System.nanoTime() + a * 50_000_000L);
+                    cur = null;
+                    chain = 0;
+                    pendingLight = pressing = charging = false;
                 }
                 case KataNet.POISE -> net.pglol.kata.client.Move.stamina = Math.min(net.pglol.kata.client.Move.stamina, a / 100f); // blocking costs the same breath running does
                 case KataNet.GUARD_BROKEN -> {

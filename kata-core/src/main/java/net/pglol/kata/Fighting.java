@@ -246,6 +246,8 @@ public final class Fighting {
     private static final Map<UUID, Integer> POISE_AT = new HashMap<>();
     /** The side a guard was raised towards (0 none, 1 left, 2 right), for parries; when a dodge began. */
     private static final Map<UUID, Integer> PARRY_SIDE = new HashMap<>(), DODGE_AT = new HashMap<>();
+    /** Hit and not yet able to throw back (server tick it ends): the attacker's string carries on unless blocked or parried. */
+    private static final Map<UUID, Integer> FLINCH_UNTIL = new HashMap<>();
     /** A dodge's invulnerable start (ticks): strikes pass through. */
     public static final int DODGE_IFRAMES = 5;
     /** The limb of the strike being dealt (true right, null unknown): it comes in on the other side of them. */
@@ -371,6 +373,16 @@ public final class Fighting {
         }
         if (e instanceof ServerPlayerEntity p && ServerPlayNetworking.canSend(p, KataNet.FightOf.ID))
             ServerPlayNetworking.send(p, new KataNet.FightOf(p.getId(), KataNet.POISE, Math.round(Math.max(0, v) * 100)));
+    }
+
+    static void flinch(LivingEntity e, int ticks) {
+        if (e instanceof Dummy d) d.flinch(ticks);
+        else if (e instanceof ServerPlayerEntity p) {
+            int until = p.getServer().getTicks() + ticks;
+            FLINCH_UNTIL.merge(p.getUuid(), until, Math::max);
+            if (FLINCH_UNTIL.size() > 1024) FLINCH_UNTIL.clear();
+            if (ServerPlayNetworking.canSend(p, KataNet.FightOf.ID)) ServerPlayNetworking.send(p, new KataNet.FightOf(p.getId(), KataNet.FLINCH, ticks));
+        }
     }
 
     static boolean dodging(Entity e) {
@@ -522,6 +534,9 @@ public final class Fighting {
         if (last != null && now - last < 2) return; // faster than any string allows
         LAST.put(p.getUuid(), now);
         if (LAST.size() > 1024) LAST.clear();
+        // Still reeling from a hit (a little slack for lag): nothing thrown lands.
+        Integer fl = FLINCH_UNTIL.get(p.getUuid());
+        if (fl != null && now < fl - 2) return;
         relay(p, KataNet.STRIKE, packed);
         if (target < 0 || guarding(p)) return;
         Entity e = p.getWorld().getEntityById(target);
@@ -567,6 +582,9 @@ public final class Fighting {
         boolean fromRight = from.x * -Math.cos(ty) + from.z * -Math.sin(ty) > 0;
         int react = part.ordinal() | m.path().ordinal() << 2 | (fromRight ? 1 << 7 : 0) | (m.heavy() ? 1 << 8 : 0);
         relayAround(t, KataNet.HIT, react);
+        // Hitstun: long enough for the attacker's next strike in the string to arrive first.
+        int stun = Math.round(m.length() * 20 * 0.85f) + (m.heavy() ? 6 : 3);
+        flinch(t, stun);
         float shove = m.push() * (m.heavy() ? 0.6f + 0.6f * power : 1) * might(by);
         boolean down = m.knockdown() && (!m.heavy() || power >= 0.9f);
         if (down) {

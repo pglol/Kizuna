@@ -232,6 +232,13 @@ public class Dummy extends PathAwareEntity {
         raiseAt = -1;
     }
 
+    /** Hit: whatever it was throwing is gone, and it can't throw again for a moment (it can still guard). */
+    void flinch(int ticks) {
+        cancelSwing();
+        cooldown = Math.max(cooldown, ticks);
+        string = 0;
+    }
+
     void knockdown(Vec3d v) {
         setVelocity(v);
         velocityModified = true;

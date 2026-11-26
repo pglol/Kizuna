@@ -341,3 +341,8 @@ moves the body somewhere the physics wouldn't.
 
 ## Others getting up
 - On other screens a limp body finishes its own get-up when its owner is already up, instead of snapping to standing.
+
+## Hitstun
+- A landed hit cancels what the one hit was throwing and stops them throwing (or dodging) for a moment: 85% of the strike's length, +3 ticks (+6 for a heavy). Enough that the attacker's next strike in the string arrives first.
+- Guard and parry still work while reeling: blocking or parrying is the way out of a string. The server rejects strikes thrown during hitstun.
+- Dummies too: hit, their swing is gone and their next strike waits.
