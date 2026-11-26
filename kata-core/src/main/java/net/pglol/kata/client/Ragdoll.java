@@ -60,7 +60,7 @@ public final class Ragdoll {
         {RH, PELVIS, 0.3}, {LH, PELVIS, 0.3}, {RH, LS, 0.3}, {LH, RS, 0.3}, {RE, LS, 0.25}, {LE, RS, 0.25},
     };
     private static final float RADIUS = 0.09f, GRAVITY = 28.8f, MU = 0.6f; // MU: friction against the ground and walls
-    private static final float MIN_TIME = 0.55f, MAX_TIME = 4.0f, GET_UP = 1.15f;
+    private static final float MIN_TIME = 0.45f, MAX_TIME = 3.0f, GET_UP = 0.8f;
 
     private static final Map<Integer, Ragdoll> ACTIVE = new HashMap<>();
 
@@ -267,7 +267,7 @@ public final class Ragdoll {
         still = speed < 0.35 ? still + dt : 0;
         // In water the body floats up and lies there a while (about 3 s) before it comes round.
         boolean afloat = inWater();
-        if (afloat ? wake && age > 1.0f : (age > MIN_TIME && still > 0.2) || age > MAX_TIME) {
+        if (afloat ? wake && age > 1.0f : (age > MIN_TIME && still > 0.12) || age > MAX_TIME) {
             getUp = 0;
             // Which way up it ended: chest towards the sky (on its back) or not.
             double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];

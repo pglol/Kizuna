@@ -300,3 +300,14 @@ moves the body somewhere the physics wouldn't.
 
 ## Knockback
 - An ordinary hit pushes you back along the ground, a step's worth, never up off it: fighters stay in range to trade back and forth. A blocked hit gives a little ground. Only knockdown moves (push kick, side kick, driving palm, spinning elbow, spinning hook kick, dropkick, full-charge heavies) send anyone flying.
+
+## Movement while fighting
+- Locked on, guarding or charging a heavy: walking pace only, no running.
+- Ground speeds (walk, fast walk, run, guard and stance factors) apply on the player's own speed.
+
+## Dummies fight back
+- A dummy's strikes use their own damage type, the same on every difficulty (mob attacks do nothing on Peaceful). Reach 3.0 for punches and 3.3 for kicks; it steps in as it throws if you're backing off; head, body or legs by the strike; shorter breathers between strings.
+- Every screen knows who a dummy is fighting and aims its strikes at them.
+
+## Getting up
+- On land: lie still briefly (0.12 s settled, at least 0.45 s down, at most 3 s), then 0.8 s to get up.

@@ -77,6 +77,10 @@ public final class Fight {
     /** Where a spin started from (degrees), so it turns smoothly all the way round. */
     private static final Map<Integer, Float> SPIN_FROM = new HashMap<>();
 
+    public static boolean guarding() {
+        return guard || charging;
+    }
+
     public static boolean locked() {
         return target >= 0;
     }
@@ -507,6 +511,10 @@ public final class Fight {
         Long at = STANCE_AT.get(p.getId());
         return GUARDS.getOrDefault(p.getId(), false) || (a != null && secs(a.start) < a.move.length()) || (at != null && secs(at) < 4)
             || othersStaggered(p) || (PARRIES.containsKey(p.getId()) && secs(PARRIES.get(p.getId()).at) < 0.5f);
+    }
+
+    public static boolean guardUpOf(PlayerEntity p) {
+        return guardUp(p);
     }
 
     private static boolean guardUp(PlayerEntity p) {

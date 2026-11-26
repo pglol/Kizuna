@@ -42,6 +42,8 @@ public class Dummy extends PathAwareEntity {
     private static final TrackedData<Integer> REACT = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
     /** How it's blocking: 0 a plain high guard, 1 meeting it with the right arm, 2 the left arm, 3 a knee checking a kick. */
     private static final TrackedData<Integer> BLOCK = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
+    /** Who it's fighting (entity id, -1 for no one): every screen aims its strikes at them. */
+    private static final TrackedData<Integer> FOE = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
     /** Counts every time it's knocked about while down (the client puts each one into its ragdoll). */
     private static final TrackedData<Integer> KNOCKS = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
 
@@ -50,6 +52,13 @@ public class Dummy extends PathAwareEntity {
 
     private BlockPos home;
     private LivingEntity foe;
+
+    /** Who it's fighting, on either side (null for no one). */
+    public LivingEntity foe() {
+        if (!getWorld().isClient) return foe;
+        int id = dataTracker.get(FOE);
+        return id >= 0 && getWorld().getEntityById(id) instanceof LivingEntity l ? l : null;
+    }
     private int calmAt, guardAt = -999, guardUntil, raiseAt = -1, cooldown = 40, contactAt = -1;
     private Fighting.Move swing;
     private int stuck, string;
@@ -79,6 +88,7 @@ public class Dummy extends PathAwareEntity {
         b.add(REACT, 0);
         b.add(KNOCKS, 0);
         b.add(BLOCK, 0);
+        b.add(FOE, -1);
     }
 
     @Override
@@ -156,6 +166,7 @@ public class Dummy extends PathAwareEntity {
 
     private void provoke(LivingEntity by) {
         foe = by;
+        dataTracker.set(FOE, by.getId());
         calmAt = age + 200; // ten seconds of nothing and it lets it go
     }
 
@@ -274,7 +285,10 @@ public class Dummy extends PathAwareEntity {
 
         // Calm: let it go after a while, or if they're gone or far off.
         if (foe != null && (!foe.isAlive() || foe.isSpectator() || age > calmAt || foe.squaredDistanceTo(this) > 20 * 20
-            || (foe instanceof PlayerEntity pl && pl.isCreative() && age > calmAt - 100))) foe = null;
+            || (foe instanceof PlayerEntity pl && pl.isCreative() && age > calmAt - 100))) {
+            foe = null;
+            dataTracker.set(FOE, -1);
+        }
 
         if (busy) return;
         if (foe != null) fight(foe);
@@ -327,7 +341,12 @@ public class Dummy extends PathAwareEntity {
             boolean counter = guarding() && age - guardAt > 6;
             if (!guarding() || counter) {
                 if (counter) setGuard(false);
-                if (d > 2.5) getNavigation().startMovingTo(foe, 1.1); // a step in to reach
+                if (d > 2.4) {
+                    // A step in to reach: it closes the gap as it throws.
+                    getNavigation().startMovingTo(foe, 1.2);
+                    Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(Math.min(0.22, (d - 2.0) * 0.12));
+                    if (isOnGround()) addVelocity(in.x, 0, in.z);
+                }
                 Fighting.Style s = Fighting.style("taijutsu");
                 String[] picks = {"jab", "jab", "straight", "straight", "one_two", "lead_hook", "rear_hook", "front_kick", "roundhouse", "low_kick", "uppercut"};
                 Fighting.Move m = s.move(s.index(picks[random.nextInt(picks.length)]));
@@ -339,17 +358,30 @@ public class Dummy extends PathAwareEntity {
                     if (string <= 0) string = 1 + random.nextInt(3);
                     string--;
                     // The next strike of the string right after this one; a breather after the last.
-                    cooldown = Math.round(m.length() * 20) + (string > 0 ? 1 : 12 + random.nextInt(18));
+                    cooldown = Math.round(m.length() * 20) + (string > 0 ? 1 : 6 + random.nextInt(12));
                 }
             }
         }
     }
 
     private void hit(LivingEntity foe, Fighting.Move m) {
-        double reach = m.leg() ? 3.0 : 2.7;
+        double reach = m.leg() ? 3.3 : 3.0;
         if (squaredDistanceTo(foe) > reach * reach) return;
-        Vec3d look = Vec3d.fromPolar(0, getYaw());
-        Fighting.land(this, foe, m, 1, Fighting.Part.TORSO, look, getDamageSources().mobAttack(this));
+        // Struck where its aim was: the head for hooks, straights and high kicks, the body for the rest,
+        // the legs for a low kick.
+        Fighting.Part part = m.path() == Fighting.Path.LOW_KICK ? Fighting.Part.LEG
+            : m.path() == Fighting.Path.FRONT_KICK || m.path() == Fighting.Path.KNEE ? Fighting.Part.TORSO
+            : random.nextFloat() < 0.6f ? Fighting.Part.HEAD : Fighting.Part.TORSO;
+        Vec3d look = foe.getPos().subtract(getPos()).multiply(1, 0, 1);
+        look = look.lengthSquared() > 1e-4 ? look.normalize() : Vec3d.fromPolar(0, getYaw());
+        Fighting.land(this, foe, m, 1, part, look, strikeSource());
+    }
+
+    /** Its own kind of damage: a fighter's strike, the same on every difficulty (mob attacks do nothing on Peaceful). */
+    private net.minecraft.entity.damage.DamageSource strikeSource() {
+        var key = net.minecraft.registry.RegistryKey.of(net.minecraft.registry.RegistryKeys.DAMAGE_TYPE, net.minecraft.util.Identifier.of(KataCore.ID, "strike"));
+        var type = getWorld().getRegistryManager().get(net.minecraft.registry.RegistryKeys.DAMAGE_TYPE).getEntry(key);
+        return type.isPresent() ? new net.minecraft.entity.damage.DamageSource(type.get(), this) : getDamageSources().mobAttack(this);
     }
 
     @Override

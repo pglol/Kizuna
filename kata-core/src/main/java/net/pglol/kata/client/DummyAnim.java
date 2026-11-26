@@ -236,11 +236,15 @@ public final class DummyAnim {
         Vec3d pos = d.getLerpedPos(td);
         MinecraftClient mc = MinecraftClient.getInstance();
         Vec3d aimW = null;
-        if (mc.player != null && mc.player.squaredDistanceTo(d) < 5 * 5) {
+        // At whoever it's really fighting (the same on every screen), else whoever is nearest.
+        net.minecraft.entity.LivingEntity foe = d.foe();
+        if (foe == null && mc.player != null && mc.player.squaredDistanceTo(d) < 5 * 5) foe = mc.player;
+        if (foe != null && foe.squaredDistanceTo(d) < 5 * 5) {
             Vec3d from = d.getEyePos().add(0, m.leg() ? -0.85 : -0.3, 0);
-            Vec3d want = mc.player.getLerpedPos(td).add(0, mc.player.getHeight() * (m.leg() ? 0.55 : 0.86), 0);
-            // Guarding: it lands on the forearms in front of your face.
-            if (Fight.guard && !m.leg()) want = mc.player.getCameraPosVec(td).add(Vec3d.fromPolar(0, mc.player.getYaw(td)).multiply(0.38)).add(0, -0.15, 0);
+            Vec3d want = foe.getLerpedPos(td).add(0, foe.getHeight() * (m.leg() ? 0.55 : 0.86), 0);
+            // Guarding: it lands on the forearms in front of their face.
+            boolean up = foe == mc.player ? Fight.guard : foe instanceof net.minecraft.entity.player.PlayerEntity pl && Fight.guardUpOf(pl);
+            if (up && !m.leg()) want = foe.getCameraPosVec(td).add(Vec3d.fromPolar(0, foe.getYaw(td)).multiply(0.38)).add(0, -0.15, 0);
             Vec3d dd = want.subtract(from);
             Vec3d face = Vec3d.fromPolar(0, by);
             // Only in front of it (an aim behind it would wrench the arm round).

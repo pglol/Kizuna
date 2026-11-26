@@ -53,6 +53,8 @@ public final class Move {
         if (held && !winded && !free && !p.isSneaking() && p.input.movementForward > 0.5f && !down(p)) p.setSprinting(true);
         // Winded: no running and no fast walk either, just walking until you've got your breath back.
         if (winded) p.setSprinting(false);
+        // Locked on to someone, guarding or charging: you're fighting, not running. You step and walk.
+        if (Fight.locked() || Fight.guarding()) p.setSprinting(false);
         if (!p.isSprinting() || free) mode = Mode.WALK;
         else mode = held ? Mode.RUN : Mode.FAST;
 
@@ -136,6 +138,8 @@ public final class Move {
             return (shuffle ? CROUCH_SHUFFLE : CROUCH_WALK) / VANILLA_SNEAK;
         }
         if (!p.isSprinting()) return p.getAbilities().flying ? 1 : WALK_SPEED;
+        // Locked on or guarding: walking pace even if the game still has you sprinting this tick.
+        if (p == MinecraftClient.getInstance().player && (Fight.locked() || Fight.guarding()) && !p.getAbilities().flying) return WALK_SPEED / VANILLA_SPRINT;
         return switch (mode) {
             case RUN -> RUN_SPEED / VANILLA_SPRINT;
             case FAST -> FAST_SPEED / VANILLA_SPRINT;
