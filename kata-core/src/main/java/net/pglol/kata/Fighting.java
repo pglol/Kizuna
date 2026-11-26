@@ -268,7 +268,7 @@ public final class Fighting {
     /** The side the guard is held towards now (0 square, 1 left, 2 right); what kind of dodge or avoid. */
     private static final Map<UUID, Integer> GUARD_SIDE = new HashMap<>(), DODGE_KIND = new HashMap<>();
     /** The last new strike: its move and when (for the spacing between strikes). */
-    private static final Map<UUID, Integer> LAST_ID = new HashMap<>(), LAST_START = new HashMap<>();
+    private static final Map<UUID, Integer> LAST_ID = new HashMap<>(), LAST_START = new HashMap<>(), LAST_HITS = new HashMap<>();
     /** Where the strike being dealt lands. */
     private static Part strikingPart;
     /** A dodge's invulnerable start (ticks): strikes pass through. */
@@ -783,25 +783,32 @@ public final class Fighting {
         float power = m.heavy() ? MathHelper.clamp(((packed >> 9) & 0x7F) / 100f, 0.3f, 1f) : 1f;
         int now = p.getServer().getTicks();
         Integer last = LAST.get(p.getUuid());
-        if (last != null && now - last < 2) {
-            dbg(p, 1, now - last);
-            if (atPlayer) report(p, 1, now - last); // faster than any string allows
-            return;
-        }
-        // A new strike only once the last has nearly run its course (later hits of the same move are fine).
+        // A new strike only once the last has nearly run its course; the later hits of the same move
+        // (a flurry, a one-two) come as fast as the move throws them, but never more of them than it has.
         Integer lastId = LAST_ID.get(p.getUuid()), lastStart = LAST_START.get(p.getUuid());
-        boolean sameMove = lastId != null && lastId == id && lastStart != null && now - lastStart < Math.round(m.length() * 20);
-        if (!sameMove) {
+        boolean sameMove = lastId != null && lastId == id && lastStart != null && now - lastStart < Math.round(m.length() * 20) + 2;
+        if (sameMove) {
+            int n = LAST_HITS.merge(p.getUuid(), 1, Integer::sum);
+            if (n > m.hits()) {
+                dbg(p, 1, n);
+                return;
+            }
+        } else {
+            if (last != null && now - last < 2) {
+                dbg(p, 1, now - last); // faster than any string allows
+                return;
+            }
             if (lastId != null && lastStart != null && lastId < MOVES.length && now - lastStart < Math.round(MOVES[lastId].length() * 20 * 0.75f)) {
                 dbg(p, 2, now - lastStart);
-            if (atPlayer) report(p, 2, now - lastStart);
                 return;
             }
             LAST_ID.put(p.getUuid(), id);
             LAST_START.put(p.getUuid(), now);
+            LAST_HITS.put(p.getUuid(), 1);
             if (LAST_ID.size() > 1024) {
                 LAST_ID.clear();
                 LAST_START.clear();
+                LAST_HITS.clear();
             }
         }
         LAST.put(p.getUuid(), now);
@@ -810,7 +817,6 @@ public final class Fighting {
         Integer fl = FLINCH_UNTIL.get(p.getUuid());
         if (fl != null && now < fl - 2) {
             dbg(p, 3, fl - now);
-            if (atPlayer) report(p, 3, fl - now);
             return;
         }
         relay(p, KataNet.STRIKE, packed);
@@ -831,7 +837,6 @@ public final class Fighting {
         boolean lying = t instanceof Dummy dd && dd.down() > 0;
         if (eye.distanceTo(near) > (lying ? 7 : REACH + (m.leg() ? KICK_EXTRA : 0) + 0.6)) { // a little slack for lag
             dbg(p, 7, (int) Math.round(eye.distanceTo(near) * 100));
-            if (t instanceof ServerPlayerEntity) report(p, 7, (int) Math.round(eye.distanceTo(near) * 100));
             return;
         }
         Vec3d to = t.getPos().subtract(p.getPos());
@@ -844,10 +849,7 @@ public final class Fighting {
             boolean landed = land(p, t, m, power, part, look, p.getDamageSources().playerAttack(p));
             int code = dealt ? (invulnerableNote ? 14 : 0) : t instanceof ServerPlayerEntity vp && vp.isCreative() ? 9 : refusal != 0 ? refusal : landed ? 13 : 8;
             dbg(p, code, Math.round(t.getHealth() * 10));
-            if (t instanceof ServerPlayerEntity) {
-                report(p, code, Math.round(t.getHealth() * 10)); // player fights: always say what happened (dev build)
-                KataCore.LOG.info("[Kata] {} {} -> {}: code {} (health now {})", p.getName().getString(), m.name(), t.getName().getString(), code, t.getHealth());
-            }
+
         } finally {
             strikeRight = null;
         }

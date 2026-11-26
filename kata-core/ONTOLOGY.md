@@ -472,3 +472,6 @@ moves the body somewhere the physics wouldn't.
 - Every body part counts: head (x1.25 damage), torso/chest (x1), legs (x0.7), arms (x0.45, a forearm in the way takes the hit). Whatever the striking fist, foot, forearm or shin touches first.
 - Dummies land only when the limb really reaches: from the shoulder (punch, 0.95) or the hip (kick, 1.25) to the nearest point of your body, in front of them. They close to punching range (under 1.7 blocks, stepping in as they throw) to do it.
 - Your lead side (the shoulder forward in your stance: left in the right stances, right in the left ones) is closer to them and gets hit more, as in any fighter's stance.
+- A move's later hits (a flurry, a one-two) are taken as fast as the move throws them, up to its number of hits; only a new move waits for the last to run its course.
+- The touch also follows the elbow (or knee) along its path, so the whole forearm (or shin) counts as it travels, hand to hand through a flurry.
+- Strike reports in chat are back to /kdebug only.
