@@ -576,6 +576,7 @@ public final class Fighting {
         Integer at = DODGE_AT.get(p.getUuid());
         if (at == null) return false;
         int age = p.getServer().getTicks() - at, kind = DODGE_KIND.getOrDefault(p.getUuid(), 0);
+        if (kind >= 32) return false; // clinging to a wall: no dodge in that
         if (kind == 0 || kind >= 16) return age <= DODGE_IFRAMES;
         if (age > 8) return false;
         return switch (kind) {
@@ -604,9 +605,9 @@ public final class Fighting {
     static void dodge(ServerPlayerEntity p, int dir) {
         DODGE_AT.put(p.getUuid(), p.getServer().getTicks());
         if (DODGE_AT.size() > 1024) DODGE_AT.clear();
-        DODGE_KIND.put(p.getUuid(), MathHelper.clamp(dir, 0, 31));
+        DODGE_KIND.put(p.getUuid(), MathHelper.clamp(dir, 0, 63));
         if (DODGE_KIND.size() > 1024) DODGE_KIND.clear();
-        relay(p, KataNet.DODGE, MathHelper.clamp(dir, 0, 31));
+        relay(p, KataNet.DODGE, MathHelper.clamp(dir, 0, 63));
     }
 
     private static void breakGuard(Entity e) {

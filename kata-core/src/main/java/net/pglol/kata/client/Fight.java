@@ -187,6 +187,120 @@ public final class Fight {
         send(KataNet.DODGE, dir, 0);
     }
 
+    static boolean clinging() {
+        return System.nanoTime() < clingUntil;
+    }
+
+    /** The face of a wall you're right up against (its outward normal, flat), or null. */
+    private static Vec3d wallNormal(ClientPlayerEntity p) {
+        var w = p.getWorld();
+        Vec3d best = null;
+        double bestD = 0.5;
+        for (net.minecraft.util.math.Direction d : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
+            boolean solid = false;
+            for (int up = 0; up <= 1; up++) {
+                net.minecraft.util.math.BlockPos b = net.minecraft.util.math.BlockPos.ofFloored(p.getX(), p.getY() + 0.4 + up * 0.9, p.getZ()).offset(d);
+                if (!w.getBlockState(b).getCollisionShape(w, b).isEmpty()) solid = true;
+            }
+            if (!solid) continue;
+            // How far you are from that face.
+            double gap = switch (d) {
+                case EAST -> Math.floor(p.getX()) + 1 - p.getX();
+                case WEST -> p.getX() - Math.floor(p.getX());
+                case SOUTH -> Math.floor(p.getZ()) + 1 - p.getZ();
+                default -> p.getZ() - Math.floor(p.getZ());
+            } - p.getWidth() / 2;
+            if (gap < bestD) {
+                bestD = gap;
+                best = new Vec3d(-d.getOffsetX(), 0, -d.getOffsetZ());
+            }
+        }
+        return best;
+    }
+
+    /** Land on the wall, sideways and crouched like a spider, for up to 1.5 s. */
+    private static void cling(ClientPlayerEntity p, Vec3d normal) {
+        clingNormal = normal;
+        clingUntil = System.nanoTime() + 1_500_000_000L;
+        clungThisJump = true;
+        flipUsed = false; // a jump off the wall can still flip
+        p.setVelocity(0, 0, 0);
+        int idx = Math.floorMod((int) Math.round(Math.atan2(normal.z, normal.x) / (Math.PI * 2) * 16), 16);
+        DODGES.put(p.getId(), new React(32 + idx, System.nanoTime()));
+        send(KataNet.DODGE, 32 + idx, 0);
+    }
+
+    /**
+     * Off the wall. At someone (locked on, or looking at them): a pounce straight at them, the opening air
+     * strike thrown as you arrive. Otherwise a boost the way you're looking, pushed out from the wall.
+     */
+    private static void wallJump(MinecraftClient mc, ClientPlayerEntity p) {
+        clingUntil = 0;
+        Entity t = targetEntity(mc);
+        if (t == null && mc.targetedEntity instanceof LivingEntity l) t = l;
+        if (t == null) t = lookedAt(p, 16);
+        Vec3d look = p.getRotationVec(1);
+        Vec3d dir;
+        double speed;
+        if (t != null) {
+            dir = t.getPos().add(0, t.getHeight() * 0.5, 0).subtract(p.getEyePos().add(0, -0.4, 0)).normalize();
+            speed = 1.0;
+            pounceAt = t.getId();
+            pounceUntil = System.nanoTime() + 1_200_000_000L;
+        } else {
+            Vec3d n = clingNormal == null ? Vec3d.ZERO : clingNormal;
+            // Never back into the wall: what's left of the look once its into-the-wall part is taken out.
+            double into = look.dotProduct(n);
+            Vec3d l2 = into < 0 ? look.subtract(n.multiply(into)) : look;
+            dir = l2.multiply(0.8).add(n.multiply(0.55)).normalize();
+            speed = 0.95;
+        }
+        p.setVelocity(dir.x * speed, Math.max(dir.y * speed, 0.32), dir.z * speed);
+        // A flip off it, whichever way you're going.
+        double rel = Math.atan2(-(dir.x * Math.cos(Math.toRadians(p.getYaw())) + dir.z * Math.sin(Math.toRadians(p.getYaw()))),
+            -dir.x * Math.sin(Math.toRadians(p.getYaw())) + dir.z * Math.cos(Math.toRadians(p.getYaw())));
+        int idx = Math.floorMod((int) Math.round(-rel / (Math.PI * 2) * 16), 16);
+        DODGES.put(p.getId(), new React(16 + idx, System.nanoTime()));
+        send(KataNet.DODGE, 16 + idx, 0);
+        flipUsed = true;
+    }
+
+    /** Someone alive in front of you within range (a narrow cone round where you look), or null. */
+    private static Entity lookedAt(ClientPlayerEntity p, double range) {
+        Vec3d eye = p.getEyePos(), look = p.getRotationVec(1);
+        Entity best = null;
+        double bestCos = 0.94;
+        for (Entity e : p.getWorld().getOtherEntities(p, p.getBoundingBox().expand(range))) {
+            if (!(e instanceof LivingEntity l) || !l.isAlive() || e.isSpectator()) continue;
+            Vec3d to = e.getPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
+            double d = to.length();
+            if (d > range || d < 1e-3) continue;
+            double cos = to.dotProduct(look) / d;
+            if (cos > bestCos) {
+                bestCos = cos;
+                best = e;
+            }
+        }
+        return best;
+    }
+
+    /** Flying at someone off a wall: when they're in reach, the opening air strike goes. */
+    private static void pounce(MinecraftClient mc, ClientPlayerEntity p) {
+        if (pounceAt < 0) return;
+        Entity t = p.getWorld().getEntityById(pounceAt);
+        if (t == null || System.nanoTime() > pounceUntil || p.isOnGround()) {
+            pounceAt = -1;
+            return;
+        }
+        if (t.squaredDistanceTo(p) < 2.6 * 2.6 && cur == null) {
+            pounceAt = -1;
+            if (target < 0) target = t.getId();
+            readyAt = 0;
+            airUsed = false;
+            begin(p, Deck.pick(Fighting.AIR, false, 0), 1);
+        }
+    }
+
     /** The dodge's step, eased over a few ticks: quick out, settling (never a shove). */
     private static void dodgeStep(ClientPlayerEntity p) {
         if (dodgeDir == null || dodgeTick >= DODGE_PROFILE.length) return;
@@ -238,9 +352,24 @@ public final class Fight {
         // Double jump: space again in the air (a fresh press, not the one you took off with) jumps again,
         // flipping whichever way you're pressing.
         boolean jumpNow = mc.options.jumpKey.isPressed() && mc.currentScreen == null;
-        if (jumpNow && !jumpWas && !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying
-            && Parkour.view(p).mode() == Parkour.Mode.NONE && !flipUsed) dodge(p);
+        boolean fresh = jumpNow && !jumpWas;
         jumpWas = jumpNow;
+        if (clinging()) {
+            // On the wall: jump off it (or at someone), or drop when time's up or you touch down.
+            p.fallDistance = 0;
+            Vec3d v = p.getVelocity();
+            p.setVelocity(0, Math.max(-0.03, Math.min(v.y, 0)) * 0.5, 0); // a slow slide
+            if (fresh) wallJump(mc, p);
+            else if (p.isOnGround() || System.nanoTime() > clingUntil) clingUntil = 0;
+        } else if (fresh && !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying
+            && Parkour.view(p).mode() == Parkour.Mode.NONE) {
+            // A double jump at a wall lands you on it, sideways, crouched; otherwise a flip.
+            Vec3d wall = wallNormal(p);
+            if (wall != null && !clungThisJump) cling(p, wall);
+            else if (!flipUsed) dodge(p);
+        }
+        if (p.isOnGround()) clungThisJump = false;
+        pounce(mc, p);
         if (mc.world != null && mc.world.getTime() % 3 == 0) stars(mc);
         while (KataClient.dodgeKey.wasPressed()) dodge(p);
         dodgeStep(p);
@@ -551,7 +680,13 @@ public final class Fight {
     private static Vec3d dodgeDir;
     private static float dodgeSpeed;
     private static int dodgeTick = 99;
-    private static boolean flipUsed, jumpWas;
+    private static boolean flipUsed, jumpWas, clungThisJump;
+    /** On a wall until then (nanos), facing out along this normal. */
+    private static long clingUntil;
+    private static Vec3d clingNormal;
+    /** Pouncing at someone off a wall: who, until when. */
+    private static int pounceAt = -1;
+    private static long pounceUntil;
     private static final Map<Integer, Long> STAGGERS = new HashMap<>();
     /** How much guard stamina others have left (it shows: a guard near breaking strains). */
     private static final Map<Integer, Float> POISES = new HashMap<>();
@@ -1253,6 +1388,43 @@ public final class Fight {
         React d = DODGES.get(e.getId());
         if (d == null) return;
         float s = secs(d.at);
+        if (d.packed >= 32) {
+            // On a wall: tipped out from it with the feet on it, crouched deep, a hand back on it.
+            if (s > 1.6f) return;
+            double ang = (d.packed - 32) * Math.PI / 8; // the wall's outward normal, in the world
+            float nx = (float) Math.cos(ang), nz = (float) Math.sin(ang);
+            double yaw = Math.toRadians(e.bodyYaw);
+            float fx = (float) -Math.sin(yaw), fz = (float) Math.cos(yaw), lx = (float) Math.cos(yaw), lz = (float) Math.sin(yaw);
+            // Towards the wall, in the model (left +x, forward -z).
+            float wx = -(nx * lx + nz * lz), wz = (nx * fx + nz * fz);
+            float ln = (float) Math.sqrt(wx * wx + wz * wz);
+            if (ln < 1e-4f) return;
+            wx /= ln;
+            wz /= ln;
+            float w = Math.min(1, s / 0.08f);
+            add(out, Bone.RIGHT_LEG, Pose.PITCH, -70 * w);
+            add(out, Bone.LEFT_LEG, Pose.PITCH, -55 * w);
+            add(out, Bone.RIGHT_SHIN, Pose.PITCH, 110 * w);
+            add(out, Bone.LEFT_SHIN, Pose.PITCH, 95 * w);
+            add(out, Bone.CHEST, Pose.PITCH, 22 * w);
+            add(out, Bone.HEAD, Pose.PITCH, -20 * w);
+            Bone hand = wx > 0 ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
+            add(out, hand, Pose.PITCH, -40 * w);
+            add(out, hand, Pose.ROLL, (wx > 0 ? -1 : 1) * 60 * w);
+            // Tip the whole body away from the wall so the feet are on it (about the waist).
+            Vector3f axis = new Vector3f(wz, 0, -wx); // tipping the head away from the wall
+            org.joml.Quaternionf tip = new org.joml.Quaternionf().rotationAxis((float) Math.toRadians(62 * w), axis.normalize());
+            org.joml.Quaternionf was = new org.joml.Quaternionf().rotationZYX(out.rad(Bone.ROOT, Pose.ROLL), out.rad(Bone.ROOT, Pose.YAW), out.rad(Bone.ROOT, Pose.PITCH));
+            org.joml.Quaternionf now = new org.joml.Quaternionf(tip).mul(was);
+            Vector3f waist = new Vector3f(0, -12, 0);
+            Vector3f a = was.transform(new Vector3f(waist)), b = now.transform(new Vector3f(waist));
+            out.offset[0] += a.x - b.x + wx * 3 * w;
+            out.offset[1] += a.y - b.y;
+            out.offset[2] += a.z - b.z + wz * 3 * w;
+            Vector3f eul = new org.joml.Matrix3f().set(now).getEulerAnglesZYX(new Vector3f());
+            out.set(Bone.ROOT, (float) Math.toDegrees(eul.x), (float) Math.toDegrees(eul.y), (float) Math.toDegrees(eul.z));
+            return;
+        }
         if (d.packed >= 16) {
             if (s > FLIP_TIME) return;
             float u = s / FLIP_TIME;

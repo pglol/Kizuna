@@ -401,3 +401,10 @@ moves the body somewhere the physics wouldn't.
 
 ## Double jump
 - Space again in the air (a fresh press) is a second jump, flipping whichever way you're pressing. Once per jump. The dodge key in the air does the same.
+
+## Jumping and walls
+- A jump springs about 1.6 blocks (jump strength 0.48).
+- Double jump at a wall (right up against it): you land on it sideways, crouched like a spider, feet on the wall, a hand back on it, sliding slowly, for up to 1.5 s. Once per jump; touching down or time running out drops you.
+- Jump again from the wall:
+  - Locked on, or looking at someone within 16 blocks: a pounce straight at them, and the opening air strike goes as you arrive (it lifts them for the juggle).
+  - Otherwise: a boost the way you're looking, pushed out from the wall (never back into it), flipping as you go.

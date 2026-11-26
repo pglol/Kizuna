@@ -17,7 +17,7 @@ public final class KataCore implements ModInitializer {
     public static boolean noHunger = true;
     /** Body physics: a touch less gravity (falls a little slower) and a slightly stronger jump, so a
      *  jump has more air under it without clearing 1.5-block fences (Minecraft: 0.08 and 0.42). */
-    public static final double GRAVITY = 0.072, JUMP = 0.43;
+    public static final double GRAVITY = 0.072, JUMP = 0.48; // about 1.6 blocks: a fighter's spring, not a hop
 
     public static void body(ServerPlayerEntity p) {
         var g = p.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_GRAVITY);
