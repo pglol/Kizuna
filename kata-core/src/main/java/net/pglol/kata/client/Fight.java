@@ -120,6 +120,11 @@ public final class Fight {
         return (System.nanoTime() - since) / 1e9f;
     }
 
+    private static boolean othersStaggered(PlayerEntity p) {
+        Long u = STAGGERS.get(p.getId());
+        return u != null && System.nanoTime() < u;
+    }
+
     private static boolean staggered() {
         return System.nanoTime() < staggerUntil;
     }
@@ -406,6 +411,9 @@ public final class Fight {
     /** Hits and blocks being shown on bodies (anyone's, yours too): what, and since when. */
     private record React(int packed, long at) { }
     private static final Map<Integer, React> HITS = new HashMap<>(), BLOCKS = new HashMap<>();
+    /** The same for other players' blocked hits (side), parries (kind) and staggers (until). */
+    private static final Map<Integer, React> JOLTS = new HashMap<>(), PARRIES = new HashMap<>();
+    private static final Map<Integer, Long> STAGGERS = new HashMap<>();
 
     static void remote(int entity, int kind, int a) {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -451,6 +459,17 @@ public final class Fight {
         }
         switch (kind) {
             case KataNet.GUARD -> GUARDS.put(entity, a != 0);
+            case KataNet.GUARD_HIT -> JOLTS.put(entity, new React(a, System.nanoTime()));
+            case KataNet.GUARD_BROKEN -> {
+                JOLTS.put(entity, new React(0, System.nanoTime()));
+                GUARDS.put(entity, false);
+            }
+            case KataNet.STAGGER -> {
+                STAGGERS.put(entity, System.nanoTime() + a * 50_000_000L);
+                MOVES.remove(entity); // whatever they were throwing is gone
+            }
+            case KataNet.PARRY -> PARRIES.put(entity, new React(a, System.nanoTime()));
+            case KataNet.KNOCKDOWN -> MOVES.remove(entity);
             case KataNet.STRIKE -> {
                 int id = a & 0xFF;
                 if (id < Fighting.MOVES.length) {
@@ -469,6 +488,9 @@ public final class Fight {
         }
         if (MOVES.size() > 256) MOVES.clear();
         if (STANCE_AT.size() > 256) STANCE_AT.clear();
+        if (JOLTS.size() > 256) JOLTS.clear();
+        if (PARRIES.size() > 256) PARRIES.clear();
+        if (STAGGERS.size() > 256) STAGGERS.clear();
     }
 
     // ---- what the body shows ----
@@ -483,7 +505,8 @@ public final class Fight {
         if (mine(p)) return guard || cur != null || charging || target >= 0 || staggered();
         Act a = MOVES.get(p.getId());
         Long at = STANCE_AT.get(p.getId());
-        return GUARDS.getOrDefault(p.getId(), false) || (a != null && secs(a.start) < a.move.length()) || (at != null && secs(at) < 4);
+        return GUARDS.getOrDefault(p.getId(), false) || (a != null && secs(a.start) < a.move.length()) || (at != null && secs(at) < 4)
+            || othersStaggered(p) || (PARRIES.containsKey(p.getId()) && secs(PARRIES.get(p.getId()).at) < 0.5f);
     }
 
     private static boolean guardUp(PlayerEntity p) {
@@ -574,10 +597,32 @@ public final class Fight {
             if (bSide > 0) g = Pose.lerp(g, g.copy().set(Bone.RIGHT_ARM, -75, -10, 38).set(Bone.RIGHT_FOREARM, 70, 0, 0), meet);
             else g = Pose.lerp(g, g.copy().set(Bone.LEFT_ARM, -75, 10, -38).set(Bone.LEFT_FOREARM, 70, 0, 0), meet);
         }
+        // The same reactions on everyone: yours from your own state, others' from what the server sent.
+        float jl;
+        int jSide;
+        boolean stag;
+        float ps;
+        int pKind;
         if (mine(p)) {
-            if (jolt > 0) {
+            jl = jolt;
+            jSide = joltSide;
+            stag = staggered();
+            ps = secs(parryAt);
+            pKind = parryKind;
+        } else {
+            React jr = JOLTS.get(p.getId());
+            jl = jr == null ? 0 : Math.max(0, 0.22f - secs(jr.at));
+            jSide = jr == null ? 0 : jr.packed;
+            stag = othersStaggered(p);
+            React pr = PARRIES.get(p.getId());
+            ps = pr == null ? 9 : secs(pr.at);
+            pKind = pr == null ? 0 : pr.packed;
+        }
+        {
+            int joltSide = jSide;
+            if (jl > 0) {
                 // A blocked hit drives the guard back into the face and turns the body away from its side.
-                float j = jolt / 0.22f;
+                float j = jl / 0.22f;
                 g.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) - 14 * j);
                 g.set(Bone.CHEST, Pose.YAW, g.get(Bone.CHEST, Pose.YAW) - 16 * j * joltSide);
                 g.set(Bone.CHEST, Pose.ROLL, g.get(Bone.CHEST, Pose.ROLL) + 6 * j * joltSide);
@@ -585,13 +630,13 @@ public final class Fight {
                 g.set(Bone.LEFT_FOREARM, Pose.PITCH, g.get(Bone.LEFT_FOREARM, Pose.PITCH) + 18 * j);
                 g.set(Bone.HEAD, Pose.PITCH, g.get(Bone.HEAD, Pose.PITCH) - 10 * j);
             }
-            if (staggered()) {
+            if (stag) {
                 // Off balance: chest and head thrown back, arms flung open.
                 g.set(Bone.CHEST, -16, 0, 0).set(Bone.HEAD, -20, 0, 0);
                 g.set(Bone.RIGHT_ARM, -25, 0, 38).set(Bone.LEFT_ARM, -25, 0, -38);
                 g.set(Bone.RIGHT_FOREARM, 25, 0, 0).set(Bone.LEFT_FOREARM, 25, 0, 0);
             }
-            float ps = secs(parryAt);
+            int parryKind = pKind;
             if (parryKind != 0 && ps < 0.5f) {
                 float k = ps < 0.12f ? ps / 0.12f : 1 - ease((ps - 0.12f) / 0.38f);
                 if (parryKind == 2) {

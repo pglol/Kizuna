@@ -238,6 +238,7 @@ public final class Fighting {
     // ---- server ----
 
     private static final Map<UUID, Boolean> GUARD = new HashMap<>();
+    private static final Map<UUID, Integer> STANCE = new HashMap<>();
     private static final Map<UUID, Integer> GUARD_AT = new HashMap<>();
     private static final Map<UUID, Integer> LAST = new HashMap<>();
     /** While a strike is being dealt: it breaks guard; what it is (for the defender's parry). */
@@ -260,6 +261,13 @@ public final class Fighting {
     }
 
     static void register() {
+        // Someone coming into view gets the fighter's state as it is now (guard, stance), not only changes.
+        net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents.START_TRACKING.register((e, viewer) -> {
+            if (!(e instanceof ServerPlayerEntity p) || !ServerPlayNetworking.canSend(viewer, KataNet.FightOf.ID)) return;
+            ServerPlayNetworking.send(viewer, new KataNet.FightOf(p.getId(), KataNet.GUARD, GUARD.getOrDefault(p.getUuid(), false) ? 1 : 0));
+            Integer st = STANCE.get(p.getUuid());
+            if (st != null) ServerPlayNetworking.send(viewer, new KataNet.FightOf(p.getId(), KataNet.STANCE, st));
+        });
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((victim, source, amount) -> {
             if (chip || !guarding(victim)) return true;
             Entity by = source.getAttacker();
@@ -321,6 +329,7 @@ public final class Fighting {
         if (e instanceof ServerPlayerEntity p) {
             GUARD.put(p.getUuid(), false);
             tell(p, KataNet.GUARD_BROKEN, 0);
+            relay(p, KataNet.GUARD, 0); // the guard is down for everyone watching too
         } else if (e instanceof Dummy d) d.guardBroken();
     }
 
@@ -349,8 +358,9 @@ public final class Fighting {
         return new Vec3d((((a >> 16) & 0xFF) - 128) / 64.0, (((a >> 8) & 0xFF) - 128) / 64.0, ((a & 0xFF) - 128) / 64.0);
     }
 
+    /** What happens to a player's body in a fight goes to them and to everyone who can see them. */
     private static void tell(Entity e, int kind, int a) {
-        if (e instanceof ServerPlayerEntity p && ServerPlayNetworking.canSend(p, KataNet.FightOf.ID)) ServerPlayNetworking.send(p, new KataNet.FightOf(p.getId(), kind, a));
+        if (e instanceof ServerPlayerEntity) relayAround(e, kind, a);
     }
 
     static void guard(ServerPlayerEntity p, boolean on) {
@@ -364,6 +374,8 @@ public final class Fighting {
     }
 
     static void stance(ServerPlayerEntity p, int stance) {
+        STANCE.put(p.getUuid(), MathHelper.clamp(stance, 0, 3));
+        if (STANCE.size() > 1024) STANCE.clear();
         relay(p, KataNet.STANCE, MathHelper.clamp(stance, 0, 3));
     }
 

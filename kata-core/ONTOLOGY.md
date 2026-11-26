@@ -293,3 +293,7 @@ moves the body somewhere the physics wouldn't.
 
 ## Other players' ragdolls
 - Your own game runs your fall and moves your player with it. Everyone else sees your limp body carried along with your player's real position (where your hitboxes are), with only the limbs simulated on their side; any drift is pulled back. A body more than 4 blocks off snaps to you.
+
+## Network: everyone sees the same fight
+- Everything that happens to a fighter's body goes to them and to everyone who can see them: blocked hits (the guard jolts and the arm meets the strike on that side), guard breaks (the guard drops), staggers (thrown off balance, the strike cancelled), parries (the slap-aside, the kick caught and thrown), hits (reactions) and knockdowns (ragdoll).
+- A player coming into view gets the fighter's current guard and stance, not just later changes.
