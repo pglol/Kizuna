@@ -434,3 +434,4 @@ moves the body somewhere the physics wouldn't.
 
 ## The deck preview is a fight
 - The preview shows the move as thrown in a fight: squared up (guard, the stance's shoulder-forward turn, a spinning move's full turn the long way round), aiming straight ahead of the body at the heights a real strike uses (as at an opponent in front). Frame exports show the same.
+- In the deck, the diamond lights the quadrant being viewed. Picking a move (a tile or a slot) moves the diamond to the quadrant it's thrown from (or AIR) and the selected slot to one it fits; picking a quadrant shows a move from it (its selected slot, else its first, else any learned move that fits).

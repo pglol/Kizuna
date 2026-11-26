@@ -110,7 +110,8 @@ public class DeckScreen extends Screen {
 
         // ---- Stance diamond and the air ----
         float cx = mx0 + 44, cy = y0 + 42, r = 26;
-        Ui.diamond(c, cx, cy, r, Fight.stance(), selStance < 4 ? selStance : -1, selStance == Fighting.AIR ? 0.45f : 1);
+        // The quadrant being viewed is the lit one (the move shown is thrown from there).
+        Ui.diamond(c, cx, cy, r, selStance < 4 ? selStance : -1, -1, selStance == Fighting.AIR ? 0.45f : 1);
         int[][] qa = {{1, -1}, {-1, -1}, {1, 1}, {-1, 1}};
         for (int q = 0; q < 4; q++) {
             int bx = Math.round(cx + (qa[q][0] > 0 ? 0 : -r)), by = Math.round(cy + (qa[q][1] > 0 ? 0 : -r));
@@ -293,10 +294,63 @@ public class DeckScreen extends Screen {
         return null;
     }
 
+    /** Can this move go anywhere in that row? */
+    private static boolean fitsRow(Move m, int row) {
+        for (int i = 0; i < Fighting.SLOTS; i++) if (m.fits(row, i)) return true;
+        return false;
+    }
+
+    /**
+     * Show a move: the diamond goes to the quadrant (or the air) it belongs in, and the selected slot to
+     * one it fits, so what you see is where it's thrown from.
+     */
     private void preview(Move m) {
-        if (m == null || m == selMove) return;
+        if (m == null) return;
+        if (!fitsRow(m, selStance)) {
+            for (int row = 0; row < Fighting.ROWS; row++) {
+                if (fitsRow(m, row)) {
+                    selStance = row;
+                    break;
+                }
+            }
+        }
+        if (!m.fits(selStance, selSlot)) {
+            for (int i = 0; i < Fighting.SLOTS; i++) {
+                if (m.fits(selStance, i)) {
+                    selSlot = i;
+                    break;
+                }
+            }
+        }
+        if (m == selMove) return;
         selMove = m;
         Fight.previewStart = System.nanoTime();
+    }
+
+    /** A quadrant picked: show something thrown from there (its selected slot, else its first, else any that fits). */
+    private void showQuadrant(int row) {
+        selStance = row;
+        Move m = Deck.move(Deck.slot(row, selSlot));
+        for (int i = 0; m == null && i < Fighting.SLOTS; i++) m = Deck.move(Deck.slot(row, i));
+        if (m == null && selMove != null && fitsRow(selMove, row)) m = selMove;
+        if (m == null) for (Move x : Deck.learned(selStyle)) {
+            if (fitsRow(x, row)) {
+                m = x;
+                break;
+            }
+        }
+        if (m != null && m != selMove) {
+            selMove = m;
+            Fight.previewStart = System.nanoTime();
+        }
+        if (m != null && !m.fits(row, selSlot)) {
+            for (int i = 0; i < Fighting.SLOTS; i++) {
+                if (m.fits(row, i)) {
+                    selSlot = i;
+                    break;
+                }
+            }
+        }
     }
 
     @Override
@@ -314,11 +368,7 @@ public class DeckScreen extends Screen {
                 Deck.show(selStyle);
                 scroll = 0;
             }
-            case K_QUAD -> {
-                selStance = b[5];
-                Move m = Deck.move(Deck.slot(selStance, selSlot));
-                if (m != null) preview(m);
-            }
+            case K_QUAD -> showQuadrant(b[5]);
             case K_SLOT -> {
                 if (button == 1) {
                     Deck.set(selStance, b[5], -1);
