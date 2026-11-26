@@ -6,4 +6,4 @@ side = "both"
 [download]
 url = "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/dist/kata-core.jar"
 hash-format = "sha256"
-hash = "9838180cf6ad7225e58d4e82403d4628e584dc0ffaedbabc41cbb7cc70069d95"
+hash = "5f380005dc921ddb93c87f8f0403d2e05b7d9a29895af164c9557e3bad323d79"
