@@ -280,7 +280,8 @@ public class Dummy extends PathAwareEntity {
         // Its own strike: contact, then done.
         if (swing != null) {
             if (age == contactAt && foe != null && !busy) hit(foe, swing);
-            if (moveAge() >= Math.round(swing.length() * 20)) cancelSwing();
+            // The hit can end the swing (parried, staggered, knocked down by a counter): check again.
+            if (swing != null && moveAge() >= Math.round(swing.length() * 20)) cancelSwing();
         }
 
         // Calm: let it go after a while, or if they're gone or far off.
