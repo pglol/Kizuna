@@ -907,7 +907,10 @@ public final class Animator {
         float k = 1 - (float) Math.exp(-dt * 9);
 
         // Front.
-        double hit = free ? probe(p, pos.x, pos.z, fx, fz, y, 0.3, 1.0) : -1;
+        // Other bodies count like walls (bumping into someone, the hands come up onto them), except
+        // in a fight, when the hands are busy.
+        boolean bodies = !Fight.engagedOf(p);
+        double hit = free ? near(probe(p, pos.x, pos.z, fx, fz, y, 0.3, 1.0), bodies ? body(p, pos, fx, fz, y, 1.0) : -1) : -1;
         float want = hit < 0 ? 0 : MathHelper.clamp((float) (0.95 - hit) / 0.45f, 0, 1);
         s.wallW += (want - s.wallW) * k;
         if (hit >= 0) s.wallHit = hit;
@@ -918,7 +921,7 @@ public final class Animator {
         double sy = pos.y + 1.3;
         for (int i = 0; i < 2; i++) {
             double sx = i == 0 ? rx : -rx, sz = i == 0 ? rz : -rz;
-            double h = free ? probe(p, pos.x, pos.z, sx, sz, sy, 0.22, 0.7) : -1;
+            double h = free ? near(probe(p, pos.x, pos.z, sx, sz, sy, 0.22, 0.7), bodies ? body(p, pos, sx, sz, sy, 0.7) : -1) : -1;
             float sw = h < 0 ? 0 : MathHelper.clamp((float) (0.7 - h) / 0.3f, 0, 1);
             s.sideW[i] += (sw - s.sideW[i]) * k;
             if (h >= 0) s.sideHit[i] = h;
@@ -958,6 +961,40 @@ public final class Animator {
             if (i == 0) reach(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, rs, toModel(hand, pos, body), frame, w);
             else reach(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, ls, toModel(hand, pos, body), frame, w);
         }
+    }
+
+    /** The nearer of two probe results (-1 is none). */
+    private static double near(double a, double b) {
+        if (a < 0) return b;
+        if (b < 0) return a;
+        return Math.min(a, b);
+    }
+
+    /** How far along (dx, dz) from pos at height y another body's side is (players, dummies), up to max; -1 if none. */
+    private static double body(PlayerEntity p, Vec3d pos, double dx, double dz, double y, double max) {
+        double best = -1;
+        for (net.minecraft.entity.Entity e : p.getWorld().getOtherEntities(p, p.getBoundingBox().expand(max + 0.5))) {
+            if (!(e instanceof net.minecraft.entity.LivingEntity l) || !l.isAlive() || e.isSpectator()) continue;
+            if (!(e instanceof PlayerEntity) && !(e instanceof net.pglol.kata.Dummy)) continue;
+            var b = e.getBoundingBox();
+            if (y < b.minY || y > b.maxY) continue;
+            // Where the line across the ground enters the box (slab test in x and z).
+            double t0 = 0, t1 = max;
+            double[] o = {pos.x, pos.z}, d = {dx, dz}, lo = {b.minX, b.minZ}, hi = {b.maxX, b.maxZ};
+            boolean miss = false;
+            for (int i = 0; i < 2 && !miss; i++) {
+                if (Math.abs(d[i]) < 1e-6) {
+                    if (o[i] < lo[i] || o[i] > hi[i]) miss = true;
+                    continue;
+                }
+                double a = (lo[i] - o[i]) / d[i], c = (hi[i] - o[i]) / d[i];
+                t0 = Math.max(t0, Math.min(a, c));
+                t1 = Math.min(t1, Math.max(a, c));
+                if (t0 > t1) miss = true;
+            }
+            if (!miss && (best < 0 || t0 < best)) best = t0;
+        }
+        return best;
     }
 
     private static float smooth(float x) {

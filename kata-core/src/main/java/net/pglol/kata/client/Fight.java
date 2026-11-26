@@ -439,7 +439,7 @@ public final class Fight {
                 float c = cur.contactOf(nextHit);
                 int early = -1;
                 if (s >= c - cur.contact() * (cur.turns() ? 0.75f : 0.6f) && limbPrev != null && limbNow != null && limbPrev.squaredDistanceTo(limbNow) > 1e-6) {
-                    Hitbox.Contact touch = Hitbox.sweep(nearby(p), td, limbPrev, limbNow, cur.leg() ? 0.09 : 0.07);
+                    Hitbox.Contact touch = Hitbox.sweep(nearby(p), td, limbPrev, limbNow, cur.leg() ? 0.13 : 0.1); // a fist or shin's thickness
                     if (touch != null) {
                         lastPart = touch.hit().part();
                         early = touch.entity().getId();
@@ -590,13 +590,46 @@ public final class Fight {
      * opponent (or whoever's under the crosshair), landing on the first body part it meets. -1 for a miss.
      */
     private static int struck(MinecraftClient mc, ClientPlayerEntity p) {
+        // Your body is drawn (third person): only a real touch counts. The fist or foot at contact, with
+        // the limb's thickness, against every body's limbs and torso; the crosshair doesn't come into it.
+        if (limbNow != null) {
+            Vec3d from = limbPrev != null ? limbPrev : limbNow;
+            Hitbox.Contact c = Hitbox.sweep(nearby(p), 1, from, limbNow, cur.leg() ? 0.2 : 0.16);
+            if (c == null) return -1;
+            lastPart = c.hit().part();
+            return c.entity().getId();
+        }
+        // First person (your body isn't drawn, so there's no limb to follow): along the strike's line.
         Entity t = targetEntity(mc);
+        if (t == null) t = softTarget(p, cur);
         if (t == null && mc.targetedEntity instanceof LivingEntity c) t = c;
         Vec3d want = t != null ? wanted(p, 1, cur, t) : p.getCameraPosVec(1).add(p.getRotationVec(1).multiply(2)).add(0, -0.2, 0);
         Hitbox.Contact h = Hitbox.traceAll(nearby(p), 1, origin(p, 1, cur), want, Fighting.REACH + (cur.leg() ? Fighting.KICK_EXTRA : 0));
         if (h == null) return -1;
         lastPart = h.hit().part();
         return h.entity().getId();
+    }
+
+    /**
+     * Not locked on: whoever's right in front of you within reach (the nearest, in a wide cone round your
+     * look), so your strike goes at their body and the limb really meets it. null if no one.
+     */
+    static Entity softTarget(PlayerEntity p, Move m) {
+        if (!(p instanceof ClientPlayerEntity cp)) return null;
+        double reach = Fighting.REACH + (m != null && m.leg() ? Fighting.KICK_EXTRA : 0) + 0.9;
+        Vec3d look = Vec3d.fromPolar(0, p.getYaw());
+        Entity best = null;
+        double bestD = reach;
+        for (Entity e : nearby(cp)) {
+            Vec3d to = e.getPos().subtract(p.getPos()).multiply(1, 0, 1);
+            double d = to.length();
+            if (d > bestD || d < 1e-3) continue;
+            if (to.dotProduct(look) / d < 0.55) continue;
+            if (Math.abs(e.getY() - p.getY()) > 2.2) continue;
+            best = e;
+            bestD = d;
+        }
+        return best;
     }
 
     /** Bodies a strike could touch: anyone alive within reach but you. */
@@ -1637,6 +1670,7 @@ public final class Fight {
     private static Vec3d aimPoint(PlayerEntity p, float td, Move m) {
         MinecraftClient mc = MinecraftClient.getInstance();
         Entity t = mine(p) ? targetEntity(mc) : null;
+        if (t == null && mine(p)) t = softTarget(p, m); // whoever's in front: the limb goes at them
         Vec3d eye = p.getCameraPosVec(td);
         if (t != null) {
             Vec3d want = wanted(p, td, m, t);

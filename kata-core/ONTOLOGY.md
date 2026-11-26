@@ -435,3 +435,10 @@ moves the body somewhere the physics wouldn't.
 ## The deck preview is a fight
 - The preview shows the move as thrown in a fight: squared up (guard, the stance's shoulder-forward turn, a spinning move's full turn the long way round), aiming straight ahead of the body at the heights a real strike uses (as at an opponent in front). Frame exports show the same.
 - In the deck, the diamond lights the quadrant being viewed. Picking a move (a tile or a slot) moves the diamond to the quadrant it's thrown from (or AIR) and the selected slot to one it fits; picking a quadrant shows a move from it (its selected slot, else its first, else any learned move that fits).
+
+## Hits are touches
+- Not locked on, a strike goes at whoever's right in front of you within reach (nearest in a wide cone round your look): the arm or leg travels to their body.
+- When your body is drawn (third person), a strike lands only if the fist or foot (with its thickness) touches someone's limbs or torso during the swing. The crosshair doesn't come into it. In first person (no body drawn) it's traced along the strike's line to whoever it's at.
+
+## Bodies are like walls
+- Walking up to someone (a player or a dummy), the hands come up onto them as onto a wall; side on, the near hand rests on them. Not while fighting (the hands are busy).
