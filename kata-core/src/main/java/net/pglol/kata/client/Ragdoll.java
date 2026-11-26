@@ -68,6 +68,8 @@ public final class Ragdoll {
     final double[] px = new double[N], py = new double[N], pz = new double[N];
     final double[] rest = new double[LINKS.length], span = new double[SPANS.length];
     float age, still, getUp = -1, acc;
+    /** Get up now (someone else's body whose own game has them up already). */
+    boolean comeRound;
     /** Which points are under water (for the smack on the way in), and when it last splashed. */
     final boolean[] wet = new boolean[N];
     /** Hands caught on a ledge while limp (world points they're held to), or null. */
@@ -267,7 +269,7 @@ public final class Ragdoll {
         still = speed < 0.35 ? still + dt : 0;
         // In water the body floats up and lies there a while (about 3 s) before it comes round.
         boolean afloat = inWater();
-        if (afloat ? wake && age > 1.0f : (age > MIN_TIME && still > 0.12) || age > MAX_TIME) {
+        if (comeRound || (afloat ? wake && age > 1.0f : (age > MIN_TIME && still > 0.12) || age > MAX_TIME)) {
             getUp = 0;
             // Which way up it ended: chest towards the sky (on its back) or not.
             double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];

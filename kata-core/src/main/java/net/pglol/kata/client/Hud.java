@@ -15,7 +15,7 @@ import net.minecraft.util.math.MathHelper;
 public final class Hud {
     private Hud() {}
 
-    private static float trail = -1, shown = -1, engage;
+    private static float trail = -1, shown = -1, engage, letterbox;
     private static long last;
 
     static void render(DrawContext c, float tickDelta) {
@@ -34,6 +34,18 @@ public final class Hud {
         Move.shownStamina += (Move.stamina - Move.shownStamina) * (1 - (float) Math.exp(-dt / 0.08f));
 
         int w = c.getScaledWindowWidth(), h = c.getScaledWindowHeight();
+        // Squared up to someone: black bars close in top and bottom like a film, and the HUD slides up
+        // out of the bottom one. They open again when you let them go.
+        letterbox += ((Fight.locked() ? 1 : 0) - letterbox) * (1 - (float) Math.exp(-dt / 0.18f));
+        if (letterbox < 0.002f) letterbox = 0;
+        float lb = letterbox * letterbox * (3 - 2 * letterbox);
+        int bar = Math.round(h * 0.085f * lb);
+        if (bar > 0) {
+            c.fill(0, 0, w, bar, 0xFF000000);
+            c.fill(0, h - bar, w, h, 0xFF000000);
+        }
+        c.getMatrices().push();
+        c.getMatrices().translate(0, -(h * 0.085f + 4) * lb, 0);
         int hw = 160, sw = 110;
         int hx = (w - hw) / 2, hy = h - 10;
         int sx = (w - sw) / 2, sy = hy - 5;
@@ -57,6 +69,7 @@ public final class Hud {
         if (sf > 0) c.fill(sx, sy, sx + sf, sy + 1, Move.winded() ? 0xFF8C8268 : 0xFFF3E7BE);
 
         tag(c, mc, h, dt);
+        c.getMatrices().pop();
     }
 
     private static void track(DrawContext c, int x, int y, int w, int h) {

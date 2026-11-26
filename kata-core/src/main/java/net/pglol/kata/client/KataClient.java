@@ -14,7 +14,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class KataClient implements ClientModInitializer {
     private static KeyBinding editorKey;
-    public static KeyBinding lockKey, deckKey;
+    public static KeyBinding lockKey, deckKey, dodgeKey;
     private static long lastFrame;
     private static boolean openEditor;
 
@@ -27,6 +27,7 @@ public final class KataClient implements ClientModInitializer {
         })));
         deckKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.deck", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_K, "category.kata_core"));
         lockKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.lock_on", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.kata_core"));
+        dodgeKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.dodge", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, "category.kata_core"));
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.FightOf.ID,
             (payload, ctx) -> Fight.remote(payload.entity(), payload.kind(), payload.a()));
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.START.register(ctx -> {

@@ -231,9 +231,9 @@ public final class Fighting {
     /** Reach from the eyes (blocks). */
     public static final double REACH = 3.0;
     /** A heavy held this long (seconds) is fully charged: full power, and it breaks guard. */
-    public static final float FULL_CHARGE = 0.8f;
+    public static final float FULL_CHARGE = 0.5f;
     /** Pressed longer than this, a click becomes a charged heavy. */
-    public static final float HEAVY_AFTER = 0.16f;
+    public static final float HEAVY_AFTER = 0.12f;
 
     // ---- server ----
 
@@ -241,6 +241,15 @@ public final class Fighting {
     private static final Map<UUID, Integer> STANCE = new HashMap<>();
     private static final Map<UUID, Integer> GUARD_AT = new HashMap<>();
     private static final Map<UUID, Integer> LAST = new HashMap<>();
+    /** Guard stamina (0..1) as of a tick; it comes back on its own a second after the last hit taken. */
+    private static final Map<UUID, Float> POISE = new HashMap<>();
+    private static final Map<UUID, Integer> POISE_AT = new HashMap<>();
+    /** The side a guard was raised towards (0 none, 1 left, 2 right), for parries; when a dodge began. */
+    private static final Map<UUID, Integer> PARRY_SIDE = new HashMap<>(), DODGE_AT = new HashMap<>();
+    /** A dodge's invulnerable start (ticks): strikes pass through. */
+    public static final int DODGE_IFRAMES = 5;
+    /** The limb of the strike being dealt (true right, null unknown): it comes in on the other side of them. */
+    private static Boolean strikeRight;
     /** While a strike is being dealt: it breaks guard; what it is (for the defender's parry). */
     private static boolean breaking, chip;
     private static Move striking;
@@ -269,7 +278,10 @@ public final class Fighting {
             if (st != null) ServerPlayNetworking.send(viewer, new KataNet.FightOf(p.getId(), KataNet.STANCE, st));
         });
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((victim, source, amount) -> {
-            if (chip || !guarding(victim)) return true;
+            if (chip) return true;
+            // Dodging, in its first moments: the strike goes through nothing.
+            if (striking != null && dodging(victim)) return false;
+            if (!guarding(victim)) return true;
             Entity by = source.getAttacker();
             if (by == null || source.isIn(DamageTypeTags.BYPASSES_SHIELD)) return true;
             var w = victim.getWorld();
@@ -281,30 +293,46 @@ public final class Fighting {
                 w.playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.ITEM_SHIELD_BREAK, SoundCategory.PLAYERS, 0.9f, 1.1f);
                 return true;
             }
-            Vec3d face = Vec3d.fromPolar(0, victim.getYaw());
-            boolean front = (to.x * face.x + to.z * face.z) / len >= 0.34; // within about 70 degrees of where they face
             double rx = -Math.cos(Math.toRadians(victim.getYaw())), rz = -Math.sin(Math.toRadians(victim.getYaw()));
-            int side = to.x * rx + to.z * rz >= 0 ? 1 : -1;
-            // Raised right as it arrives, facing it: a perfect block.
-            boolean perfect = front && guardAge(victim) <= PERFECT && (!(victim instanceof Dummy) || w.random.nextFloat() < 0.3f);
-            if (perfect) {
-                parry(victim, by, striking);
-                return false;
+            // The side it comes in on (1 their right, -1 their left): a right-hand (or right-leg) strike
+            // comes in on their left; otherwise judged by where the attacker stands.
+            int side = strikeRight != null ? (strikeRight ? -1 : 1) : to.x * rx + to.z * rz >= 0 ? 1 : -1;
+            // The parry: the guard raised right as it arrives, towards the side it comes from. Towards
+            // the wrong side, the guard is out of place and the hit lands clean.
+            boolean window = guardAge(victim) <= PERFECT;
+            if (victim instanceof Dummy) {
+                if (window && w.random.nextFloat() < 0.3f) {
+                    parry(victim, by, striking);
+                    return false;
+                }
+            } else if (window && striking != null) {
+                int want = side > 0 ? 2 : 1, ps = PARRY_SIDE.getOrDefault(victim.getUuid(), 0);
+                if (ps == want) {
+                    parry(victim, by, striking);
+                    return false;
+                }
+                if (ps != 0) {
+                    stagger(victim, 8); // caught reaching the wrong way
+                    return true;
+                }
             }
+            // A block: from any side, paid for in stamina by how hard the hit was. Not enough left and
+            // the guard breaks: stunned, and the hit lands.
+            float cost = amount * 0.05f + (striking != null && striking.heavy() ? 0.15f : 0);
+            float po = poise(victim);
+            if (cost > po) {
+                setPoise(victim, 0);
+                breakGuard(victim);
+                stagger(victim, 20);
+                w.playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.ITEM_SHIELD_BREAK, SoundCategory.PLAYERS, 0.9f, 1.1f);
+                return true;
+            }
+            setPoise(victim, po - cost);
             w.playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.ITEM_SHIELD_BLOCK, SoundCategory.PLAYERS, 0.8f, 1.2f + w.random.nextFloat() * 0.2f);
             tell(victim, KataNet.GUARD_HIT, side);
             if (victim instanceof ServerPlayerEntity vp) relayAround(vp, KataNet.BLOCKED, side > 0 ? 1 : 0); // everyone sees the block
             if (victim instanceof Dummy d) d.blocked(side);
             shove(victim, new Vec3d(-to.x / len, 0, -to.z / len), 0.05 + amount * 0.008); // the guard gives a little
-            if (front) return false; // blocked the way it came: nothing gets through
-            // Guarding the wrong way: some of it gets round the guard.
-            chip = true;
-            try {
-                victim.timeUntilRegen = 0;
-                victim.damage(source, amount * 0.4f);
-            } finally {
-                chip = false;
-            }
             return false;
         });
     }
@@ -320,8 +348,42 @@ public final class Fighting {
             // Caught the foot: thrown back the way it came, off their feet.
             Vec3d away = by.getPos().subtract(victim.getPos()).multiply(1, 0, 1);
             away = away.lengthSquared() < 1e-4 ? Vec3d.fromPolar(0, victim.getYaw()) : away.normalize();
-            knockdown(by, away.multiply(0.6).add(0, 0.32, 0));
-        } else stagger(by, 12);
+            knockdown(by, away.multiply(0.35).add(0, 0.24, 0));
+        } else stagger(by, 18); // long enough that the counter is sure to land
+        setPoise(victim, Math.min(1, poise(victim) + 0.25f));
+    }
+
+    /** Guard stamina now: what was left at the last hit, coming back after a second's breather. */
+    static float poise(Entity e) {
+        Float v = POISE.get(e.getUuid());
+        Integer at = POISE_AT.get(e.getUuid());
+        if (v == null || at == null || e.getServer() == null) return 1;
+        return Math.min(1, v + Math.max(0, e.getServer().getTicks() - at - 20) / 80f);
+    }
+
+    static void setPoise(Entity e, float v) {
+        if (e.getServer() == null) return;
+        POISE.put(e.getUuid(), Math.max(0, v));
+        POISE_AT.put(e.getUuid(), e.getServer().getTicks());
+        if (POISE.size() > 2048) {
+            POISE.clear();
+            POISE_AT.clear();
+        }
+        if (e instanceof ServerPlayerEntity p && ServerPlayNetworking.canSend(p, KataNet.FightOf.ID))
+            ServerPlayNetworking.send(p, new KataNet.FightOf(p.getId(), KataNet.POISE, Math.round(Math.max(0, v) * 100)));
+    }
+
+    static boolean dodging(Entity e) {
+        if (!(e instanceof ServerPlayerEntity p)) return false;
+        Integer at = DODGE_AT.get(p.getUuid());
+        return at != null && p.getServer().getTicks() - at <= DODGE_IFRAMES;
+    }
+
+    /** A dodge begins (dir: 0 back, 1 forward, 2 left, 3 right): i-frames, and everyone sees it. */
+    static void dodge(ServerPlayerEntity p, int dir) {
+        DODGE_AT.put(p.getUuid(), p.getServer().getTicks());
+        if (DODGE_AT.size() > 1024) DODGE_AT.clear();
+        relay(p, KataNet.DODGE, MathHelper.clamp(dir, 0, 3));
     }
 
     private static void breakGuard(Entity e) {
@@ -333,6 +395,14 @@ public final class Fighting {
     }
 
     /** Knocked off their feet (limp) with this velocity (blocks a tick). */
+    /**
+     * How hard this fighter hits: the multiplier on every push and knockdown. 1 for everyone for now;
+     * strength (training, stats, buffs) raises it later, and only that makes hits send people further.
+     */
+    public static float might(Entity e) {
+        return 1;
+    }
+
     /** Pushed back along the ground (dir flat, s blocks a tick): no hop, and their own run mostly cancelled. */
     static void shove(LivingEntity e, Vec3d dir, double s) {
         Vec3d v = e.getVelocity();
@@ -367,6 +437,14 @@ public final class Fighting {
     /** What happens to a player's body in a fight goes to them and to everyone who can see them. */
     private static void tell(Entity e, int kind, int a) {
         if (e instanceof ServerPlayerEntity) relayAround(e, kind, a);
+    }
+
+    /** The guard packet: bit 0 up or down, bits 1-2 the side it was raised towards (for a parry). */
+    static void guard(ServerPlayerEntity p, int packed) {
+        boolean on = (packed & 1) != 0;
+        if (on && !GUARD.getOrDefault(p.getUuid(), false)) PARRY_SIDE.put(p.getUuid(), (packed >> 1) & 3);
+        if (PARRY_SIDE.size() > 1024) PARRY_SIDE.clear();
+        guard(p, on);
     }
 
     static void guard(ServerPlayerEntity p, boolean on) {
@@ -460,7 +538,12 @@ public final class Fighting {
         double len = Math.hypot(to.x, to.z);
         if (!lying && len > 0.3 && (to.x * look.x + to.z * look.z) / len < -0.2) return;
         Part part = Part.values()[Math.min(3, (packed >> 16) & 0x3)];
-        land(p, t, m, power, part, look, p.getDamageSources().playerAttack(p));
+        strikeRight = (packed & 1 << 8) != 0;
+        try {
+            land(p, t, m, power, part, look, p.getDamageSources().playerAttack(p));
+        } finally {
+            strikeRight = null;
+        }
     }
 
     /** A strike landing (from a player or a dummy): damage by part, guard, parry, knockback, launch, knockdown. */
@@ -484,10 +567,11 @@ public final class Fighting {
         boolean fromRight = from.x * -Math.cos(ty) + from.z * -Math.sin(ty) > 0;
         int react = part.ordinal() | m.path().ordinal() << 2 | (fromRight ? 1 << 7 : 0) | (m.heavy() ? 1 << 8 : 0);
         relayAround(t, KataNet.HIT, react);
-        float shove = m.push() * (m.heavy() ? 0.6f + 0.6f * power : 1);
+        float shove = m.push() * (m.heavy() ? 0.6f + 0.6f * power : 1) * might(by);
         boolean down = m.knockdown() && (!m.heavy() || power >= 0.9f);
         if (down) {
-            knockdown(t, look.multiply(shove * 0.8).add(0, 0.2 + m.lift() * 0.75, 0));
+            // Knocked down a couple of body lengths, not across the field: further only with more might.
+            knockdown(t, look.multiply(shove * 0.4).add(0, 0.14 + m.lift() * 0.6, 0));
         } else {
             // An ordinary hit moves you back a step along the ground, never off it: fighters stay in range
             // to trade. Only knockdowns send anyone flying.

@@ -124,6 +124,33 @@ public final class Fight {
         return (System.nanoTime() - since) / 1e9f;
     }
 
+    /** Out of a dodge and not yet able to act (its i-frames are over, the step not finished). */
+    static boolean recovering() {
+        return dodgeAt != 0 && secs(dodgeAt) < DODGE_RECOVER;
+    }
+
+    private static void dodge(ClientPlayerEntity p) {
+        if (!p.isOnGround() || limp(p) || cur != null || charging || staggered() || recovering() || p.getAbilities().flying) return;
+        if (Move.winded() || Move.stamina < DODGE_COST) return;
+        float f = p.input.movementForward, sdw = p.input.movementSideways;
+        int dir;
+        if (Math.abs(sdw) > 0.3f && Math.abs(sdw) >= Math.abs(f)) dir = sdw > 0 ? 2 : 3;
+        else dir = f > 0.3f ? 1 : 0;
+        Vec3d fw = Vec3d.fromPolar(0, p.getYaw()), right = new Vec3d(-fw.z, 0, fw.x);
+        Vec3d d = switch (dir) {
+            case 1 -> fw;
+            case 2 -> right.multiply(-1);
+            case 3 -> right;
+            default -> fw.multiply(-1);
+        };
+        p.setVelocity(d.x * DODGE_SPEED, p.getVelocity().y, d.z * DODGE_SPEED);
+        Move.stamina = Math.max(0, Move.stamina - DODGE_COST);
+        dodgeAt = System.nanoTime();
+        pressing = false;
+        DODGES.put(p.getId(), new React(dir, dodgeAt));
+        send(KataNet.DODGE, dir, 0);
+    }
+
     private static boolean othersStaggered(PlayerEntity p) {
         Long u = STAGGERS.get(p.getId());
         return u != null && System.nanoTime() < u;
@@ -152,11 +179,18 @@ public final class Fight {
         if (target >= 0 && (t == null || !t.isAlive() || t.squaredDistanceTo(p) > 20 * 20)) target = -1;
 
         boolean free = fists(p) && mc.currentScreen == null;
-        guard = free && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && System.nanoTime() > brokenUntil;
+        // Dodge: a quick step out of the way, the way you're pressing (back if nothing). Strikes pass
+        // through its first moments; then a short recovery when you can't guard or throw.
+        while (KataClient.dodgeKey.wasPressed()) dodge(p);
+        guard = free && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && !recovering() && System.nanoTime() > brokenUntil;
         if (guard && target < 0) target = pick(p, 8, 50); // raising a guard locks onto whoever's in front
         if (guard != sentGuard) {
             sentGuard = guard;
-            send(KataNet.GUARD, guard ? 1 : 0, 0);
+            // Raised while pressing left or right: a parry towards that side (it must match the side the
+            // strike comes in on).
+            float sideIn = p.input.movementSideways;
+            int ps = sideIn > 0.3f ? 1 : sideIn < -0.3f ? 2 : 0;
+            send(KataNet.GUARD, guard ? 1 | ps << 1 : 0, 0);
         }
         if (jolt > 0) jolt = Math.max(0, jolt - 0.05f);
         // Hit while winding up: the heavy is gone.
@@ -246,7 +280,7 @@ public final class Fight {
         if (p == null) return false;
         if (limp(p)) return true; // a limp body throws nothing (and doesn't swing either)
         if (!fists(p)) return false;
-        if (guard || staggered()) return true; // hands up, or knocked off balance: nothing to throw
+        if (guard || staggered() || recovering()) return true; // hands up, off balance or out of a dodge: nothing to throw
         pressing = true;
         pressAt = System.nanoTime();
         return true;
@@ -416,7 +450,10 @@ public final class Fight {
     private record React(int packed, long at) { }
     private static final Map<Integer, React> HITS = new HashMap<>(), BLOCKS = new HashMap<>();
     /** The same for other players' blocked hits (side), parries (kind) and staggers (until). */
-    private static final Map<Integer, React> JOLTS = new HashMap<>(), PARRIES = new HashMap<>();
+    private static final Map<Integer, React> JOLTS = new HashMap<>(), PARRIES = new HashMap<>(), DODGES = new HashMap<>();
+    private static long dodgeAt;
+    /** A dodge: how fast it carries you (blocks a tick), what it costs, how long until you can act again. */
+    private static final float DODGE_SPEED = 0.82f, DODGE_COST = 0.2f, DODGE_RECOVER = 0.42f;
     private static final Map<Integer, Long> STAGGERS = new HashMap<>();
 
     static void remote(int entity, int kind, int a) {
@@ -436,7 +473,11 @@ public final class Fight {
                 case KataNet.GUARD_HIT -> {
                     jolt = 0.22f;
                     joltSide = a;
+                    // The hit pushes the stance the other way: struck on the right, you're turned to the left.
+                    boolean top = Fighting.top(stance);
+                    stanceTo(a > 0 ? (top ? Fighting.TL : Fighting.BL) : (top ? Fighting.TR : Fighting.BR));
                 }
+                case KataNet.POISE -> Move.stamina = Math.min(Move.stamina, a / 100f); // blocking costs the same breath running does
                 case KataNet.GUARD_BROKEN -> {
                     jolt = 0.22f;
                     brokenUntil = System.nanoTime() + 700_000_000L;
@@ -451,7 +492,9 @@ public final class Fight {
                 case KataNet.PARRY -> {
                     parryAt = System.nanoTime();
                     parryKind = a;
+                    Move.stamina = Math.min(1, Move.stamina + 0.25f); // a parry gives breath back
                 }
+                case KataNet.DODGE -> { }
                 case KataNet.KNOCKDOWN -> {
                     cur = null;
                     pendingLight = pressing = charging = false;
@@ -473,6 +516,7 @@ public final class Fight {
                 MOVES.remove(entity); // whatever they were throwing is gone
             }
             case KataNet.PARRY -> PARRIES.put(entity, new React(a, System.nanoTime()));
+            case KataNet.DODGE -> DODGES.put(entity, new React(a, System.nanoTime()));
             case KataNet.KNOCKDOWN -> MOVES.remove(entity);
             case KataNet.STRIKE -> {
                 int id = a & 0xFF;
@@ -495,6 +539,7 @@ public final class Fight {
         if (JOLTS.size() > 256) JOLTS.clear();
         if (PARRIES.size() > 256) PARRIES.clear();
         if (STAGGERS.size() > 256) STAGGERS.clear();
+        if (DODGES.size() > 256) DODGES.clear();
     }
 
     // ---- what the body shows ----
@@ -906,6 +951,7 @@ public final class Fight {
      * knee. Heavies hit harder. Fast in, eased out. Added on top of everything else.
      */
     public static void react(LivingEntity e, Pose out) {
+        dodgePose(e, out);
         React r = HITS.get(e.getId());
         if (r == null) return;
         boolean heavy = (r.packed & 1 << 8) != 0;
@@ -955,6 +1001,37 @@ public final class Fight {
                 add(out, Bone.CHEST, Pose.YAW, -8 * side * w);
             }
         }
+    }
+
+    /** A dodge as the body shows it: low and leaning out of the way it's going, hands kept up. */
+    private static void dodgePose(LivingEntity e, Pose out) {
+        React d = DODGES.get(e.getId());
+        if (d == null) return;
+        float s = secs(d.at), dur = DODGE_RECOVER;
+        if (s > dur) return;
+        float w = s < 0.06f ? s / 0.06f : 1 - ease((s - 0.06f) / (dur - 0.06f));
+        switch (d.packed) {
+            case 1 -> { // forward: ducking in under it
+                add(out, Bone.CHEST, Pose.PITCH, 28 * w);
+                add(out, Bone.HEAD, Pose.PITCH, -12 * w);
+            }
+            case 2, 3 -> { // to a side: the body leans out that way
+                float sd = d.packed == 2 ? 1 : -1; // left is +roll on the root
+                add(out, Bone.ROOT, Pose.ROLL, 10 * sd * w);
+                add(out, Bone.CHEST, Pose.ROLL, 12 * sd * w);
+                add(out, Bone.HEAD, Pose.ROLL, -8 * sd * w);
+            }
+            default -> { // back: leaning away from it
+                add(out, Bone.CHEST, Pose.PITCH, -16 * w);
+                add(out, Bone.HEAD, Pose.PITCH, 8 * w);
+            }
+        }
+        // Knees bent, low through it.
+        add(out, Bone.RIGHT_LEG, Pose.PITCH, -14 * w);
+        add(out, Bone.LEFT_LEG, Pose.PITCH, -14 * w);
+        add(out, Bone.RIGHT_SHIN, Pose.PITCH, 30 * w);
+        add(out, Bone.LEFT_SHIN, Pose.PITCH, 30 * w);
+        out.offset[1] += 2.2f * w;
     }
 
     private static void add(Pose p, Bone b, int axis, float deg) {

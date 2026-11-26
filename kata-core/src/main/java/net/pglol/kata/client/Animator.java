@@ -122,9 +122,14 @@ public final class Animator {
 
         // Ragdoll: the body is physics until it has got back up.
         Parkour.View rv = Parkour.view(p);
-        if (rv.mode() == Parkour.Mode.RAGDOLL) {
+        boolean local = p == MinecraftClient.getInstance().player;
+        Ragdoll live = Ragdoll.of(p);
+        // Someone else's body: their game has them up already, but here it finishes getting up (never a
+        // snap from lying to standing).
+        boolean finishing = !local && s.ragdolled && rv.mode() != Parkour.Mode.RAGDOLL && live != null && !live.finished();
+        if (finishing) live.comeRound = true;
+        if (rv.mode() == Parkour.Mode.RAGDOLL || finishing) {
             float by = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
-            boolean local = p == MinecraftClient.getInstance().player;
             if (!s.ragdolled) {
                 s.ragdolled = true;
                 s.carried = null;
@@ -386,20 +391,38 @@ public final class Animator {
         float c = MathHelper.cos(phase), sn = MathHelper.sin(phase);
         // Rough: no two steps quite the same when pushing it (a little more or less on each one).
         float rough = 1 + 0.16f * jitter(MathHelper.floor(phase / MathHelper.PI)) * (fast + run);
-        float stride = (30 + 12 * fast + 24 * run) * rough * (1 - 0.75f * Math.abs(sideK)) * (1 - 0.35f * backK);
+        float stride = (30 + 12 * fast + 24 * run) * rough * (1 - 0.92f * Math.abs(sideK)) * (1 - 0.35f * backK);
         // Legs: Minecraft's swing is taken out (gait), ours put in: right leg forward when c < 0.
         float rHip = c * stride * w, lHip = -c * stride * w;
         o.set(Bone.RIGHT_LEG, Pose.PITCH, rHip);
         o.set(Bone.LEFT_LEG, Pose.PITCH, lHip);
-        // Side-steps: legs reach out sideways in turn.
-        // Side-steps: the lead leg reaches out the way they're going, the other follows it in.
-        float step = w * Math.abs(sideK) * 24;
-        o.set(Bone.RIGHT_LEG, Pose.ROLL, sideK > 0 ? step * Math.max(0, sn) : -step * 0.35f * Math.max(0, sn));
-        o.set(Bone.LEFT_LEG, Pose.ROLL, sideK < 0 ? -step * Math.max(0, -sn) : step * 0.35f * Math.max(0, -sn));
+        // Side-steps, step and close: the leg on the side they're going lifts at the knee and reaches out
+        // while the other stays planted and the body travels over it; then that one picks up and closes
+        // in. A planted foot slides back under the hip (the body moving over it), a lifted one swings
+        // ahead. The feet stay a little apart and never cross.
+        float sideAbs = Math.abs(sideK) * w, dir = Math.signum(sideK);
+        float cyc = (float) (phase / (Math.PI * 2)) % 1f;
+        if (cyc < 0) cyc += 1;
+        boolean rightLeads = sideK > 0;
+        float uLead = cyc, uTrail = (cyc + 0.5f) % 1f;
+        float reach = 11 * sideAbs;
+        float[] lead = sideStep(uLead, reach), trail = sideStep(uTrail, reach);
+        float spread = 5 * sideAbs; // a fighter's base, feet apart
+        float rRoll = dir * (rightLeads ? lead[0] : trail[0]) + spread;
+        float lRoll = dir * (rightLeads ? trail[0] : lead[0]) - spread;
+        o.set(Bone.RIGHT_LEG, Pose.ROLL, rRoll);
+        o.set(Bone.LEFT_LEG, Pose.ROLL, lRoll);
+        float rLift = rightLeads ? lead[1] : trail[1], lLift = rightLeads ? trail[1] : lead[1];
+        // The lifting leg comes up a little in front (knee forward), as a foot picked up does.
+        o.set(Bone.RIGHT_LEG, Pose.PITCH, o.get(Bone.RIGHT_LEG, Pose.PITCH) - 14 * rLift * sideAbs);
+        o.set(Bone.LEFT_LEG, Pose.PITCH, o.get(Bone.LEFT_LEG, Pose.PITCH) - 14 * lLift * sideAbs);
         // Knees: fold through the swing (more running), give a little on contact.
         float swingFold = 32 + 26 * fast + 64 * run;
         float rKnee = w * (Math.max(0, sn) * swingFold + (1 - Math.abs(sn)) * 9);
         float lKnee = w * (Math.max(0, -sn) * swingFold + (1 - Math.abs(sn)) * 9);
+        // Side-stepping: knees soft in the fighting base, and the stepping one folds to pick the foot up.
+        rKnee = MathHelper.lerp(sideAbs, rKnee, 12 + 30 * rLift);
+        lKnee = MathHelper.lerp(sideAbs, lKnee, 12 + 30 * lLift);
         // Arms. Walking and fast walking: a free swing opposite the legs, loose and wide when pushing it,
         // shoulders thrown into it. Running: the anime run, both arms swept straight back behind, loose
         // at the elbow, bouncing with each stride, a bit out from the body (delinquent, not textbook).
@@ -933,6 +956,21 @@ public final class Animator {
     /** A leg driven to a target (a kick), the knee pointing towards pole (in the root frame). */
     static void kickLeg(Pose out, Bone leg, Bone shin, Vector3f hip, Vector3f target, Matrix4f invFrame, float weight, Vector3f pole) {
         solve(out, leg, shin, hip, target, invFrame, weight, 6, 6, 1, 0, pole);
+    }
+
+    /**
+     * One leg's side step at u (0..1 round the cycle): {how far out it is the way they're going (degrees
+     * of roll), how lifted (0..1)}. The first half it's lifted and swings from behind to ahead; the
+     * second half it's planted and the body carrying on makes it slide back under.
+     */
+    private static float[] sideStep(float u, float reach) {
+        if (u < 0.5f) {
+            float k = u / 0.5f;
+            float e = k * k * (3 - 2 * k);
+            return new float[] {-reach + 2 * reach * e, MathHelper.sin(MathHelper.PI * k)};
+        }
+        float k = (u - 0.5f) / 0.5f;
+        return new float[] {reach - 2 * reach * k, 0};
     }
 
     static void stride(Pose out, Bone leg, Bone shin, Vector3f hip, Vector3f target, Matrix4f invFrame) {

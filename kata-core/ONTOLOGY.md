@@ -311,3 +311,33 @@ moves the body somewhere the physics wouldn't.
 
 ## Getting up
 - On land: lie still briefly (0.12 s settled, at least 0.45 s down, at most 3 s), then 0.8 s to get up.
+
+## Defense (Absolver-style, layered)
+### Guard
+- Hold guard (right button) from any stance: it blocks strikes from every side.
+- Each blocked hit costs stamina by how hard it was (damage x 0.05, +0.15 for a heavy). The same breath as running. Stamina comes back a second after the last hit taken.
+- Not enough left: the guard breaks, you're stunned (1 s) and the hit lands. A full-charge heavy breaks it outright.
+- A blocked hit pushes your stance: struck on the right, you're turned to the left (top stays top, back stays back), changing your counters.
+### Parry
+- Raise the guard just as the strike arrives (3 ticks) while pressing toward the side it comes in on (A: left, D: right). A right-hand or right-leg strike comes in on your left.
+- Right side: a punch is turned aside and the attacker is stunned long enough for a sure counter (18 ticks); a kick is caught and they're thrown. You get 0.25 stamina back.
+- Wrong side: the guard is out of place, you're caught reaching (8 ticks) and the hit lands clean. No side pressed: just a block.
+### Dodge
+- Dodge key (Left Alt): a quick low step the way you're pressing (back if nothing). Costs 0.2 stamina; not when winded, in the air, striking, charging or staggered.
+- Its first 5 ticks are invulnerable to strikes (they pass through). Then a recovery to 0.42 s with no guard and no strikes: a sweep or late strike catches you.
+- Everyone sees it: forward ducks in, sideways leans out, back leans away; knees bent, low.
+
+## Heavies
+- Held 0.12 s it's a heavy; full charge at 0.5 s.
+
+## Fight view
+- Locked on: black bars close in top and bottom and the HUD slides up out of the bottom one.
+
+## Side steps
+- Step and close: the leg on the side you're going lifts and reaches out, the other stays planted as the body travels over it, then closes in. Feet apart, never crossing; knees soft.
+
+## Knockdown distance
+- Knockdowns throw a couple of body lengths. Every push and knockdown is multiplied by the attacker's might (1 for now; strength raises it later).
+
+## Others getting up
+- On other screens a limp body finishes its own get-up when its owner is already up, instead of snapping to standing.
