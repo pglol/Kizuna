@@ -84,6 +84,7 @@ public final class Animator {
         boolean wasHang;
         int lastHurt;
         boolean ragdolled;
+        Vec3d carried; // where someone else's limp body was carried to last frame
         // Hands to a wall right in front: how much, and how far off it is.
         float wallW;
         double wallHit = 0.6;
@@ -123,13 +124,21 @@ public final class Animator {
         Parkour.View rv = Parkour.view(p);
         if (rv.mode() == Parkour.Mode.RAGDOLL) {
             float by = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
+            boolean local = p == MinecraftClient.getInstance().player;
             if (!s.ragdolled) {
                 s.ragdolled = true;
-                Ragdoll.start(p, s.out, by, Parkour.impact(p));
+                s.carried = null;
+                // Someone else's body: it starts still and goes where they go (follow, below).
+                Ragdoll.start(p, s.out, by, local ? Parkour.impact(p) : Vec3d.ZERO);
             }
             Ragdoll r = Ragdoll.of(p);
             if (r != null && !r.finished()) {
                 r.step(p.getWorld(), dt);
+                if (!local) {
+                    Vec3d at = p.getLerpedPos(td);
+                    r.follow(at, s.carried, dt);
+                    s.carried = at;
+                }
                 Pose shown;
                 if (!r.resting()) shown = r.pose(p, p.getLerpedPos(td), by, td);
                 else {

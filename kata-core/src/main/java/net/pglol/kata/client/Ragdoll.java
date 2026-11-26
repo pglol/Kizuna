@@ -422,6 +422,37 @@ public final class Ragdoll {
         pinR = pinL = null;
     }
 
+    /** Move the whole body by d (blocks) without changing how it's moving: carried along. */
+    public void carry(Vec3d d) {
+        for (int i = 0; i < N; i++) {
+            x[i] += d.x;
+            px[i] += d.x;
+            y[i] += d.y;
+            py[i] += d.y;
+            z[i] += d.z;
+            pz[i] += d.z;
+        }
+    }
+
+    /**
+     * Someone else's limp body, seen from here: it goes where their player really is (their own game runs
+     * the fall and moves them; this one only flops the limbs). Carried by however far they moved since
+     * last frame, then any drift pulled back: across always, up and down only when well off (lying on the
+     * ground the pelvis is lower than in flight).
+     */
+    public void follow(Vec3d at, Vec3d was, float dt) {
+        Vec3d want = at.add(0, 0.7, 0), pel = pelvis();
+        if (was == null || pel.distanceTo(want) > 4) {
+            carry(want.subtract(pel));
+            return;
+        }
+        carry(at.subtract(was));
+        Vec3d err = want.subtract(pelvis());
+        double k = Math.min(1, dt * 6);
+        double ey = Math.abs(err.y) > 1 ? (err.y - Math.signum(err.y)) * k : 0;
+        carry(new Vec3d(err.x * k, ey, err.z * k));
+    }
+
     /** Catch the ledge: the hands are held at these points, the body hangs and swings from them. */
     public void pin(Vec3d right, Vec3d left) {
         pinR = right;
