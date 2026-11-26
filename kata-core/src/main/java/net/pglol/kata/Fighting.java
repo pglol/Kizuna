@@ -312,12 +312,17 @@ public final class Fighting {
 
     /** Set when Kata itself turns a hit away (so a refused player hit isn't then forced through). */
     private static boolean kataRefused;
+    /** Why Kata turned the last hit away (10 blocked, 11 parried, 12 evaded), for the report. */
+    private static int refusal;
+    /** Whether the last strike dealt damage. */
+    private static boolean dealt;
 
     private static boolean allow(LivingEntity victim, net.minecraft.entity.damage.DamageSource source, float amount) {
             if (chip) return true;
             // Dodging, in its first moments: the strike goes through nothing.
             if (striking != null && evades(victim, striking, strikingPart)) {
                 evaded(victim, source.getAttacker());
+                refusal = 12;
                 return false;
             }
             if (!guarding(victim)) return true;
@@ -342,12 +347,14 @@ public final class Fighting {
             if (victim instanceof Dummy) {
                 if (window && w.random.nextFloat() < 0.3f) {
                     parry(victim, by, striking);
+                    refusal = 11;
                     return false;
                 }
             } else if (window && striking != null) {
                 int want = side > 0 ? 2 : 1, ps = PARRY_SIDE.getOrDefault(victim.getUuid(), 0);
                 if (ps == want) {
                     parry(victim, by, striking);
+                    refusal = 11;
                     return false;
                 }
                 if (ps != 0) {
@@ -384,6 +391,7 @@ public final class Fighting {
             if (victim instanceof ServerPlayerEntity vp) relayAround(vp, KataNet.BLOCKED, side > 0 ? 1 : 0); // everyone sees the block
             if (victim instanceof Dummy d) d.blocked(side);
             shove(victim, new Vec3d(-to.x / len, 0, -to.z / len), 0.05 + amount * 0.008); // the guard gives a little
+            refusal = 10;
             if (halfIn) {
                 chip = true;
                 try {
@@ -771,11 +779,13 @@ public final class Fighting {
         int id = packed & 0xFF;
         if (id >= MOVES.length || !p.isAlive() || p.isSpectator()) return;
         Move m = MOVES[id];
+        boolean atPlayer = target >= 0 && p.getWorld().getEntityById(target) instanceof ServerPlayerEntity;
         float power = m.heavy() ? MathHelper.clamp(((packed >> 9) & 0x7F) / 100f, 0.3f, 1f) : 1f;
         int now = p.getServer().getTicks();
         Integer last = LAST.get(p.getUuid());
         if (last != null && now - last < 2) {
-            dbg(p, 1, now - last); // faster than any string allows
+            dbg(p, 1, now - last);
+            if (atPlayer) report(p, 1, now - last); // faster than any string allows
             return;
         }
         // A new strike only once the last has nearly run its course (later hits of the same move are fine).
@@ -784,6 +794,7 @@ public final class Fighting {
         if (!sameMove) {
             if (lastId != null && lastStart != null && lastId < MOVES.length && now - lastStart < Math.round(MOVES[lastId].length() * 20 * 0.75f)) {
                 dbg(p, 2, now - lastStart);
+            if (atPlayer) report(p, 2, now - lastStart);
                 return;
             }
             LAST_ID.put(p.getUuid(), id);
@@ -799,6 +810,7 @@ public final class Fighting {
         Integer fl = FLINCH_UNTIL.get(p.getUuid());
         if (fl != null && now < fl - 2) {
             dbg(p, 3, fl - now);
+            if (atPlayer) report(p, 3, fl - now);
             return;
         }
         relay(p, KataNet.STRIKE, packed);
@@ -819,6 +831,7 @@ public final class Fighting {
         boolean lying = t instanceof Dummy dd && dd.down() > 0;
         if (eye.distanceTo(near) > (lying ? 7 : REACH + (m.leg() ? KICK_EXTRA : 0) + 0.6)) { // a little slack for lag
             dbg(p, 7, (int) Math.round(eye.distanceTo(near) * 100));
+            if (t instanceof ServerPlayerEntity) report(p, 7, (int) Math.round(eye.distanceTo(near) * 100));
             return;
         }
         Vec3d to = t.getPos().subtract(p.getPos());
@@ -829,7 +842,12 @@ public final class Fighting {
         strikeRight = (packed & 1 << 8) != 0;
         try {
             boolean landed = land(p, t, m, power, part, look, p.getDamageSources().playerAttack(p));
-            dbg(p, landed ? 0 : 8, 0);
+            int code = dealt ? 0 : t instanceof ServerPlayerEntity vp && vp.isCreative() ? 9 : refusal != 0 ? refusal : landed ? 13 : 8;
+            dbg(p, code, Math.round(t.getHealth() * 10));
+            if (t instanceof ServerPlayerEntity) {
+                report(p, code, Math.round(t.getHealth() * 10)); // player fights: always say what happened (dev build)
+                KataCore.LOG.info("[Kata] {} {} -> {}: code {} (health now {})", p.getName().getString(), m.name(), t.getName().getString(), code, t.getHealth());
+            }
         } finally {
             strikeRight = null;
         }
@@ -841,6 +859,12 @@ public final class Fighting {
     static void debug(ServerPlayerEntity p, boolean on) {
         if (on) DEBUG.add(p.getUuid());
         else DEBUG.remove(p.getUuid());
+    }
+
+    /** Tell the striker what became of a strike at a player, whether or not they're debugging. */
+    private static void report(ServerPlayerEntity p, int code, int value) {
+        if (!DEBUG.contains(p.getUuid()) && ServerPlayNetworking.canSend(p, KataNet.FightOf.ID))
+            ServerPlayNetworking.send(p, new KataNet.FightOf(p.getId(), KataNet.DEBUG, code | (Math.max(0, Math.min(0xFFFFFF, value)) << 4)));
     }
 
     /** Tell a debugging player what became of their strike (a code, and a number for it). */
@@ -858,6 +882,7 @@ public final class Fighting {
         strikingPart = part;
         boolean hit;
         kataRefused = false;
+        refusal = 0;
         try {
             hit = t.damage(src, dmg);
             // A fighter's strike that really touched another player: the game's PvP and team rules
@@ -877,6 +902,7 @@ public final class Fighting {
             striking = null;
             strikingPart = null;
         }
+        dealt = hit;
         // A creative-mode player takes no damage, but still feels the hit (unless it was blocked).
         if (!hit && !(t instanceof net.minecraft.entity.player.PlayerEntity pl && pl.isCreative() && !guarding(t))) return false;
         // The hit's reaction, for everyone to see: where it landed, what kind of strike, from which side.

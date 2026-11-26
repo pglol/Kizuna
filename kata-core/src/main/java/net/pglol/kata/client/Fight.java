@@ -475,6 +475,15 @@ public final class Fight {
                         lastStruck = hit;
                         lastStruckAt = System.nanoTime();
                     }
+                    if (!debug && hit < 0 && drawn) {
+                        // A player right beside you that the limb didn't touch: say so (dev build), so a miss is never a mystery.
+                        for (Entity e : nearby(p)) {
+                            if (e instanceof PlayerEntity && e.squaredDistanceTo(p) < 2.2 * 2.2) {
+                                say("your " + cur.name() + " didn't touch " + e.getName().getString() + " (" + String.format("%.1f", e.distanceTo(p)) + " blocks away)");
+                                break;
+                            }
+                        }
+                    }
                     if (debug) {
                         Entity he = hit >= 0 ? p.getWorld().getEntityById(hit) : null;
                         say("strike " + cur.name() + " (" + (drawn ? "limb touch" : "first-person line") + "): "
@@ -854,7 +863,7 @@ public final class Fight {
                 case KataNet.DEBUG -> {
                     int code = a & 0xF, v = a >>> 4;
                     say("server: " + switch (code) {
-                        case 0 -> "landed";
+                        case 0 -> "landed (their health now " + (v / 10f) + ")";
                         case 1 -> "refused: too soon after the last packet (" + v + " ticks)";
                         case 2 -> "refused: a new strike before the last had run its course (" + v + " ticks)";
                         case 3 -> "refused: you're still reeling from a hit (" + v + " ticks left)";
@@ -862,7 +871,12 @@ public final class Fight {
                         case 5 -> "refused: the server thinks your guard is up";
                         case 6 -> "refused: no such living target (" + v + ")";
                         case 7 -> "refused: out of reach (" + (v / 100f) + " blocks from your eyes to them)";
-                        case 8 -> "hit refused by the game (no damage: PvP off, invulnerable, or a team rule)";
+                        case 8 -> "hit refused by the game (no damage: invulnerable, or a team rule)";
+                        case 9 -> "touched, but they're in creative (creative players can't be hurt; they still react)";
+                        case 10 -> "blocked by their guard";
+                        case 11 -> "parried";
+                        case 12 -> "evaded (they dodged it)";
+                        case 13 -> "landed but did no damage (health " + (v / 10f) + ")";
                         default -> "code " + code;
                     });
                 }
