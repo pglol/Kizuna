@@ -229,7 +229,8 @@ public final class Fighting {
     }
 
     /** Reach from the eyes (blocks). */
-    public static final double REACH = 3.0;
+    /** How far a punch reaches (from the eyes); kicks reach a little further (KICK_EXTRA). */
+    public static final double REACH = 2.4, KICK_EXTRA = 0.4;
     /** A heavy held this long (seconds) is fully charged: full power, and it breaks guard. */
     public static final float FULL_CHARGE = 0.5f;
     /** Pressed longer than this, a click becomes a charged heavy. */
@@ -278,6 +279,7 @@ public final class Fighting {
     }
 
     static void register() {
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(Fighting::tick);
         // Someone coming into view gets the fighter's state as it is now (guard, stance), not only changes.
         net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents.START_TRACKING.register((e, viewer) -> {
             if (!(e instanceof ServerPlayerEntity p) || !ServerPlayNetworking.canSend(viewer, KataNet.FightOf.ID)) return;
@@ -419,6 +421,115 @@ public final class Fighting {
             FLINCH_UNTIL.merge(p.getUuid(), until, Math::max);
             if (FLINCH_UNTIL.size() > 1024) FLINCH_UNTIL.clear();
             if (ServerPlayNetworking.canSend(p, KataNet.FightOf.ID)) ServerPlayNetworking.send(p, new KataNet.FightOf(p.getId(), KataNet.FLINCH, ticks));
+        }
+    }
+
+    // ---- air combat ----
+
+    private static final net.minecraft.util.Identifier FLOAT_ID = net.minecraft.util.Identifier.of(KataCore.ID, "juggle");
+    /** Who's being held up in the air (gravity lightened) until when (server tick). */
+    private static final Map<UUID, Integer> FLOAT_UNTIL = new HashMap<>();
+    private static final Map<UUID, net.minecraft.entity.LivingEntity> FLOATING = new HashMap<>();
+    /** Smashed towards the ground: concussed when they hit it (or after a moment). */
+    private static final Map<UUID, Integer> SMASHED = new HashMap<>();
+    private static final Map<UUID, net.minecraft.entity.LivingEntity> SMASHING = new HashMap<>();
+    /** How long one air hit holds them up (ticks): enough for the next. */
+    public static final int FLOAT_TICKS = 16;
+
+    /**
+     * An air hit. On the ground, it lifts them off it; already up, it pops them up a touch and holds them
+     * there (light gravity) for the next hit. The attacker hangs with them (their game does that).
+     */
+    static void juggle(LivingEntity by, LivingEntity t, Vec3d look) {
+        Vec3d flat = new Vec3d(look.x, 0, look.z);
+        if (flat.lengthSquared() > 1e-4) flat = flat.normalize();
+        double up = t.isOnGround() ? 0.5 : 0.2;
+        t.setVelocity(flat.x * 0.05, up, flat.z * 0.05);
+        t.velocityModified = true;
+        hold(t, FLOAT_TICKS);
+        t.fallDistance = 0;
+        tell(by, KataNet.AIR_HIT, FLOAT_TICKS);
+        tell(t, KataNet.AIR_HIT, FLOAT_TICKS);
+    }
+
+    private static void hold(LivingEntity t, int ticks) {
+        var g = t.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_GRAVITY);
+        if (g != null && g.getModifier(FLOAT_ID) == null)
+            g.addTemporaryModifier(new net.minecraft.entity.attribute.EntityAttributeModifier(FLOAT_ID, -0.82, net.minecraft.entity.attribute.EntityAttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
+        if (t.getServer() == null) return;
+        FLOAT_UNTIL.put(t.getUuid(), t.getServer().getTicks() + ticks);
+        FLOATING.put(t.getUuid(), t);
+    }
+
+    private static void release(LivingEntity t) {
+        var g = t.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_GRAVITY);
+        if (g != null) g.removeModifier(FLOAT_ID);
+        FLOAT_UNTIL.remove(t.getUuid());
+        FLOATING.remove(t.getUuid());
+    }
+
+    /** The held air strike: down they go, hard, and they're concussed when they hit the ground. */
+    static void smash(LivingEntity by, LivingEntity t, Vec3d look) {
+        release(t);
+        Vec3d flat = new Vec3d(look.x, 0, look.z);
+        if (flat.lengthSquared() > 1e-4) flat = flat.normalize();
+        t.setVelocity(flat.x * 0.06, -1.5, flat.z * 0.06);
+        t.velocityModified = true;
+        if (t.getServer() == null) return;
+        SMASHED.put(t.getUuid(), t.getServer().getTicks());
+        SMASHING.put(t.getUuid(), t);
+        flinch(t, 30);
+    }
+
+    /** Hit the ground from a smash: a burst of dust, a thud, knocked flat, then dazed a while. */
+    private static void concuss(LivingEntity t) {
+        var w = t.getWorld();
+        if (w instanceof net.minecraft.server.world.ServerWorld sw) {
+            sw.spawnParticles(net.minecraft.particle.ParticleTypes.POOF, t.getX(), t.getY() + 0.1, t.getZ(), 24, 0.6, 0.05, 0.6, 0.08);
+            sw.spawnParticles(net.minecraft.particle.ParticleTypes.CRIT, t.getX(), t.getY() + 0.3, t.getZ(), 12, 0.4, 0.1, 0.4, 0.2);
+        }
+        w.playSound(null, t.getX(), t.getY(), t.getZ(), SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.PLAYERS, 0.45f, 1.5f);
+        t.fallDistance = 0;
+        knockdown(t, new Vec3d(0, 0.06, 0));
+        int dazed = 60;
+        flinch(t, dazed + 30);
+        if (t instanceof Dummy d) d.stagger(dazed);
+        relayAround(t, KataNet.CONCUSS, dazed);
+    }
+
+    /** Every tick: let go of whoever has floated long enough; concuss whoever a smash put into the ground. */
+    static void tick(net.minecraft.server.MinecraftServer server) {
+        int now = server.getTicks();
+        if (!FLOAT_UNTIL.isEmpty()) {
+            for (var it = FLOAT_UNTIL.entrySet().iterator(); it.hasNext(); ) {
+                var en = it.next();
+                LivingEntity e = FLOATING.get(en.getKey());
+                if (e == null || e.isRemoved() || now >= en.getValue()) {
+                    it.remove();
+                    if (e != null) {
+                        var g = e.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_GRAVITY);
+                        if (g != null) g.removeModifier(FLOAT_ID);
+                    }
+                    FLOATING.remove(en.getKey());
+                }
+            }
+        }
+        if (!SMASHED.isEmpty()) {
+            for (var it = SMASHED.entrySet().iterator(); it.hasNext(); ) {
+                var en = it.next();
+                LivingEntity e = SMASHING.get(en.getKey());
+                if (e == null || e.isRemoved()) {
+                    it.remove();
+                    SMASHING.remove(en.getKey());
+                    continue;
+                }
+                int age = now - en.getValue();
+                if ((age > 1 && (e.isOnGround() || e.isTouchingWater())) || age > 40) {
+                    it.remove();
+                    SMASHING.remove(en.getKey());
+                    concuss(e);
+                }
+            }
         }
     }
 
@@ -589,6 +700,13 @@ public final class Fighting {
             }
         }
         if (e instanceof Dummy d) d.anticipate(p, m, Math.round(m.contact() * 20), (packed & 1 << 8) != 0);
+        // Everyone watching sees it start (the load-up is the tell), not only when it lands.
+        relay(p, KataNet.WINDUP, packed);
+    }
+
+    /** A heavy being charged (1) or let go of (0): everyone sees the wind-up building. */
+    static void charge(ServerPlayerEntity p, int on) {
+        relay(p, KataNet.CHARGE, on != 0 ? 1 : 0);
     }
 
     /**
@@ -650,7 +768,7 @@ public final class Fighting {
         Vec3d near = new Vec3d(MathHelper.clamp(eye.x, b.minX, b.maxX), MathHelper.clamp(eye.y, b.minY, b.maxY), MathHelper.clamp(eye.z, b.minZ, b.maxZ));
         // A downed dummy's body lies wherever it flew (its box may be elsewhere): judge by distance only.
         boolean lying = t instanceof Dummy dd && dd.down() > 0;
-        if (eye.distanceTo(near) > (lying ? 7 : REACH + 0.8)) return;
+        if (eye.distanceTo(near) > (lying ? 7 : REACH + (m.leg() ? KICK_EXTRA : 0) + 0.5)) return; // a little slack for lag
         Vec3d to = t.getPos().subtract(p.getPos());
         Vec3d look = Vec3d.fromPolar(0, p.getYaw());
         double len = Math.hypot(to.x, to.z);
@@ -690,6 +808,13 @@ public final class Fighting {
         // Hitstun: long enough for the attacker's next strike in the string to arrive first.
         int stun = Math.round(m.length() * 20 * 0.85f) + (m.heavy() ? 6 : 3);
         flinch(t, stun);
+        // In the air: hits keep them up there (a juggle); the held one smashes them into the ground.
+        if (m.from() == From.AIR) {
+            if (m.heavy()) smash(by, t, look);
+            else juggle(by, t, look);
+            t.getWorld().playSound(null, t.getX(), t.getY(), t.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, SoundCategory.PLAYERS, 0.9f, 1.1f + t.getRandom().nextFloat() * 0.2f);
+            return;
+        }
         float shove = m.push() * (m.heavy() ? 0.6f + 0.6f * power : 1) * might(by);
         boolean down = m.knockdown() && (!m.heavy() || power >= 0.9f);
         if (down) {

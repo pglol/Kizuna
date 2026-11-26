@@ -371,3 +371,15 @@ moves the body somewhere the physics wouldn't.
 ## HUD bars
 - Health: a red brush stroke slanted at both ends, mottled, in a ragged black ink stroke. Black flames rise off its end, swaying and curling, shedding embers; ink beads under it, stretches and drips away (more often when health is low). A dim red stain shows what's empty and a pale trail shows what was just lost.
 - Stamina: the same ink, finer and shorter, cream (dim when winded), left-aligned above the health stroke, clear of its flames, with small flames and rare drips.
+
+## Reach and reading strikes
+- A punch reaches 2.4 blocks from the eyes, a kick 2.8 (the server allows 0.5 more for lag). Dummies: 2.5 and 2.9, starting from under 2.9 and closing to 2.3.
+- Every strike has a readable tell: lights take 0.13 to 0.24 s to land, kicks and heavies 0.26 to 0.36 s, spins up to 0.42 s.
+- The first 45% of a hand strike is the load: drawn back and coiled away, weight onto the back foot of that side, the shoulder on the striking side dropped, the head tucked; a hook, backfist, elbow or overhand cocks its arm out wide on its side. Then it snaps through. A charging heavy holds the load, and kicks lean away over the standing leg with the arms opening.
+- Everyone sees strikes from their start (the wind-up is relayed), and sees a heavy being charged.
+
+## Air combat (replaces superman punch, flying knee, jumping roundhouse, dropkick)
+- Taijutsu air set: Air jab (opener), Air hook (link), Rising knee (link), Whirlwind kick (finisher); held: Hammer smash.
+- An air strike on someone standing lifts them off the ground; on someone in the air it pops them up a touch. Either way they're held there, nearly weightless (gravity -82%), for 0.8 s, long enough for the next hit, and the attacker hangs with them (gravity -82% for them too) and drifts in to stay in reach. Each air hit landed gives another air strike.
+- Juggled bodies show it: tipped back, head thrown back, arms and legs loose and flailing.
+- Holding attack in the air at any point (0.12 s) cuts the string off with the Hammer smash: a hitch at the top, then down they go hard, and the attacker dives after them. When they hit the ground: a burst of dust, a thud, knocked flat, then concussed for 3 s (head lolling, swaying, stars, slow, unable to strike).

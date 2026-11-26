@@ -60,7 +60,9 @@ public final class Fight {
     private static float jolt;
     private static int joltSide;
     private static long brokenUntil, staggerUntil, parryAt, flinchUntil, readyAt;
-    private static boolean curLanded;
+    private static boolean curLanded, smashDive;
+    /** Hanging in the air (an air hit, given or taken): gravity eased right off until then. */
+    private static long hangUntil;
     private static int parryKind, lastHurt;
     /** Where the striking fist or foot is in the world, this frame and last (what it runs into on the way). */
     private static Vec3d limbNow, limbPrev;
@@ -228,6 +230,7 @@ public final class Fight {
         // Dodge: a quick step out of the way, the way you're pressing (back if nothing). Strikes pass
         // through its first moments; then a short recovery when you can't guard or throw.
         if (p.isOnGround()) flipUsed = false;
+        if (mc.world != null && mc.world.getTime() % 3 == 0) stars(mc);
         while (KataClient.dodgeKey.wasPressed()) dodge(p);
         dodgeStep(p);
         guard = free && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && !recovering() && System.nanoTime() > brokenUntil;
@@ -260,11 +263,20 @@ public final class Fight {
                 pressing = false;
                 if (charging) {
                     charging = false;
+                    send(KataNet.CHARGE, 0, 0);
                     begin(p, Deck.pick(row(p), true, 0), Math.min(1, secs(chargeAt) / Fighting.FULL_CHARGE));
                 } else light(p);
+            } else if (airborne(p) && secs(pressAt) >= Fighting.HEAVY_AFTER) {
+                // Held in the air: the smash, straight away, cutting off whatever air strike was going.
+                pressing = false;
+                pendingLight = false;
+                if (cur != null && cur.from() == Fighting.From.AIR) cur = null;
+                readyAt = 0;
+                begin(p, Deck.pick(Fighting.AIR, true, 0), 1);
             } else if (!charging && cur == null && secs(pressAt) >= Fighting.HEAVY_AFTER) {
                 charging = true;
                 chargeAt = System.nanoTime();
+                send(KataNet.CHARGE, 1, 0); // they see it building
             }
         }
         // The move in progress: each of its hits lands (on whatever it first touches), then it's done.
@@ -291,6 +303,12 @@ public final class Fight {
                     if (hit >= 0) {
                         curStart += (long) ((cur.heavy() ? 0.09 : 0.05) * 1e9);
                         curLanded = true;
+                    }
+                    if (smashDive) {
+                        smashDive = false;
+                        hangUntil = 0;
+                        Vec3d v = p.getVelocity();
+                        p.setVelocity(v.x * 0.3, -0.9, v.z * 0.3); // down after them
                     }
                     // A rising strike lifts you with it.
                     if (cur.path() == Path.UPPER && cur.heavy() && p.isOnGround()) p.addVelocity(0, 0.3, 0);
@@ -335,7 +353,7 @@ public final class Fight {
         if (p == null) return false;
         if (limp(p)) return true; // a limp body throws nothing (and doesn't swing either)
         if (!fists(p)) return false;
-        if (guard || staggered() || recovering() || flinching()) return true; // hands up, off balance, out of a dodge or reeling: nothing to throw
+        if (guard || staggered() || recovering() || flinching() || concussed(p)) return true; // hands up, off balance, out of a dodge or reeling: nothing to throw
         pressing = true;
         pressAt = System.nanoTime();
         return true;
@@ -388,18 +406,20 @@ public final class Fight {
         // The body behind it: a step in on the ground; in the air, the lunge the move flies on.
         Vec3d f = Vec3d.fromPolar(0, p.getYaw());
         if (m.from() == Fighting.From.AIR) {
-            // The lunge sets how fast you fly in (it never stacks on what you already have).
-            double fwd = switch (m.path()) {
-                case SUPERMAN -> 0.26;
-                case DROPKICK -> 0.3;
-                case KNEE -> 0.22;
-                default -> 0.1;
-            };
-            double up = m.path() == Path.KNEE ? 0.08 : m.path() == Path.SUPERMAN ? 0.04 : 0;
             Vec3d v = p.getVelocity();
-            double along = v.x * f.x + v.z * f.z;
-            double add = Math.max(0, fwd - along);
-            p.setVelocity(v.x + f.x * add, Math.max(v.y, up), v.z + f.z * add);
+            if (m.heavy()) {
+                // The smash: a hitch at the top, then down with it.
+                p.setVelocity(v.x * 0.3, Math.max(v.y, 0.12), v.z * 0.3);
+                smashDive = true;
+            } else {
+                // Air strikes keep you up and drift you in to stay on them.
+                Entity tg = targetEntity(MinecraftClient.getInstance());
+                Vec3d in = tg != null ? tg.getPos().subtract(p.getPos()).multiply(1, 0, 1) : f;
+                double dist = in.length();
+                Vec3d dir = dist > 1e-3 ? in.multiply(1 / dist) : f;
+                double drift = tg != null ? MathHelper.clamp((dist - 1.4) * 0.12, 0, 0.14) : 0.06;
+                p.setVelocity(v.x * 0.4 + dir.x * drift, Math.max(v.y, 0.1), v.z * 0.4 + dir.z * drift);
+            }
         } else if (p.isOnGround() && !m.leg()) {
             double step = m.heavy() ? 0.06 + 0.1 * curPower : 0.035;
             p.addVelocity(f.x * step, 0, f.z * step);
@@ -420,7 +440,7 @@ public final class Fight {
         Entity t = targetEntity(mc);
         if (t == null && mc.targetedEntity instanceof LivingEntity c) t = c;
         Vec3d want = t != null ? wanted(p, 1, cur, t) : p.getCameraPosVec(1).add(p.getRotationVec(1).multiply(2)).add(0, -0.2, 0);
-        Hitbox.Contact h = Hitbox.traceAll(nearby(p), 1, origin(p, 1, cur), want, Fighting.REACH);
+        Hitbox.Contact h = Hitbox.traceAll(nearby(p), 1, origin(p, 1, cur), want, Fighting.REACH + (cur.leg() ? Fighting.KICK_EXTRA : 0));
         if (h == null) return -1;
         lastPart = h.hit().part();
         return h.entity().getId();
@@ -524,6 +544,8 @@ public final class Fight {
     private static final Map<Integer, Long> STAGGERS = new HashMap<>();
     /** How much guard stamina others have left (it shows: a guard near breaking strains). */
     private static final Map<Integer, Float> POISES = new HashMap<>();
+    /** Others charging a heavy (since), hanging in the air from a hit (until), concussed (until). */
+    private static final Map<Integer, Long> CHARGES = new HashMap<>(), HANGS = new HashMap<>(), CONCUSSED = new HashMap<>();
 
     static void remote(int entity, int kind, int a) {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -575,6 +597,16 @@ public final class Fight {
                 }
                 case KataNet.DODGE -> { }
                 case KataNet.PARRIED -> Hud.pop("PARRIED", 0xFFFF5A4A);
+                case KataNet.AIR_HIT -> {
+                    // An air hit, given or taken: hang there for the next. Given, another air strike is yours.
+                    hangUntil = System.nanoTime() + a * 50_000_000L;
+                    HANGS.put(entity, hangUntil);
+                    airLanded = true;
+                }
+                case KataNet.CONCUSS -> {
+                    CONCUSSED.put(entity, System.nanoTime() + a * 50_000_000L);
+                    Hud.pop("CONCUSSED", 0xFFFF5A4A);
+                }
                 case KataNet.EVADED -> Hud.pop("EVADE", 0xFFF3E7BE);
                 case KataNet.KNOCKDOWN -> {
                     cur = null;
@@ -600,16 +632,30 @@ public final class Fight {
             case KataNet.DODGE -> DODGES.put(entity, new React(a, System.nanoTime()));
             case KataNet.POISE -> POISES.put(entity, a / 100f);
             case KataNet.KNOCKDOWN -> MOVES.remove(entity);
-            case KataNet.STRIKE -> {
+            case KataNet.WINDUP, KataNet.STRIKE -> {
+                // Seen from its start (the wind-up is relayed); the landing of a move already showing
+                // doesn't restart it.
                 int id = a & 0xFF;
                 if (id < Fighting.MOVES.length) {
                     Move m = Fighting.MOVES[id];
-                    int st = STANCES.getOrDefault(entity, Fighting.TR);
-                    MOVES.put(entity, new Act(m, st, ((a >> 9) & 0x7F) / 100f, System.nanoTime()));
-                    if (m.turns()) SPIN.put(entity, (a & 1 << 8) != 0 ? 1 : -1);
+                    Act was = MOVES.get(entity);
+                    boolean showing = was != null && was.move == m && secs(was.start) < m.length();
+                    if (kind == KataNet.WINDUP || !showing) {
+                        int st = STANCES.getOrDefault(entity, Fighting.TR);
+                        MOVES.put(entity, new Act(m, st, ((a >> 9) & 0x7F) / 100f, System.nanoTime()));
+                        if (m.turns()) SPIN.put(entity, (a & 1 << 8) != 0 ? 1 : -1);
+                    }
+                    CHARGES.remove(entity);
                 }
                 STANCE_AT.put(entity, System.nanoTime());
             }
+            case KataNet.CHARGE -> {
+                if (a != 0) CHARGES.put(entity, System.nanoTime());
+                else CHARGES.remove(entity);
+                STANCE_AT.put(entity, System.nanoTime());
+            }
+            case KataNet.AIR_HIT -> HANGS.put(entity, System.nanoTime() + a * 50_000_000L);
+            case KataNet.CONCUSS -> CONCUSSED.put(entity, System.nanoTime() + a * 50_000_000L);
             case KataNet.STANCE -> {
                 STANCES.put(entity, MathHelper.clamp(a, 0, 3));
                 STANCE_AT.put(entity, System.nanoTime());
@@ -623,6 +669,9 @@ public final class Fight {
         if (STAGGERS.size() > 256) STAGGERS.clear();
         if (DODGES.size() > 256) DODGES.clear();
         if (POISES.size() > 256) POISES.clear();
+        if (CHARGES.size() > 256) CHARGES.clear();
+        if (HANGS.size() > 256) HANGS.clear();
+        if (CONCUSSED.size() > 256) CONCUSSED.clear();
     }
 
     // ---- what the body shows ----
@@ -839,11 +888,22 @@ public final class Fight {
             }
         } else {
             Act a = MOVES.get(p.getId());
-            if (a == null || secs(a.start) >= a.move.length()) return;
-            m = a.move;
-            st = a.stance;
-            s = secs(a.start);
-            power = a.power;
+            Long ch = CHARGES.get(p.getId());
+            if (ch != null && (a == null || secs(a.start) >= a.move.length())) {
+                // Someone else winding up a heavy: we don't know which yet, so it's their back-stance-free
+                // heavy from where they stand (the load-up reads the same).
+                m = Fighting.MOVES.length > 0 ? heavyFor(STANCES.getOrDefault(p.getId(), Fighting.TR)) : null;
+                st = STANCES.getOrDefault(p.getId(), Fighting.TR);
+                wind = Math.min(1, secs(ch) / Fighting.FULL_CHARGE);
+                s = 0;
+                power = 1;
+            } else {
+                if (a == null || secs(a.start) >= a.move.length()) return;
+                m = a.move;
+                st = a.stance;
+                s = secs(a.start);
+                power = a.power;
+            }
         }
         if (m == null) return;
 
@@ -856,7 +916,16 @@ public final class Fight {
         float k;
         if (wind > 0) k = -0.25f * ease(wind);
         else if (m.turns() && u < c) k = MathHelper.clamp(u / c, 0, 1); // steady through the spin, fully out at contact
-        else if (u < c) {
+        else if (u < c && !m.leg() && hit == 0) {
+            // The tell: the first part of the way in it loads (drawn back, coiled away, weight shifting
+            // to the side it comes from), then snaps through to contact.
+            float x = u / c, load = 0.45f;
+            if (x < load) k = -0.4f * ease(x / load);
+            else {
+                float y = (x - load) / (1 - load);
+                k = -0.4f + 1.4f * y * y * (1.4f - 0.4f * y);
+            }
+        } else if (u < c) {
             float x = u / c;
             k = x * x * (1.4f - 0.4f * x);
         } else if (u < c + hold) k = 1;
@@ -865,6 +934,26 @@ public final class Fight {
         float out_ = right ? -1 : 1; // the limb's outside (model x: right is negative)
         float mass = m.heavy() ? 0.6f + 0.8f * power : 1;
         float sign = right ? -1 : 1; // a right-side strike turns the chest to the left
+
+        // How loaded it is (0..1): the wind-up of a heavy, or the first part of any strike.
+        float tell = k < 0 ? -k / 0.4f : 0;
+        if (tell > 0) {
+            // The whole body says which side: weight onto the back foot of that side, the shoulder on the
+            // striking side drawn back and dropped, the head tucked; a swinging strike's arm cocked out wide.
+            out.set(Bone.CHEST, Pose.ROLL, out.get(Bone.CHEST, Pose.ROLL) + sign * 9 * tell);
+            out.set(Bone.ROOT, Pose.ROLL, out.get(Bone.ROOT, Pose.ROLL) + sign * 4 * tell);
+            out.set(Bone.HEAD, Pose.PITCH, out.get(Bone.HEAD, Pose.PITCH) + 6 * tell);
+            out.offset[0] += -out_ * 1.2f * tell;
+            Bone arm = right ? Bone.RIGHT_ARM : Bone.LEFT_ARM;
+            if (m.path() == Path.HOOK || m.path() == Path.BACKFIST || m.path() == Path.ELBOW || m.path() == Path.OVERHAND)
+                out.set(arm, Pose.ROLL, out.get(arm, Pose.ROLL) - out_ * 28 * tell);
+            if (m.leg()) {
+                // A kick: leaning away over the standing leg, arms opening for balance.
+                out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) - 10 * tell);
+                out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) + 14 * tell);
+                out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) - 14 * tell);
+            }
+        }
 
         Vec3d pos = p.getLerpedPos(td);
         float bodyYaw = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
@@ -1058,6 +1147,24 @@ public final class Fight {
      * the head whips it away from the side it came from; a body shot folds you; a low kick buckles that
      * knee. Heavies hit harder. Fast in, eased out. Added on top of everything else.
      */
+    /** The heavy someone would throw from this stance with the starter deck (for showing their wind-up). */
+    private static Move heavyFor(int stance) {
+        Fighting.Style s = Fighting.STYLES[0];
+        int[] row = s.starter()[Math.max(0, Math.min(3, stance))];
+        return s.move(row[Fighting.HEAVY_SLOT]);
+    }
+
+    /** Is the local player hanging in the air from an air hit (gravity eased off)? */
+    public static boolean hanging() {
+        return System.nanoTime() < hangUntil;
+    }
+
+    /** Concussed: slow and unsteady. */
+    static boolean concussed(LivingEntity e) {
+        Long u = CONCUSSED.get(e.getId());
+        return u != null && System.nanoTime() < u;
+    }
+
     static boolean hitRecently(LivingEntity e) {
         React r = HITS.get(e.getId());
         return r != null && secs(r.at) < 1.5f;
@@ -1065,6 +1172,8 @@ public final class Fight {
 
     public static void react(LivingEntity e, Pose out) {
         dodgePose(e, out);
+        suspendedPose(e, out);
+        dazedPose(e, out);
         React r = HITS.get(e.getId());
         if (r == null) return;
         boolean heavy = (r.packed & 1 << 8) != 0;
@@ -1198,6 +1307,63 @@ public final class Fight {
         }
     }
 
+    /** Juggled: hanging in the air from the hits, limbs thrown loose, the body tipped back and turning slowly. */
+    private static void suspendedPose(LivingEntity e, Pose out) {
+        Long u = HANGS.get(e.getId());
+        if (u == null || e.isOnGround()) return;
+        float left = (u - System.nanoTime()) / 1e9f;
+        if (left <= -0.15f) return;
+        // Only for whoever took the hit (the attacker is busy striking).
+        if (e instanceof PlayerEntity pl && mine(pl) && cur != null) return;
+        if (!(e instanceof PlayerEntity pl2 && mine(pl2)) && MOVES.containsKey(e.getId()) && secs(MOVES.get(e.getId()).start) < MOVES.get(e.getId()).move.length()) return;
+        float w = MathHelper.clamp(left / 0.15f + 1, 0, 1);
+        float tt = (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
+        add(out, Bone.ROOT, Pose.PITCH, -22 * w);
+        add(out, Bone.CHEST, Pose.PITCH, -12 * w);
+        add(out, Bone.HEAD, Pose.PITCH, -18 * w);
+        add(out, Bone.RIGHT_ARM, Pose.PITCH, (-60 + 12 * MathHelper.sin(tt * 9)) * w);
+        add(out, Bone.LEFT_ARM, Pose.PITCH, (-55 + 12 * MathHelper.sin(tt * 8 + 1)) * w);
+        add(out, Bone.RIGHT_ARM, Pose.ROLL, 30 * w);
+        add(out, Bone.LEFT_ARM, Pose.ROLL, -30 * w);
+        add(out, Bone.RIGHT_LEG, Pose.PITCH, -30 * w);
+        add(out, Bone.LEFT_LEG, Pose.PITCH, 10 * w);
+        add(out, Bone.RIGHT_SHIN, Pose.PITCH, 50 * w);
+        add(out, Bone.LEFT_SHIN, Pose.PITCH, 35 * w);
+    }
+
+    /** Concussed: the head lolls round, the body sways, the arms hang heavy. */
+    private static void dazedPose(LivingEntity e, Pose out) {
+        Long u = CONCUSSED.get(e.getId());
+        if (u == null) return;
+        float left = (u - System.nanoTime()) / 1e9f;
+        if (left <= 0) return;
+        float w = Math.min(1, left / 0.5f);
+        float tt = (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
+        add(out, Bone.HEAD, Pose.ROLL, 14 * MathHelper.sin(tt * 2.6f) * w);
+        add(out, Bone.HEAD, Pose.PITCH, (10 + 8 * MathHelper.cos(tt * 2.6f)) * w);
+        add(out, Bone.CHEST, Pose.ROLL, 6 * MathHelper.sin(tt * 1.7f) * w);
+        add(out, Bone.CHEST, Pose.PITCH, 8 * w);
+        add(out, Bone.RIGHT_ARM, Pose.PITCH, 10 * w);
+        add(out, Bone.LEFT_ARM, Pose.PITCH, 10 * w);
+        out.offset[0] += 0.8f * MathHelper.sin(tt * 1.7f) * w;
+    }
+
+    /** Stars round a concussed head (every few ticks). */
+    private static void stars(MinecraftClient mc) {
+        if (mc.world == null || CONCUSSED.isEmpty()) return;
+        long now = System.nanoTime();
+        for (var en : CONCUSSED.entrySet()) {
+            if (now > en.getValue()) continue;
+            Entity e = mc.world.getEntityById(en.getKey());
+            if (e == null) continue;
+            double a = (now / 1e9) * 5;
+            for (int i = 0; i < 3; i++) {
+                double ang = a + i * Math.PI * 2 / 3;
+                mc.world.addParticle(net.minecraft.particle.ParticleTypes.CRIT, e.getX() + Math.cos(ang) * 0.35, e.getEyeY() + 0.35, e.getZ() + Math.sin(ang) * 0.35, 0, 0.01, 0);
+            }
+        }
+    }
+
     private static void add(Pose p, Bone b, int axis, float deg) {
         p.set(b, axis, p.get(b, axis) + deg);
     }
@@ -1251,6 +1417,7 @@ public final class Fight {
         if (guard) s *= 0.75f;
         if (charging) s *= 0.8f;
         if (staggered()) s *= 0.5f;
+        if (concussed(p)) s *= 0.55f;
         return s;
     }
 

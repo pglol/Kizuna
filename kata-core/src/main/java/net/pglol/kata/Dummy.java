@@ -317,7 +317,7 @@ public class Dummy extends PathAwareEntity {
             // Throwing something: feet planted.
             getNavigation().stop();
             stuck = 0;
-        } else if (d > 2.6) {
+        } else if (d > 2.3) {
             if (age % 5 == 0) getNavigation().startMovingTo(foe, d > 5 ? 1.15 : 0.9);
             // No path (they're up on something, or round an edge): head straight for them, and hop over
             // what's in the way once it's clearly stuck.
@@ -345,14 +345,14 @@ public class Dummy extends PathAwareEntity {
 
         // Its turn: strings of one to three strikes, often; out of a block it counters (dropping the
         // guard to hit back); just out of reach it steps in to strike.
-        if (swing == null && d < 3.4 && --cooldown <= 0) {
+        if (swing == null && d < 2.9 && --cooldown <= 0) {
             boolean counter = guarding() && age - guardAt > 6;
             if (!guarding() || counter) {
                 if (counter) setGuard(false);
-                if (d > 2.4) {
+                if (d > 2.1) {
                     // A step in to reach: it closes the gap as it throws.
                     getNavigation().startMovingTo(foe, 1.2);
-                    Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(Math.min(0.22, (d - 2.0) * 0.12));
+                    Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(Math.min(0.18, (d - 1.8) * 0.12));
                     if (isOnGround()) addVelocity(in.x, 0, in.z);
                 }
                 Fighting.Style s = Fighting.style("taijutsu");
@@ -373,7 +373,7 @@ public class Dummy extends PathAwareEntity {
     }
 
     private void hit(LivingEntity foe, Fighting.Move m) {
-        double reach = m.leg() ? 3.3 : 3.0;
+        double reach = m.leg() ? 2.9 : 2.5;
         if (squaredDistanceTo(foe) > reach * reach) return;
         // Struck where its aim was: the head for hooks, straights and high kicks, the body for the rest,
         // the legs for a low kick.
