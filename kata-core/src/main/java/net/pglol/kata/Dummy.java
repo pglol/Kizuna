@@ -173,10 +173,18 @@ public class Dummy extends PathAwareEntity {
 
     /** Where its knocked-down body came to rest (seen on a player's screen): it gets up there. */
     void settleAt(Vec3d at) {
-        if (getPos().squaredDistanceTo(at) > 12 * 12) return;
-        if (!getWorld().isSpaceEmpty(this, getBoundingBox().offset(at.subtract(getPos())))) return;
-        refreshPositionAndAngles(at.x, at.y, at.z, getYaw(), getPitch());
+        if (down() <= 0 || getPos().squaredDistanceTo(at) > 12 * 12) return;
+        // Stand where the body lies (lifted out of the floor it's lying on, if need be).
+        for (double up = 0; up <= 1.5; up += 0.1) {
+            Vec3d spot = at.add(0, up, 0);
+            if (getWorld().isSpaceEmpty(this, getBoundingBox().offset(spot.subtract(getPos())))) {
+                refreshPositionAndAngles(spot.x, spot.y, spot.z, getYaw(), getPitch());
+                setVelocity(Vec3d.ZERO);
+                break;
+            }
+        }
         getNavigation().stop();
+        dataTracker.set(DOWN, Math.min(down(), 24)); // getting up takes a moment, then it's back on its feet
     }
 
     void blocked(int side) {
@@ -204,7 +212,7 @@ public class Dummy extends PathAwareEntity {
     void knockdown(Vec3d v) {
         setVelocity(v);
         velocityModified = true;
-        dataTracker.set(DOWN, 50);
+        dataTracker.set(DOWN, 200); // down until its body is seen to come to rest (then it gets up), ten seconds at most
         cancelSwing();
         setGuard(false);
         raiseAt = -1;

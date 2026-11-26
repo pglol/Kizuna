@@ -445,11 +445,10 @@ public final class Parkour {
             boolean tumble = ground && !lastGround && hs > TUMBLE_SPEED;
             fastAir = !ground && p.getVelocity().horizontalLength() > FLUNG_SPEED ? fastAir + 1 : 0;
             // Stopping flight at speed: nothing is holding you up any more and you're still going.
-            // Leaving flight you carry on with about half the speed you had (all of it was too much).
-            if (lastFlying && !p.getAbilities().flying) p.setVelocity(p.getVelocity().multiply(0.5, 1, 0.5));
+            // Stopping flight at speed: nothing holds you up any more and you're still going.
             boolean dropped = lastFlying && !ground && p.getVelocity().length() > 0.6;
             if (slam || tumble || dropped || fastAir >= 2) {
-                airVel = slam || tumble ? lastVel : p.getVelocity();
+                airVel = slam || tumble ? lastVel : p.getVelocity().multiply(dropped ? 0.8 : 1);
                 landRough = 1;
                 stoodUp = false;
                 p.setSprinting(false);

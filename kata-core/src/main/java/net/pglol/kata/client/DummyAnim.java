@@ -9,6 +9,7 @@ import net.pglol.kata.Fighting.Move;
 import net.pglol.kata.Fighting.Path;
 import net.pglol.kata.rig.Bone;
 import net.pglol.kata.rig.Pose;
+import org.joml.Vector3f;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,6 +34,12 @@ public final class DummyAnim {
     }
 
     private static final Map<Integer, State> STATES = new HashMap<>();
+
+    /** The pose it's showing (for its hitboxes), without moving its animation on. */
+    static Pose current(Dummy d, float td) {
+        State s = STATES.get(d.getId());
+        return s != null ? s.shown : new Pose();
+    }
 
     public static Pose pose(Dummy d, float td) {
         State s = STATES.computeIfAbsent(d.getId(), k -> new State());
@@ -82,7 +89,7 @@ public final class DummyAnim {
         for (int i = 0; i < steps && dt > 0; i++) {
             for (Bone b : Bone.values()) {
                 int bi = b.ordinal();
-                float k = striking ? 900 : 220, c = 2 * 0.8f * (float) Math.sqrt(k);
+                float k = striking ? 420 : 200, c = 2 * 0.9f * (float) Math.sqrt(k);
                 for (int a = 0; a < 3; a++) {
                     float acc = k * (want.get(b, a) - s.ang[bi][a]) - c * s.vel[bi][a];
                     s.vel[bi][a] += acc * h;
@@ -93,6 +100,7 @@ public final class DummyAnim {
         Pose out = new Pose();
         for (Bone b : Bone.values()) for (int a = 0; a < 3; a++) out.set(b, a, dt > 0 ? s.ang[b.ordinal()][a] : want.get(b, a));
         System.arraycopy(want.offset, 0, out.offset, 0, 3);
+        strike(d, td, by, out);
         s.shown = out;
         return out;
     }
@@ -129,34 +137,6 @@ public final class DummyAnim {
             return o;
         }
 
-        // Its strike.
-        int id = d.move();
-        if (id >= 0 && id < Fighting.MOVES.length) {
-            Move m = Fighting.MOVES[id];
-            float s = (d.moveAge() + td) / 20f;
-            float c = m.contact(), k;
-            if (s < c) k = (s / c) * (s / c);
-            else if (s < c + 0.05f) k = 1;
-            else k = 1 - MathHelper.clamp((s - c - 0.05f) / Math.max(0.05f, m.length() - c - 0.05f), 0, 1);
-            int hit = m.hits() > 1 && m.interval() > 0 ? Math.min(m.hits() - 1, (int) (s / m.interval())) : 0;
-            boolean right = Fighting.rightLimb(m, Fighting.TR, hit);
-            float sign = right ? -1 : 1;
-            if (m.leg()) {
-                Bone leg = right ? Bone.RIGHT_LEG : Bone.LEFT_LEG, shin = right ? Bone.RIGHT_SHIN : Bone.LEFT_SHIN;
-                boolean round = m.path() == Path.ROUNDHOUSE;
-                o.set(leg, -85 * k, 0, (round ? -sign * 55 : 0) * k);
-                o.set(shin, 60 * (1 - k) * k * 4 * 0.25f + 10, 0, 0);
-                o.set(Bone.CHEST, -14 * k, sign * 20 * k, 0);
-                o.set(Bone.ROOT, 0, sign * (round ? 40 : 8) * k, 0);
-            } else {
-                Bone arm = right ? Bone.RIGHT_ARM : Bone.LEFT_ARM, fore = right ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM;
-                o.set(arm, MathHelper.lerp(k, o.get(arm, Pose.PITCH), -88), MathHelper.lerp(k, o.get(arm, Pose.YAW), -sign * 6), 0);
-                o.set(fore, MathHelper.lerp(k, o.get(fore, Pose.PITCH), 5), 0, 0);
-                o.set(Bone.CHEST, 5 * k, sign * (m.lead() ? 12 : 28) * k, 0);
-                o.offset[2] = -2 * k;
-            }
-        }
-
         // Reactions.
         int ra = d.reactionAge();
         float rk = ra < 3 ? 1 : MathHelper.clamp(1 - (ra - 3 + td) / 8f, 0, 1);
@@ -180,6 +160,63 @@ public final class DummyAnim {
             o.offset[2] = 1.5f;
         }
         return o;
+    }
+
+    /**
+     * Its strike, solved like a player's: the fist (or foot) travels from its guard to the nearest
+     * player and stops on whatever part of them it meets first (a raised forearm, say).
+     */
+    private static void strike(Dummy d, float td, float by, Pose out) {
+        int id = d.move();
+        if (id < 0 || id >= Fighting.MOVES.length) return;
+        Move m = Fighting.MOVES[id];
+        float s = (d.moveAge() + td) / 20f;
+        int hit = m.hits() > 1 && m.interval() > 0 ? Math.min(m.hits() - 1, (int) (s / m.interval())) : 0;
+        float u = s - hit * m.interval();
+        float end = hit < m.hits() - 1 ? m.interval() : m.length() - hit * m.interval();
+        float c = m.contact(), k;
+        if (u < c) {
+            float x = u / c;
+            k = x * x * (1.4f - 0.4f * x);
+        } else if (u < c + 0.05f) k = 1;
+        else k = 1 - MathHelper.clamp((u - c - 0.05f) / Math.max(0.05f, end - c - 0.05f), 0, 1);
+        k = k * k * (3 - 2 * k);
+        boolean right = Fighting.rightLimb(m, Fighting.TR, hit);
+        float out_ = right ? -1 : 1, sign = right ? -1 : 1;
+        Vec3d pos = d.getLerpedPos(td);
+        MinecraftClient mc = MinecraftClient.getInstance();
+        Vec3d aimW = null;
+        if (mc.player != null && mc.player.squaredDistanceTo(d) < 5 * 5) {
+            Vec3d from = d.getEyePos().add(0, m.leg() ? -0.85 : -0.3, 0);
+            Vec3d want = mc.player.getLerpedPos(td).add(0, mc.player.getHeight() * (m.leg() ? 0.55 : 0.86), 0);
+            Hitbox.Hit h = Hitbox.trace(mc.player, td, from, want, 3);
+            aimW = h != null ? h.point() : want;
+            Vec3d dd = aimW.subtract(from);
+            double max = m.leg() ? 1.3 : 1.2;
+            if (dd.length() > max) aimW = from.add(dd.normalize().multiply(max));
+        }
+        if (aimW == null) aimW = d.getEyePos().add(Vec3d.fromPolar(0, by).multiply(1.0)).add(0, m.leg() ? -0.75 : -0.2, 0);
+        Vector3f aim = Animator.toModel(aimW, pos, by);
+        if (m.leg()) {
+            Bone leg = right ? Bone.RIGHT_LEG : Bone.LEFT_LEG, shin = right ? Bone.RIGHT_SHIN : Bone.LEFT_SHIN;
+            Vector3f hip = new Vector3f(right ? -1.9f : 1.9f, 12, 0);
+            boolean round = m.path() == Path.ROUNDHOUSE;
+            out.set(Bone.ROOT, Pose.YAW, out.get(Bone.ROOT, Pose.YAW) + sign * (round ? 40 : 8) * k);
+            out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) - 14 * k);
+            Vector3f chamber = new Vector3f(hip.x + (round ? out_ * 3 : 0), 16, -3);
+            Vector3f foot = k < 0.4f ? new Vector3f(hip.x, 24, 0).lerp(chamber, k / 0.4f) : new Vector3f(chamber).lerp(aim, (k - 0.4f) / 0.6f);
+            Animator.kickLeg(out, leg, shin, hip, foot, Ragdoll.rootFrame(out).invert(), 1, round ? new Vector3f(out_, -0.2f, -0.4f) : new Vector3f(0, 0, -1));
+        } else {
+            out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) + sign * (m.lead() ? 12 : 28) * k);
+            out.set(Bone.ROOT, Pose.YAW, out.get(Bone.ROOT, Pose.YAW) + sign * (m.lead() ? 5 : 11) * k);
+            out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) + 5 * k);
+            out.offset[2] -= 2 * k;
+            Vector3f guard = Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH];
+            Vector3f fist = new Vector3f(guard).lerp(aim, k);
+            if (m.path() == Path.HOOK) fist.add(out_ * 6 * MathHelper.sin(MathHelper.PI * k), 0, 0);
+            Animator.reach(out, right ? Bone.RIGHT_ARM : Bone.LEFT_ARM, right ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM,
+                new Vector3f(right ? -5 : 5, 2, 0), fist, Animator.armFrame(out).invert(), 1, new Vector3f(out_ * 0.3f, 1, 0.45f));
+        }
     }
 
     /** The world-space spot a dummy's ragdoll pelvis is at (for following it), or null. */

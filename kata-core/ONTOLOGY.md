@@ -142,7 +142,6 @@ moves the body somewhere the physics wouldn't.
 10d. **Floating limp.** A limp body in water floats up and lies there for as long as you leave it. A movement or jump key brings you round (after at least a second): you stand if there's ground under you, otherwise you start swimming.
 10c. **Limp in water.** A limp body hitting water fast smacks the surface: most of its speed is lost on impact and it splashes. Under the surface the water drags it and holds it up (torso and head float, limbs about neutral), so it floats. Coming round, it stands if there's ground within reach, otherwise it swims.
 11. **Limp means no will.** No hands either: no strikes, guard, swings, block breaking or item use.
-11a. **Leaving flight** carries about half the flight speed.
 11b. **Limp means no will.** No walking, no sprinting, no sprint FOV. Position follows the pelvis.
 12. **Getting up** starts once the body has been still for 0.2 s (after at least 0.55 s), or after 2.2 s at most. It runs push-up or sit-up, then kneel, then stand, over 1.15 s. No part of the body goes below the ground while getting up.
 
@@ -238,6 +237,7 @@ moves the body somewhere the physics wouldn't.
     - a punch is turned aside: the attacker staggers for 0.6 s, their chain broken, can't act
     - a kick is caught: you grab the foot and throw them off their feet
 41. **Knockdowns.** A knockdown move (a full heavy, a push kick, a side kick, a dropkick and so on) puts the target into the ragdoll with 80 % of the hit's push and 75 % of its lift. A caught kick throws at 0.6 forward and 0.32 up. A hit while down sends the body flying again.
+41b. **Spinning kicks sweep.** The leg chambers and goes out wide early, held through the turn. It hits the first body it touches on the way round.
 41a. **Spins turn smoothly.** A spinning strike turns the long way round, its side leading, with an ease-in-out arriving exactly at contact (0.26–0.32 s), so the whole turn is visible.
 42. **Footwork.** Locked on, a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse. Guarding ×0.75, winding up ×0.8, staggered ×0.5.
 43. **Training dummy.**
@@ -246,7 +246,9 @@ moves the body somewhere the physics wouldn't.
     - It reads wind-ups and tries to raise its guard with human reaction time: it reads about 65 % of them, after 100–400 ms, so it's sometimes late. Of its well-timed blocks, about 30 % are parries.
     - It meets the strike on the side it comes from: that arm out to take a hook or spin, a raised knee to check a roundhouse or low kick, and a high guard for straights.
     - With no path to you (you're up on something), it heads straight for you and hops 1-block obstacles.
-    - Knocked down, it gets up where its body came to rest; a player's game reports that spot.
+    - Knocked down, it stays down until a player's game reports where its body came to rest (ten seconds at most). Then it stands there, lifted out of the floor if need be, and gets up over about a second before it moves again.
+    - Its hitboxes come from its shown pose, ragdoll included. A downed dummy can be hit wherever its body lies (within 7 blocks).
+    - Its strikes use the same IK as a player's: the fist or foot travels to you and stops on the first part of you it meets, such as a guarding forearm.
     - It throws jabs, straights, one-twos and kicks, which you can block, parry or catch. They shove a creative-mode player even though they do no damage.
     - It staggers and gets knocked down into a real ragdoll.
     - After 10 s left alone, or with the target 20+ blocks away, it walks home and settles. It never goes down for good.

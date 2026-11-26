@@ -29,9 +29,10 @@ public final class Hitbox {
     public static List<Capsule> of(Entity e, float td) {
         List<Capsule> out = new ArrayList<>();
         Vec3d pos = e.getLerpedPos(td);
-        if (e instanceof PlayerEntity p) {
+        if (e instanceof PlayerEntity || e instanceof net.pglol.kata.Dummy) {
+            LivingEntity p = (LivingEntity) e;
             float yaw = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
-            Pose pose = Animator.pose(p, td);
+            Pose pose = p instanceof PlayerEntity pl ? Animator.pose(pl, td) : DummyAnim.current((net.pglol.kata.Dummy) p, td);
             Vector3f[] j = Ragdoll.joints(pose);
             Vec3d[] w = new Vec3d[j.length];
             for (int i = 0; i < j.length; i++) w[i] = Ragdoll.toWorld(j[i], pos, yaw);

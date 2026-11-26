@@ -433,11 +433,13 @@ public final class Fighting {
         Vec3d eye = p.getEyePos();
         var b = t.getBoundingBox();
         Vec3d near = new Vec3d(MathHelper.clamp(eye.x, b.minX, b.maxX), MathHelper.clamp(eye.y, b.minY, b.maxY), MathHelper.clamp(eye.z, b.minZ, b.maxZ));
-        if (eye.distanceTo(near) > REACH + 0.8) return;
+        // A downed dummy's body lies wherever it flew (its box may be elsewhere): judge by distance only.
+        boolean lying = t instanceof Dummy dd && dd.down() > 0;
+        if (eye.distanceTo(near) > (lying ? 7 : REACH + 0.8)) return;
         Vec3d to = t.getPos().subtract(p.getPos());
         Vec3d look = Vec3d.fromPolar(0, p.getYaw());
         double len = Math.hypot(to.x, to.z);
-        if (len > 0.3 && (to.x * look.x + to.z * look.z) / len < -0.2) return;
+        if (!lying && len > 0.3 && (to.x * look.x + to.z * look.z) / len < -0.2) return;
         Part part = Part.values()[Math.min(3, (packed >> 16) & 0x3)];
         land(p, t, m, power, part, look, p.getDamageSources().playerAttack(p));
     }

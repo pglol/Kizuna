@@ -181,7 +181,7 @@ public final class Fight {
             if (nextHit < cur.hits()) {
                 float c = cur.contactOf(nextHit);
                 int early = -1;
-                if (s >= c - cur.contact() * 0.6f && limbPrev != null && limbNow != null && limbPrev.squaredDistanceTo(limbNow) > 1e-6) {
+                if (s >= c - cur.contact() * (cur.turns() ? 0.75f : 0.6f) && limbPrev != null && limbNow != null && limbPrev.squaredDistanceTo(limbNow) > 1e-6) {
                     Hitbox.Contact touch = Hitbox.sweep(nearby(p), td, limbPrev, limbNow, cur.leg() ? 0.09 : 0.07);
                     if (touch != null) {
                         lastPart = touch.hit().part();
@@ -626,6 +626,7 @@ public final class Fight {
         float c = m.contact(), hold = m.heavy() ? 0.07f : 0.04f;
         float k;
         if (wind > 0) k = -0.25f * ease(wind);
+        else if (m.turns() && u < c) k = ease(u / (c * 0.65f)); // out early and held: it swings round with the spin
         else if (u < c) {
             float x = u / c;
             k = x * x * (1.4f - 0.4f * x);
@@ -730,7 +731,7 @@ public final class Fight {
         Vector3f hip = new Vector3f(right ? -1.9f : 1.9f, 12, 0);
 
         // The body: hips turning into it, leaning back over the standing leg (forward for a back kick).
-        float hips = switch (m.path()) {
+        float hips = m.turns() ? 0 : switch (m.path()) {
             case ROUNDHOUSE -> 45;
             case SIDE_KICK -> 70;
             case LOW_KICK -> 25;
@@ -767,7 +768,9 @@ public final class Fight {
             Vector3f rest = new Vector3f(hip.x, 24, 0);
             float chamberY = m.path() == Path.LOW_KICK ? 19 : 16;
             Vector3f chamber = new Vector3f(hip.x + (m.path() == Path.ROUNDHOUSE ? out_ * 3 : 0), chamberY, m.path() == Path.BACK_KICK ? 3 : -3);
-            Vector3f target = clampReach(hip, aim, 11.6f);
+            // A spinning kick doesn't aim: the leg goes out wide, a little above the hip, and the spin sweeps
+            // it round through whatever's there.
+            Vector3f target = m.turns() ? new Vector3f(hip.x + out_ * 11, 9, -1) : clampReach(hip, aim, 11.6f);
             Vector3f foot;
             if (kk < 0.4f) foot = new Vector3f(rest).lerp(chamber, ease(kk / 0.4f));
             else {

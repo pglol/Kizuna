@@ -340,9 +340,11 @@ public final class Ragdoll {
     private static final double[] FLOAT = new double[N];
 
     static {
-        java.util.Arrays.fill(FLOAT, 1.0);
-        for (int i : new int[] {PELVIS, NECK, RS, LS, RHIP, LHIP}) FLOAT[i] = 1.25;
-        FLOAT[HEAD] = 1.4;
+        // A body floats (just): the chest (air in the lungs) and head most, the limbs barely. Together it
+        // rises slowly to lie at the surface.
+        java.util.Arrays.fill(FLOAT, 1.08);
+        for (int i : new int[] {PELVIS, NECK, RS, LS, RHIP, LHIP}) FLOAT[i] = 1.38;
+        FLOAT[HEAD] = 1.45;
     }
 
     /**
