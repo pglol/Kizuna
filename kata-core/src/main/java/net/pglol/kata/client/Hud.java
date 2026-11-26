@@ -244,8 +244,8 @@ public final class Hud {
         net.pglol.kata.Fighting.Move light = Fight.nextLight(), heavy = Fight.nextHeavy();
         float a = engage;
         int rowY = y - 22;
-        chip(c, tr, x, rowY, "TAP", light == null ? "—" : light.name(), Ui.alpha(Ui.TEXT, a), Ui.alpha(acc, a), a);
-        chip(c, tr, x, rowY + 10, "HOLD", heavy == null ? "—" : heavy.name(), Ui.alpha(Ui.TEXT, a), Ui.alpha(Ui.HEAVY, a), a);
+        chip(c, tr, x, rowY, "TAP", light, Ui.alpha(Ui.TEXT, a), Ui.alpha(acc, a), a);
+        chip(c, tr, x, rowY + 10, "HOLD", heavy, Ui.alpha(Ui.TEXT, a), Ui.alpha(Ui.HEAVY, a), a);
         if (Fight.chargingHeavy()) {
             float k = Fight.charge();
             int bw = 70;
@@ -254,11 +254,14 @@ public final class Hud {
         }
     }
 
-    private static void chip(DrawContext c, net.minecraft.client.font.TextRenderer tr, int x, int y, String key, String move, int textCol, int keyCol, float a) {
+    /** A key and what it throws: the key, the move's icon, its name. */
+    private static void chip(DrawContext c, net.minecraft.client.font.TextRenderer tr, int x, int y, String key, net.pglol.kata.Fighting.Move move, int textCol, int keyCol, float a) {
         float kw = Ui.width(tr, key, 0.5f);
         c.fill(x, y, x + Math.round(kw) + 5, y + 7, Ui.alpha(0xFF000000, 0.45f * a));
         c.fill(x, y + 7, x + Math.round(kw) + 5, y + 8, keyCol);
         Ui.text(c, tr, key, x + 2.5f, y + 1.5f, 0.5f, keyCol);
-        Ui.text(c, tr, move, x + kw + 9, y + 0.5f, 0.7f, textCol);
+        int ix = x + Math.round(kw) + 8;
+        if (move != null) Icons.draw(c, move, ix, y - 1, 1, Ui.alpha(0xFF0E0C0A, a), keyCol);
+        Ui.text(c, tr, move == null ? "—" : move.name(), ix + 13, y + 0.5f, 0.7f, textCol);
     }
 }

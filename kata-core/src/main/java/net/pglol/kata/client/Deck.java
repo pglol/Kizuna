@@ -3,16 +3,23 @@ package net.pglol.kata.client;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.MinecraftClient;
 import net.pglol.kata.Fighting;
 import net.pglol.kata.Fighting.Move;
 import net.pglol.kata.Fighting.Style;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
- * Your combat deck: the style you fight in and, for each stance quadrant, which of its moves sit in
- * the three light slots (the chain, in order) and the heavy slot. Kept in config/kizuna/kata_deck.json.
+ * Your combat deck: for each stance quadrant (and the air), which moves sit in the three light slots
+ * (the chain, in order) and the heavy slot. Moves can come from any style you know. Also what you know:
+ * the styles you've learned and their moves (everyone starts with their first style's starter moves;
+ * operators know everything). Kept in config/kizuna/kata_deck.json.
  */
 public final class Deck {
     private Deck() {}
@@ -21,35 +28,51 @@ public final class Deck {
         String style;
         /** Per row (top right, top left, back right, back left, air): four move ids, null for empty. */
         String[][] slots;
+        List<String> known, learned;
     }
 
+    /** The style shown (the fight tag, the accent colour): the last one picked in the deck. */
     private static Style style = Fighting.STYLES[0];
-    private static int[][] slots = copy(Fighting.STYLES[0].starter());
+    /** Slots hold moves by their global number (Fighting.MOVES), -1 for empty. */
+    private static int[][] slots = starter(Fighting.STYLES[0]);
+    private static final Set<String> KNOWN = new LinkedHashSet<>(), LEARNED = new LinkedHashSet<>();
     private static boolean loaded;
 
     private static Path file() {
         return FabricLoader.getInstance().getConfigDir().resolve("kizuna").resolve("kata_deck.json");
     }
 
+    /** A style's starter deck, as global move numbers. */
+    static int[][] starter(Style s) {
+        int[][] o = new int[Fighting.ROWS][Fighting.SLOTS];
+        for (int q = 0; q < Fighting.ROWS; q++) for (int i = 0; i < Fighting.SLOTS; i++) {
+            Move m = s.starter() != null && q < s.starter().length ? s.move(s.starter()[q][i]) : null;
+            o[q][i] = m == null ? -1 : Fighting.id(m);
+        }
+        return o;
+    }
+
     static void load() {
         if (loaded) return;
         loaded = true;
+        KNOWN.add(Fighting.STYLES[0].id());
+        for (int[] row : starter(Fighting.STYLES[0])) for (int id : row) if (id >= 0) LEARNED.add(Fighting.MOVES[id].id());
         try {
             Path f = file();
             if (!Files.exists(f)) return;
             Saved s = new Gson().fromJson(Files.readString(f), Saved.class);
             style = Fighting.style(s.style);
-            slots = copy(style.starter());
+            if (s.known != null) KNOWN.addAll(s.known);
+            if (s.learned != null) LEARNED.addAll(s.learned);
             if (s.slots != null && s.slots.length >= 4) {
-                int[][] in = copy(style.starter());
+                int[][] in = starter(style);
                 for (int q = 0; q < Math.min(Fighting.ROWS, s.slots.length); q++) {
                     if (s.slots[q] == null) continue;
                     for (int i = 0; i < Fighting.SLOTS && i < s.slots[q].length; i++) {
-                        int idx = s.slots[q][i] == null ? -1 : style.index(s.slots[q][i]);
-                        Move m = style.move(idx);
-                        in[q][i] = m != null && m.fits(q, i) ? idx : -1;
+                        Move m = Fighting.byId(s.slots[q][i]);
+                        in[q][i] = m != null && m.fits(q, i) ? Fighting.id(m) : -1;
                     }
-                    if (lights(in[q]) == 0 && lights(style.starter()[q]) > 0) in[q] = style.starter()[q].clone(); // a row keeps a light if it can have one
+                    if (lights(in[q]) == 0 && lights(starter(style)[q]) > 0) in[q] = starter(style)[q].clone();
                 }
                 slots = in;
             }
@@ -63,9 +86,11 @@ public final class Deck {
             s.style = style.id();
             s.slots = new String[Fighting.ROWS][Fighting.SLOTS];
             for (int q = 0; q < Fighting.ROWS; q++) for (int i = 0; i < Fighting.SLOTS; i++) {
-                Move m = style.move(slots[q][i]);
+                Move m = move(slots[q][i]);
                 s.slots[q][i] = m == null ? null : m.id();
             }
+            s.known = new ArrayList<>(KNOWN);
+            s.learned = new ArrayList<>(LEARNED);
             Path f = file();
             Files.createDirectories(f.getParent());
             Files.writeString(f, new GsonBuilder().setPrettyPrinting().create().toJson(s));
@@ -73,24 +98,59 @@ public final class Deck {
         }
     }
 
+    static Move move(int id) {
+        return id >= 0 && id < Fighting.MOVES.length ? Fighting.MOVES[id] : null;
+    }
+
+    /** Operators know every style and every move. */
+    static boolean op() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        return mc.player != null && mc.player.hasPermissionLevel(2);
+    }
+
+    /** The styles you know (operators: all). */
+    public static List<Style> known() {
+        load();
+        List<Style> out = new ArrayList<>();
+        for (Style s : Fighting.STYLES) if (op() || KNOWN.contains(s.id())) out.add(s);
+        return out;
+    }
+
+    /** The moves of a style you've learned (operators: all of them). */
+    public static List<Move> learned(Style s) {
+        load();
+        List<Move> out = new ArrayList<>();
+        for (Move m : s.pool()) if (op() || LEARNED.contains(m.id())) out.add(m);
+        return out;
+    }
+
     public static Style style() {
         load();
         return style;
     }
 
+    /** The style shown (picked in the deck). */
+    public static void show(Style s) {
+        load();
+        if (s == style) return;
+        style = s;
+        save();
+    }
+
+    /** The move in a slot (global number), -1 for empty. */
     public static int slot(int stance, int i) {
         load();
         return slots[stance][i];
     }
 
-    /** Put move (an index into the style's pool, or -1 to empty it) in a slot. False if it doesn't fit there. */
-    public static boolean set(int stance, int i, int move) {
+    /** Put a move (global number, or -1 to empty it) in a slot. False if it doesn't fit there. */
+    public static boolean set(int stance, int i, int id) {
         load();
-        Move m = style.move(move);
-        if (move >= 0 && (m == null || !m.fits(stance, i))) return false;
+        Move m = move(id);
+        if (id >= 0 && (m == null || !m.fits(stance, i))) return false;
         int keep = slots[stance][i];
-        slots[stance][i] = move;
-        if (lights(slots[stance]) == 0 && lights(style.starter()[stance]) > 0) {
+        slots[stance][i] = id;
+        if (lights(slots[stance]) == 0 && lights(starter(style)[stance]) > 0) {
             slots[stance][i] = keep; // never leave a row with nothing to throw
             return false;
         }
@@ -98,18 +158,21 @@ public final class Deck {
         return true;
     }
 
-    /** Switch to another style (its starter deck, until you change it). */
-    public static void use(Style s) {
+    /** Swap two slots of a row (dragging one onto another), if each fits where it goes. */
+    public static boolean swap(int stance, int a, int b) {
         load();
-        if (s == style) return;
-        style = s;
-        slots = copy(s.starter());
+        Move ma = move(slots[stance][a]), mb = move(slots[stance][b]);
+        if ((ma != null && !ma.fits(stance, b)) || (mb != null && !mb.fits(stance, a))) return false;
+        int t = slots[stance][a];
+        slots[stance][a] = slots[stance][b];
+        slots[stance][b] = t;
         save();
+        return true;
     }
 
     public static void reset() {
         load();
-        slots = copy(style.starter());
+        slots = starter(style);
         save();
     }
 
@@ -119,7 +182,7 @@ public final class Deck {
         if (stance < 0 || stance >= slots.length) return null;
         int[] q = slots[stance];
         if (heavy) {
-            Move h = style.move(q[Fighting.HEAVY_SLOT]);
+            Move h = move(q[Fighting.HEAVY_SLOT]);
             return h != null ? h : pick(stance, false, step);
         }
         int n = lights(q);
@@ -127,7 +190,7 @@ public final class Deck {
         int want = Math.floorMod(step, Math.max(1, n));
         for (int i = 0, seen = 0; i < Fighting.HEAVY_SLOT; i++) {
             if (q[i] < 0) continue;
-            if (seen++ == want) return style.move(q[i]);
+            if (seen++ == want) return move(q[i]);
         }
         return null;
     }
@@ -136,11 +199,5 @@ public final class Deck {
         int n = 0;
         for (int i = 0; i < Fighting.HEAVY_SLOT; i++) if (q[i] >= 0) n++;
         return n;
-    }
-
-    private static int[][] copy(int[][] a) {
-        int[][] o = new int[a.length][];
-        for (int i = 0; i < a.length; i++) o[i] = a[i].clone();
-        return o;
     }
 }

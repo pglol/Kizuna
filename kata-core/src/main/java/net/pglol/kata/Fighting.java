@@ -193,6 +193,22 @@ public final class Fighting {
         return STYLES[0];
     }
 
+    /** A move by its id ("taijutsu:jab", or just "jab"), or null. */
+    public static Move byId(String id) {
+        if (id == null) return null;
+        for (Move m : MOVES) if (m.id().equals(id)) return m;
+        for (Move m : MOVES) if (m.id().endsWith(":" + id)) return m;
+        return null;
+    }
+
+    /** The style a move belongs to. */
+    public static Style styleOf(Move m) {
+        if (m == null) return STYLES[0];
+        String sid = m.id().contains(":") ? m.id().substring(0, m.id().indexOf(':')) : "";
+        for (Style s : STYLES) if (s.id().equals(sid)) return s;
+        return STYLES[0];
+    }
+
     public static int id(Move m) {
         for (int i = 0; i < MOVES.length; i++) if (MOVES[i] == m) return i;
         return -1;

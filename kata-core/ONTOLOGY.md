@@ -383,3 +383,21 @@ moves the body somewhere the physics wouldn't.
 - An air strike on someone standing lifts them off the ground; on someone in the air it pops them up a touch. Either way they're held there, nearly weightless (gravity -82%), for 0.8 s, long enough for the next hit, and the attacker hangs with them (gravity -82% for them too) and drifts in to stay in reach. Each air hit landed gives another air strike.
 - Juggled bodies show it: tipped back, head thrown back, arms and legs loose and flailing.
 - Holding attack in the air at any point (0.12 s) cuts the string off with the Hammer smash: a hitch at the top, then down they go hard, and the attacker dives after them. When they hit the ground: a burst of dust, a thud, knocked flat, then concussed for 3 s (head lolling, swaying, stars, slow, unable to strike).
+
+## The combat deck (K)
+- Left: the styles you know (everyone starts with their first style; operators know all of them).
+- Top: the stance diamond (a quadrant, or AIR) and its chain: three light slots in order, then HOLD. Slots show their move's icon; the selected slot is outlined (vermilion, gold for HOLD).
+- Top right: the selected move, thrown on your own body over and over, with its name and speed and power pips.
+- Below: the moves you've learned in the selected style (operators: all), as icon tiles with their style named across the top; heavies underlined in gold. Moves that fit the selected slot are bright, the rest dim.
+- Drag a move onto a slot to put it there; drag a slot onto another to swap; drag a slot off the chain to empty it; right-click a move to drop it in the selected slot; right-click a slot to empty it. Click anything to preview it. Hover for the name.
+- A deck can mix moves from any styles you know.
+- Saved per player in config/kizuna/kata_deck.json (with what's known and learned, until there's a way to learn styles in the world).
+
+## Icons
+- Each move has a pixel icon: the limb (fist, open palm, elbow, foot, knee), a small arrow for how it travels (straight in, round, rising, coming down, low), a curl for spins, wing strokes for air moves. The HUD's TAP and HOLD chips show them too.
+
+## Theme
+- Modern and minimal, a dojo feel: flat warm ink panels, paper-coloured type, one vermilion mark, gold for heavies, each style's own colour on its tags. No gradients or glass.
+
+## Double jump
+- Space again in the air (a fresh press) is a second jump, flipping whichever way you're pressing. Once per jump. The dodge key in the air does the same.

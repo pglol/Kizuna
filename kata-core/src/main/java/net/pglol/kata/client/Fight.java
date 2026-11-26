@@ -42,6 +42,11 @@ public final class Fight {
     static int target = -1;
     static int stance = Fighting.TR;
     static boolean guard;
+    /** The deck's move preview: what to show on your body while the deck draws it, from which stance, since when. */
+    static Move previewMove;
+    static int previewStance;
+    static boolean previewing;
+    static long previewStart;
     /** Which way the guard is turned: 0 square, 1 left, 2 right. */
     static int guardSide;
     private static boolean sentGuard;
@@ -160,7 +165,7 @@ public final class Fight {
             dir = 16 + idx;
             Vec3d d = fw.multiply(Math.cos(idx * Math.PI / 8)).add(left.multiply(Math.sin(idx * Math.PI / 8)));
             Vec3d v = p.getVelocity();
-            p.setVelocity(v.x * 0.6 + d.x * 0.16, Math.max(v.y, 0.26), v.z * 0.6 + d.z * 0.16);
+            p.setVelocity(v.x * 0.6 + d.x * 0.16, Math.max(v.y, 0.4), v.z * 0.6 + d.z * 0.16); // a real second jump
         } else {
             if (mc.options.jumpKey.isPressed()) dir = 4;
             else if (Math.abs(sdw) > 0.3f && Math.abs(sdw) >= Math.abs(f)) dir = sdw > 0 ? 2 : 3;
@@ -230,6 +235,12 @@ public final class Fight {
         // Dodge: a quick step out of the way, the way you're pressing (back if nothing). Strikes pass
         // through its first moments; then a short recovery when you can't guard or throw.
         if (p.isOnGround()) flipUsed = false;
+        // Double jump: space again in the air (a fresh press, not the one you took off with) jumps again,
+        // flipping whichever way you're pressing.
+        boolean jumpNow = mc.options.jumpKey.isPressed() && mc.currentScreen == null;
+        if (jumpNow && !jumpWas && !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying
+            && Parkour.view(p).mode() == Parkour.Mode.NONE && !flipUsed) dodge(p);
+        jumpWas = jumpNow;
         if (mc.world != null && mc.world.getTime() % 3 == 0) stars(mc);
         while (KataClient.dodgeKey.wasPressed()) dodge(p);
         dodgeStep(p);
@@ -540,7 +551,7 @@ public final class Fight {
     private static Vec3d dodgeDir;
     private static float dodgeSpeed;
     private static int dodgeTick = 99;
-    private static boolean flipUsed;
+    private static boolean flipUsed, jumpWas;
     private static final Map<Integer, Long> STAGGERS = new HashMap<>();
     /** How much guard stamina others have left (it shows: a guard near breaking strains). */
     private static final Map<Integer, Float> POISES = new HashMap<>();
@@ -874,7 +885,15 @@ public final class Fight {
         int st;
         float s, power;
         float wind = 0;
-        if (mine(p)) {
+        if (mine(p) && previewing && previewMove != null) {
+            // The deck's preview: the selected move, thrown over and over with a breath between.
+            m = previewMove;
+            st = previewStance;
+            float loop = m.length() + 0.5f;
+            s = secs(previewStart) % loop;
+            if (s > m.length()) return;
+            power = 1;
+        } else if (mine(p)) {
             m = cur;
             st = curStance;
             s = cur != null ? secs(curStart) : 0;

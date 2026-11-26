@@ -14,8 +14,9 @@ import org.joml.Matrix4f;
 public final class Ui {
     private Ui() {}
 
-    public static final int GLASS_TOP = 0xE0141821, GLASS_BOTTOM = 0xE00B0D12, EDGE = 0x26FFFFFF, EDGE_LIT = 0x40FFFFFF;
-    public static final int TEXT = 0xFFF1F2F6, SOFT = 0xFF9EA4B2, FAINT = 0xFF5E6472, HEAVY = 0xFFE7A85A;
+    // The dojo palette: warm ink panels, paper-coloured type, a vermilion mark, gold for heavies.
+    public static final int GLASS_TOP = 0xF2141210, GLASS_BOTTOM = 0xF2141210, EDGE = 0x22EDE5D3, EDGE_LIT = 0xFFD9472B;
+    public static final int TEXT = 0xFFEDE5D3, SOFT = 0xFFA79F8E, FAINT = 0xFF655F55, HEAVY = 0xFFD9A55B;
 
     public static int accent() {
         return 0xFF000000 | Deck.style().color();
@@ -25,13 +26,14 @@ public final class Ui {
         return ((int) (Math.max(0, Math.min(1, a)) * 255) << 24) | (col & 0xFFFFFF);
     }
 
-    /** A glass panel: gradient body, clipped corners, hairline edge, a lit top edge. */
+    /** A panel: flat warm ink, a hairline edge, one short vermilion mark at the top left. */
     public static void panel(DrawContext c, int x, int y, int w, int h) {
-        c.fillGradient(x + 1, y, x + w - 1, y + h, GLASS_TOP, GLASS_BOTTOM);
-        c.fillGradient(x, y + 1, x + 1, y + h - 1, GLASS_TOP, GLASS_BOTTOM);
-        c.fillGradient(x + w - 1, y + 1, x + w, y + h - 1, GLASS_TOP, GLASS_BOTTOM);
-        edge(c, x, y, w, h, EDGE);
-        c.fill(x + 2, y, x + w - 2, y + 1, EDGE_LIT);
+        c.fill(x, y, x + w, y + h, GLASS_TOP);
+        c.fill(x, y, x + w, y + 1, EDGE);
+        c.fill(x, y + h - 1, x + w, y + h, EDGE);
+        c.fill(x, y, x + 1, y + h, EDGE);
+        c.fill(x + w - 1, y, x + w, y + h, EDGE);
+        c.fill(x, y, x + Math.min(24, w), y + 1, EDGE_LIT);
     }
 
     /** A hairline outline with clipped corners. */
