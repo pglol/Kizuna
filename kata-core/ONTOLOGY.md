@@ -367,3 +367,7 @@ moves the body somewhere the physics wouldn't.
 ## Knockdowns in a fight
 - At most 0.22 blocks a tick across and 0.3 up when thrown; the air slows a knocked-down body hard across, so even off a height it lands near.
 - Up quickly: lying still a moment (0.3 s at least, 1.4 s at most), then 0.6 s to get up.
+
+## HUD bars
+- Health: a red brush stroke slanted at both ends, mottled, in a ragged black ink stroke. Black flames rise off its end, swaying and curling, shedding embers; ink beads under it, stretches and drips away (more often when health is low). A dim red stain shows what's empty and a pale trail shows what was just lost.
+- Stamina: the same ink, finer and shorter, cream (dim when winded), left-aligned above the health stroke, clear of its flames, with small flames and rare drips.

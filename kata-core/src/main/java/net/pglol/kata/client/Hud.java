@@ -7,7 +7,8 @@ import net.minecraft.util.math.MathHelper;
 
 /**
  * The HUD, kept to the edges and out of the way.
- *  - Bottom centre: health, a slim bar with a pale trail of what you just lost catching up a moment
+ *  - Bottom centre: health, a red brush stroke in black ink (flames off its end, ink dripping), a pale
+ *    trail of what you just lost catching up a moment
  *    later; stamina, a hairline above it that dims when you've run yourself dry.
  *  - Bottom left: the fight tag. A small stance diamond and your style; squared up to someone, what a
  *    click and a hold will throw, with the heavy's charge.
@@ -56,27 +57,19 @@ public final class Hud {
         }
         c.getMatrices().push();
         c.getMatrices().translate(0, -(h * 0.085f + 4) * lb, 0);
-        int hw = 160, sw = 110;
-        int hx = (w - hw) / 2, hy = h - 10;
-        int sx = (w - sw) / 2, sy = hy - 5;
+        int hw = 160, sw = 104;
+        int hx = (w - hw) / 2, hy = h - 14;
+        int sx = hx + 4, sy = hy - 9; // under the start of the health stroke, clear of its flames
+        float time = (now % 1_000_000_000_000L) / 1e9f;
 
-        // Health: a slim bar on a dark track, ticks every tenth, the loss trail behind it.
-        track(c, hx, hy, hw, 3);
-        c.fill(hx, hy, hx + Math.round(hw * trail), hy + 3, 0xB0F0E2D6);
+        // Health: red in a ragged black ink stroke, flames licking off its end, ink dripping beneath.
         boolean low = hp < 0.25f;
-        int col = low ? (((now / 250_000_000L) & 1) == 0 ? 0xFFE8383C : 0xFFB02A2D) : 0xFFDC3F3C;
-        int fw = Math.round(hw * MathHelper.clamp(shown, 0, 1));
-        if (fw > 0) {
-            c.fillGradient(hx, hy, hx + fw, hy + 3, Ui.alpha(col, 1), Ui.darker(col, 0.75f));
-            c.fill(hx, hy, hx + fw, hy + 1, 0x50FFFFFF);
-            c.fill(hx + fw - 1, hy - 1, hx + fw, hy + 4, 0xC0FFFFFF); // the leading edge
-        }
-        for (int i = 1; i < 10; i++) c.fill(hx + hw * i / 10, hy, hx + hw * i / 10 + 1, hy + 3, 0x40000000);
+        int col = low ? (((now / 250_000_000L) & 1) == 0 ? 0xFFE8383C : 0xFFB02A2D) : 0xFFD8302E;
+        inkBar(c, hx, hy, hw, 5, MathHelper.clamp(shown, 0, 1), trail, col, 0xC0F0E2D6, time, 1f, 0, dt, low ? 2.5f : 1f);
 
-        // Stamina: a hairline, warm when there's breath, dim when you're winded.
-        track(c, sx, sy, sw, 1);
-        int sf = Math.round(sw * MathHelper.clamp(Move.shownStamina, 0, 1));
-        if (sf > 0) c.fill(sx, sy, sx + sf, sy + 1, Move.winded() ? 0xFF8C8268 : 0xFFF3E7BE);
+        // Stamina: the same ink, finer, a pale breath colour; dim when you're winded.
+        int stam = Move.winded() ? 0xFF8C8268 : 0xFFF3E7BE;
+        inkBar(c, sx, sy, sw, 2, MathHelper.clamp(Move.shownStamina, 0, 1), -1, stam, 0, time, 0.45f, 1, dt, 0.35f);
 
         tag(c, mc, h, dt);
         c.getMatrices().pop();
@@ -90,6 +83,142 @@ public final class Hud {
                 Ui.text(c, mc.textRenderer, popText, (w - tw) / 2f, h / 2f + 14 - s * 6, sc, Ui.alpha(popColor, a));
             } else popText = null;
         }
+    }
+
+    /** A drop of ink: hanging from the bar's underside and stretching, then falling and fading. */
+    private static final class Drip {
+        float x, len, y, vy, life;
+        boolean falling;
+        int bar;
+    }
+
+    private static final java.util.List<Drip> DRIPS = new java.util.ArrayList<>();
+    private static final float[] DRIP_CLOCK = new float[2];
+    private static final int INK = 0xF0080808;
+
+    private static int brighter(int col) {
+        int r = Math.min(255, ((col >> 16) & 0xFF) + 28), g = Math.min(255, ((col >> 8) & 0xFF) + 22), b = Math.min(255, (col & 0xFF) + 18);
+        return (col & 0xFF000000) | (r << 16) | (g << 8) | b;
+    }
+
+    /** Repeatable noise in 0..1 for an integer (the ink's ragged edge stays put frame to frame). */
+    private static float noise(int i, int seed) {
+        double v = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453;
+        return (float) (v - Math.floor(v));
+    }
+
+    /** Smooth noise along the bar: the edge wanders rather than jitters. */
+    private static float wander(float x, int seed) {
+        int i = (int) Math.floor(x);
+        float f = x - i, k = f * f * (3 - 2 * f);
+        return noise(i, seed) * (1 - k) + noise(i + 1, seed) * k;
+    }
+
+    /**
+     * A brush-stroke bar. The fill is slanted at both ends (the top runs further than the bottom), mottled
+     * darker inside; the ink stroke around it has a ragged, wandering edge, fatter underneath. Off its end
+     * black flames rise, curling and flickering, and now and then shed an ember; under it ink beads, hangs,
+     * stretches and drips away. `flame` scales the flames, `drip` how often it drips.
+     */
+    private static void inkBar(DrawContext c, int x, int y, int w, int h, float fill, float trail, int col, int trailCol,
+                               float time, float flame, int bar, float dt, float drip) {
+        int slant = Math.max(1, h);
+        // The ink stroke.
+        for (int i = -3; i <= w + 4; i++) {
+            float end = i < 0 ? (i + 3) / 3f : i > w ? 1 - (i - w) / 5f : 1; // tapering at both ends
+            int top = Math.round(1 + wander(i / 6f, 3 + bar) * 1.8f * end);
+            int bot = Math.round(1 + wander(i / 5f, 7 + bar) * 2.6f * end + (noise(i, 11 + bar) > 0.93f ? 1 : 0));
+            if (end <= 0) continue;
+            c.fill(x + i, y - top, x + i + 1, y + h + bot, INK);
+        }
+        // The empty track (a dim stain of the colour), the loss trail, then the fill, row by row so the ends slant.
+        for (int r = 0; r < h; r++) {
+            int l = x + 1 + r * slant / h, rgt = r * slant * 2 / h;
+            if (x + w - rgt > l) c.fill(l, y + r, x + w - rgt, y + r + 1, Ui.alpha(Ui.darker(col, 0.35f), 0.85f));
+            if (trail > fill) {
+                int te = x + Math.round(w * trail) - rgt;
+                if (te > l) c.fill(l, y + r, te, y + r + 1, trailCol);
+            }
+            int fe = x + Math.round(w * fill) - rgt;
+            if (fe > l) c.fill(l, y + r, fe, y + r + 1, r == 0 ? brighter(col) : r >= h - 1 && h > 2 ? Ui.darker(col, 0.72f) : col);
+        }
+        // Mottling: darker flecks through the paint, fixed in place.
+        if (h > 2) {
+            int fe = x + Math.round(w * fill);
+            for (int i = 2; i < w; i += 2) {
+                if (x + i >= fe - 2) break;
+                float n = noise(i, 21 + bar);
+                if (n > 0.62f) c.fill(x + i, y + 1 + (int) (n * 10) % (h - 1), x + i + (n > 0.85f ? 2 : 1), y + 2 + (int) (n * 10) % (h - 1), Ui.alpha(Ui.darker(col, 0.6f), 0.55f));
+            }
+        }
+        // Flames off the end: tendrils rising from the top edge, the tallest at the end, swaying.
+        if (flame > 0) {
+            float[][] tongues = {{-40, 4}, {-28, 6}, {-17, 10}, {-7, 15}, {1, 17}, {5, 9}};
+            for (int k = 0; k < tongues.length; k++) {
+                float base = x + w + tongues[k][0];
+                float tall = tongues[k][1] * flame * (0.8f + 0.2f * MathHelper.sin(time * (5 + k) + k * 1.7f));
+                int n = Math.round(tall);
+                for (int j = 0; j < n; j++) {
+                    float up = j / Math.max(1f, tall);
+                    // Leaning back along the bar, curling at the tip.
+                    float sway = MathHelper.sin(time * 3.2f + k * 1.3f - j * 0.45f) * up * 1.6f - up * up * 2.2f;
+                    int px = Math.round(base + sway);
+                    int wid = up < 0.25f ? 3 : up < 0.6f ? 2 : 1;
+                    c.fill(px, y - 2 - j, px + wid, y - 1 - j, INK);
+                }
+                // A curl at the tip.
+                if (n > 4) {
+                    float sway = MathHelper.sin(time * 3.2f + k * 1.3f - n * 0.45f) * 1.6f - 2.2f;
+                    int px = Math.round(base + sway);
+                    c.fill(px + 1, y - 1 - n, px + 2, y - n, INK);
+                }
+            }
+            // Embers: a speck leaves a flame now and then, drifting up and fading.
+            for (int k = 0; k < 3; k++) {
+                float ph = (time * 0.7f + k * 0.37f) % 1f;
+                float ex = x + w - 14 + k * 7 + MathHelper.sin(time * 2 + k) * 2, ey = y - 6 - ph * 14 * flame;
+                c.fill(Math.round(ex), Math.round(ey), Math.round(ex) + 1, Math.round(ey) + 1, Ui.alpha(INK, (1 - ph) * 0.8f));
+            }
+        }
+        // Drips: a bead forms under the stroke (more towards the end), stretches, lets go and falls.
+        DRIP_CLOCK[bar] -= dt * drip;
+        if (DRIP_CLOCK[bar] <= 0 && dt > 0) {
+            DRIP_CLOCK[bar] = 0.5f + noise((int) (time * 100), 5) * 0.9f;
+            Drip d = new Drip();
+            float r = noise((int) (time * 1000), 9 + bar);
+            d.x = x + w * (0.15f + 0.85f * (float) Math.sqrt(r));
+            d.bar = bar;
+            DRIPS.add(d);
+        }
+        int under = y + h + 2;
+        for (java.util.Iterator<Drip> it = DRIPS.iterator(); it.hasNext(); ) {
+            Drip d = it.next();
+            if (d.bar != bar) continue;
+            d.life += dt;
+            int dx = Math.round(d.x);
+            if (!d.falling) {
+                d.len = Math.min(4, d.len + dt * 5);
+                int L = Math.round(d.len);
+                c.fill(dx, under, dx + 1, under + L, INK);
+                c.fill(dx - (L > 2 ? 1 : 0), under + L, dx + 1, under + L + 1, INK); // the bead
+                if (d.len >= 4 && d.life > 1.1f) {
+                    d.falling = true;
+                    d.y = under + L;
+                }
+            } else {
+                d.vy += dt * 60;
+                d.y += d.vy * dt;
+                float a = Math.max(0, 1 - (d.y - under) / 22f);
+                if (a <= 0) {
+                    it.remove();
+                    continue;
+                }
+                int dy = Math.round(d.y);
+                c.fill(dx, dy, dx + 1, dy + 2, Ui.alpha(INK, a));
+                c.fill(dx, under, dx + 1, under + 1, INK); // what's left at the bar
+            }
+        }
+        if (DRIPS.size() > 40) DRIPS.remove(0);
     }
 
     private static void track(DrawContext c, int x, int y, int w, int h) {
