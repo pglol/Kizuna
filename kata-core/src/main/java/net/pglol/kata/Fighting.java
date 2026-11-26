@@ -295,8 +295,7 @@ public final class Fighting {
             tell(victim, KataNet.GUARD_HIT, side);
             if (victim instanceof ServerPlayerEntity vp) relayAround(vp, KataNet.BLOCKED, side > 0 ? 1 : 0); // everyone sees the block
             if (victim instanceof Dummy d) d.blocked(side);
-            victim.takeKnockback(0.15 + amount * 0.03, to.x / len, to.z / len);
-            victim.velocityModified = true;
+            shove(victim, new Vec3d(-to.x / len, 0, -to.z / len), 0.05 + amount * 0.008); // the guard gives a little
             if (front) return false; // blocked the way it came: nothing gets through
             // Guarding the wrong way: some of it gets round the guard.
             chip = true;
@@ -334,6 +333,13 @@ public final class Fighting {
     }
 
     /** Knocked off their feet (limp) with this velocity (blocks a tick). */
+    /** Pushed back along the ground (dir flat, s blocks a tick): no hop, and their own run mostly cancelled. */
+    static void shove(LivingEntity e, Vec3d dir, double s) {
+        Vec3d v = e.getVelocity();
+        e.setVelocity(v.x * 0.4 + dir.x * s, Math.min(v.y, 0.05), v.z * 0.4 + dir.z * s);
+        e.velocityModified = true;
+    }
+
     public static void knockdown(Entity e, Vec3d v) {
         if (e instanceof ServerPlayerEntity p) tell(p, KataNet.KNOCKDOWN, packVelocity(v));
         else if (e instanceof Dummy d) d.knockdown(v);
@@ -483,9 +489,14 @@ public final class Fighting {
         if (down) {
             knockdown(t, look.multiply(shove * 0.8).add(0, 0.2 + m.lift() * 0.75, 0));
         } else {
-            t.takeKnockback(shove, -look.x, -look.z);
-            if (m.lift() > 0) t.addVelocity(0, m.lift() * (m.heavy() ? 0.6f + 0.6f * power : 1), 0);
-            t.velocityModified = true;
+            // An ordinary hit moves you back a step along the ground, never off it: fighters stay in range
+            // to trade. Only knockdowns send anyone flying.
+            Vec3d flat = new Vec3d(look.x, 0, look.z);
+            if (flat.lengthSquared() > 1e-4) shove(t, flat.normalize(), shove * 0.3);
+            if (m.lift() > 0) {
+                t.addVelocity(0, m.lift() * (m.heavy() ? 0.6f + 0.6f * power : 1), 0);
+                t.velocityModified = true;
+            }
         }
         t.getWorld().playSound(null, t.getX(), t.getY(), t.getZ(),
             m.heavy() || down ? SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK : SoundEvents.ENTITY_PLAYER_ATTACK_STRONG,

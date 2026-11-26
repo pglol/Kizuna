@@ -297,3 +297,6 @@ moves the body somewhere the physics wouldn't.
 ## Network: everyone sees the same fight
 - Everything that happens to a fighter's body goes to them and to everyone who can see them: blocked hits (the guard jolts and the arm meets the strike on that side), guard breaks (the guard drops), staggers (thrown off balance, the strike cancelled), parries (the slap-aside, the kick caught and thrown), hits (reactions) and knockdowns (ragdoll).
 - A player coming into view gets the fighter's current guard and stance, not just later changes.
+
+## Knockback
+- An ordinary hit pushes you back along the ground, a step's worth, never up off it: fighters stay in range to trade back and forth. A blocked hit gives a little ground. Only knockdown moves (push kick, side kick, driving palm, spinning elbow, spinning hook kick, dropkick, full-charge heavies) send anyone flying.
