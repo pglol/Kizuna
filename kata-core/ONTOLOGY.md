@@ -504,3 +504,12 @@ moves the body somewhere the physics wouldn't.
 - Smash: only from a press that began in the air; holding on the ground then jumping drops the charge instead of forcing a smash. Server reach +1.6 for it, the nearest body below is its target, and landing always sends a shockwave (dust ring, thud, small shove out).
 - Air strikes and heavies leave a short flowing light ribbon behind the striking fist or foot.
 - Wall cling never climbs you over an edge; vaults take 11 ticks (smoother).
+
+## Kizuna town (the play world)
+- Dimension `kata_core:town` (flat, built by the mod on first start; `Town.VERSION` bump = rebuild). Everyone is taken to the school courtyard on join and respawns there; survival players get adventure mode in town; no monsters.
+- Grid: 4 x 4 city blocks of 87, streets 13 wide (raised sidewalks, lamps, crosswalks), x/z -206..206, a belt of trees outside.
+- North row: downtown towers (24-120 high, ladder core to a roof hatch, sills, fire escapes, glass skybridges, roof props), a parking garage, a fountain square, a construction site with a tower crane, the Kizuna Tower helipad.
+- East column: warehouse (sawtooth roof, mezzanine, catwalk, racking), steelworks (chimneys, tanks, pipes) + container yard + gantry crane, freight yard (tracks, wagons, platform, water tower, sheds).
+- Middle: Kizuna Academy (spawn) spanning two blocks: U of three-storey wings with classrooms, stairwells, fenced roof, clock tower, gym, track and pitch. South of it the Budokan (karate ring, stands, light rig) and the shopping street round the town park.
+- Neighbourhoods with houses all round and a dojo compound in the middle: Kaze, Tora, Ishi, Kumo, Ryu, Hana (blank styles for now).
+- Ops: `/kata town` (go there), `/kata town rebuild`.
