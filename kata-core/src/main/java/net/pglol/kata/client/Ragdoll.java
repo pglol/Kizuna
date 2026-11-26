@@ -340,11 +340,13 @@ public final class Ragdoll {
     private static final double[] FLOAT = new double[N];
 
     static {
-        // A body floats (just): the chest (air in the lungs) and head most, the limbs barely. Together it
-        // rises slowly to lie at the surface.
-        java.util.Arrays.fill(FLOAT, 1.08);
-        for (int i : new int[] {PELVIS, NECK, RS, LS, RHIP, LHIP}) FLOAT[i] = 1.38;
-        FLOAT[HEAD] = 1.45;
+        // A limp body floats all the way up and lies out on the surface: chest and head highest, arms
+        // and thighs at the top too, only the hands and feet dipping a little under.
+        java.util.Arrays.fill(FLOAT, 1.55);
+        for (int i : new int[] {PELVIS, NECK, RS, LS, RHIP, LHIP}) FLOAT[i] = 1.9;
+        FLOAT[HEAD] = 1.9;
+        for (int i : new int[] {RH, LH}) FLOAT[i] = 1.35;
+        for (int i : new int[] {RF, LF}) FLOAT[i] = 1.25;
     }
 
     /**
@@ -375,7 +377,7 @@ public final class Ragdoll {
             vx *= keep;
             vy *= keep;
             vz *= keep;
-            vy += GRAVITY * FLOAT[i] * Math.min(1, depth / 0.3) * h * h;
+            vy += GRAVITY * FLOAT[i] * Math.min(1, depth / 0.12) * h * h; // full lift just under the top: it rides at the surface
             px[i] = x[i] - vx;
             py[i] = y[i] - vy;
             pz[i] = z[i] - vz;

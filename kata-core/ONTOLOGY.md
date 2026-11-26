@@ -285,3 +285,6 @@ moves the body somewhere the physics wouldn't.
 
 ## Dummy motion
 - A dummy's shown pose never jumps between frames: each angle moves the short way round toward the solved pose, quickly but continuously.
+
+## Floating limp
+- A knocked-out body floats all the way up and lies out on the surface: torso, head, arms and thighs at the top, only the hands and feet dipping slightly under. Lift reaches full strength 0.12 blocks under the top.
