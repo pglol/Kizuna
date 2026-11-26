@@ -41,7 +41,7 @@ public abstract class PlayerModelMixin {
     private void kata$pose(LivingEntity entity, float limbAngle, float limbDistance, float age, float headYaw, float headPitch, CallbackInfo ci) {
         // The pose of the player being drawn (set by the renderer for this frame).
         Pose p = Rig.current;
-        if (p == null || !(entity instanceof net.minecraft.entity.player.PlayerEntity)) return;
+        if (p == null || !(entity instanceof net.minecraft.entity.player.PlayerEntity || entity instanceof net.pglol.kata.Dummy)) return;
         BipedEntityModel<?> m = (BipedEntityModel<?>) (Object) this;
         if (p.gait) {
             // Our walk cycle replaces Minecraft's stick-leg swing (everything else it does stays).
@@ -71,7 +71,10 @@ public abstract class PlayerModelMixin {
         add(m.head, p, Bone.HEAD);
         // The look turns the head only as far as a neck can: about 75 degrees either side of where the
         // chest faces, 60 up and 70 down. (A limp body's head isn't looking anywhere; Ragdoll poses it.)
-        if (net.pglol.kata.client.Parkour.view((net.minecraft.entity.player.PlayerEntity) entity).mode() != net.pglol.kata.client.Parkour.Mode.RAGDOLL) {
+        boolean limp = entity instanceof net.minecraft.entity.player.PlayerEntity pl
+            ? net.pglol.kata.client.Parkour.view(pl).mode() == net.pglol.kata.client.Parkour.Mode.RAGDOLL
+            : entity instanceof net.pglol.kata.Dummy d && net.pglol.kata.client.Ragdoll.of(d) != null;
+        if (!limp) {
             float bodyYaw = p.rad(Bone.ROOT, Pose.YAW) + p.rad(Bone.CHEST, Pose.YAW);
             float bodyPitch = p.rad(Bone.ROOT, Pose.PITCH) + p.rad(Bone.CHEST, Pose.PITCH);
             float y = net.minecraft.util.math.MathHelper.wrapDegrees((float) Math.toDegrees(m.head.yaw - bodyYaw));

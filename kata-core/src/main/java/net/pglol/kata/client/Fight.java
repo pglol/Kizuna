@@ -25,17 +25,15 @@ import java.util.Map;
  * Hand to hand, your side.
  *
  * Bare hands:
- *  - left click: a quick click throws a light; holding winds up a heavy, thrown on release (harder
- *    the longer it's held, breaking guard at full charge)
- *  - right click (held): guard
- *  - R: lock on (the camera holds them; the mouse turns your stance instead)
+ *  - left click: a quick click throws the next light of the chain; holding winds up the heavy,
+ *    thrown on release (harder the longer it's held, breaking guard at full charge)
+ *  - in the air: only the air moves (a superman punch, a flying knee, a dropkick...)
+ *  - right click (held): guard; raised just as a hit arrives, facing it, it parries
+ *  - R: lock on (the camera holds them; a mouse drag turns your stance)
  *
- * Locked on, a distinct drag of the mouse towards a quadrant turns you into it. The stance diamond at
- * your feet shows which one you're in.
- *
- * Strikes are thrown along a real path for the fist (straight, hooking, over the top, spinning),
- * driven by the hips and chest and a little step of the body behind them. They speed up into contact
- * and hold a beat when they land.
+ * Strikes are thrown along real paths: fists and feet are solved onto the line they travel (straight,
+ * hooking, rising, chambered kicks), driven by the hips and chest and the body's weight, and they land
+ * on whatever body part they first touch.
  */
 public final class Fight {
     private Fight() {}
@@ -45,32 +43,35 @@ public final class Fight {
     static int stance = Fighting.TR;
     static boolean guard;
     private static boolean sentGuard;
-    // The left button: pressed, and since when; winding up a heavy, and since when.
     private static boolean pressing, charging;
     private static long pressAt, chargeAt;
-    // The strike in progress.
+    // The move in progress: what, from which stance and row, power, start, the next hit to land.
     private static Move cur;
-    private static boolean curRight, hitSent;
+    private static int curStance, nextHit;
     private static float curPower = 1;
     private static long curStart;
     private static boolean pendingLight;
     private static int chain;
     private static long lastEnd;
     private static double flickX, flickY;
+    /** A blocked hit's jolt (seconds left) and the side it came from (+1 right, -1 left). */
     private static float jolt;
-    private static long brokenUntil;
-    private static int lastHurt;
+    private static int joltSide;
+    private static long brokenUntil, staggerUntil, parryAt;
+    private static int parryKind, lastHurt;
+    /** Where the striking fist or foot is in the world, this frame and last (what it runs into on the way). */
+    private static Vec3d limbNow, limbPrev;
+    private static Fighting.Part lastPart = Fighting.Part.TORSO;
 
     // ---- everyone else (from the server) ----
-    private record Act(Move move, boolean right, float power, long start) { }
-    /** Spinning: +1 turning right, -1 left (the striking arm's side leads), 0 not spinning. */
-    private static final Map<Integer, Integer> SPIN = new HashMap<>();
+    private record Act(Move move, int stance, float power, long start) { }
     private static final Map<Integer, Act> MOVES = new HashMap<>();
     private static final Map<Integer, Boolean> GUARDS = new HashMap<>();
     private static final Map<Integer, Integer> STANCES = new HashMap<>();
     private static final Map<Integer, Long> STANCE_AT = new HashMap<>();
-    /** The turn each body is showing (eases to its stance's). */
+    /** The turn each body is showing (eases to its stance's), and which way a spin goes (+1 right, -1 left). */
     private static final Map<Integer, Float> TURN = new HashMap<>();
+    private static final Map<Integer, Integer> SPIN = new HashMap<>();
 
     public static boolean locked() {
         return target >= 0;
@@ -90,14 +91,22 @@ public final class Fight {
         return p != null && fists(p);
     }
 
-    /** Bare fists, on your feet and free to fight. */
+    /** Bare fists, free to fight (on your feet or in the air). */
     static boolean fists(ClientPlayerEntity p) {
         Parkour.Mode m = Parkour.view(p).mode();
         return p.getMainHandStack().isEmpty() && !p.isSpectator() && (m == Parkour.Mode.NONE || m == Parkour.Mode.LAND);
     }
 
+    private static boolean airborne(ClientPlayerEntity p) {
+        return !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying;
+    }
+
     private static float secs(long since) {
         return (System.nanoTime() - since) / 1e9f;
+    }
+
+    private static boolean staggered() {
+        return System.nanoTime() < staggerUntil;
     }
 
     static void tick(MinecraftClient mc) {
@@ -111,6 +120,7 @@ public final class Fight {
             STANCES.clear();
             STANCE_AT.clear();
             TURN.clear();
+            SPIN.clear();
             return;
         }
         while (KataClient.lockKey.wasPressed()) target = target >= 0 ? -1 : pick(p, 14, 60);
@@ -118,7 +128,7 @@ public final class Fight {
         if (target >= 0 && (t == null || !t.isAlive() || t.squaredDistanceTo(p) > 20 * 20)) target = -1;
 
         boolean free = fists(p) && mc.currentScreen == null;
-        guard = free && mc.options.useKey.isPressed() && cur == null && !charging && System.nanoTime() > brokenUntil;
+        guard = free && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && System.nanoTime() > brokenUntil;
         if (guard && target < 0) target = pick(p, 8, 50); // raising a guard locks onto whoever's in front
         if (guard != sentGuard) {
             sentGuard = guard;
@@ -126,13 +136,9 @@ public final class Fight {
         }
         if (jolt > 0) jolt = Math.max(0, jolt - 0.05f);
         // Hit while winding up: the heavy is gone.
-        if (p.hurtTime > lastHurt && charging) {
-            charging = pressing = false;
-        }
+        if (p.hurtTime > lastHurt && charging) charging = pressing = false;
         lastHurt = p.hurtTime;
-        if (!free) {
-            pressing = charging = false;
-        }
+        if (!free) pressing = charging = false;
     }
 
     /** Every frame: input timing (click or hold), the strike's progress, the camera on the opponent. */
@@ -146,35 +152,40 @@ public final class Fight {
                 pressing = false;
                 if (charging) {
                     charging = false;
-                    begin(p, Deck.pick(stance, true, 0), Math.min(1, secs(chargeAt) / Fighting.FULL_CHARGE));
+                    begin(p, Deck.pick(row(p), true, 0), Math.min(1, secs(chargeAt) / Fighting.FULL_CHARGE));
                 } else light(p);
             } else if (!charging && cur == null && secs(pressAt) >= Fighting.HEAVY_AFTER) {
                 charging = true;
                 chargeAt = System.nanoTime();
             }
         }
-        // The strike in progress: contact (and a beat held if it lands), then done.
+        // The move in progress: each of its hits lands (on whatever it first touches), then it's done.
         if (cur != null) {
             float s = secs(curStart);
-            int early = -1;
-            // On its way out, the fist runs into whoever's in its path: the first body it touches takes it.
-            if (!hitSent && s >= cur.contact() * 0.4f && fistPrev != null && fistNow != null && fistPrev.squaredDistanceTo(fistNow) > 1e-6) {
-                Hitbox.Contact touch = Hitbox.sweep(nearby(p), td, fistPrev, fistNow, 0.07);
-                if (touch != null) {
-                    lastPart = touch.hit().part();
-                    early = touch.entity().getId();
+            if (nextHit < cur.hits()) {
+                float c = cur.contactOf(nextHit);
+                int early = -1;
+                if (s >= c - cur.contact() * 0.6f && limbPrev != null && limbNow != null && limbPrev.squaredDistanceTo(limbNow) > 1e-6) {
+                    Hitbox.Contact touch = Hitbox.sweep(nearby(p), td, limbPrev, limbNow, cur.leg() ? 0.09 : 0.07);
+                    if (touch != null) {
+                        lastPart = touch.hit().part();
+                        early = touch.entity().getId();
+                    }
+                }
+                if (early >= 0 || s >= c) {
+                    int hit = early >= 0 ? early : struck(mc, p);
+                    boolean right = Fighting.rightLimb(cur, curStance, nextHit);
+                    int packed = Fighting.id(cur) | (right ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9) | (lastPart.ordinal() << 16);
+                    send(KataNet.STRIKE, packed, hit);
+                    nextHit++;
+                    // It lands: the strike holds still for a moment (the impact), longer for a heavy.
+                    if (hit >= 0) curStart += (long) ((cur.heavy() ? 0.09 : 0.05) * 1e9);
+                    // A rising strike lifts you with it.
+                    if (cur.path() == Path.UPPER && cur.heavy() && p.isOnGround()) p.addVelocity(0, 0.3, 0);
                 }
             }
-            if (!hitSent && (early >= 0 || s >= cur.contact())) {
-                hitSent = true;
-                int hit = early >= 0 ? early : struck(mc, p);
-                int packed = Fighting.id(cur) | (curRight ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9) | (lastPart.ordinal() << 16);
-                send(KataNet.STRIKE, packed, hit);
-                // It lands: the strike holds still for a moment (the impact), longer for a heavy.
-                if (hit >= 0) curStart += (long) ((cur.heavy() ? 0.09 : 0.05) * 1e9);
-            }
             if (s >= cur.length()) {
-                stanceTo(Fighting.end(cur, stance));
+                stanceTo(Fighting.end(cur, curStance));
                 cur = null;
                 lastEnd = System.nanoTime();
                 if (pendingLight) {
@@ -198,44 +209,68 @@ public final class Fight {
         p.prevPitch = np;
     }
 
+    /** The deck row to throw from: the air if you're off the ground, else your stance. */
+    private static int row(ClientPlayerEntity p) {
+        return airborne(p) ? Fighting.AIR : stance;
+    }
+
     /** Left button pressed. True when Kata handles it (bare fists). */
     public static boolean attack() {
         ClientPlayerEntity p = MinecraftClient.getInstance().player;
         if (p == null || !fists(p)) return false;
-        if (guard) return true; // hands are up: let go of guard to strike
+        if (guard || staggered()) return true; // hands up, or knocked off balance: nothing to throw
         pressing = true;
         pressAt = System.nanoTime();
         return true;
     }
 
     private static void light(ClientPlayerEntity p) {
+        if (staggered()) return;
         if (cur != null) {
-            // Pressed during a strike: the next in the chain follows straight on.
-            if (secs(curStart) > cur.contact() * 0.5f) pendingLight = true;
+            // Pressed during a strike: the next in the chain follows straight on (not across ground and air).
+            if (secs(curStart) > cur.contact() * 0.5f && (cur.from() == Fighting.From.AIR) == airborne(p)) pendingLight = true;
             return;
         }
         if (secs(lastEnd) > 0.55f) chain = 0;
-        begin(p, Deck.pick(stance, false, chain), 1);
+        begin(p, Deck.pick(row(p), false, chain), 1);
         chain++;
     }
 
     private static void begin(ClientPlayerEntity p, Move m, float power) {
+        if (m == null || staggered()) return;
+        // In the air only air moves; on the ground none of them.
+        if ((m.from() == Fighting.From.AIR) != airborne(p)) return;
         cur = m;
-        curRight = Fighting.rightHand(m, stance);
+        curStance = stance;
         curPower = m.heavy() ? Math.max(0.3f, power) : 1;
         curStart = System.nanoTime();
-        hitSent = false;
-        fistNow = fistPrev = null;
+        nextHit = 0;
+        limbNow = limbPrev = null;
         if (m.heavy()) chain = 0;
-        // A spinning strike turns you as you throw it, the striking arm's side leading the turn.
+        boolean right = Fighting.rightLimb(m, stance, 0);
+        // A spinning strike turns you as you throw it, its side leading the turn.
         if (m.turns()) {
-            SPIN.put(p.getId(), curRight ? 1 : -1);
+            SPIN.put(p.getId(), right ? 1 : -1);
             stanceTo(Fighting.end(m, stance));
         }
-        // The body steps in behind it.
+        // Anyone it's aimed at sees it coming.
+        Entity t = targetEntity(MinecraftClient.getInstance());
+        send(KataNet.WINDUP, Fighting.id(m), t != null ? t.getId() : -1);
+        // The body behind it: a step in on the ground; in the air, the lunge the move flies on.
         Vec3d f = Vec3d.fromPolar(0, p.getYaw());
-        double step = m.heavy() ? 0.06 + 0.1 * curPower : 0.035;
-        if (p.isOnGround()) p.addVelocity(f.x * step, 0, f.z * step);
+        if (m.from() == Fighting.From.AIR) {
+            double fwd = switch (m.path()) {
+                case SUPERMAN -> 0.38;
+                case DROPKICK -> 0.42;
+                case KNEE -> 0.3;
+                default -> 0.12;
+            };
+            double up = m.path() == Path.KNEE ? 0.14 : m.path() == Path.SUPERMAN ? 0.08 : 0.04;
+            p.addVelocity(f.x * fwd, up, f.z * fwd);
+        } else if (p.isOnGround() && !m.leg()) {
+            double step = m.heavy() ? 0.06 + 0.1 * curPower : 0.035;
+            p.addVelocity(f.x * step, 0, f.z * step);
+        }
     }
 
     private static void stanceTo(int s) {
@@ -244,21 +279,15 @@ public final class Fight {
         send(KataNet.STANCE, s, 0);
     }
 
-    /** Where the striking fist is in the world, this frame and last (for what it runs into on the way). */
-    private static Vec3d fistNow, fistPrev;
-
-    /** The body part the last strike landed on. */
-    private static Fighting.Part lastPart = Fighting.Part.TORSO;
-
     /**
-     * What the strike hits: traced along its line from the shoulder into the locked opponent (or
-     * whoever's under the crosshair), landing on the first limb it meets. -1 for a miss.
+     * What the strike hits: traced along its line from the shoulder (the hip for a kick) into the locked
+     * opponent (or whoever's under the crosshair), landing on the first body part it meets. -1 for a miss.
      */
     private static int struck(MinecraftClient mc, ClientPlayerEntity p) {
         Entity t = targetEntity(mc);
         if (t == null && mc.targetedEntity instanceof LivingEntity c) t = c;
         Vec3d want = t != null ? wanted(p, 1, cur, t) : p.getCameraPosVec(1).add(p.getRotationVec(1).multiply(2)).add(0, -0.2, 0);
-        Hitbox.Contact h = Hitbox.traceAll(nearby(p), 1, shoulder(p, 1), want, Fighting.REACH);
+        Hitbox.Contact h = Hitbox.traceAll(nearby(p), 1, origin(p, 1, cur), want, Fighting.REACH);
         if (h == null) return -1;
         lastPart = h.hit().part();
         return h.entity().getId();
@@ -273,22 +302,20 @@ public final class Fight {
         return out;
     }
 
-    /** Roughly where the striking shoulder is (world). */
-    private static Vec3d shoulder(PlayerEntity p, float td) {
-        return p.getCameraPosVec(td).add(0, -0.3, 0);
+    /** Where a strike starts from (world): the shoulder, or the hip for a kick. */
+    private static Vec3d origin(PlayerEntity p, float td, Move m) {
+        return p.getCameraPosVec(td).add(0, m != null && m.leg() ? -0.85 : -0.3, 0);
     }
 
-    /** Where a strike wants to go on its target: the head, the body for a palm. */
+    /** Where on its target a strike goes: the head, the body, the legs. */
     private static Vec3d wanted(PlayerEntity p, float td, Move m, Entity t) {
-        double h = m != null && m.path() == Path.PALM ? 0.62 : m != null && m.path() == Path.UPPER ? 0.8 : 0.88;
+        double h = m == null ? 0.88 : switch (m.path()) {
+            case PALM, FRONT_KICK, SIDE_KICK, BACK_KICK, KNEE, DROPKICK -> 0.6;
+            case LOW_KICK -> 0.28;
+            case UPPER -> 0.82;
+            default -> 0.88;
+        };
         return t.getLerpedPos(td).add(0, t.getHeight() * h, 0);
-    }
-
-    private static boolean inReach(ClientPlayerEntity p, Entity t) {
-        Vec3d eye = p.getEyePos();
-        var b = t.getBoundingBox();
-        Vec3d near = new Vec3d(MathHelper.clamp(eye.x, b.minX, b.maxX), MathHelper.clamp(eye.y, b.minY, b.maxY), MathHelper.clamp(eye.z, b.minZ, b.maxZ));
-        return eye.distanceTo(near) <= Fighting.REACH;
     }
 
     /** The best opponent to lock: alive, in range, nearest the middle of the view. */
@@ -313,7 +340,7 @@ public final class Fight {
     }
 
     /**
-     * Mouse movement while locked on: a distinct drag towards a quadrant turns you into it (side to
+     * Mouse movement while locked on: a deliberate drag towards a quadrant turns you into it (side to
      * side changes the side, up and down the front or back). Small movements fade away.
      */
     public static void look(double dx, double dy) {
@@ -330,12 +357,14 @@ public final class Fight {
 
     /** What the next press throws: the next light in the chain (a quick click), and the heavy (hold). */
     public static Move nextLight() {
+        ClientPlayerEntity p = MinecraftClient.getInstance().player;
         int step = cur != null || secs(lastEnd) <= 0.55f ? chain : 0;
-        return Deck.pick(stance, false, step);
+        return Deck.pick(p != null ? row(p) : stance, false, step);
     }
 
     public static Move nextHeavy() {
-        return Deck.pick(stance, true, 0);
+        ClientPlayerEntity p = MinecraftClient.getInstance().player;
+        return Deck.pick(p != null ? row(p) : stance, true, 0);
     }
 
     public static boolean chargingHeavy() {
@@ -346,19 +375,35 @@ public final class Fight {
         return charging ? Math.min(1, secs(chargeAt) / Fighting.FULL_CHARGE) : 0;
     }
 
-    /** A hit landed on your guard: it jolts the guard. */
-    static void guardHit() {
-        jolt = 0.2f;
-    }
-
     static void remote(int entity, int kind, int a) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && entity == mc.player.getId()) {
-            if (kind == KataNet.GUARD_HIT) guardHit();
-            if (kind == KataNet.GUARD_BROKEN) {
-                // Guard smashed open: the hands are down for a moment.
-                jolt = 0.2f;
-                brokenUntil = System.nanoTime() + 700_000_000L;
+            switch (kind) {
+                case KataNet.GUARD_HIT -> {
+                    jolt = 0.22f;
+                    joltSide = a;
+                }
+                case KataNet.GUARD_BROKEN -> {
+                    jolt = 0.22f;
+                    brokenUntil = System.nanoTime() + 700_000_000L;
+                }
+                case KataNet.STAGGER -> {
+                    // Knocked off balance: whatever you were doing is gone for a moment.
+                    staggerUntil = System.nanoTime() + a * 50_000_000L;
+                    cur = null;
+                    chain = 0;
+                    pendingLight = pressing = charging = false;
+                }
+                case KataNet.PARRY -> {
+                    parryAt = System.nanoTime();
+                    parryKind = a;
+                }
+                case KataNet.KNOCKDOWN -> {
+                    cur = null;
+                    pendingLight = pressing = charging = false;
+                    Parkour.knockdown(mc.player, Fighting.unpackVelocity(a));
+                }
+                default -> { }
             }
             return;
         }
@@ -367,9 +412,10 @@ public final class Fight {
             case KataNet.STRIKE -> {
                 int id = a & 0xFF;
                 if (id < Fighting.MOVES.length) {
-                    Act act = new Act(Fighting.MOVES[id], (a & 1 << 8) != 0, ((a >> 9) & 0x7F) / 100f, System.nanoTime());
-                    MOVES.put(entity, act);
-                    if (act.move.turns()) SPIN.put(entity, act.right ? 1 : -1);
+                    Move m = Fighting.MOVES[id];
+                    int st = STANCES.getOrDefault(entity, Fighting.TR);
+                    MOVES.put(entity, new Act(m, st, ((a >> 9) & 0x7F) / 100f, System.nanoTime()));
+                    if (m.turns()) SPIN.put(entity, (a & 1 << 8) != 0 ? 1 : -1);
                 }
                 STANCE_AT.put(entity, System.nanoTime());
             }
@@ -392,16 +438,20 @@ public final class Fight {
 
     /** Is this player fighting (guard up, a strike going, or squared up to someone)? */
     private static boolean engaged(PlayerEntity p) {
-        if (mine(p)) return guard || cur != null || charging || target >= 0;
+        if (mine(p)) return guard || cur != null || charging || target >= 0 || staggered();
         Act a = MOVES.get(p.getId());
         Long at = STANCE_AT.get(p.getId());
         return GUARDS.getOrDefault(p.getId(), false) || (a != null && secs(a.start) < a.move.length()) || (at != null && secs(at) < 4);
     }
 
+    private static boolean guardUp(PlayerEntity p) {
+        return mine(p) ? guard : GUARDS.getOrDefault(p.getId(), false);
+    }
+
     /**
      * How far the body is turned from facing the opponent (degrees): a fighter's stance with a shoulder
-     * forward, or turned right round with the back to them. Eases there, fast during a strike (the
-     * spin of a spinning one).
+     * forward, or turned right round with the back to them. Eases there, fast during a strike; a
+     * spinning strike goes the long way round, its side leading.
      */
     public static float bodyTurn(PlayerEntity p, float dt) {
         float want = 0;
@@ -415,10 +465,9 @@ public final class Fight {
             };
         }
         float c = TURN.getOrDefault(p.getId(), 0f);
-        boolean busy = mine(p) ? cur != null : MOVES.containsKey(p.getId());
+        boolean busy = mine(p) ? cur != null : MOVES.containsKey(p.getId()) && secs(MOVES.get(p.getId()).start) < MOVES.get(p.getId()).move.length();
         int spin = SPIN.getOrDefault(p.getId(), 0);
         if (busy && spin != 0) {
-            // A spinning strike goes the long way round, the striking arm's side leading.
             while (spin > 0 && want < c) want += 360;
             while (spin < 0 && want > c) want -= 360;
         } else {
@@ -426,47 +475,88 @@ public final class Fight {
             c = want + MathHelper.wrapDegrees(c - want); // done spinning: the same turn, without the extra lap
         }
         float k = 1 - (float) Math.exp(-dt * (busy ? 18 : 9));
-        c += (want - c) * k; // not wrapped: a back stance is reached by turning, not snapping round
+        c += (want - c) * k;
         TURN.put(p.getId(), c);
         if (TURN.size() > 256) TURN.clear();
         return c;
     }
 
-    /** The guard (arms up, chest set) when fighting, or null; weight[0] says how much (0..1). */
+    /** Hands loose and low-ish when squared up; a tight high guard when blocking. weight[0]: how much (0..1). */
     public static Pose pose(PlayerEntity p, float[] weight) {
         weight[0] = 0;
         if (!engaged(p)) return null;
-        Pose g = Presets.GUARD.copy();
-        if (mine(p) && jolt > 0) {
-            // A blocked hit knocks the guard back into the face.
-            float j = jolt / 0.2f;
-            g.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) - 12 * j);
-            g.set(Bone.RIGHT_FOREARM, Pose.PITCH, g.get(Bone.RIGHT_FOREARM, Pose.PITCH) + 15 * j);
-            g.set(Bone.LEFT_FOREARM, Pose.PITCH, g.get(Bone.LEFT_FOREARM, Pose.PITCH) + 15 * j);
+        Pose g;
+        if (guardUp(p)) {
+            // Blocking: forearms up and tight in front of the face, chin down, shoulders rounded.
+            g = Presets.GUARD.copy();
+            g.set(Bone.RIGHT_ARM, Pose.PITCH, g.get(Bone.RIGHT_ARM, Pose.PITCH) - 14);
+            g.set(Bone.LEFT_ARM, Pose.PITCH, g.get(Bone.LEFT_ARM, Pose.PITCH) - 14);
+            g.set(Bone.RIGHT_ARM, Pose.YAW, g.get(Bone.RIGHT_ARM, Pose.YAW) - 10);
+            g.set(Bone.LEFT_ARM, Pose.YAW, g.get(Bone.LEFT_ARM, Pose.YAW) + 10);
+            g.set(Bone.RIGHT_FOREARM, Pose.PITCH, 118);
+            g.set(Bone.LEFT_FOREARM, Pose.PITCH, 122);
+            g.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) + 8);
+            g.set(Bone.HEAD, Pose.PITCH, g.get(Bone.HEAD, Pose.PITCH) + 8);
+        } else {
+            // Squared up: the guard's shape, loose, hands lower.
+            g = Pose.lerp(new Pose(), Presets.GUARD, 0.65f);
+            g.set(Bone.RIGHT_FOREARM, Pose.PITCH, 75);
+            g.set(Bone.LEFT_FOREARM, Pose.PITCH, 80);
+        }
+        if (mine(p)) {
+            if (jolt > 0) {
+                // A blocked hit drives the guard back into the face and turns the body away from its side.
+                float j = jolt / 0.22f;
+                g.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) - 14 * j);
+                g.set(Bone.CHEST, Pose.YAW, g.get(Bone.CHEST, Pose.YAW) - 16 * j * joltSide);
+                g.set(Bone.CHEST, Pose.ROLL, g.get(Bone.CHEST, Pose.ROLL) + 6 * j * joltSide);
+                g.set(Bone.RIGHT_FOREARM, Pose.PITCH, g.get(Bone.RIGHT_FOREARM, Pose.PITCH) + 18 * j);
+                g.set(Bone.LEFT_FOREARM, Pose.PITCH, g.get(Bone.LEFT_FOREARM, Pose.PITCH) + 18 * j);
+                g.set(Bone.HEAD, Pose.PITCH, g.get(Bone.HEAD, Pose.PITCH) - 10 * j);
+            }
+            if (staggered()) {
+                // Off balance: chest and head thrown back, arms flung open.
+                g.set(Bone.CHEST, -16, 0, 0).set(Bone.HEAD, -20, 0, 0);
+                g.set(Bone.RIGHT_ARM, -25, 0, 38).set(Bone.LEFT_ARM, -25, 0, -38);
+                g.set(Bone.RIGHT_FOREARM, 25, 0, 0).set(Bone.LEFT_FOREARM, 25, 0, 0);
+            }
+            float ps = secs(parryAt);
+            if (parryKind != 0 && ps < 0.5f) {
+                float k = ps < 0.12f ? ps / 0.12f : 1 - ease((ps - 0.12f) / 0.38f);
+                if (parryKind == 2) {
+                    // The kick caught: both hands down on the foot, then the throw (arms sweeping up).
+                    float up = ps > 0.2f ? ease((ps - 0.2f) / 0.2f) : 0;
+                    g = Pose.lerp(g, new Pose().set(Bone.RIGHT_ARM, -55 - 70 * up, 10, 0).set(Bone.LEFT_ARM, -55 - 70 * up, -10, 0)
+                        .set(Bone.RIGHT_FOREARM, 35, 0, 0).set(Bone.LEFT_FOREARM, 35, 0, 0).set(Bone.CHEST, 18 - 30 * up, 0, 0), k);
+                } else {
+                    // A punch turned aside: the lead hand slaps it out wide.
+                    g = Pose.lerp(g, g.copy().set(Bone.LEFT_ARM, -70, 0, -55).set(Bone.LEFT_FOREARM, 30, 0, 0).set(Bone.CHEST, 4, 18, 0), k);
+                }
+            }
         }
         weight[0] = 1;
         return g;
     }
 
     /**
-     * The strike (or the heavy's wind-up) on top of the body's springs: first the body drives it (hips
-     * and chest turning through, weight forward, a lean in), then the striking arm is solved so the fist
-     * travels its path from the guard to the target.
+     * The strike (or a heavy's wind-up) on top of the body's springs: first the body drives it (hips and
+     * chest turning through, weight shifting, leaning in or back), then the striking limb is solved so
+     * the fist or foot travels its path from where it is to where it lands.
      */
     static void apply(PlayerEntity p, float td, Pose out) {
         Move m;
-        boolean right;
+        int st;
         float s, power;
         float wind = 0;
         if (mine(p)) {
             m = cur;
-            right = curRight;
+            st = curStance;
             s = cur != null ? secs(curStart) : 0;
             power = curPower;
-            if (charging) {
-                // Winding up: the heavy from this stance, fist and weight drawn back.
-                m = Deck.pick(stance, true, 0);
-                right = Fighting.rightHand(m, stance);
+            if (charging && cur == null) {
+                ClientPlayerEntity cp = (ClientPlayerEntity) p;
+                m = Deck.pick(row(cp), true, 0);
+                st = stance;
                 wind = Math.min(1, secs(chargeAt) / Fighting.FULL_CHARGE);
                 s = 0;
             }
@@ -474,58 +564,90 @@ public final class Fight {
             Act a = MOVES.get(p.getId());
             if (a == null || secs(a.start) >= a.move.length()) return;
             m = a.move;
-            right = a.right;
+            st = a.stance;
             s = secs(a.start);
             power = a.power;
         }
         if (m == null) return;
 
-        // How far out the strike is (0 guard, 1 full extension): speeding up all the way into contact,
-        // a beat held there, then drawn back.
+        // Which hit of the move is going (a combo throws several), and how far out it is: 0 at the guard,
+        // 1 at full extension. Speeding up all the way into contact, a beat held there, then drawn back.
+        int hit = m.hits() > 1 && m.interval() > 0 ? Math.min(m.hits() - 1, (int) (s / m.interval())) : 0;
+        float u = s - hit * m.interval();
+        float end = hit < m.hits() - 1 ? m.interval() : m.length() - hit * m.interval();
         float c = m.contact(), hold = m.heavy() ? 0.07f : 0.04f;
         float k;
         if (wind > 0) k = -0.25f * ease(wind);
-        else if (s < c) {
-            float u = s / c;
-            k = u * u * (1.4f - 0.4f * u);
-        } else if (s < c + hold) k = 1;
-        else k = 1 - ease((s - c - hold) / Math.max(0.05f, m.length() - c - hold));
-
-        // The body behind it.
+        else if (u < c) {
+            float x = u / c;
+            k = x * x * (1.4f - 0.4f * x);
+        } else if (u < c + hold) k = 1;
+        else k = 1 - ease((u - c - hold) / Math.max(0.04f, end - c - hold));
+        boolean right = Fighting.rightLimb(m, st, hit);
+        float out_ = right ? -1 : 1; // the limb's outside (model x: right is negative)
         float mass = m.heavy() ? 0.6f + 0.8f * power : 1;
-        float twist = (switch (m.path()) {
-            case STRAIGHT -> m.lead() ? 12 : 28;
-            case HOOK -> 30;
-            case UPPER -> 22;
-            case OVERHAND, PALM -> 32;
-            case BACKFIST, ELBOW -> 0; // the spin itself turns the body (see bodyTurn)
-        }) * mass;
-        float sign = right ? -1 : 1; // a right-hand strike turns the chest to the left
-        out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) + sign * twist * k);
-        out.set(Bone.ROOT, Pose.YAW, out.get(Bone.ROOT, Pose.YAW) + sign * twist * 0.4f * k);
-        out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) + (m.heavy() ? 9 : 5) * k);
-        out.offset[2] -= (m.heavy() ? 3.5f * mass : 2f) * k;
-        if (m.heavy()) out.offset[1] += 0.9f * Math.abs(k);
+        float sign = right ? -1 : 1; // a right-side strike turns the chest to the left
 
-        // The fist's path, from where the guard holds it to the target.
-        Bone arm = right ? Bone.RIGHT_ARM : Bone.LEFT_ARM, fore = right ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM;
-        Vector3f shoulder = new Vector3f(right ? -5 : 5, 2, 0);
-        Vector3f[] j = Ragdoll.joints(out);
-        Vector3f guardFist = j[right ? Ragdoll.RH : Ragdoll.LH];
         Vec3d pos = p.getLerpedPos(td);
         float bodyYaw = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
         Vector3f aim = Animator.toModel(aimPoint(p, td, m), pos, bodyYaw);
+
+        if (m.leg()) {
+            kick(p, out, m, k, right, out_, sign, mass, aim, pos, bodyYaw);
+            return;
+        }
+
+        // The body behind a hand strike.
+        float twist = (switch (m.path()) {
+            case STRAIGHT -> m.lead() ? 12 : 28;
+            case HOOK -> 30;
+            case UPPER -> 18;
+            case OVERHAND, PALM -> 32;
+            case SUPERMAN -> 20;
+            default -> 0; // spinning strikes: the spin itself turns the body (see bodyTurn)
+        }) * mass;
+        out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) + sign * twist * k);
+        out.set(Bone.ROOT, Pose.YAW, out.get(Bone.ROOT, Pose.YAW) + sign * twist * 0.4f * k);
+        if (m.path() == Path.UPPER) {
+            // Dip into the legs, then drive up through them onto the toes, chest rising and leaning back.
+            float dip = k < 0.35f ? ease(k / 0.35f) : 1 - ease((k - 0.35f) / 0.4f);
+            float rise = k > 0.35f ? ease((k - 0.35f) / 0.65f) : 0;
+            out.offset[1] += 2.6f * dip * mass - 1.6f * rise * mass;
+            out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) + 14 * dip - 14 * rise);
+            out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) + 35 * dip);
+            out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) + 35 * dip);
+            out.set(Bone.RIGHT_LEG, Pose.PITCH, out.get(Bone.RIGHT_LEG, Pose.PITCH) - 18 * dip);
+            out.set(Bone.LEFT_LEG, Pose.PITCH, out.get(Bone.LEFT_LEG, Pose.PITCH) - 18 * dip);
+        } else if (m.path() == Path.SUPERMAN) {
+            // Flying in flat: the body tips forward behind the fist, the legs trailing.
+            out.set(Bone.ROOT, Pose.PITCH, out.get(Bone.ROOT, Pose.PITCH) + 45 * Math.max(0, k));
+            out.set(Bone.RIGHT_LEG, Pose.PITCH, out.get(Bone.RIGHT_LEG, Pose.PITCH) + 35 * Math.max(0, k));
+            out.set(Bone.LEFT_LEG, Pose.PITCH, out.get(Bone.LEFT_LEG, Pose.PITCH) + 45 * Math.max(0, k));
+            Bone other = right ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
+            out.set(other, Pose.PITCH, out.get(other, Pose.PITCH) + 50 * Math.max(0, k));
+        } else {
+            out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) + (m.heavy() ? 9 : 5) * k);
+            out.offset[2] -= (m.heavy() ? 3.5f * mass : 2f) * k;
+            if (m.heavy()) out.offset[1] += 0.9f * Math.abs(k);
+        }
+
+        // The fist's path, from where the guard holds it to where it lands.
+        Bone arm = right ? Bone.RIGHT_ARM : Bone.LEFT_ARM, fore = right ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM;
+        Vector3f shoulder = new Vector3f(right ? -5 : 5, 2, 0);
+        Vector3f guardFist = Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH];
         Vector3f fist;
-        float out_ = right ? -1 : 1; // the arm's outside (model x: right is negative)
         if (m.path() == Path.BACKFIST) {
             // The arm swings out wide to its side and the spin carries it round into them, back of the fist first.
             fist = new Vector3f(guardFist).lerp(new Vector3f(out_ * 15.5f, 3, -3), Math.max(0, k));
         } else if (m.path() == Path.ELBOW) {
             // The elbow comes up level and out to the side, the fist tucked at the chest; the spin drives it in.
             fist = new Vector3f(guardFist).lerp(new Vector3f(out_ * 2.5f, 2.5f, -4.5f), Math.max(0, k));
+        } else if (m.path() == Path.UPPER && k >= 0) {
+            // Down to the hip first, then up through the line.
+            Vector3f low = new Vector3f(out_ * 1.5f, 10, -4);
+            fist = k < 0.35f ? new Vector3f(guardFist).lerp(low, ease(k / 0.35f)) : new Vector3f(low).lerp(aim, ease((k - 0.35f) / 0.65f));
         } else if (k < 0) {
-            // Drawn back, away from the target.
-            Vector3f back = new Vector3f(guardFist).sub(aim).normalize().mul(6 * -k);
+            Vector3f back = new Vector3f(guardFist).sub(aim).normalize().mul(6 * -k); // drawn back, away from them
             fist = new Vector3f(guardFist).add(back);
         } else {
             fist = new Vector3f(guardFist).lerp(aim, k);
@@ -533,26 +655,107 @@ public final class Fight {
             switch (m.path()) {
                 case HOOK -> fist.add(out_ * 6 * arc, -1 * arc, 0);
                 case OVERHAND -> fist.add(out_ * 2 * arc, -5 * arc, 0);
-                case UPPER -> fist.add(-out_ * 1 * arc, 5 * arc, -1 * arc); // dips, then drives up through the line
                 default -> { }
             }
         }
         Matrix4f frame = Animator.armFrame(out).invert();
         Vector3f pole = m.path() == Path.ELBOW || m.path() == Path.HOOK
-            ? new Vector3f(out_, -0.15f, 0.25f)           // elbow up and out to the side
-            : m.path() == Path.BACKFIST ? new Vector3f(out_ * 0.3f, 0.2f, 1) // arm out straight, elbow back
-            : new Vector3f(out_ * 0.3f, 1, 0.45f);        // elbow down, behind the punch
+            ? new Vector3f(out_, -0.15f, 0.25f)                                // elbow up and out to the side
+            : m.path() == Path.BACKFIST ? new Vector3f(out_ * 0.3f, 0.2f, 1)   // arm out straight, elbow back
+            : new Vector3f(out_ * 0.3f, 1, 0.45f);                             // elbow down, behind the punch
         Animator.reach(out, arm, fore, shoulder, fist, frame, 1, pole);
         if (mine(p) && cur != null) {
-            Vector3f hand = Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH];
-            fistPrev = fistNow;
-            fistNow = Ragdoll.toWorld(hand, pos, bodyYaw);
+            limbPrev = limbNow;
+            limbNow = Ragdoll.toWorld(Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH], pos, bodyYaw);
         }
     }
 
     /**
-     * Where a strike is aimed: on the opponent, the point where its line first meets their body (a guard's
-     * forearm, say), so the fist lands on it and stops there. With nobody locked, straight out ahead.
+     * A kick: the knee chambers up, then the foot drives out along the kick's line (straight through,
+     * whipping round, low to the leg, back behind you) while the hips turn and the body counter-leans
+     * over the standing leg. A dropkick throws both feet, the body laid out behind them.
+     */
+    private static void kick(PlayerEntity p, Pose out, Move m, float k, boolean right, float out_, float sign, float mass, Vector3f aim, Vec3d pos, float bodyYaw) {
+        float kk = Math.max(0, k);
+        Bone leg = right ? Bone.RIGHT_LEG : Bone.LEFT_LEG, shin = right ? Bone.RIGHT_SHIN : Bone.LEFT_SHIN;
+        Bone standShin = right ? Bone.LEFT_SHIN : Bone.RIGHT_SHIN;
+        Vector3f hip = new Vector3f(right ? -1.9f : 1.9f, 12, 0);
+
+        // The body: hips turning into it, leaning back over the standing leg (forward for a back kick).
+        float hips = switch (m.path()) {
+            case ROUNDHOUSE -> 45;
+            case SIDE_KICK -> 70;
+            case LOW_KICK -> 25;
+            default -> 8;
+        } * mass;
+        float lean = switch (m.path()) {
+            case BACK_KICK -> 28;
+            case KNEE -> 8;
+            case DROPKICK -> 0;
+            case SIDE_KICK -> -22;
+            default -> -14;
+        };
+        out.set(Bone.ROOT, Pose.YAW, out.get(Bone.ROOT, Pose.YAW) + sign * hips * kk);
+        out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) + lean * kk);
+        if (m.path() == Path.SIDE_KICK) out.set(Bone.CHEST, Pose.ROLL, out.get(Bone.CHEST, Pose.ROLL) - out_ * 18 * kk);
+        out.set(standShin, Pose.PITCH, out.get(standShin, Pose.PITCH) + 14 * kk);
+        // Hands stay up to guard while the leg works.
+        if (m.path() == Path.DROPKICK) {
+            // Laid out behind both feet.
+            out.set(Bone.ROOT, Pose.PITCH, out.get(Bone.ROOT, Pose.PITCH) - 70 * kk);
+            out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) + 40 * kk);
+            out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) - 40 * kk);
+        }
+
+        Matrix4f inv = Ragdoll.rootFrame(out).invert();
+        if (m.path() == Path.KNEE) {
+            // The knee drives up into them; the foot tucked under.
+            out.set(leg, Pose.PITCH, out.get(leg, Pose.PITCH) - 105 * kk);
+            out.set(shin, Pose.PITCH, out.get(shin, Pose.PITCH) + 115 * kk);
+            out.set(Bone.RIGHT_ARM, Pose.PITCH, out.get(Bone.RIGHT_ARM, Pose.PITCH) - 30 * kk);
+            out.set(Bone.LEFT_ARM, Pose.PITCH, out.get(Bone.LEFT_ARM, Pose.PITCH) - 30 * kk);
+        } else {
+            // Rest, chamber, extension.
+            Vector3f rest = new Vector3f(hip.x, 24, 0);
+            float chamberY = m.path() == Path.LOW_KICK ? 19 : 16;
+            Vector3f chamber = new Vector3f(hip.x + (m.path() == Path.ROUNDHOUSE ? out_ * 3 : 0), chamberY, m.path() == Path.BACK_KICK ? 3 : -3);
+            Vector3f target = clampReach(hip, aim, 11.6f);
+            Vector3f foot;
+            if (kk < 0.4f) foot = new Vector3f(rest).lerp(chamber, ease(kk / 0.4f));
+            else {
+                float x = (kk - 0.4f) / 0.6f;
+                foot = new Vector3f(chamber).lerp(target, x);
+                if (m.path() == Path.ROUNDHOUSE) foot.add(out_ * 6 * MathHelper.sin(MathHelper.PI * x), -1.5f * MathHelper.sin(MathHelper.PI * x), 0);
+            }
+            Vector3f pole = switch (m.path()) {
+                case ROUNDHOUSE, SIDE_KICK -> new Vector3f(out_, -0.2f, -0.4f); // knee turned out to the side
+                case BACK_KICK -> new Vector3f(0, 0, 1);                       // knee behind
+                default -> new Vector3f(out_ * 0.15f, 0, -1);                  // knee forward
+            };
+            Animator.kickLeg(out, leg, shin, hip, foot, inv, 1, pole);
+            if (m.path() == Path.DROPKICK) {
+                Bone leg2 = right ? Bone.LEFT_LEG : Bone.RIGHT_LEG, shin2 = right ? Bone.LEFT_SHIN : Bone.RIGHT_SHIN;
+                Vector3f hip2 = new Vector3f(-hip.x, 12, 0);
+                Vector3f foot2 = new Vector3f(foot).add(-hip.x * 2, 0, 0);
+                Animator.kickLeg(out, leg2, shin2, hip2, foot2, inv, 1, new Vector3f(-out_ * 0.15f, 0, -1));
+            }
+        }
+        if (mine(p) && cur != null) {
+            limbPrev = limbNow;
+            Vector3f[] j = Ragdoll.joints(out);
+            limbNow = Ragdoll.toWorld(m.path() == Path.KNEE ? j[right ? Ragdoll.RK : Ragdoll.LK] : j[right ? Ragdoll.RF : Ragdoll.LF], pos, bodyYaw);
+        }
+    }
+
+    private static Vector3f clampReach(Vector3f root, Vector3f at, float reach) {
+        Vector3f d = new Vector3f(at).sub(root);
+        if (d.length() > reach) d.normalize().mul(reach);
+        return d.add(root);
+    }
+
+    /**
+     * Where a strike is aimed: on the locked opponent, the point where its line first meets their body
+     * (a guard's forearm, say), so the fist or foot lands on it and stops there. Otherwise straight out.
      */
     private static Vec3d aimPoint(PlayerEntity p, float td, Move m) {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -560,13 +763,22 @@ public final class Fight {
         Vec3d eye = p.getCameraPosVec(td);
         if (t != null) {
             Vec3d want = wanted(p, td, m, t);
-            Hitbox.Hit h = Hitbox.trace(t, td, shoulder(p, td), want, Fighting.REACH);
+            Hitbox.Hit h = Hitbox.trace(t, td, origin(p, td, m), want, Fighting.REACH);
             Vec3d at = h != null ? h.point() : want;
-            Vec3d d = at.subtract(eye);
-            return d.length() > 1.2 ? eye.add(d.normalize().multiply(1.2)) : at; // past full reach the arm just points at it
+            Vec3d from = origin(p, td, m);
+            Vec3d d = at.subtract(from);
+            double max = m.leg() ? 1.3 : 1.2;
+            return d.length() > max ? from.add(d.normalize().multiply(max)) : at; // past full reach the limb just points at it
         }
-        Vec3d look = p.getRotationVec(td);
-        return eye.add(look.multiply(1.0)).add(0, m.path() == Path.PALM ? -0.45 : -0.2, 0);
+        Vec3d look = Vec3d.fromPolar(0, p.getYaw(td));
+        double h = switch (m.path()) {
+            case PALM -> -0.45;
+            case FRONT_KICK, SIDE_KICK, BACK_KICK, KNEE, DROPKICK -> -0.75;
+            case LOW_KICK -> -1.25;
+            case ROUNDHOUSE -> -0.35;
+            default -> -0.2;
+        };
+        return eye.add(look.multiply(m.leg() ? 1.1 : 1.0)).add(0, h, 0);
     }
 
     private static float ease(float x) {
@@ -575,8 +787,8 @@ public final class Fight {
     }
 
     /**
-     * Footwork while locked on: in a top stance you walk in faster and back off slower, in a bottom
-     * stance the other way round. Guarding or winding up a heavy slows you down.
+     * Footwork: locked on, a top stance walks in faster and backs off slower (a back stance the other
+     * way round). Guarding, winding up a heavy or reeling slows you down.
      */
     public static float speedScale(PlayerEntity p) {
         if (!mine(p)) return 1;
@@ -589,6 +801,7 @@ public final class Fight {
         }
         if (guard) s *= 0.75f;
         if (charging) s *= 0.8f;
+        if (staggered()) s *= 0.5f;
         return s;
     }
 

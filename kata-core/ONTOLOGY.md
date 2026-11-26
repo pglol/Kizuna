@@ -139,6 +139,7 @@ moves the body somewhere the physics wouldn't.
     - stopping flight in mid-air while moving faster than 0.6 blocks/tick
 10b. **Real friction.** Sliding along a surface loses speed in proportion to how hard the part presses into it (μ = 0.6). A hand brushing a wall slides freely; a body lying on the ground stops.
 10a. **Bodies bounce.** A ragdoll part hitting a surface faster than about 4 m/s rebounds 30–45 % of that speed; slower contacts stop dead so the body settles. Only the parts that hit are pushed back, so striking an edge or a fence flips the body over it.
+10d. **Floating limp.** A limp body in water floats for about 3 s (up to 6) before it comes round.
 10c. **Limp in water.** A limp body hitting water fast smacks the surface: most of its speed is lost on impact and it splashes. Under the surface the water drags it and holds it up (torso and head float, limbs about neutral), so it floats. Coming round, it stands if there's ground within reach, otherwise it swims.
 11. **Limp means no will.** No walking, no sprinting, no sprint FOV. Position follows the pelvis.
 12. **Getting up** starts once the body has been still for 0.2 s (after at least 0.55 s), or after 2.2 s at most. It runs push-up or sit-up, then kneel, then stand, over 1.15 s. No part of the body goes below the ground while getting up.
@@ -163,6 +164,8 @@ moves the body somewhere the physics wouldn't.
     - Away from the wall (S): drop, or with space, a back jump that turns to face the other ledge.
     - Sideways (A/D): shuffle, or with space, a side jump.
     - Space alone: ledge jump up.
+23e. **Limp catches.** Limp in the air, the hands can still catch a lip, but you stay limp: the body hangs and swings from its pinned hands. If you come round still hanging, you take hold properly and can move from the ledge.
+23f. **Leaps complete.** Brushing the target lip in the last part of a ledge leap counts as the catch.
 23a. **Catch reflex.** Falling past a lip (after at least 2.5 blocks of fall, and not the edge you just left), the hands grab it on any side, facing first. It works even while limp in the air. Falling faster than 1.1 blocks/tick tears the grip; holding crouch means letting yourself drop.
 23c. **Jumping backwards** is a both-feet hop: the legs tuck evenly and the hands come up for balance from the moment the feet leave, with no one-leg-out pose.
 23d. **Water carries you.** Not limp, you float up and tread water chest-deep (crouch to dive; swimming as normal). Water takes the fall, so reaching the bottom plays no landing squash. Hitting water hard (falling faster than 1 block/tick, about 10 blocks) smacks you limp on the surface.
@@ -187,53 +190,64 @@ moves the body somewhere the physics wouldn't.
 ### 3.9 Hand to hand
 
 **Entities:**
-- **Style:** a fighting style, such as Taijutsu. It's defined in a data file, `kata_core/styles/<style>.json`, listed in `index.json`. The file holds its whole move tree (each move's id, name, path, hand, light/heavy, front/back, timing, damage and knockback), its colour and its starter deck. Moves are namespaced, for example `taijutsu:jab`. Every style and move is loaded from these files, on both client and server.
-- **Move:** a strike, with these properties:
-  - path: straight, hook, uppercut, overhand, palm, backfist or elbow
-  - lead or rear hand
+- **Style:** a fighting style, such as Taijutsu. It's defined in a data file, `kata_core/styles/<style>.json`, listed in `index.json`, with its colour, its whole move tree and its starter deck. Moves are namespaced (`taijutsu:jab`) and loaded on both client and server.
+- **Move:** each move has these properties:
+  - path: straight, hook, upper, overhand, palm, backfist, elbow, superman, front kick, roundhouse, side kick, back kick, low kick, knee or dropkick
+  - limb: lead or rear, a hand or a foot depending on the path
   - light or heavy
-  - front or back (back moves spin you round)
-  - contact and recovery time
-  - damage and knockback
-- **Deck:** for each of the four stance quadrants, three light slots (a chain thrown in order) and one heavy slot. You choose the moves on the deck screen (K); each slot only takes moves that fit it.
-- **StanceQuadrant:** top-right, top-left, bottom-right or bottom-left, as body orientation relative to the locked opponent.
-
-- **Body parts (hitboxes):** capsules for the head, torso, each upper arm, forearm, thigh and shin.
-  - For players they're taken from the posed skeleton every frame, so a raised guard puts the forearms in front of the face.
-  - Other bodies get a standing human layout scaled to their size.
+  - from: the front stances, the back stances, or the air
+  - spin, timing, damage, push and lift (upward launch)
+  - hits: 1 or more, with an interval, optionally alternating limbs (a combo)
+  - knockdown
+- **Deck:** five rows of four slots (three lights as a chain, then a heavy): one row per stance quadrant, plus an AIR row. It's edited on the deck screen (K).
+- **StanceQuadrant:** top-right, top-left, back-right or back-left: the body's orientation to the locked opponent.
+- **Body parts (hitboxes):** capsules for the head, torso, upper arms, forearms, thighs and shins. For players and dummies they come from the posed skeleton.
+- **Training dummy:** a sparring partner with the full rig.
 
 **Rules:**
-31. **Controls.** With bare hands:
-    - left click: a quick click (released within 0.16 s) throws the next light in the chain; holding winds up the heavy, thrown on release
-    - right click held: guard
-    - R: lock on; raising a guard with no lock locks onto whoever's in front
-    - K: the deck
-    Locked on, the camera holds the opponent.
-32. **Stance is body orientation, not guard direction.**
-    - top stances: chest to them, turned about 30°
-    - back stances: back turned, about 145°
-    The diamond at your feet (shown while locked on) shades the quadrant you're in.
-33. **Stance changes only by intent.** A deliberate mouse drag while locked on turns you into that quadrant (a light drag is enough): up = top, down = back, left/right = side. Clicking never switches sides by itself. Only a spinning back move turns you, from a back stance to the top stance on the same side.
-34. **Chains.** Quick clicks run the quadrant's light chain in order, and a click during a strike queues the next one. The chain resets after 0.55 s without a strike, or after a heavy.
-35. **Light vs heavy.**
-    - **Lights:** fast, with contact 75–160 ms after the press, and low damage.
-    - **Heavies:** wound up by holding, with contact about 130–170 ms after the release. Power grows with hold time up to 0.8 s: 0.5–1× damage and up to 1.2× knockback. A fully charged heavy breaks guard: the guard drops for 0.7 s and the hit lands.
-    - Getting hit while winding up cancels the heavy.
-36. **Strikes have mass.**
-    - The fist travels a real path from the guard to the target. IK solves the arm, with the elbow behind straight punches and out to the side for hooks, backfists and elbows.
-    - It accelerates into contact, then holds briefly on a hit: 50 ms for a light, 90 ms for a heavy.
-    - Hips and chest turn through the strike, the weight shifts forward, and the body steps in behind it, a step that grows with a heavy's charge.
-37. **Guarding is omnidirectional.** It blocks every hit with an attacker except shield-bypassing damage and full heavies. A block still shoves you and jolts the guard. You can't strike with the guard up.
-38. **Any contact counts.** While a strike is in motion, the fist's real path is swept against the body parts of everyone nearby, whoever it was aimed at. The first part it touches takes the hit, and the strike stops there. If it hasn't touched anyone by its contact moment, it lands on the first body along its line.
-38a. **Landing a strike.** A strike is traced from the shoulder along its line, up to 3 blocks, and lands on the first body part it meets, which can be a guarding forearm. The fist stops on that part. Damage by part: head 1.25×, torso 1×, legs 0.7×, arms 0.45×. The server checks reach and facing. Combos aren't eaten by hit invulnerability.
-39. **Footwork.**
-    - Locked on, a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse.
-    - Guarding multiplies speed by 0.75 and winding up a heavy by 0.8, whether locked on or not.
-40. **HUD.** Bottom left shows your style and the deck key. While locked on or winding up, it shows what a click and a hold will throw, plus the heavy's charge.
-41. **Taijutsu move pool.**
-    - Lights: jab, straight, lead hook, rear hook, uppercut, palm jab; and from the back stances, spinning backfist.
-    - Heavies: driving palm, overhand; and from the back stances, spinning elbow.
-42. **Training dummy** (`/kata dummy`, and three on the test zone's dojo mat). It faces the nearest player, takes hits and knockback, never goes down, and heals when left alone.
+31. **Controls (bare hands).**
+    - Quick click: the next light in the chain.
+    - Hold: winds up the heavy, thrown on release.
+    - Right click held: guard.
+    - R: lock on.
+    - K: the deck.
+32. **Stance is body orientation.** Top stances have the chest to them, turned about 30°; back stances have the back turned, about 145°. The diamond at your feet shows the current one.
+33. **Stance changes only by intent:** a deliberate mouse drag while locked on. A spinning back move also turns you round to the top stance on the same side.
+34. **Chains and combos.** Quick clicks run the row's light chain. A click during a strike queues the next one, though never across ground and air. A combo move lands several hits, each hit landing and pausing on its own.
+35. **Light vs heavy.** Lights are fast. A heavy charges for up to 0.8 s, giving 0.5–1× damage and more knockback. A full charge breaks guard. Getting hit while winding up cancels the heavy.
+36. **Air attacks.** Off the ground, only the AIR row's moves come out: superman punch, flying knee, jumping roundhouse, dropkick. Each carries its own lunge. Ground moves can't fire in the air, and air moves can't fire on the ground.
+37. **Strikes have mass.**
+    - The fist or foot follows a real path, solved with IK:
+      - punches: straight, hooking, uppercut or overhand
+      - kicks: chamber then extend
+      - roundhouse: knee turned out
+      - side kick: hips turned 70°
+      - back kick: leaning forward
+    - Hips and chest drive every strike, and weight shifts with it.
+    - An uppercut dips into the legs and drives up onto the toes; a heavy one leaves the ground. A launching move lifts its target.
+    - Strikes accelerate into contact and pause briefly on a hit.
+38. **Any contact counts.** The moving fist or foot is swept against everyone's limbs. The first part it touches takes the hit and the strike stops there. If it hasn't touched anyone, it lands on whoever is first along its line. Damage by part: head 1.25×, torso 1×, legs 0.7×, arms 0.45×.
+39. **Guard.**
+    - Squared up, the hands are loose and lowish. Holding guard tightens into a high guard: forearms in front of the face, chin down.
+    - A hit from where you face (within about 70°) is fully blocked. From the side or behind, 40 % gets through.
+    - A blocked hit shoves you and jolts the guard back, turning the body away from that side.
+40. **Perfect block (parry).** Guard raised within 3 ticks (0.15 s) of a hit arriving, facing it:
+    - a punch is turned aside: the attacker staggers for 0.6 s, their chain broken, can't act
+    - a kick is caught: you grab the foot and throw them off their feet
+41. **Knockdowns.** A knockdown move (a full heavy, a push kick, a side kick, a dropkick and so on) puts the target into the ragdoll with the hit's velocity, launch included.
+42. **Footwork.** Locked on, a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse. Guarding ×0.75, winding up ×0.8, staggered ×0.5.
+43. **Training dummy.**
+    - It stands at ease at its spot until hit.
+    - When hit, it chases whoever hit it and keeps to fighting distance.
+    - It reads wind-ups and tries to raise its guard with human reaction time: it reads about 65 % of them, after 100–400 ms, so it's sometimes late and sometimes parries.
+    - It throws jabs, straights, one-twos and kicks, which you can block, parry or catch.
+    - It staggers and gets knocked down into a real ragdoll.
+    - After 10 s left alone, or with the target 20+ blocks away, it walks home and settles. It never goes down for good.
+44. **Taijutsu move tree.**
+    - **Front lights:** jab, straight, one-two, flurry, lead hook, rear hook, hook-uppercut, uppercut, palm jab, front kick, roundhouse, low kick, double kick.
+    - **Front heavies:** driving palm, overhand, rising uppercut, push kick, side kick.
+    - **Back:** spinning backfist and back kick (lights); spinning elbow and spinning hook kick (heavies).
+    - **Air:** superman punch, flying knee, jumping roundhouse (lights); dropkick (heavy).
 
 ## 4. Not yet covered (next for the core)
 - **More of the Combat Deck:** kicks, grabs, weapon decks, guard breaks.

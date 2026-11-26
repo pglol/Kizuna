@@ -43,6 +43,8 @@ public final class Parkour {
     /** Synced by ordinal: add new moves at the end. */
     // Momentum: last tick's velocity (what you hit things with), and how long you've been flying fast.
     private static Vec3d lastVel = Vec3d.ZERO;
+    /** Limp, hands caught on a ledge: where you'd hang when you come round (null if not). */
+    private static Vec3d limpHang;
     private static boolean lastFlying, lastWater;
     // A leap cut short in the air carries on as a real flight: for a while the hands still go for the
     // lip it was aimed at, in the direction it was aimed.
@@ -554,8 +556,17 @@ public final class Parkour {
                 ticks++;
                 Ragdoll r = Ragdoll.of(p);
                 // Still in the air and not yet hit anything: a hand can still find a lip.
-                if (!ground && r != null && !r.resting() && ticks > 2 && reflex(p, sneak, true)) {
+                // Still in the air: a hand can still find a lip. The limp body catches it (it keeps hanging
+                // limp from its hands, swinging), and takes hold properly if it comes round still there.
+                if (!ground && r != null && !r.resting() && ticks > 2 && limpHang == null) reflex(p, sneak, true);
+                if (r != null && r.resting() && limpHang != null) {
+                    Vec3d hang = limpHang;
+                    limpHang = null;
                     Ragdoll.stop(p);
+                    p.setPosition(hang);
+                    p.setVelocity(Vec3d.ZERO);
+                    p.fallDistance = 0;
+                    set(Mode.HANG);
                     break;
                 }
                 if (ticks > 4 && (r == null || r.finished())) set(Mode.NONE);
@@ -857,10 +868,34 @@ public final class Parkour {
             if (!wall(p, at, 0.3, 1.7)) continue;
             Double l = lip(p, at, at.y, 1.3, 2.3);
             if (l == null || (!limp && l > peakY + 0.5)) continue; // not one you've just come off
+            if (limp) {
+                // Limp: the hands catch it, the body hangs from them; no grip taken yet.
+                Ragdoll r = Ragdoll.of(p);
+                Vec3d hold = snap(at, l - 0.03);
+                Vec3d hang = new Vec3d(hold.x, l - HANG_H, hold.z);
+                if (r == null || !empty(p, column(hang.x, hang.y, hang.z, 1.8))) continue;
+                Vec3d[] hands = handPoints(p.getWorld(), hang, d, l);
+                r.pin(hands[0], hands[1]);
+                ledgeY = l;
+                limpHang = hang;
+                return true;
+            }
             if (grab(p, at, l)) return true;
         }
         dir = keep;
         return false;
+    }
+
+    /** Knocked off your feet by a hit (a full heavy, a big kick, a caught kick thrown back): limp, flying. */
+    public static void knockdown(ClientPlayerEntity p, Vec3d v) {
+        if (p.getAbilities().flying || p.isSpectator() || p.hasVehicle()) return;
+        airVel = v;
+        p.setVelocity(v);
+        landRough = 1;
+        stoodUp = false;
+        stepIn = 0;
+        p.setSprinting(false);
+        set(Mode.RAGDOLL);
     }
 
     /** Where a leap from `from` to `to` is at k (0..1): off fast, easing into the catch, lifted by lift. */
@@ -1077,7 +1112,10 @@ public final class Parkour {
 
     private static void set(Mode m) {
         if (m != Mode.HOP) hopTurn = null;
-        if (m == Mode.RAGDOLL && mode != Mode.RAGDOLL) ragOff = Double.NaN;
+        if (m == Mode.RAGDOLL && mode != Mode.RAGDOLL) {
+            ragOff = Double.NaN;
+            limpHang = null;
+        }
         mode = m;
         cyc = 0;
         plant = null;
@@ -1267,7 +1305,11 @@ public final class Parkour {
                     // Brushed something on the way: a leap slides past an edge it only grazes (the path
                     // was checked clear before it started); a real block in the way turns it into a free
                     // flight that keeps its speed and still catches the lip it was aimed at.
-                    if (mode == Mode.HOP && empty(p, column(target.x, target.y + 0.05, target.z, 1.7))) {
+                    if (mode == Mode.HOP && k > 0.6f && empty(p, new Box(to.x - 0.25, to.y + 0.05, to.z - 0.25, to.x + 0.25, to.y + 1.75, to.z + 0.25))) {
+                        // Brushing the lip it's arriving at: that's the catch, not a miss.
+                        p.setPosition(to);
+                        p.setVelocity(Vec3d.ZERO);
+                    } else if (mode == Mode.HOP && empty(p, new Box(target.x - 0.25, target.y + 0.05, target.z - 0.25, target.x + 0.25, target.y + 1.75, target.z + 0.25))) {
                         p.setPosition(target);
                         p.setVelocity(target.subtract(was));
                     } else if (mode == Mode.HOP) {

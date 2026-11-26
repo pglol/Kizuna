@@ -6,7 +6,7 @@ import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
@@ -70,6 +70,8 @@ public final class Ragdoll {
     float age, still, getUp = -1, acc;
     /** Which points are under water (for the smack on the way in), and when it last splashed. */
     final boolean[] wet = new boolean[N];
+    /** Hands caught on a ledge while limp (world points they're held to), or null. */
+    Vec3d pinR, pinL;
     float lastSplash = -1;
     /** Which way the body lay when it started getting up (degrees, like a player's yaw). */
     float lieYaw;
@@ -145,16 +147,16 @@ public final class Ragdoll {
         p.set(b, (float) Math.toDegrees(e.x), (float) Math.toDegrees(e.y), (float) Math.toDegrees(e.z));
     }
 
-    public static Ragdoll of(PlayerEntity p) {
+    public static Ragdoll of(LivingEntity p) {
         return ACTIVE.get(p.getId());
     }
 
-    public static void stop(PlayerEntity p) {
+    public static void stop(LivingEntity p) {
         ACTIVE.remove(p.getId());
     }
 
     /** Go limp from the pose last shown, carrying on at velocity v (blocks per second). */
-    public static void start(PlayerEntity p, Pose from, float bodyYaw, Vec3d v) {
+    public static void start(LivingEntity p, Pose from, float bodyYaw, Vec3d v) {
         Ragdoll r = new Ragdoll();
         Vec3d pos = p.getPos();
         Vector3f[] m = joints(from == null ? new Pose() : from);
@@ -256,10 +258,14 @@ public final class Ragdoll {
                 hinges();
             }
             for (int i = 0; i < N; i++) collide(w, i);
+            if (pinR != null) hold(RH, pinR);
+            if (pinL != null) hold(LH, pinL);
         }
         double speed = moved / N / (steps * h);
         still = speed < 0.35 ? still + dt : 0;
-        if ((age > MIN_TIME && still > 0.2) || age > MAX_TIME) {
+        // In water the body floats up and lies there a while (about 3 s) before it comes round.
+        boolean afloat = inWater();
+        if (afloat ? (age > 3.0f && still > 0.2) || age > 6.0f : (age > MIN_TIME && still > 0.2) || age > MAX_TIME) {
             getUp = 0;
             // Which way up it ended: chest towards the sky (on its back) or not.
             double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];
@@ -389,6 +395,22 @@ public final class Ragdoll {
         return wet[PELVIS] || wet[NECK];
     }
 
+    /** Catch the ledge: the hands are held at these points, the body hangs and swings from them. */
+    public void pin(Vec3d right, Vec3d left) {
+        pinR = right;
+        pinL = left;
+    }
+
+    public boolean pinned() {
+        return pinR != null || pinL != null;
+    }
+
+    private void hold(int i, Vec3d at) {
+        x[i] = px[i] = at.x;
+        y[i] = py[i] = at.y;
+        z[i] = pz[i] = at.z;
+    }
+
     /** Hold points a and b at length len (only pushing apart when min). */
     private void keep(int a, int b, double len, boolean min) {
         double dx = x[b] - x[a], dy = y[b] - y[a], dz = z[b] - z[a];
@@ -492,7 +514,7 @@ public final class Ragdoll {
     // ---- the rig from the points ----
 
     /** The pose for these points, for a player at pos facing bodyYaw. */
-    Pose pose(PlayerEntity p, Vec3d pos, float bodyYaw, float td) {
+    Pose pose(LivingEntity p, Vec3d pos, float bodyYaw, float td) {
         Vector3f[] m = new Vector3f[N];
         for (int i = 0; i < N; i++) m[i] = Animator.toModel(new Vec3d(x[i], y[i], z[i]), pos, bodyYaw);
         Pose out = new Pose();

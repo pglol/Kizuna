@@ -17,10 +17,11 @@ import java.util.List;
  * to empty it.
  */
 public class DeckScreen extends Screen {
-    private static final int W = 268, H = 150;
-    private static final String[] QUAD = {"TOP RIGHT", "TOP LEFT", "BACK RIGHT", "BACK LEFT"};
+    private static final int W = 268, H = 170;
+    private static final String[] QUAD = {"TOP RIGHT", "TOP LEFT", "BACK RIGHT", "BACK LEFT", "IN THE AIR"};
 
-    private int selStance = Fight.stance(), selSlot = 0;
+    private int selStance = Fight.stance(), selSlot = 0, scroll;
+    private int shownMoves, fitMoves;
     private float open;
     private final List<int[]> boxes = new ArrayList<>(); // x, y, w, h, kind (0 stance, 1 slot, 2 move, 3 style, 4 reset), value
 
@@ -72,14 +73,22 @@ public class DeckScreen extends Screen {
 
         // Stance diamond.
         float cx = x0 + 52, cy = y0 + 72, r = 34;
-        Ui.diamond(c, cx, cy, r, Fight.stance(), selStance, 1);
+        Ui.diamond(c, cx, cy, r, Fight.stance(), selStance < 4 ? selStance : -1, selStance == Fighting.AIR ? 0.5f : 1);
         // Quadrant hit areas (each quadrant's half-square).
         int[][] qa = {{1, -1}, {-1, -1}, {1, 1}, {-1, 1}};
         for (int q = 0; q < 4; q++) {
             int bx = Math.round(cx + (qa[q][0] > 0 ? 0 : -r)), by = Math.round(cy + (qa[q][1] > 0 ? 0 : -r));
             boxes.add(new int[] {bx, by, Math.round(r), Math.round(r), 0, q});
         }
-        Ui.text(c, textRenderer, QUAD[selStance], cx - Ui.width(textRenderer, QUAD[selStance], 0.6f) / 2, cy + r + 8, 0.6f, Ui.SOFT);
+        Ui.text(c, textRenderer, QUAD[selStance], cx - Ui.width(textRenderer, QUAD[selStance], 0.6f) / 2, cy + r + 4, 0.6f, Ui.SOFT);
+        // The air row: what you throw when you're off the ground.
+        String airLabel = "AIR";
+        int aw = 26, ah = 11, ax = Math.round(cx - aw / 2f), ay = Math.round(cy + r + 11);
+        boolean airSel = selStance == Fighting.AIR, airOver = in(mx, my, ax, ay, aw, ah);
+        c.fill(ax, ay, ax + aw, ay + ah, airSel ? Ui.alpha(acc, 0.35f) : airOver ? 0x26FFFFFF : 0x14FFFFFF);
+        Ui.edge(c, ax, ay, aw, ah, airSel ? acc : Ui.EDGE);
+        Ui.text(c, textRenderer, airLabel, ax + (aw - Ui.width(textRenderer, airLabel, 0.6f)) / 2, ay + 3, 0.6f, airSel ? Ui.TEXT : Ui.SOFT);
+        boxes.add(new int[] {ax, ay, aw, ah, 0, Fighting.AIR});
 
         // The chain: three lights, then the heavy.
         int px = x0 + 104, py = y0 + 30, cw = 36, ch = 26, gap = 4;
@@ -104,10 +113,14 @@ public class DeckScreen extends Screen {
         Ui.text(c, textRenderer, "POWER", lx + lw - 23, ly - 1, 0.45f, Ui.FAINT);
         ly += 5;
         Move[] pool = style.pool();
+        int skip = scroll, fit = 0, shown = 0;
         for (int i = 0; i < pool.length; i++) {
             Move m = pool[i];
             if (!m.fits(selStance, selSlot)) continue;
-            if (ly + 11 > y0 + H - 6) break;
+            fit++;
+            if (skip-- > 0) continue;
+            if (ly + 11 > y0 + H - 6) continue;
+            shown++;
             boolean in = Deck.slot(selStance, selSlot) == i, over = in(mx, my, lx, ly, lw, 11);
             if (in || over) c.fill(lx, ly, lx + lw, ly + 11, in ? Ui.alpha(acc, 0.22f) : 0x18FFFFFF);
             if (in) c.fill(lx, ly, lx + 1, ly + 11, acc);
@@ -119,6 +132,15 @@ public class DeckScreen extends Screen {
             Ui.pips(c, lx + lw - 23, ly + 5, power, 5, m.heavy() ? Ui.HEAVY : acc);
             boxes.add(new int[] {lx, ly, lw, 11, 2, i});
             ly += 12;
+        }
+        fitMoves = fit;
+        shownMoves = shown;
+        // More than fits: a thin scroll track at the list's edge.
+        if (fit > shown && fit > 0) {
+            int top = py + ch + 13, h = y0 + H - 6 - top;
+            int bh = Math.max(8, h * shown / fit), by = top + (h - bh) * scroll / Math.max(1, fit - shown);
+            c.fill(x0 + W - 6, top, x0 + W - 5, top + h, 0x18FFFFFF);
+            c.fill(x0 + W - 6, by, x0 + W - 5, by + bh, Ui.alpha(acc, 0.8f));
         }
     }
 
@@ -153,12 +175,16 @@ public class DeckScreen extends Screen {
             if (!in(mx, my, b[0], b[1], b[2], b[3])) continue;
             switch (b[4]) {
                 case 0 -> {
+                    scroll = 0;
                     selStance = b[5];
                     if (selSlot >= Fighting.SLOTS) selSlot = 0;
                 }
                 case 1 -> {
                     if (button == 1) Deck.set(selStance, b[5], -1);
-                    else selSlot = b[5];
+                    else {
+                        selSlot = b[5];
+                        scroll = 0;
+                    }
                 }
                 case 2 -> {
                     Deck.set(selStance, selSlot, b[5]);
@@ -171,6 +197,12 @@ public class DeckScreen extends Screen {
             return true;
         }
         return super.mouseClicked(mx, my, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double h, double v) {
+        scroll = Math.max(0, Math.min(Math.max(0, fitMoves - shownMoves), scroll - (int) Math.signum(v)));
+        return true;
     }
 
     @Override

@@ -19,7 +19,7 @@ public final class Deck {
 
     private static final class Saved {
         String style;
-        /** Per stance (top right, top left, back right, back left): four move ids, null for empty. */
+        /** Per row (top right, top left, back right, back left, air): four move ids, null for empty. */
         String[][] slots;
     }
 
@@ -40,16 +40,16 @@ public final class Deck {
             Saved s = new Gson().fromJson(Files.readString(f), Saved.class);
             style = Fighting.style(s.style);
             slots = copy(style.starter());
-            if (s.slots != null && s.slots.length == 4) {
+            if (s.slots != null && s.slots.length >= 4) {
                 int[][] in = copy(style.starter());
-                for (int q = 0; q < 4; q++) {
+                for (int q = 0; q < Math.min(Fighting.ROWS, s.slots.length); q++) {
                     if (s.slots[q] == null) continue;
                     for (int i = 0; i < Fighting.SLOTS && i < s.slots[q].length; i++) {
                         int idx = s.slots[q][i] == null ? -1 : style.index(s.slots[q][i]);
                         Move m = style.move(idx);
                         in[q][i] = m != null && m.fits(q, i) ? idx : -1;
                     }
-                    if (lights(in[q]) == 0) in[q] = style.starter()[q].clone(); // a quadrant always has a light
+                    if (lights(in[q]) == 0 && lights(style.starter()[q]) > 0) in[q] = style.starter()[q].clone(); // a row keeps a light if it can have one
                 }
                 slots = in;
             }
@@ -61,8 +61,8 @@ public final class Deck {
         try {
             Saved s = new Saved();
             s.style = style.id();
-            s.slots = new String[4][Fighting.SLOTS];
-            for (int q = 0; q < 4; q++) for (int i = 0; i < Fighting.SLOTS; i++) {
+            s.slots = new String[Fighting.ROWS][Fighting.SLOTS];
+            for (int q = 0; q < Fighting.ROWS; q++) for (int i = 0; i < Fighting.SLOTS; i++) {
                 Move m = style.move(slots[q][i]);
                 s.slots[q][i] = m == null ? null : m.id();
             }
@@ -90,8 +90,8 @@ public final class Deck {
         if (move >= 0 && (m == null || !m.fits(stance, i))) return false;
         int keep = slots[stance][i];
         slots[stance][i] = move;
-        if (lights(slots[stance]) == 0) {
-            slots[stance][i] = keep; // never leave a quadrant with nothing to throw
+        if (lights(slots[stance]) == 0 && lights(style.starter()[stance]) > 0) {
+            slots[stance][i] = keep; // never leave a row with nothing to throw
             return false;
         }
         save();
@@ -116,18 +116,20 @@ public final class Deck {
     /** The move a press throws from this stance: the heavy, or step `step` of the light chain (skipping empty slots). */
     public static Move pick(int stance, boolean heavy, int step) {
         load();
+        if (stance < 0 || stance >= slots.length) return null;
         int[] q = slots[stance];
         if (heavy) {
             Move h = style.move(q[Fighting.HEAVY_SLOT]);
             return h != null ? h : pick(stance, false, step);
         }
         int n = lights(q);
+        if (n == 0) return null;
         int want = Math.floorMod(step, Math.max(1, n));
         for (int i = 0, seen = 0; i < Fighting.HEAVY_SLOT; i++) {
             if (q[i] < 0) continue;
             if (seen++ == want) return style.move(q[i]);
         }
-        return style.pool()[0];
+        return null;
     }
 
     static int lights(int[] q) {

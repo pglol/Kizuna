@@ -493,11 +493,14 @@ public final class Animator {
         add(o, backArm, Pose.PITCH, one * (32 * up + 20 * mid - 8 * down));
         add(o, Bone.RIGHT_ARM, Pose.ROLL, one * (8 + 20 * down));
         add(o, Bone.LEFT_ARM, Pose.ROLL, -one * (8 + 20 * down));
-        // ...and the hands come up and out together for balance, from the moment the feet leave.
-        add(o, Bone.RIGHT_ARM, Pose.PITCH, even * -105);
-        add(o, Bone.LEFT_ARM, Pose.PITCH, even * -105);
-        add(o, Bone.RIGHT_ARM, Pose.ROLL, even * 28);
-        add(o, Bone.LEFT_ARM, Pose.ROLL, -even * 28);
+        // ...and the hands come up forward together for balance (reaching out in front, the way you do
+        // stepping back), from the moment the feet leave.
+        add(o, Bone.RIGHT_ARM, Pose.PITCH, even * -78);
+        add(o, Bone.LEFT_ARM, Pose.PITCH, even * -78);
+        add(o, Bone.RIGHT_ARM, Pose.YAW, even * 8);
+        add(o, Bone.LEFT_ARM, Pose.YAW, -even * 8);
+        add(o, Bone.RIGHT_FOREARM, Pose.PITCH, even * 18);
+        add(o, Bone.LEFT_FOREARM, Pose.PITCH, even * 18);
         add(o, Bone.RIGHT_FOREARM, Pose.PITCH, ai * 28);
         add(o, Bone.LEFT_FOREARM, Pose.PITCH, ai * 28);
         add(o, Bone.CHEST, Pose.PITCH, ai * (9 * up + 4 * mid - 2 * down));
@@ -917,6 +920,11 @@ public final class Animator {
     }
 
     /** Two-bone IK for a leg (thigh and shin, 6 pixels each; the knee bends backwards). */
+    /** A leg driven to a target (a kick), the knee pointing towards pole (in the root frame). */
+    static void kickLeg(Pose out, Bone leg, Bone shin, Vector3f hip, Vector3f target, Matrix4f invFrame, float weight, Vector3f pole) {
+        solve(out, leg, shin, hip, target, invFrame, weight, 6, 6, 1, 0, pole);
+    }
+
     static void stride(Pose out, Bone leg, Bone shin, Vector3f hip, Vector3f target, Matrix4f invFrame) {
         solve(out, leg, shin, hip, target, invFrame, 1, 6, 6, 1, 0, new Vector3f(Math.signum(hip.x) * 0.15f, 0, -1));
     }
