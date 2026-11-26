@@ -342,11 +342,11 @@ public final class Ragdoll {
     static {
         // A limp body floats all the way up and lies out on the surface: chest and head highest, arms
         // and thighs at the top too, only the hands and feet dipping a little under.
-        java.util.Arrays.fill(FLOAT, 1.55);
-        for (int i : new int[] {PELVIS, NECK, RS, LS, RHIP, LHIP}) FLOAT[i] = 1.9;
-        FLOAT[HEAD] = 1.9;
-        for (int i : new int[] {RH, LH}) FLOAT[i] = 1.35;
-        for (int i : new int[] {RF, LF}) FLOAT[i] = 1.25;
+        java.util.Arrays.fill(FLOAT, 1.22);
+        for (int i : new int[] {PELVIS, NECK, RS, LS, RHIP, LHIP}) FLOAT[i] = 1.4;
+        FLOAT[HEAD] = 1.4;
+        for (int i : new int[] {RH, LH}) FLOAT[i] = 1.14;
+        for (int i : new int[] {RF, LF}) FLOAT[i] = 1.1;
     }
 
     /**
@@ -375,9 +375,9 @@ public final class Ragdoll {
             }
             double keep = Math.exp(-3.5 * h);
             vx *= keep;
-            vy *= keep;
+            vy *= Math.exp(-5.5 * h); // water resists going up and down most: a gentle drift to the top
             vz *= keep;
-            vy += GRAVITY * FLOAT[i] * Math.min(1, depth / 0.12) * h * h; // full lift just under the top: it rides at the surface
+            vy += GRAVITY * FLOAT[i] * Math.min(1, depth / 0.2) * h * h; // full lift a little under the top: it rides at the surface
             px[i] = x[i] - vx;
             py[i] = y[i] - vy;
             pz[i] = z[i] - vz;

@@ -44,6 +44,30 @@ public final class DummyAnim {
     }
 
     /** The pose it's showing (for its hitboxes), without moving its animation on. */
+    /**
+     * Turn bone b of `out` part way (f) from how it was last frame, as one rotation (never angle by angle:
+     * the same turn can be written two ways, and easing each angle separately between the two swings the
+     * limb through poses it never had). Written back in the form nearest last frame's angles.
+     */
+    private static void blendTurn(Pose out, Pose prev, Bone b, float f) {
+        org.joml.Quaternionf qa = new org.joml.Quaternionf().rotationZYX(prev.rad(b, Pose.ROLL), prev.rad(b, Pose.YAW), prev.rad(b, Pose.PITCH));
+        org.joml.Quaternionf qb = new org.joml.Quaternionf().rotationZYX(out.rad(b, Pose.ROLL), out.rad(b, Pose.YAW), out.rad(b, Pose.PITCH));
+        if (qa.dot(qb) < 0) qb.mul(-1);
+        Vector3f e = new org.joml.Matrix3f().set(qa.slerp(qb, f)).getEulerAnglesZYX(new Vector3f());
+        float pd = (float) Math.toDegrees(e.x), yd = (float) Math.toDegrees(e.y), rd = (float) Math.toDegrees(e.z);
+        float cp = prev.get(b, Pose.PITCH), cy = prev.get(b, Pose.YAW), cr = prev.get(b, Pose.ROLL);
+        float ap = pd + 180, ay = 180 - yd, ar = rd + 180;
+        float d1 = Math.abs(MathHelper.wrapDegrees(pd - cp)) + Math.abs(MathHelper.wrapDegrees(yd - cy)) + Math.abs(MathHelper.wrapDegrees(rd - cr));
+        float d2 = Math.abs(MathHelper.wrapDegrees(ap - cp)) + Math.abs(MathHelper.wrapDegrees(ay - cy)) + Math.abs(MathHelper.wrapDegrees(ar - cr));
+        if (d2 < d1) {
+            pd = ap;
+            yd = ay;
+            rd = ar;
+        }
+        // Keep the numbers next to last frame's (no 359 -> -1 jumps for anything reading them).
+        out.set(b, cp + MathHelper.wrapDegrees(pd - cp), cy + MathHelper.wrapDegrees(yd - cy), cr + MathHelper.wrapDegrees(rd - cr));
+    }
+
     static Pose current(Dummy d, float td) {
         State s = STATES.get(d.getId());
         return s != null ? s.shown : new Pose();
@@ -88,6 +112,7 @@ public final class DummyAnim {
                     }
                 }
                 s.shown = r.resting() ? r.getUpPose(limp, r.getUp, 0, 0) : limp;
+                s.prev = s.shown.copy(); // getting up carries on from where the body lies
                 return s.shown;
             }
             Ragdoll.stop(d);
@@ -121,10 +146,7 @@ public final class DummyAnim {
         // but continuously, from what was shown last frame.
         if (dt > 0 && s.prev != null) {
             float f = Math.min(1, dt * 28);
-            for (Bone b : Bone.values()) for (int a = 0; a < 3; a++) {
-                float was = s.prev.get(b, a);
-                out.set(b, a, was + MathHelper.wrapDegrees(out.get(b, a) - was) * f);
-            }
+            for (Bone b : Bone.values()) blendTurn(out, s.prev, b, f);
             for (int a = 0; a < 3; a++) out.offset[a] = s.prev.offset[a] + (out.offset[a] - s.prev.offset[a]) * f;
         }
         s.prev = out.copy();

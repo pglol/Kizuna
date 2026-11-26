@@ -288,3 +288,5 @@ moves the body somewhere the physics wouldn't.
 
 ## Floating limp
 - A knocked-out body floats all the way up and lies out on the surface: torso, head, arms and thighs at the top, only the hands and feet dipping slightly under. Lift reaches full strength 0.12 blocks under the top.
+- (Tuned) The float is a gentle drift up, not a launch: lift ramps over the last 0.2 blocks and water resists vertical motion most. Torso and head ride about 0.14 under the top, limbs a little lower, feet lowest.
+- A dummy's pose is smoothed as whole rotations per bone, never angle by angle.
