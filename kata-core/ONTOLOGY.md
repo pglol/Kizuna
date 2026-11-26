@@ -238,7 +238,7 @@ moves the body somewhere the physics wouldn't.
     - a kick is caught: you grab the foot and throw them off their feet
 41. **Knockdowns.** A knockdown move (a full heavy, a push kick, a side kick, a dropkick and so on) puts the target into the ragdoll with 80 % of the hit's push and 75 % of its lift. A caught kick throws at 0.6 forward and 0.32 up. A hit while down sends the body flying again.
 41b. **Spinning kicks sweep.** The leg chambers and goes out wide early, held through the turn. It hits the first body it touches on the way round.
-41c. **Spinning strikes lead with the turn.** From a back stance the spin carries on round, and the limb on the side leading the turn strikes: back-right turns right with the left limb, back-left turns left with the right.
+41c. **Spinning strikes** use the limb on the side you're turned (back-right: right) and turn that way. A spinning kick swings out wide on that side through the turn and sweeps round, so fully out the foot lands on the target.
 41d. **Kicks pivot.** The hips turn over the standing foot, which stays planted and pointing where it was, and the chest counter-twists.
 41a. **Spins turn smoothly.** A spinning strike turns the long way round, its side leading, with an ease-in-out arriving exactly at contact (0.26–0.32 s), so the whole turn is visible.
 42. **Footwork.** Locked on, a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse. Guarding ×0.75, winding up ×0.8, staggered ×0.5.

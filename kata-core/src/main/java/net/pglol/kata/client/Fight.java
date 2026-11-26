@@ -274,7 +274,7 @@ public final class Fight {
         boolean right = Fighting.rightLimb(m, stance, 0);
         // A spinning strike turns you as you throw it, its side leading the turn.
         if (m.turns()) {
-            SPIN.put(p.getId(), right ? -1 : 1); // the leading limb's side: a right one leads a turn to the left
+            SPIN.put(p.getId(), right ? 1 : -1);
             stanceTo(Fighting.end(m, stance));
         }
         // Anyone it's aimed at sees it coming.
@@ -443,7 +443,7 @@ public final class Fight {
                     Move m = Fighting.MOVES[id];
                     int st = STANCES.getOrDefault(entity, Fighting.TR);
                     MOVES.put(entity, new Act(m, st, ((a >> 9) & 0x7F) / 100f, System.nanoTime()));
-                    if (m.turns()) SPIN.put(entity, (a & 1 << 8) != 0 ? -1 : 1);
+                    if (m.turns()) SPIN.put(entity, (a & 1 << 8) != 0 ? 1 : -1);
                 }
                 STANCE_AT.put(entity, System.nanoTime());
             }
@@ -779,15 +779,16 @@ public final class Fight {
             Vector3f rest = new Vector3f(hip.x, 24, 0);
             float chamberY = m.path() == Path.LOW_KICK ? 19 : 16;
             Vector3f chamber = new Vector3f(hip.x + (m.path() == Path.ROUNDHOUSE ? out_ * 3 : 0), chamberY, m.path() == Path.BACK_KICK ? 3 : -3);
-            // A spinning kick doesn't aim: the leg goes out wide, a little above the hip, and the spin sweeps
-            // it round through whatever's there.
-            Vector3f target = m.turns() ? new Vector3f(hip.x + out_ * 11, 9, -1) : clampReach(hip, aim, 11.6f);
+            Vector3f target = clampReach(hip, aim, 11.6f);
             Vector3f foot;
             if (kk < 0.4f) foot = new Vector3f(rest).lerp(chamber, ease(kk / 0.4f));
             else {
                 float x = (kk - 0.4f) / 0.6f;
                 foot = new Vector3f(chamber).lerp(target, x);
-                if (m.path() == Path.ROUNDHOUSE) foot.add(out_ * 6 * MathHelper.sin(MathHelper.PI * x), -1.5f * MathHelper.sin(MathHelper.PI * x), 0);
+                // A spinning kick swings out wide on its own side through the turn and sweeps round onto the
+                // target: fully out, the foot is on them, not off to the side.
+                if (m.turns()) foot.add(out_ * 10 * MathHelper.sin(MathHelper.PI * x), -3 * MathHelper.sin(MathHelper.PI * x), 2 * MathHelper.sin(MathHelper.PI * x));
+                else if (m.path() == Path.ROUNDHOUSE) foot.add(out_ * 6 * MathHelper.sin(MathHelper.PI * x), -1.5f * MathHelper.sin(MathHelper.PI * x), 0);
             }
             Vector3f pole = switch (m.path()) {
                 case ROUNDHOUSE, SIDE_KICK -> new Vector3f(out_, -0.2f, -0.4f); // knee turned out to the side

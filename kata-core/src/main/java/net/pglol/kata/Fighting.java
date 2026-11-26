@@ -214,9 +214,7 @@ public final class Fighting {
     /** The limb (hand or foot) hit i of a move is thrown with from a stance: true = right. */
     public static boolean rightLimb(Move m, int stance, int hit) {
         boolean right;
-        // Turned away: the spin carries on round, and the limb on the side that leads the turn strikes
-        // (back-right turns on to the right, so the left leads; back-left the other way).
-        if (m.from() == From.BACK) right = !rightSide(stance);
+        if (m.from() == From.BACK) right = rightSide(stance); // turned away: the limb on the side you're turned
         else {
             boolean leadRight = !rightSide(stance); // top-right is orthodox (left lead)
             right = m.lead() == leadRight;

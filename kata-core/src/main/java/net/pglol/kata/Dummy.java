@@ -327,10 +327,7 @@ public class Dummy extends PathAwareEntity {
             boolean counter = guarding() && age - guardAt > 6;
             if (!guarding() || counter) {
                 if (counter) setGuard(false);
-                if (d > 2.5) {
-                    Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(0.22);
-                    addVelocity(in.x, 0, in.z);
-                }
+                if (d > 2.5) getNavigation().startMovingTo(foe, 1.1); // a step in to reach
                 Fighting.Style s = Fighting.style("taijutsu");
                 String[] picks = {"jab", "jab", "straight", "straight", "one_two", "lead_hook", "rear_hook", "front_kick", "roundhouse", "low_kick", "uppercut"};
                 Fighting.Move m = s.move(s.index(picks[random.nextInt(picks.length)]));
