@@ -304,6 +304,16 @@ public final class Fighting {
             if (st != null) ServerPlayNetworking.send(viewer, new KataNet.FightOf(p.getId(), KataNet.STANCE, st));
         });
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((victim, source, amount) -> {
+            boolean ok = allow(victim, source, amount);
+            if (!ok) kataRefused = true; // dodged, parried or blocked: Kata's own refusal
+            return ok;
+        });
+    }
+
+    /** Set when Kata itself turns a hit away (so a refused player hit isn't then forced through). */
+    private static boolean kataRefused;
+
+    private static boolean allow(LivingEntity victim, net.minecraft.entity.damage.DamageSource source, float amount) {
             if (chip) return true;
             // Dodging, in its first moments: the strike goes through nothing.
             if (striking != null && evades(victim, striking, strikingPart)) {
@@ -384,7 +394,6 @@ public final class Fighting {
                 }
             }
             return false;
-        });
     }
 
     /** A perfect block: a punch is turned aside and the attacker staggers; a kick is caught and they're thrown. */
@@ -847,8 +856,21 @@ public final class Fighting {
         striking = m;
         strikingPart = part;
         boolean hit;
+        kataRefused = false;
         try {
             hit = t.damage(src, dmg);
+            // A fighter's strike that really touched another player: the game's PvP and team rules
+            // don't get a say (they turned every player hit away). Creative and spectators stay untouchable.
+            if (!hit && !kataRefused && t instanceof ServerPlayerEntity victim && by instanceof ServerPlayerEntity && !victim.isCreative() && !victim.isSpectator()
+                && victim.isAlive() && !guarding(victim)) {
+                var key = net.minecraft.registry.RegistryKey.of(net.minecraft.registry.RegistryKeys.DAMAGE_TYPE, net.minecraft.util.Identifier.of(KataCore.ID, "strike"));
+                var type = t.getWorld().getRegistryManager().get(net.minecraft.registry.RegistryKeys.DAMAGE_TYPE).getEntry(key);
+                if (type.isPresent()) {
+                    t.timeUntilRegen = 0;
+                    hit = t.damage(new net.minecraft.entity.damage.DamageSource(type.get()), dmg);
+                    if (hit) t.setAttacker(by);
+                }
+            }
         } finally {
             breaking = false;
             striking = null;

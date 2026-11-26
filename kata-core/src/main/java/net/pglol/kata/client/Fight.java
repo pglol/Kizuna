@@ -42,6 +42,9 @@ public final class Fight {
     static int target = -1;
     static int stance = Fighting.TR;
     static boolean guard;
+    /** Who your last strike touched, and when (an impact on them is yours). */
+    private static int lastStruck = -1;
+    private static long lastStruckAt;
     /** /kdebug: show the striking limb and report every strike's fate. */
     static boolean debug;
     /** The deck's move preview: what to show on your body while the deck draws it, from which stance, since when. */
@@ -468,6 +471,10 @@ public final class Fight {
                     boolean right = Fighting.rightLimb(cur, curStance, nextHit);
                     int packed = Fighting.id(cur) | (right ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9) | (lastPart.ordinal() << 16);
                     send(KataNet.STRIKE, packed, hit);
+                    if (hit >= 0) {
+                        lastStruck = hit;
+                        lastStruckAt = System.nanoTime();
+                    }
                     if (debug) {
                         Entity he = hit >= 0 ? p.getWorld().getEntityById(hit) : null;
                         say("strike " + cur.name() + " (" + (drawn ? "limb touch" : "first-person line") + "): "
@@ -788,7 +795,16 @@ public final class Fight {
             int tier = (a >> 9) & 3;
             if (tier > 0 && mc.world != null && mc.player != null) {
                 Entity he = mc.world.getEntityById(entity);
-                if (he != null && he.squaredDistanceTo(mc.player) < 16 * 16) ImpactFrames.hit(he.getEyePos().add(0, -0.3, 0), tier == 1 ? 0.55f : 1.0f);
+                if (he != null && he.squaredDistanceTo(mc.player) < 24 * 24) {
+                    Vec3d at = he.getEyePos().add(0, -0.3, 0);
+                    // You took it, you landed it, or you're just nearby.
+                    int who = entity == mc.player.getId() ? ImpactFrames.VICTIM
+                        : entity == lastStruck && System.nanoTime() - lastStruckAt < 800_000_000L ? ImpactFrames.ATTACKER : ImpactFrames.NEARBY;
+                    ImpactFrames.hit(at, tier == 1 ? 0.55f : 1.0f, who);
+                    // A burst where it landed, for anyone looking.
+                    for (int i = 0; i < 8; i++) mc.world.addParticle(net.minecraft.particle.ParticleTypes.CRIT, at.x, at.y, at.z,
+                        (mc.world.random.nextDouble() - 0.5) * 0.8, mc.world.random.nextDouble() * 0.4, (mc.world.random.nextDouble() - 0.5) * 0.8);
+                }
             }
             HITS.put(entity, new React(a, System.nanoTime()));
             if (HITS.size() > 256) HITS.clear();

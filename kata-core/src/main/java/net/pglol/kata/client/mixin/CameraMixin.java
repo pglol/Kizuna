@@ -22,9 +22,14 @@ public abstract class CameraMixin {
     @Inject(method = "update", at = @At("TAIL"))
     private void kata$shoulder(BlockView area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickDelta, CallbackInfo ci) {
         KataCam.Cam cam = KataCam.camera(tickDelta);
-        if (cam == null) return;
+        float[] shake = net.pglol.kata.client.ImpactFrames.shake(); // a heavy landing jolts the view
+        Camera self = (Camera) (Object) this;
+        if (cam == null) {
+            if (shake != null) setRotation(self.getYaw() + shake[0], self.getPitch() + shake[1]);
+            return;
+        }
         this.thirdPerson = true;
-        setRotation(cam.yaw(), cam.pitch());
+        setRotation(cam.yaw() + (shake == null ? 0 : shake[0]), cam.pitch() + (shake == null ? 0 : shake[1]));
         setPos(cam.x(), cam.y(), cam.z());
     }
 }

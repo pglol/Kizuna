@@ -447,7 +447,9 @@ moves the body somewhere the physics wouldn't.
 - Every body keeps a short trail of how it just stood. A parry bursts a bright cyan-white ghost out of the parrier, swelling as it fades, with two quick echoes, and throws a red ghost back off whoever was parried. An evade leaves a trail of four pale ghosts where the body was as the strike went through. A dodge leaves one faint ghost behind. They glow, are drawn through the full rig (every bend), and fade in under half a second. Everyone nearby sees them, dummies included.
 
 ## Impact frames on heavies
-- How charged a heavy was decides it: barely (under 40%) none; half charged a light impact frame (one short black frame with white spikes, then thin speed lines); well charged (80% or more) a medium one (black frame, white frame, speed lines). Everyone within 16 blocks sees it, centred on the hit. The hit stop grows with the charge too (0.07, 0.11, 0.15 s).
+- How charged a heavy was decides it: barely (under 40%) none; half charged a light surge; well charged (80% or more) a strong one. The hit stop grows with the charge too (0.07, 0.11, 0.15 s).
+- The two fighters feel it: a tint pressing in from the screen's edges and a faint wash over the view (warm gold for the one who landed it, deep red for the one it landed on), the view punching in a touch and shaking for a moment; a strong one adds faint speed lines towards the hit. It rises in 45 ms and ebbs over about a third of a second. No flashes.
+- Anyone else within 24 blocks: nothing on their screen if they can see it (just a burst of sparks where it landed); if it's out of view, a soft glow on the edge of the screen on the side it came from.
 
 ## Knockback
 - Ordinary hits push a little further along the ground (0.42 x push), knockdowns throw a little further (0.5 x push, at most 0.28 blocks a tick across).
@@ -456,3 +458,6 @@ moves the body somewhere the physics wouldn't.
 
 ## /kdebug
 - Toggles strike debugging: the striking fist or foot leaves a trail (and the elbow or knee sparks), each strike reports what it touched, and the server answers with what became of it (landed, or why not: too soon, still reeling, guard up, out of reach with the distance, or the game refusing the damage).
+
+## Player hits always count
+- A strike that really touched another player lands even if the game's PvP or team rules would turn it away (the fighting is the game). Creative and spectator players can't be hurt, and dodges, parries and blocks still turn hits away as before.

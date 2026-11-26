@@ -20,67 +20,92 @@ import org.joml.Vector3f;
 import java.util.Random;
 
 /**
- * Impact frames, the way anime cuts a big hit: a frame gone black with white spikes bursting from
- * the point of impact, a frame gone white with black ones, then speed lines rushing in from the
- * edges as it all settles. A light one (a heavy half charged) is only the black frame, short, and
- * thinner lines; a medium one (well charged) is the whole cut. (The AoT mod's, brought over.)
+ * The feel of a heavy landing. For the two fighters in it: a surge, a tint closing in from the edges of
+ * the screen and a faint wash over the whole view (warm for the one who landed it, deep red for the one
+ * it landed on), the view punching in a touch and shaking for a moment; well charged, faint speed lines
+ * towards the hit too. For anyone else nearby nothing on screen at all, unless the hit is out of view:
+ * then a soft glow on the edge of the screen on the side it came from.
  */
 public final class ImpactFrames {
     private ImpactFrames() {}
 
+    public static final int ATTACKER = 0, VICTIM = 1, NEARBY = 2;
+
     private static long at, seed;
     private static float strength;
+    private static int role = -1;
     private static Vec3d where;
-    /** Speed lines alone (a vanish, a charge): until, and how hard. */
-    private static long linesUntil;
-    private static float lines;
+    /** The edge cue for a hit out of view: when, and where it was. */
+    private static long cueAt;
+    private static Vec3d cueWhere;
+    private static float cueStrength;
 
-    /** A big hit at this spot (strength 0..1+). */
-    public static void hit(Vec3d pos, float s) {
+    /** A heavy landed at this spot (strength 0.55 light, 1 medium), seen as attacker, victim or someone nearby. */
+    public static void hit(Vec3d pos, float s, int who) {
         long now = Util.getMeasuringTimeMs();
-        if (now - at < 380 && s <= strength) return;
+        if (who == NEARBY) {
+            cueAt = now;
+            cueWhere = pos;
+            cueStrength = s;
+            return;
+        }
+        if (now - at < 300 && s <= strength) return;
         at = now;
-        seed = now ^ (long) (pos.x * 31 + pos.z * 17);
-        strength = Math.min(1.4f, s);
+        seed = now;
+        strength = s;
+        role = who;
         where = pos;
     }
 
-    /** Speed lines closing in from the edges for a moment. */
-    public static void rush(float s, long ms) {
-        linesUntil = Util.getMeasuringTimeMs() + ms;
-        lines = s;
+    /** How strong the surge is right now (0..1+), rising fast and ebbing away. */
+    private static float amp() {
+        if (role < 0) return 0;
+        long t = Util.getMeasuringTimeMs() - at;
+        float len = 160 + 200 * strength;
+        if (t < 45) return strength * t / 45f;
+        float k = (float) Math.exp(-(t - 45) / len * 3);
+        return k < 0.01f ? 0 : strength * k;
+    }
+
+    /** The view punching in (a multiplier on the field of view). */
+    public static float fovScale() {
+        return 1 - 0.06f * amp();
+    }
+
+    /** A shake of the view, in degrees (yaw, pitch). */
+    public static float[] shake() {
+        float a = amp();
+        if (a < 0.02f) return null;
+        long t = Util.getMeasuringTimeMs();
+        return new float[] {(float) Math.sin(t * 0.09) * 0.9f * a, (float) Math.cos(t * 0.11) * 0.7f * a};
     }
 
     public static void render(DrawContext c, RenderTickCounter tick) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.options.hudHidden) return;
-        long now = Util.getMeasuringTimeMs();
         int w = c.getScaledWindowWidth(), h = c.getScaledWindowHeight();
-        long t = now - at;
-        if (where != null && t < 420) {
-            float[] o = screen(mc, where, w, h);
-            Random r = new Random(seed);
-            Matrix4f m = c.getMatrices().peek().getPositionMatrix();
-            boolean full = strength >= 0.8f;
-            long one = full ? 55 : 40, two = full ? 110 : 40;
-            if (t < one) {
-                // Frame one: black, white spikes.
-                fill(m, w, h, (int) (215 * Math.min(1, strength)) << 24);
-                spikes(m, o[0], o[1], w, h, r, full ? 26 : 16, 0.05f, 0xF0FFFFFF, 0.04f);
-            } else if (t < two) {
-                // Frame two: white, black spikes.
-                fill(m, w, h, ((int) (170 * Math.min(1, strength)) << 24) | 0xFFFFFF);
-                spikes(m, o[0], o[1], w, h, r, 22, 0.06f, 0xE0000000, 0.03f);
-            } else {
-                // Settling: speed lines in from the edges, thinning out.
-                float k = 1 - (t - two) / 310f;
-                lines(m, o[0], o[1], w, h, r, 40, k * strength);
+        Matrix4f m = c.getMatrices().peek().getPositionMatrix();
+        float a = amp();
+        if (a > 0.01f) {
+            int rgb = role == ATTACKER ? 0xFFD49A : 0xC4161C;
+            // The wash over everything, then the tint pressing in from the edges.
+            fill(m, w, h, argb(a * (role == ATTACKER ? 0.08f : 0.14f), rgb));
+            vignette(m, w, h, argb(Math.min(0.75f, a * 0.62f), rgb), 0.24f);
+            if (strength >= 0.8f && where != null) {
+                float[] o = screen(mc, where, w, h);
+                lines(m, o[0], o[1], w, h, new Random(seed), 30, a * 0.45f);
             }
+        } else role = -1;
+        // A heavy landed nearby, out of view: a soft glow on the edge it came from.
+        long ct = Util.getMeasuringTimeMs() - cueAt;
+        if (cueWhere != null && ct < 650) {
+            float[] dir = offscreen(mc, cueWhere);
+            if (dir != null) edgeGlow(m, w, h, dir[0], dir[1], argb((1 - ct / 650f) * 0.55f * cueStrength, 0xFFF1DC));
         }
-        if (now < linesUntil) {
-            float k = (linesUntil - now) / 260f;
-            lines(c.getMatrices().peek().getPositionMatrix(), w / 2f, h / 2f, w, h, new Random(now / 50), 34, Math.min(1, k) * lines);
-        }
+    }
+
+    private static int argb(float a, int rgb) {
+        return ((int) (Math.max(0, Math.min(1, a)) * 255) << 24) | (rgb & 0xFFFFFF);
     }
 
     /** Where a world point lands on screen (the middle if it's behind you). */
@@ -92,8 +117,24 @@ public final class ImpactFrames {
         if (v.z >= -0.1f) return new float[] {w / 2f, h / 2f};
         double fov = Math.toRadians(mc.options.getFov().getValue());
         float focal = (float) (h / 2f / Math.tan(fov / 2));
-        float x = w / 2f + v.x / -v.z * focal, y = h / 2f - v.y / -v.z * focal;
-        return new float[] {Math.max(0, Math.min(w, x)), Math.max(0, Math.min(h, y))};
+        return new float[] {Math.max(0, Math.min(w, w / 2f + v.x / -v.z * focal)), Math.max(0, Math.min(h, h / 2f - v.y / -v.z * focal))};
+    }
+
+    /** If a point is out of view, the screen direction towards it (x right, y down, unit); null if it's in view. */
+    private static float[] offscreen(MinecraftClient mc, Vec3d p) {
+        Camera cam = mc.gameRenderer.getCamera();
+        Vec3d rel = p.subtract(cam.getPos());
+        Vector3f v = new Vector3f((float) rel.x, (float) rel.y, (float) rel.z);
+        new Quaternionf(cam.getRotation()).conjugate().transform(v);
+        double fov = Math.toRadians(mc.options.getFov().getValue());
+        if (v.z < -0.1f) {
+            double half = Math.tan(fov / 2);
+            if (Math.abs(v.x / -v.z) < half * 1.4 && Math.abs(v.y / -v.z) < half) return null; // on screen: they can see it
+        }
+        float dx = v.x, dy = -v.y;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-4f) return new float[] {0, 1};
+        return new float[] {dx / len, dy / len};
     }
 
     private static void begin() {
@@ -119,44 +160,61 @@ public final class ImpactFrames {
         end(b);
     }
 
-    /** Wedges bursting out from a point to past the edges. */
-    private static void spikes(Matrix4f m, float cx, float cy, int w, int h, Random r, int n, float width, int argb, float jitter) {
+    /** A tint strongest at the screen's edges, fading to nothing a share of the way in. */
+    private static void vignette(Matrix4f m, int w, int h, int edge, float inset) {
+        int clear = edge & 0x00FFFFFF;
+        float ix = w * inset, iy = h * inset;
         begin();
-        BufferBuilder b = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
-        float far = (float) Math.hypot(w, h) * 1.2f;
-        for (int i = 0; i < n; i++) {
-            double a = i * Math.PI * 2 / n + (r.nextDouble() - 0.5) * 0.4;
-            double wd = width * (0.4 + r.nextDouble() * 1.4);
-            float inner = 6 + r.nextFloat() * 22;
-            float len = far * (0.45f + r.nextFloat() * 0.55f);
-            float tx = cx + (float) Math.cos(a) * inner, ty = cy + (float) Math.sin(a) * inner;
-            b.vertex(m, tx, ty, 0).color(argb);
-            b.vertex(m, cx + (float) Math.cos(a - wd) * len, cy + (float) Math.sin(a - wd) * len, 0).color(argb);
-            b.vertex(m, cx + (float) Math.cos(a + wd) * len, cy + (float) Math.sin(a + wd) * len, 0).color(argb);
-            if (r.nextFloat() < jitter * 10) {
-                // A split spike: a second, thinner one beside it.
-                double a2 = a + wd * 2.5;
-                b.vertex(m, tx, ty, 0).color(argb);
-                b.vertex(m, cx + (float) Math.cos(a2 - wd * 0.4) * len * 0.8f, cy + (float) Math.sin(a2 - wd * 0.4) * len * 0.8f, 0).color(argb);
-                b.vertex(m, cx + (float) Math.cos(a2 + wd * 0.4) * len * 0.8f, cy + (float) Math.sin(a2 + wd * 0.4) * len * 0.8f, 0).color(argb);
-            }
-        }
+        BufferBuilder b = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+        // top, right, bottom, left: outer edge (tinted) to inner edge (clear)
+        quad(b, m, 0, 0, w, 0, w - ix, iy, ix, iy, edge, clear);
+        quad(b, m, w, 0, w, h, w - ix, h - iy, w - ix, iy, edge, clear);
+        quad(b, m, w, h, 0, h, ix, h - iy, w - ix, h - iy, edge, clear);
+        quad(b, m, 0, h, 0, 0, ix, iy, ix, h - iy, edge, clear);
         end(b);
     }
 
-    /** Manga speed lines: thin white wedges from the edges in towards a point, never reaching it. */
+    private static void quad(BufferBuilder b, Matrix4f m, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, int outer, int inner) {
+        b.vertex(m, x1, y1, 0).color(outer);
+        b.vertex(m, x2, y2, 0).color(outer);
+        b.vertex(m, x3, y3, 0).color(inner);
+        b.vertex(m, x4, y4, 0).color(inner);
+    }
+
+    /** A soft glow on the screen's edge in direction (dx, dy) from the middle. */
+    private static void edgeGlow(Matrix4f m, int w, int h, float dx, float dy, int col) {
+        float cx = w / 2f, cy = h / 2f;
+        float sx = Math.abs(dx) < 1e-4f ? Float.MAX_VALUE : (w / 2f) / Math.abs(dx), sy = Math.abs(dy) < 1e-4f ? Float.MAX_VALUE : (h / 2f) / Math.abs(dy);
+        float s = Math.min(sx, sy);
+        float ex = cx + dx * s, ey = cy + dy * s;
+        float tx = -dy, ty = dx, span = Math.min(w, h) * 0.22f, depth = Math.min(w, h) * 0.12f;
+        int clear = col & 0x00FFFFFF;
+        begin();
+        BufferBuilder b = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
+        // A fan: bright at the edge point, fading along the edge and inwards.
+        float ix = ex - dx * depth, iy = ey - dy * depth;
+        b.vertex(m, ex, ey, 0).color(col);
+        b.vertex(m, ex + tx * span, ey + ty * span, 0).color(clear);
+        b.vertex(m, ix, iy, 0).color(clear);
+        b.vertex(m, ex, ey, 0).color(col);
+        b.vertex(m, ix, iy, 0).color(clear);
+        b.vertex(m, ex - tx * span, ey - ty * span, 0).color(clear);
+        end(b);
+    }
+
+    /** Thin streaks from the edges towards a point, never reaching it. */
     private static void lines(Matrix4f m, float cx, float cy, int w, int h, Random r, int n, float k) {
         if (k <= 0.02f) return;
         begin();
         BufferBuilder b = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLES, VertexFormats.POSITION_COLOR);
         float far = (float) Math.hypot(w, h);
-        int col = ((int) (150 * Math.min(1, k)) << 24) | 0xFFFFFF;
+        int col = ((int) (110 * Math.min(1, k)) << 24) | 0xFFFFFF;
         for (int i = 0; i < n; i++) {
-            double a = r.nextDouble() * Math.PI * 2, wd = 0.004 + r.nextDouble() * 0.01;
-            float inner = far * (0.32f + r.nextFloat() * 0.22f);
+            double a = r.nextDouble() * Math.PI * 2, wd = 0.003 + r.nextDouble() * 0.006;
+            float inner = far * (0.36f + r.nextFloat() * 0.2f);
             b.vertex(m, cx + (float) Math.cos(a) * inner, cy + (float) Math.sin(a) * inner, 0).color(col);
-            b.vertex(m, cx + (float) Math.cos(a - wd) * far, cy + (float) Math.sin(a - wd) * far, 0).color(col);
-            b.vertex(m, cx + (float) Math.cos(a + wd) * far, cy + (float) Math.sin(a + wd) * far, 0).color(col);
+            b.vertex(m, cx + (float) Math.cos(a - wd) * far, cy + (float) Math.sin(a - wd) * far, 0).color(col & 0x00FFFFFF);
+            b.vertex(m, cx + (float) Math.cos(a + wd) * far, cy + (float) Math.sin(a + wd) * far, 0).color(col & 0x00FFFFFF);
         }
         end(b);
     }

@@ -14,6 +14,6 @@ public abstract class RunFeelMixin {
     @Inject(method = "getFovMultiplier", at = @At("RETURN"), cancellable = true, require = 0)
     private void kata$fov(CallbackInfoReturnable<Float> cir) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player != null && (Object) this == mc.player) cir.setReturnValue(Move.fov(mc.player, cir.getReturnValueF()));
+        if (mc.player != null && (Object) this == mc.player) cir.setReturnValue(Move.fov(mc.player, cir.getReturnValueF()) * net.pglol.kata.client.ImpactFrames.fovScale());
     }
 }
