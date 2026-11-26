@@ -285,6 +285,7 @@ public final class Fighting {
             }
             w.playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.ITEM_SHIELD_BLOCK, SoundCategory.PLAYERS, 0.8f, 1.2f + w.random.nextFloat() * 0.2f);
             tell(victim, KataNet.GUARD_HIT, side);
+            if (victim instanceof ServerPlayerEntity vp) relayAround(vp, KataNet.BLOCKED, side > 0 ? 1 : 0); // everyone sees the block
             if (victim instanceof Dummy d) d.blocked(side);
             victim.takeKnockback(0.15 + amount * 0.03, to.x / len, to.z / len);
             victim.velocityModified = true;
@@ -459,6 +460,12 @@ public final class Fighting {
         }
         // A creative-mode player takes no damage, but still feels the hit (unless it was blocked).
         if (!hit && !(t instanceof net.minecraft.entity.player.PlayerEntity pl && pl.isCreative() && !guarding(t))) return;
+        // The hit's reaction, for everyone to see: where it landed, what kind of strike, from which side.
+        Vec3d from = by.getPos().subtract(t.getPos());
+        double ty = Math.toRadians(t.getYaw());
+        boolean fromRight = from.x * -Math.cos(ty) + from.z * -Math.sin(ty) > 0;
+        int react = part.ordinal() | m.path().ordinal() << 2 | (fromRight ? 1 << 7 : 0) | (m.heavy() ? 1 << 8 : 0);
+        relayAround(t, KataNet.HIT, react);
         float shove = m.push() * (m.heavy() ? 0.6f + 0.6f * power : 1);
         boolean down = m.knockdown() && (!m.heavy() || power >= 0.9f);
         if (down) {
@@ -471,6 +478,15 @@ public final class Fighting {
         t.getWorld().playSound(null, t.getX(), t.getY(), t.getZ(),
             m.heavy() || down ? SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK : SoundEvents.ENTITY_PLAYER_ATTACK_STRONG,
             SoundCategory.PLAYERS, 0.9f, (m.heavy() ? 0.75f : 1f) + t.getRandom().nextFloat() * 0.2f);
+    }
+
+    /** Tell everyone who can see e (and e itself, if a player) about something that happened to it. */
+    private static void relayAround(Entity e, int kind, int value) {
+        if (e.getWorld().isClient) return;
+        for (ServerPlayerEntity o : PlayerLookup.tracking(e)) {
+            if (ServerPlayNetworking.canSend(o, KataNet.FightOf.ID)) ServerPlayNetworking.send(o, new KataNet.FightOf(e.getId(), kind, value));
+        }
+        if (e instanceof ServerPlayerEntity sp && ServerPlayNetworking.canSend(sp, KataNet.FightOf.ID)) ServerPlayNetworking.send(sp, new KataNet.FightOf(e.getId(), kind, value));
     }
 
     private static void relay(ServerPlayerEntity p, int kind, int value) {

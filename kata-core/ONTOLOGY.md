@@ -269,3 +269,19 @@ moves the body somewhere the physics wouldn't.
 - **Slides and rolls:** keep momentum through a roll when you crouch on landing at speed.
 - **Surface materials:** friction and sound per block (ice, mud, metal).
 - **Water:** buoyancy and drag in place of gravity.
+
+## Hit reactions (every body: players, dummies, you)
+- Every landed hit is relayed to everyone tracking the body: where it landed (head, torso, arm, leg), the strike's path, which side it came from, and whether it was heavy.
+- Head: an uppercut snaps the head back, looking at the sky (no launch). A straight, palm, superman, overhand, knee or front kick knocks the head back. A hook, backfist or any kick from the side whips the head away from that side.
+- Torso: the body folds forward over the hit and turns away from its side. Leg: that knee buckles and the body drops. Arm: that arm is knocked back.
+- Reactions are fast in (0.05 s) and eased out (0.38 s; 0.55 s and harder for heavies), added on top of whatever the body is doing.
+- Uppercuts push back; they don't lift. Rising uppercut and flying knee don't lift either.
+
+## Blocks are visible
+- A blocked strike is relayed to everyone: the blocker's arm on that side goes out to meet it, forearm up, for a quarter second.
+
+## Spinning kicks
+- The kicking leg chambers and goes out wide on its own side, held in the body's frame so it turns with the spin. Only in the last 15% does it sweep onto the target.
+
+## Dummy motion
+- A dummy's shown pose never jumps between frames: each angle moves the short way round toward the solved pose, quickly but continuously.

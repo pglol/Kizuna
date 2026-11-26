@@ -403,8 +403,22 @@ public final class Fight {
         return charging ? Math.min(1, secs(chargeAt) / Fighting.FULL_CHARGE) : 0;
     }
 
+    /** Hits and blocks being shown on bodies (anyone's, yours too): what, and since when. */
+    private record React(int packed, long at) { }
+    private static final Map<Integer, React> HITS = new HashMap<>(), BLOCKS = new HashMap<>();
+
     static void remote(int entity, int kind, int a) {
         MinecraftClient mc = MinecraftClient.getInstance();
+        if (kind == KataNet.HIT) {
+            HITS.put(entity, new React(a, System.nanoTime()));
+            if (HITS.size() > 256) HITS.clear();
+            return;
+        }
+        if (kind == KataNet.BLOCKED) {
+            BLOCKS.put(entity, new React(a, System.nanoTime()));
+            if (BLOCKS.size() > 256) BLOCKS.clear();
+            return;
+        }
         if (mc.player != null && entity == mc.player.getId()) {
             switch (kind) {
                 case KataNet.GUARD_HIT -> {
@@ -551,6 +565,15 @@ public final class Fight {
             g.set(Bone.RIGHT_FOREARM, Pose.PITCH, 75);
             g.set(Bone.LEFT_FOREARM, Pose.PITCH, 80);
         }
+        // A strike just blocked: the arm on its side goes out to meet it, forearm up to take it.
+        React b = BLOCKS.get(p.getId());
+        float bs = b == null ? 9 : secs(b.at);
+        int bSide = mine(p) ? joltSide : (b != null && b.packed != 0 ? 1 : -1);
+        float meet = mine(p) ? jolt / 0.22f : bs < 0.25f ? 1 - bs / 0.25f : 0;
+        if (meet > 0 && guardUp(p)) {
+            if (bSide > 0) g = Pose.lerp(g, g.copy().set(Bone.RIGHT_ARM, -75, -10, 38).set(Bone.RIGHT_FOREARM, 70, 0, 0), meet);
+            else g = Pose.lerp(g, g.copy().set(Bone.LEFT_ARM, -75, 10, -38).set(Bone.LEFT_FOREARM, 70, 0, 0), meet);
+        }
         if (mine(p)) {
             if (jolt > 0) {
                 // A blocked hit drives the guard back into the face and turns the body away from its side.
@@ -626,7 +649,7 @@ public final class Fight {
         float c = m.contact(), hold = m.heavy() ? 0.07f : 0.04f;
         float k;
         if (wind > 0) k = -0.25f * ease(wind);
-        else if (m.turns() && u < c) k = ease(u / (c * 0.65f)); // out early and held: it swings round with the spin
+        else if (m.turns() && u < c) k = MathHelper.clamp(u / c, 0, 1); // steady through the spin, fully out at contact
         else if (u < c) {
             float x = u / c;
             k = x * x * (1.4f - 0.4f * x);
@@ -781,14 +804,21 @@ public final class Fight {
             Vector3f chamber = new Vector3f(hip.x + (m.path() == Path.ROUNDHOUSE ? out_ * 3 : 0), chamberY, m.path() == Path.BACK_KICK ? 3 : -3);
             Vector3f target = clampReach(hip, aim, 11.6f);
             Vector3f foot;
-            if (kk < 0.4f) foot = new Vector3f(rest).lerp(chamber, ease(kk / 0.4f));
+            if (m.turns()) {
+                // A spinning kick: the leg chambers and goes out wide on its own side, held there in the
+                // body's frame so it turns with the spin, and only at the very end sweeps onto the target.
+                Matrix4f body = Ragdoll.rootFrame(out);
+                Vector3f restB = body.transformPosition(new Vector3f(rest));
+                Vector3f chamberB = body.transformPosition(new Vector3f(hip.x + out_ * 3, 16, -2));
+                Vector3f wide = body.transformPosition(new Vector3f(hip.x + out_ * 10.5f, 10, -2));
+                if (kk < 0.3f) foot = restB.lerp(chamberB, ease(kk / 0.3f));
+                else if (kk < 0.85f) foot = chamberB.lerp(wide, ease((kk - 0.3f) / 0.4f));
+                else foot = wide.lerp(target, ease((kk - 0.85f) / 0.15f));
+            } else if (kk < 0.4f) foot = new Vector3f(rest).lerp(chamber, ease(kk / 0.4f));
             else {
                 float x = (kk - 0.4f) / 0.6f;
                 foot = new Vector3f(chamber).lerp(target, x);
-                // A spinning kick swings out wide on its own side through the turn and sweeps round onto the
-                // target: fully out, the foot is on them, not off to the side.
-                if (m.turns()) foot.add(out_ * 10 * MathHelper.sin(MathHelper.PI * x), -3 * MathHelper.sin(MathHelper.PI * x), 2 * MathHelper.sin(MathHelper.PI * x));
-                else if (m.path() == Path.ROUNDHOUSE) foot.add(out_ * 6 * MathHelper.sin(MathHelper.PI * x), -1.5f * MathHelper.sin(MathHelper.PI * x), 0);
+                if (m.path() == Path.ROUNDHOUSE) foot.add(out_ * 6 * MathHelper.sin(MathHelper.PI * x), -1.5f * MathHelper.sin(MathHelper.PI * x), 0);
             }
             Vector3f pole = switch (m.path()) {
                 case ROUNDHOUSE, SIDE_KICK -> new Vector3f(out_, -0.2f, -0.4f); // knee turned out to the side

@@ -30,6 +30,7 @@ public final class DummyAnim {
         long last;
         boolean ragdoll, wasDown, reported;
         long lastReport;
+        Pose prev;
         int knocks;
         Pose shown = new Pose();
     }
@@ -116,6 +117,18 @@ public final class DummyAnim {
         Pose before = out.copy();
         strike(d, td, by, out);
         if (broken(out)) out = before; // a solve that went wrong never shows (a broken pose makes the model vanish)
+        // Never a jump between frames: each angle (and the body's offset) moves the short way round, fast
+        // but continuously, from what was shown last frame.
+        if (dt > 0 && s.prev != null) {
+            float f = Math.min(1, dt * 28);
+            for (Bone b : Bone.values()) for (int a = 0; a < 3; a++) {
+                float was = s.prev.get(b, a);
+                out.set(b, a, was + MathHelper.wrapDegrees(out.get(b, a) - was) * f);
+            }
+            for (int a = 0; a < 3; a++) out.offset[a] = s.prev.offset[a] + (out.offset[a] - s.prev.offset[a]) * f;
+        }
+        s.prev = out.copy();
+        Fight.react(d, out); // a hit landing on it
         s.shown = out;
         return out;
     }
