@@ -462,3 +462,7 @@ moves the body somewhere the physics wouldn't.
 ## Player hits always count
 - A strike that really touched another player lands even if the game's PvP or team rules would turn it away (the fighting is the game). Creative and spectator players can't be hurt, and dodges, parries and blocks still turn hits away as before.
 - (Fix) The "just teleported" treatment that skips the movement check applies only while the server checks movement. Minecraft also makes a just-teleported player invulnerable, which had made every player in the air (or just landed) unhittable.
+
+## Guard and kicks (from the frame exports)
+- Squared up, a fighter's guard: hands up at the chin, elbows bent and in (a touch looser than blocking). The off hand stays there through every strike, and both hands stay up through kicks.
+- A kick's foot goes out to the leg's full length along the line to where it's aimed, so the leg is straight at contact (front, side, roundhouse and back kicks all landed bent-kneed before).

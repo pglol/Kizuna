@@ -1074,10 +1074,12 @@ public final class Fight {
             g.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) + 8);
             g.set(Bone.HEAD, Pose.PITCH, g.get(Bone.HEAD, Pose.PITCH) + 8);
         } else {
-            // Squared up: the guard's shape, loose, hands lower.
-            g = Pose.lerp(new Pose(), Presets.GUARD, 0.65f);
-            g.set(Bone.RIGHT_FOREARM, Pose.PITCH, 75);
-            g.set(Bone.LEFT_FOREARM, Pose.PITCH, 80);
+            // Squared up: a fighter's guard, hands up at the chin, elbows in (a touch looser than blocking).
+            g = Presets.GUARD.copy();
+            g.set(Bone.RIGHT_ARM, Pose.PITCH, g.get(Bone.RIGHT_ARM, Pose.PITCH) - 10);
+            g.set(Bone.LEFT_ARM, Pose.PITCH, g.get(Bone.LEFT_ARM, Pose.PITCH) - 6);
+            g.set(Bone.RIGHT_FOREARM, Pose.PITCH, 108);
+            g.set(Bone.LEFT_FOREARM, Pose.PITCH, 112);
         }
         if (guardUp(p)) {
             // Turned to a side: the body and guard face that way, the arm on that side higher and out.
@@ -1404,7 +1406,10 @@ public final class Fight {
             Vector3f rest = new Vector3f(hip.x, 24, 0);
             float chamberY = m.path() == Path.LOW_KICK ? 19 : 16;
             Vector3f chamber = new Vector3f(hip.x + (m.path() == Path.ROUNDHOUSE ? out_ * 3 : 0), chamberY, m.path() == Path.BACK_KICK ? 3 : -3);
-            Vector3f target = clampReach(hip, aim, 11.6f);
+            // The foot goes out to the leg's full length along the line to where it's aimed: at contact the
+            // leg is straight (a kick that lands bent-kneed has no snap).
+            Vector3f toAim = new Vector3f(aim).sub(hip);
+            Vector3f target = toAim.lengthSquared() < 1e-4f ? clampReach(hip, aim, 11.6f) : new Vector3f(hip).add(toAim.normalize().mul(11.4f));
             Vector3f foot;
             if (m.turns()) {
                 // A spinning kick: the leg chambers and goes out wide on its own side, held there in the
