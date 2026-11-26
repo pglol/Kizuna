@@ -38,6 +38,41 @@ public final class KataNet {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
+    /**
+     * Client -> server: my limp body's points, relative to my position (x, y, z each in 1/256 blocks,
+     * as shorts), so everyone sees it lying exactly as it does for me.
+     */
+    public record Rag(short[] points) implements CustomPayload {
+        public static final Id<Rag> ID = new Id<>(Identifier.of(KataCore.ID, "rag"));
+        public static final PacketCodec<RegistryByteBuf, Rag> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.points.length);
+            for (short s : v.points) b.writeShort(s);
+        }, b -> {
+            int n = Math.min(64, b.readVarInt());
+            short[] s = new short[n];
+            for (int i = 0; i < n; i++) s[i] = b.readShort();
+            return new Rag(s);
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
+    /** Server -> client: that player's limp body's points (see Rag). */
+    public record RagOf(int entity, short[] points) implements CustomPayload {
+        public static final Id<RagOf> ID = new Id<>(Identifier.of(KataCore.ID, "rag_of"));
+        public static final PacketCodec<RegistryByteBuf, RagOf> CODEC = PacketCodec.of((v, b) -> {
+            b.writeVarInt(v.entity);
+            b.writeVarInt(v.points.length);
+            for (short s : v.points) b.writeShort(s);
+        }, b -> {
+            int e = b.readVarInt();
+            int n = Math.min(64, b.readVarInt());
+            short[] s = new short[n];
+            for (int i = 0; i < n; i++) s[i] = b.readShort();
+            return new RagOf(e, s);
+        });
+        @Override public Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     /** Client -> server: a fighting action. kind GUARD (a: 1 on, 0 off), STRIKE (a: move, b: target entity or -1), STANCE (a: stance). */
     public record Fight(int kind, int a, int b) implements CustomPayload {
         public static final Id<Fight> ID = new Id<>(Identifier.of(KataCore.ID, "fight"));
@@ -60,7 +95,7 @@ public final class KataNet {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
-    public static final int GUARD = 0, STRIKE = 1, STANCE = 2, GUARD_HIT = 3, GUARD_BROKEN = 4, WINDUP = 5, STAGGER = 6, PARRY = 7, KNOCKDOWN = 8, DUMMY_REST = 9, DUMMY_AT = 10, HIT = 11, BLOCKED = 12, DODGE = 13, POISE = 14, FLINCH = 15, PARRIED = 16, EVADED = 17, CHARGE = 18, AIR_HIT = 19, CONCUSS = 20, DEBUG = 21;
+    public static final int GUARD = 0, STRIKE = 1, STANCE = 2, GUARD_HIT = 3, GUARD_BROKEN = 4, WINDUP = 5, STAGGER = 6, PARRY = 7, KNOCKDOWN = 8, DUMMY_REST = 9, DUMMY_AT = 10, HIT = 11, BLOCKED = 12, DODGE = 13, POISE = 14, FLINCH = 15, PARRIED = 16, EVADED = 17, CHARGE = 18, AIR_HIT = 19, CONCUSS = 20, DEBUG = 21, TETHER = 22, WHIFFED = 23;
 
     /** Act mode meaning "crouched to catch a landing" (for the server's fall damage; not shown). */
     public static final int BRACE = 31;
@@ -75,6 +110,14 @@ public final class KataNet {
         PayloadTypeRegistry.playS2C().register(ActOf.ID, ActOf.CODEC);
         PayloadTypeRegistry.playC2S().register(Fight.ID, Fight.CODEC);
         PayloadTypeRegistry.playS2C().register(FightOf.ID, FightOf.CODEC);
+        PayloadTypeRegistry.playC2S().register(Rag.ID, Rag.CODEC);
+        PayloadTypeRegistry.playS2C().register(RagOf.ID, RagOf.CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(Rag.ID, (payload, ctx) -> {
+            ServerPlayerEntity p = ctx.player();
+            for (ServerPlayerEntity other : PlayerLookup.tracking(p)) {
+                if (other != p && ServerPlayNetworking.canSend(other, RagOf.ID)) ServerPlayNetworking.send(other, new RagOf(p.getId(), payload.points()));
+            }
+        });
         ServerPlayNetworking.registerGlobalReceiver(Fight.ID, (payload, ctx) -> {
             ServerPlayerEntity p = ctx.player();
             switch (payload.kind()) {

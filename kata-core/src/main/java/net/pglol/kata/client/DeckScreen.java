@@ -54,7 +54,7 @@ public class DeckScreen extends Screen {
     public DeckScreen() {
         super(Text.literal("Combat deck"));
         selMove = Deck.pick(selStance, false, 0);
-        Fight.previewStart = System.nanoTime();
+        Fight.previewStart = Fight.clock();
     }
 
     @Override
@@ -324,7 +324,7 @@ public class DeckScreen extends Screen {
         }
         if (m == selMove) return;
         selMove = m;
-        Fight.previewStart = System.nanoTime();
+        Fight.previewStart = Fight.clock();
     }
 
     /** A quadrant picked: show something thrown from there (its selected slot, else its first, else any that fits). */
@@ -341,7 +341,7 @@ public class DeckScreen extends Screen {
         }
         if (m != null && m != selMove) {
             selMove = m;
-            Fight.previewStart = System.nanoTime();
+            Fight.previewStart = Fight.clock();
         }
         if (m != null && !m.fits(row, selSlot)) {
             for (int i = 0; i < Fighting.SLOTS; i++) {

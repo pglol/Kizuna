@@ -96,6 +96,12 @@ public final class ImpactFrames {
                 lines(m, o[0], o[1], w, h, new Random(seed), 30, a * 0.45f);
             }
         } else role = -1;
+        // A dodged strike: the world goes cool and grey at the edges while time stretches.
+        float sl = Fight.slowness();
+        if (sl > 0.01f) {
+            fill(m, w, h, argb(sl * 0.12f, 0x8FA3B8));
+            vignette(m, w, h, argb(sl * 0.6f, 0x5C6F82), 0.3f);
+        }
         // A heavy landed nearby, out of view: a soft glow on the edge it came from.
         long ct = Util.getMeasuringTimeMs() - cueAt;
         if (cueWhere != null && ct < 650) {

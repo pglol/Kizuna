@@ -88,6 +88,7 @@ public final class Animator {
         float stillFace = Float.NaN;
         long movedAt;
         Vec3d carried; // where someone else's limp body was carried to last frame
+        long ragdollSince;
         // Hands to a wall right in front: how much, and how far off it is.
         float wallW;
         double wallHit = 0.6;
@@ -136,6 +137,7 @@ public final class Animator {
             if (!s.ragdolled) {
                 s.ragdolled = true;
                 s.carried = null;
+                s.ragdollSince = System.nanoTime();
                 // Someone else's body: it starts still and goes where they go (follow, below).
                 // A fight's knockdown gets up quickly; someone else's, if they were just hit.
                 Ragdoll.nextCombat = local ? Parkour.takeCombatDown() : Fight.hitRecently(p);
@@ -148,6 +150,13 @@ public final class Animator {
                     Vec3d at = p.getLerpedPos(td);
                     r.follow(at, s.carried, dt);
                     s.carried = at;
+                    // Lying exactly as it does for them: pulled onto their game's own points.
+                    short[] theirs = Ragdoll.heardFor(p.getId());
+                    r.followsOwner = true;
+                    if (theirs != null) {
+                        r.match(theirs, at, Math.min(1, dt * 12));
+                        if (theirs.length > Ragdoll.N * 3 && theirs[Ragdoll.N * 3] >= 0) r.comeRound = true; // theirs is getting up
+                    } else if (s.ragdollSince != 0 && System.nanoTime() - s.ragdollSince > 3_000_000_000L) r.followsOwner = false; // nothing heard: its own way
                 }
                 Pose shown;
                 if (!r.resting()) shown = r.pose(p, p.getLerpedPos(td), by, td);

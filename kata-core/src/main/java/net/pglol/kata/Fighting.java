@@ -466,6 +466,8 @@ public final class Fighting {
     /** Who's being held up in the air (gravity lightened) until when (server tick). */
     private static final Map<UUID, Integer> FLOAT_UNTIL = new HashMap<>();
     private static final Map<UUID, net.minecraft.entity.LivingEntity> FLOATING = new HashMap<>();
+    /** Who's holding them in an air string (they're kept in front of that fighter). */
+    private static final Map<UUID, LivingEntity> TETHER = new HashMap<>();
     /** Smashed towards the ground: concussed when they hit it (or after a moment). */
     private static final Map<UUID, Integer> SMASHED = new HashMap<>();
     private static final Map<UUID, net.minecraft.entity.LivingEntity> SMASHING = new HashMap<>();
@@ -481,9 +483,9 @@ public final class Fighting {
         if (flat.lengthSquared() > 1e-4) flat = flat.normalize();
         // Carried to just in front of the attacker at their height (a touch above), so the attacker
         // trails them up through the air rather than hitting someone hanging over their head.
-        Vec3d spot = by.getPos().add(flat.multiply(1.5)).add(0, 0.15, 0);
+        Vec3d spot = by.getPos().add(flat.multiply(1.4)).add(0, 0.1, 0);
         Vec3d to = spot.subtract(t.getPos());
-        double rise = t.isOnGround() ? 0.42 : 0.16;
+        double rise = t.isOnGround() ? 0.3 : 0.08; // lifted off the ground, then held (the tether keeps them there)
         Vec3d v = new Vec3d(to.x * 0.4, to.y * 0.4 + rise, to.z * 0.4);
         double hl = Math.hypot(v.x, v.z);
         if (hl > 0.5) v = new Vec3d(v.x * 0.5 / hl, v.y, v.z * 0.5 / hl);
@@ -491,6 +493,9 @@ public final class Fighting {
         t.velocityModified = true;
         hold(t, FLOAT_TICKS);
         t.fallDistance = 0;
+        // Tethered: while the string goes on, they stay right in front of the one hitting them.
+        TETHER.put(t.getUuid(), by);
+        relayAround(t, KataNet.TETHER, by.getId());
         tell(by, KataNet.AIR_HIT, FLOAT_TICKS);
         tell(t, KataNet.AIR_HIT, FLOAT_TICKS);
     }
@@ -505,6 +510,7 @@ public final class Fighting {
     }
 
     private static void release(LivingEntity t) {
+        TETHER.remove(t.getUuid());
         var g = t.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_GRAVITY);
         if (g != null) g.removeModifier(FLOAT_ID);
         FLOAT_UNTIL.remove(t.getUuid());
@@ -556,6 +562,25 @@ public final class Fighting {
                     }
                     FLOATING.remove(en.getKey());
                 }
+            }
+        }
+        // Air strings: each one held is kept just in front of whoever's hitting them, at their height,
+        // for as long as they float and the hitter is still in the air.
+        if (!TETHER.isEmpty()) {
+            for (var it = TETHER.entrySet().iterator(); it.hasNext(); ) {
+                var en = it.next();
+                LivingEntity t = FLOATING.get(en.getKey()), by = en.getValue();
+                if (t == null || by == null || t.isRemoved() || by.isRemoved() || !by.isAlive() || (by.isOnGround() && t.isOnGround())) {
+                    it.remove();
+                    continue;
+                }
+                Vec3d flat = Vec3d.fromPolar(0, by.getYaw());
+                Vec3d spot = by.getPos().add(flat.multiply(1.4)).add(0, 0.1, 0);
+                Vec3d v = spot.subtract(t.getPos()).multiply(0.45);
+                if (v.length() > 0.6) v = v.normalize().multiply(0.6);
+                t.setVelocity(v);
+                t.velocityModified = true;
+                t.fallDistance = 0;
             }
         }
         if (!SMASHED.isEmpty()) {
@@ -620,6 +645,7 @@ public final class Fighting {
         setPoise(victim, Math.min(1, poise(victim) + 0.15f));
         if (by != null) setPoise(by, Math.max(0, poise(by) - 0.15f));
         tell(victim, KataNet.EVADED, 0);
+        if (by != null) tell(by, KataNet.WHIFFED, 0); // the one who missed feels it too (the slow-down)
         victim.getWorld().playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_NODAMAGE, SoundCategory.PLAYERS, 0.7f, 1.4f);
     }
 
@@ -678,7 +704,10 @@ public final class Fighting {
     /** Staggered: whatever they were throwing is gone and they can't act for a moment (ticks). */
     public static void stagger(Entity e, int ticks) {
         if (e instanceof ServerPlayerEntity p) tell(p, KataNet.STAGGER, ticks);
-        else if (e instanceof Dummy d) d.stagger(ticks);
+        else if (e instanceof Dummy d) {
+            d.stagger(ticks);
+            relayAround(d, KataNet.STAGGER, ticks); // everyone sees it reeling
+        }
     }
 
     public static int packVelocity(Vec3d v) {

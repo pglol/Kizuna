@@ -478,3 +478,18 @@ moves the body somewhere the physics wouldn't.
 
 ## Ragdolls are always in step for everyone
 - A limp body (and a ledge hang) shows on every screen for as long as it lasts: the owner's game says so again every second, everyone keeps showing it until told otherwise (or nothing's heard for 4 s), and anyone who comes into view while someone's down gets told straight away. (Short moves like vaults still fade on their own.)
+
+## Air strings are tethered
+- Each air hit lifts them less (0.3 off the ground, a touch in the air) and then holds them: every tick the server keeps them 1.4 blocks in front of the one hitting them, at their height, for as long as they float and the hitter is in the air. A line of sparks links the two for everyone to see, and your string's hit count shows beside the crosshair.
+
+## Light into heavy
+- Hold the button during a strike and the heavy starts charging straight away (the charge isn't lost waiting for the last strike to finish); let go and it goes the moment it can.
+
+## Dodged strikes slow time
+- When a strike is dodged, the two fighters' screens go into half a second of slow motion (down to about a third speed, ramping back up), the edges cool and grey, then the fight flows on. Every strike, dodge and reaction on screen keeps to the fight's clock.
+
+## Stuns show
+- Staggered, guard broken or concussed: grey ghosts pulse out of the body three times over a second (dummies too).
+
+## Ragdolls lie the same for everyone
+- Your game sends your limp body's points ten times a second; everyone else's copy is pulled onto them (on your back for you is on your back for them), and it gets up when yours does.

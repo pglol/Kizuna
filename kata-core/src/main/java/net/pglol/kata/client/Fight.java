@@ -73,6 +73,8 @@ public final class Fight {
     private static int joltSide;
     private static long brokenUntil, staggerUntil, parryAt, flinchUntil, readyAt;
     private static boolean curLanded, smashDive;
+    /** A heavy waiting to go (its charge), or -1. */
+    private static float pendingHeavy = -1;
     /** Hanging in the air (an air hit, given or taken): gravity eased right off until then. */
     private static long hangUntil;
     private static int parryKind, lastHurt;
@@ -137,13 +139,42 @@ public final class Fight {
         return !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying;
     }
 
+    /**
+     * The fight's own clock (nanoseconds): real time, except through a slow-down (a dodged strike), when
+     * it runs slow and then ramps back. Every strike, dodge and reaction shown here keeps to it.
+     */
+    static long clock() {
+        return System.nanoTime() - lag;
+    }
+
+    private static long lag, slowAt;
+    private static long lastFrame;
+
+    /** A dodged strike: half a second of slow motion, ramping back to full speed. */
+    static void slowDown() {
+        slowAt = System.nanoTime();
+    }
+
+    /** How slow it is right now (0 normal .. ~0.65 at the slowest). */
+    public static float slowness() {
+        float s = (System.nanoTime() - slowAt) / 1e9f;
+        if (slowAt == 0 || s > 0.55f) return 0;
+        return 0.65f * (1 - ease(s / 0.55f));
+    }
+
+    private static void advanceClock() {
+        long now = System.nanoTime();
+        if (lastFrame != 0) lag += (long) ((now - lastFrame) * slowness());
+        lastFrame = now;
+    }
+
     private static float secs(long since) {
-        return (System.nanoTime() - since) / 1e9f;
+        return (clock() - since) / 1e9f;
     }
 
     /** Out of a dodge and not yet able to act (its i-frames are over, the step not finished). */
     static boolean flinching() {
-        return System.nanoTime() < flinchUntil;
+        return clock() < flinchUntil;
     }
 
     static boolean recovering() {
@@ -170,7 +201,7 @@ public final class Fight {
             double ang = Math.abs(f) + Math.abs(sdw) < 0.2f ? Math.PI : Math.atan2(sdw, f);
             int idx = Math.floorMod((int) Math.round(ang / (Math.PI * 2) * 16), 16);
             dir = 16 + idx;
-            controlledUntil = System.nanoTime() + 1_000_000_000L;
+            controlledUntil = clock() + 1_000_000_000L;
             Vec3d d = fw.multiply(Math.cos(idx * Math.PI / 8)).add(left.multiply(Math.sin(idx * Math.PI / 8)));
             Vec3d v = p.getVelocity();
             p.setVelocity(v.x * 0.6 + d.x * 0.16, Math.max(v.y, 0.4), v.z * 0.6 + d.z * 0.16); // a real second jump
@@ -190,14 +221,14 @@ public final class Fight {
             if (dir == 4) p.setVelocity(p.getVelocity().x * 0.5, 0.34, p.getVelocity().z * 0.5);
         }
         net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - DODGE_COST);
-        dodgeAt = System.nanoTime();
+        dodgeAt = clock();
         pressing = false;
         DODGES.put(p.getId(), new React(dir, dodgeAt));
         send(KataNet.DODGE, dir, 0);
     }
 
     static boolean clinging() {
-        return System.nanoTime() < clingUntil;
+        return clock() < clingUntil;
     }
 
     /** The face of a wall you're right up against (its outward normal, flat), or null. */
@@ -230,12 +261,12 @@ public final class Fight {
     /** Land on the wall, sideways and crouched like a spider, for up to 1.5 s. */
     private static void cling(ClientPlayerEntity p, Vec3d normal) {
         clingNormal = normal;
-        clingUntil = System.nanoTime() + 1_500_000_000L;
+        clingUntil = clock() + 1_500_000_000L;
         clungThisJump = true;
         flipUsed = false; // a jump off the wall can still flip
         p.setVelocity(0, 0, 0);
         int idx = Math.floorMod((int) Math.round(Math.atan2(normal.z, normal.x) / (Math.PI * 2) * 16), 16);
-        DODGES.put(p.getId(), new React(32 + idx, System.nanoTime()));
+        DODGES.put(p.getId(), new React(32 + idx, clock()));
         send(KataNet.DODGE, 32 + idx, 0);
     }
 
@@ -255,7 +286,7 @@ public final class Fight {
             dir = t.getPos().add(0, t.getHeight() * 0.5, 0).subtract(p.getEyePos().add(0, -0.4, 0)).normalize();
             speed = 1.0;
             pounceAt = t.getId();
-            pounceUntil = System.nanoTime() + 1_200_000_000L;
+            pounceUntil = clock() + 1_200_000_000L;
         } else {
             Vec3d n = clingNormal == null ? Vec3d.ZERO : clingNormal;
             // Never back into the wall: what's left of the look once its into-the-wall part is taken out.
@@ -265,12 +296,12 @@ public final class Fight {
             speed = 0.95;
         }
         p.setVelocity(dir.x * speed, Math.max(dir.y * speed, 0.32), dir.z * speed);
-        controlledUntil = System.nanoTime() + 1_500_000_000L; // flying on purpose: land on your feet
+        controlledUntil = clock() + 1_500_000_000L; // flying on purpose: land on your feet
         // A flip off it, whichever way you're going.
         double rel = Math.atan2(-(dir.x * Math.cos(Math.toRadians(p.getYaw())) + dir.z * Math.sin(Math.toRadians(p.getYaw()))),
             -dir.x * Math.sin(Math.toRadians(p.getYaw())) + dir.z * Math.cos(Math.toRadians(p.getYaw())));
         int idx = Math.floorMod((int) Math.round(-rel / (Math.PI * 2) * 16), 16);
-        DODGES.put(p.getId(), new React(16 + idx, System.nanoTime()));
+        DODGES.put(p.getId(), new React(16 + idx, clock()));
         send(KataNet.DODGE, 16 + idx, 0);
         flipUsed = true;
     }
@@ -298,7 +329,7 @@ public final class Fight {
     private static void pounce(MinecraftClient mc, ClientPlayerEntity p) {
         if (pounceAt < 0) return;
         Entity t = p.getWorld().getEntityById(pounceAt);
-        if (t == null || System.nanoTime() > pounceUntil || p.isOnGround()) {
+        if (t == null || clock() > pounceUntil || p.isOnGround()) {
             pounceAt = -1;
             return;
         }
@@ -330,11 +361,11 @@ public final class Fight {
 
     private static boolean othersStaggered(PlayerEntity p) {
         Long u = STAGGERS.get(p.getId());
-        return u != null && System.nanoTime() < u;
+        return u != null && clock() < u;
     }
 
     private static boolean staggered() {
-        return System.nanoTime() < staggerUntil;
+        return clock() < staggerUntil;
     }
 
     static void tick(MinecraftClient mc) {
@@ -379,7 +410,7 @@ public final class Fight {
             Vec3d v = p.getVelocity();
             p.setVelocity(0, Math.max(-0.03, Math.min(v.y, 0)) * 0.5, 0); // a slow slide
             if (fresh) wallJump(mc, p);
-            else if (p.isOnGround() || System.nanoTime() > clingUntil) clingUntil = 0;
+            else if (p.isOnGround() || clock() > clingUntil) clingUntil = 0;
         } else if (fresh && !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying
             && Parkour.view(p).mode() == Parkour.Mode.NONE) {
             // A double jump at a wall lands you on it, sideways, crouched; otherwise a flip.
@@ -390,9 +421,10 @@ public final class Fight {
         if (p.isOnGround()) clungThisJump = false;
         pounce(mc, p);
         if (mc.world != null && mc.world.getTime() % 3 == 0) stars(mc);
+        tethers(mc);
         while (KataClient.dodgeKey.wasPressed()) dodge(p);
         dodgeStep(p);
-        guard = free && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && !recovering() && System.nanoTime() > brokenUntil;
+        guard = free && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && !recovering() && clock() > brokenUntil;
         if (guard && target < 0) target = pick(p, 8, 50); // raising a guard locks onto whoever's in front
         // Pressing left or right while guarding turns the guard to that side (it stops swinging strikes
         // from there); raised while pressing one, it's a parry towards that side.
@@ -412,6 +444,7 @@ public final class Fight {
 
     /** Every frame: input timing (click or hold), the strike's progress, the camera on the opponent. */
     static void frame(MinecraftClient mc, float td, float dt) {
+        advanceClock();
         ClientPlayerEntity p = mc.player;
         if (p == null) return;
         if (!airborne(p)) airUsed = airLanded = false;
@@ -423,7 +456,10 @@ public final class Fight {
                 if (charging) {
                     charging = false;
                     send(KataNet.CHARGE, 0, 0);
-                    begin(p, Deck.pick(row(p), true, 0), Math.min(1, secs(chargeAt) / Fighting.FULL_CHARGE));
+                    float power = Math.min(1, secs(chargeAt) / Fighting.FULL_CHARGE);
+                    // Still finishing the last strike (or the beat after it): it goes the moment it can.
+                    if (cur != null || clock() < readyAt) pendingHeavy = power;
+                    else begin(p, Deck.pick(row(p), true, 0), power);
                 } else light(p);
             } else if (airborne(p) && secs(pressAt) >= Fighting.HEAVY_AFTER) {
                 // Held in the air: the smash, straight away, cutting off whatever air strike was going.
@@ -432,9 +468,12 @@ public final class Fight {
                 if (cur != null && cur.from() == Fighting.From.AIR) cur = null;
                 readyAt = 0;
                 begin(p, Deck.pick(Fighting.AIR, true, 0), 1);
-            } else if (!charging && cur == null && secs(pressAt) >= Fighting.HEAVY_AFTER) {
+            } else if (!charging && secs(pressAt) >= Fighting.HEAVY_AFTER && (cur == null || cur.from() != Fighting.From.AIR)) {
+                // Held: the heavy starts charging now, even while the last strike finishes (the charge
+                // isn't lost waiting for it), and goes as soon as it can.
                 charging = true;
-                chargeAt = System.nanoTime();
+                pendingLight = false;
+                chargeAt = clock();
                 send(KataNet.CHARGE, 1, 0); // they see it building
             }
         }
@@ -474,7 +513,7 @@ public final class Fight {
                     send(KataNet.STRIKE, packed, hit);
                     if (hit >= 0) {
                         lastStruck = hit;
-                        lastStruckAt = System.nanoTime();
+                        lastStruckAt = clock();
                     }
                     if (debug && hit < 0 && drawn) {
                         // A player right beside you that the limb didn't touch: say so (dev build), so a miss is never a mystery.
@@ -512,13 +551,19 @@ public final class Fight {
             if (s >= cur.length()) {
                 stanceTo(Fighting.end(cur, curStance));
                 // A beat before the next: longer after a heavy, longer still after a miss.
-                readyAt = System.nanoTime() + (long) (((cur.heavy() ? 0.16 : 0.07) + (curLanded ? 0 : 0.1)) * 1e9);
+                readyAt = clock() + (long) (((cur.heavy() ? 0.16 : 0.07) + (curLanded ? 0 : 0.1)) * 1e9);
                 cur = null;
-                lastEnd = System.nanoTime();
+                lastEnd = clock();
             }
         }
+        // A heavy let go of while the last strike was finishing: now.
+        if (cur == null && pendingHeavy >= 0 && clock() >= readyAt) {
+            float pw = pendingHeavy;
+            pendingHeavy = -1;
+            begin(p, Deck.pick(row(p), true, 0), pw);
+        }
         // The next in the chain, pressed during the last, goes as soon as the beat between them is over.
-        if (cur == null && pendingLight && System.nanoTime() >= readyAt) {
+        if (cur == null && pendingLight && clock() >= readyAt) {
             pendingLight = false;
             light(p);
         }
@@ -550,7 +595,7 @@ public final class Fight {
         if (!fists(p)) return false;
         if (guard || staggered() || recovering() || flinching() || concussed(p)) return true; // hands up, off balance, out of a dodge or reeling: nothing to throw
         pressing = true;
-        pressAt = System.nanoTime();
+        pressAt = clock();
         return true;
     }
 
@@ -561,7 +606,7 @@ public final class Fight {
             if (secs(curStart) > cur.contact() * 0.5f && (cur.from() == Fighting.From.AIR) == airborne(p)) pendingLight = true;
             return;
         }
-        if (System.nanoTime() < readyAt) {
+        if (clock() < readyAt) {
             pendingLight = true; // too soon: it goes on the beat
             return;
         }
@@ -580,12 +625,12 @@ public final class Fight {
             airUsed = true;
             airLanded = false;
         }
-        if (System.nanoTime() < readyAt) return;
+        if (clock() < readyAt) return;
         cur = m;
         curLanded = false;
         curStance = stance;
         curPower = m.heavy() ? Math.max(0.3f, power) : 1;
-        curStart = System.nanoTime();
+        curStart = clock();
         nextHit = 0;
         limbNow = limbPrev = limbMid = limbMidPrev = null;
         if (m.heavy()) chain = 0;
@@ -774,7 +819,7 @@ public final class Fight {
     private static long controlledUntil;
 
     public static boolean controlled() {
-        return System.nanoTime() < controlledUntil;
+        return clock() < controlledUntil;
     }
     /** On a wall until then (nanos), facing out along this normal. */
     private static long clingUntil;
@@ -785,14 +830,34 @@ public final class Fight {
     private static final Map<Integer, Long> STAGGERS = new HashMap<>();
     /** How much guard stamina others have left (it shows: a guard near breaking strains). */
     private static final Map<Integer, Float> POISES = new HashMap<>();
+    /** Air-string tethers: the one held -> {the one holding, until}. Your own string's hit count. */
+    private static final Map<Integer, long[]> TETHERS = new HashMap<>();
+    static int combo;
+    static long comboAt;
     /** Others charging a heavy (since), hanging in the air from a hit (until), concussed (until). */
     private static final Map<Integer, Long> CHARGES = new HashMap<>(), HANGS = new HashMap<>(), CONCUSSED = new HashMap<>();
 
     static void remote(int entity, int kind, int a) {
         MinecraftClient mc = MinecraftClient.getInstance();
+        // An air string's tether (entity: the one held, a: the one holding them): everyone sees the link.
+        if (kind == KataNet.TETHER) {
+            TETHERS.put(entity, new long[] {a, clock() + Fighting.FLOAT_TICKS * 50_000_000L});
+            if (mc.player != null && a == mc.player.getId()) {
+                combo = clock() - comboAt < 1_200_000_000L ? combo + 1 : 1;
+                comboAt = clock();
+            }
+            if (TETHERS.size() > 64) TETHERS.clear();
+            return;
+        }
         // Seen by everyone: afterimages for parries, evasions and dodges.
         if (mc.world != null) {
-            if (kind == KataNet.EVADED) Afterimages.evade(entity);
+            if (kind == KataNet.EVADED) {
+                Afterimages.evade(entity);
+                if (mc.player != null && entity == mc.player.getId()) slowDown(); // you slipped it: time stretches
+            } else if (kind == KataNet.WHIFFED) {
+                if (mc.player != null && entity == mc.player.getId()) slowDown(); // yours went through nothing
+                return;
+            } else if (kind == KataNet.STAGGER || kind == KataNet.GUARD_BROKEN || kind == KataNet.CONCUSS) Afterimages.stun(entity);
             else if (kind == KataNet.PARRY) Afterimages.parry(entity);
             else if (kind == KataNet.PARRIED) {
                 Entity pe = mc.world.getEntityById(entity);
@@ -809,19 +874,19 @@ public final class Fight {
                     Vec3d at = he.getEyePos().add(0, -0.3, 0);
                     // You took it, you landed it, or you're just nearby.
                     int who = entity == mc.player.getId() ? ImpactFrames.VICTIM
-                        : entity == lastStruck && System.nanoTime() - lastStruckAt < 800_000_000L ? ImpactFrames.ATTACKER : ImpactFrames.NEARBY;
+                        : entity == lastStruck && clock() - lastStruckAt < 800_000_000L ? ImpactFrames.ATTACKER : ImpactFrames.NEARBY;
                     ImpactFrames.hit(at, tier == 1 ? 0.55f : 1.0f, who);
                     // A burst where it landed, for anyone looking.
                     for (int i = 0; i < 8; i++) mc.world.addParticle(net.minecraft.particle.ParticleTypes.CRIT, at.x, at.y, at.z,
                         (mc.world.random.nextDouble() - 0.5) * 0.8, mc.world.random.nextDouble() * 0.4, (mc.world.random.nextDouble() - 0.5) * 0.8);
                 }
             }
-            HITS.put(entity, new React(a, System.nanoTime()));
+            HITS.put(entity, new React(a, clock()));
             if (HITS.size() > 256) HITS.clear();
             return;
         }
         if (kind == KataNet.BLOCKED) {
-            BLOCKS.put(entity, new React(a, System.nanoTime()));
+            BLOCKS.put(entity, new React(a, clock()));
             if (BLOCKS.size() > 256) BLOCKS.clear();
             return;
         }
@@ -837,26 +902,28 @@ public final class Fight {
                 case KataNet.FLINCH -> {
                     // Hit: the strike you were throwing is gone and you can't throw for a moment. Guard or
                     // parry to get out of their string.
-                    flinchUntil = Math.max(flinchUntil, System.nanoTime() + a * 50_000_000L);
+                    flinchUntil = Math.max(flinchUntil, clock() + a * 50_000_000L);
                     cur = null;
                     chain = 0;
                     pendingLight = pressing = charging = false;
+                    pendingHeavy = -1;
                 }
                 case KataNet.POISE -> net.pglol.kata.client.Move.stamina = Math.min(net.pglol.kata.client.Move.stamina, a / 100f); // blocking costs the same breath running does
                 case KataNet.GUARD_BROKEN -> {
                     jolt = 0.22f;
                     Hud.pop("GUARD BROKEN", 0xFFFF5A4A);
-                    brokenUntil = System.nanoTime() + 700_000_000L;
+                    brokenUntil = clock() + 700_000_000L;
                 }
                 case KataNet.STAGGER -> {
                     // Knocked off balance: whatever you were doing is gone for a moment.
-                    staggerUntil = System.nanoTime() + a * 50_000_000L;
+                    staggerUntil = clock() + a * 50_000_000L;
                     cur = null;
                     chain = 0;
                     pendingLight = pressing = charging = false;
+                    pendingHeavy = -1;
                 }
                 case KataNet.PARRY -> {
-                    parryAt = System.nanoTime();
+                    parryAt = clock();
                     parryKind = a;
                     net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + 0.25f); // a parry gives breath back
                 }
@@ -884,7 +951,7 @@ public final class Fight {
                 }
                 case KataNet.AIR_HIT -> {
                     // An air hit, given or taken: hang there for the next. Given, another air strike is yours.
-                    hangUntil = System.nanoTime() + a * 50_000_000L;
+                    hangUntil = clock() + a * 50_000_000L;
                     HANGS.put(entity, hangUntil);
                     airLanded = true;
                     // Rising with them: the string carries you both up together.
@@ -894,12 +961,13 @@ public final class Fight {
                     }
                 }
                 case KataNet.CONCUSS -> {
-                    CONCUSSED.put(entity, System.nanoTime() + a * 50_000_000L);
+                    CONCUSSED.put(entity, clock() + a * 50_000_000L);
                     Hud.pop("CONCUSSED", 0xFFFF5A4A);
                 }
                 case KataNet.KNOCKDOWN -> {
                     cur = null;
                     pendingLight = pressing = charging = false;
+                    pendingHeavy = -1;
                     Parkour.knockdown(mc.player, Fighting.unpackVelocity(a));
                 }
                 default -> { }
@@ -908,17 +976,17 @@ public final class Fight {
         }
         switch (kind) {
             case KataNet.GUARD -> GUARDS.put(entity, a != 0);
-            case KataNet.GUARD_HIT -> JOLTS.put(entity, new React(a, System.nanoTime()));
+            case KataNet.GUARD_HIT -> JOLTS.put(entity, new React(a, clock()));
             case KataNet.GUARD_BROKEN -> {
-                JOLTS.put(entity, new React(0, System.nanoTime()));
+                JOLTS.put(entity, new React(0, clock()));
                 GUARDS.put(entity, false);
             }
             case KataNet.STAGGER -> {
-                STAGGERS.put(entity, System.nanoTime() + a * 50_000_000L);
+                STAGGERS.put(entity, clock() + a * 50_000_000L);
                 MOVES.remove(entity); // whatever they were throwing is gone
             }
-            case KataNet.PARRY -> PARRIES.put(entity, new React(a, System.nanoTime()));
-            case KataNet.DODGE -> DODGES.put(entity, new React(a, System.nanoTime()));
+            case KataNet.PARRY -> PARRIES.put(entity, new React(a, clock()));
+            case KataNet.DODGE -> DODGES.put(entity, new React(a, clock()));
             case KataNet.POISE -> POISES.put(entity, a / 100f);
             case KataNet.KNOCKDOWN -> MOVES.remove(entity);
             case KataNet.WINDUP, KataNet.STRIKE -> {
@@ -931,23 +999,23 @@ public final class Fight {
                     boolean showing = was != null && was.move == m && secs(was.start) < m.length();
                     if (kind == KataNet.WINDUP || !showing) {
                         int st = STANCES.getOrDefault(entity, Fighting.TR);
-                        MOVES.put(entity, new Act(m, st, ((a >> 9) & 0x7F) / 100f, System.nanoTime()));
+                        MOVES.put(entity, new Act(m, st, ((a >> 9) & 0x7F) / 100f, clock()));
                         if (m.turns()) SPIN.put(entity, (a & 1 << 8) != 0 ? 1 : -1);
                     }
                     CHARGES.remove(entity);
                 }
-                STANCE_AT.put(entity, System.nanoTime());
+                STANCE_AT.put(entity, clock());
             }
             case KataNet.CHARGE -> {
-                if (a != 0) CHARGES.put(entity, System.nanoTime());
+                if (a != 0) CHARGES.put(entity, clock());
                 else CHARGES.remove(entity);
-                STANCE_AT.put(entity, System.nanoTime());
+                STANCE_AT.put(entity, clock());
             }
-            case KataNet.AIR_HIT -> HANGS.put(entity, System.nanoTime() + a * 50_000_000L);
-            case KataNet.CONCUSS -> CONCUSSED.put(entity, System.nanoTime() + a * 50_000_000L);
+            case KataNet.AIR_HIT -> HANGS.put(entity, clock() + a * 50_000_000L);
+            case KataNet.CONCUSS -> CONCUSSED.put(entity, clock() + a * 50_000_000L);
             case KataNet.STANCE -> {
                 STANCES.put(entity, MathHelper.clamp(a, 0, 3));
-                STANCE_AT.put(entity, System.nanoTime());
+                STANCE_AT.put(entity, clock());
             }
             default -> { }
         }
@@ -1112,7 +1180,7 @@ public final class Fight {
             float po = mine(p) ? net.pglol.kata.client.Move.stamina : POISES.getOrDefault(p.getId(), 1f);
             float strain = MathHelper.clamp((0.7f - po) / 0.7f, 0, 1);
             if (strain > 0) {
-                float tt = (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
+                float tt = (clock() % 1_000_000_000_000L) / 1e9f;
                 float shake = MathHelper.sin(tt * 47) * 2.2f * strain, shake2 = MathHelper.sin(tt * 53 + 1.3f) * 2.2f * strain;
                 g.set(Bone.RIGHT_ARM, Pose.PITCH, g.get(Bone.RIGHT_ARM, Pose.PITCH) + shake);
                 g.set(Bone.LEFT_ARM, Pose.PITCH, g.get(Bone.LEFT_ARM, Pose.PITCH) + shake2);
@@ -1509,13 +1577,13 @@ public final class Fight {
 
     /** Is the local player hanging in the air from an air hit (gravity eased off)? */
     public static boolean hanging() {
-        return System.nanoTime() < hangUntil;
+        return clock() < hangUntil;
     }
 
     /** Concussed: slow and unsteady. */
     static boolean concussed(LivingEntity e) {
         Long u = CONCUSSED.get(e.getId());
-        return u != null && System.nanoTime() < u;
+        return u != null && clock() < u;
     }
 
     private static void say(String s) {
@@ -1706,13 +1774,13 @@ public final class Fight {
     private static void suspendedPose(LivingEntity e, Pose out) {
         Long u = HANGS.get(e.getId());
         if (u == null || e.isOnGround()) return;
-        float left = (u - System.nanoTime()) / 1e9f;
+        float left = (u - clock()) / 1e9f;
         if (left <= -0.15f) return;
         // Only for whoever took the hit (the attacker is busy striking).
         if (e instanceof PlayerEntity pl && mine(pl) && cur != null) return;
         if (!(e instanceof PlayerEntity pl2 && mine(pl2)) && MOVES.containsKey(e.getId()) && secs(MOVES.get(e.getId()).start) < MOVES.get(e.getId()).move.length()) return;
         float w = MathHelper.clamp(left / 0.15f + 1, 0, 1);
-        float tt = (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
+        float tt = (clock() % 1_000_000_000_000L) / 1e9f;
         add(out, Bone.ROOT, Pose.PITCH, -22 * w);
         add(out, Bone.CHEST, Pose.PITCH, -12 * w);
         add(out, Bone.HEAD, Pose.PITCH, -18 * w);
@@ -1730,10 +1798,10 @@ public final class Fight {
     private static void dazedPose(LivingEntity e, Pose out) {
         Long u = CONCUSSED.get(e.getId());
         if (u == null) return;
-        float left = (u - System.nanoTime()) / 1e9f;
+        float left = (u - clock()) / 1e9f;
         if (left <= 0) return;
         float w = Math.min(1, left / 0.5f);
-        float tt = (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
+        float tt = (clock() % 1_000_000_000_000L) / 1e9f;
         add(out, Bone.HEAD, Pose.ROLL, 14 * MathHelper.sin(tt * 2.6f) * w);
         add(out, Bone.HEAD, Pose.PITCH, (10 + 8 * MathHelper.cos(tt * 2.6f)) * w);
         add(out, Bone.CHEST, Pose.ROLL, 6 * MathHelper.sin(tt * 1.7f) * w);
@@ -1743,10 +1811,31 @@ public final class Fight {
         out.offset[0] += 0.8f * MathHelper.sin(tt * 1.7f) * w;
     }
 
+    /** The tether of an air string: a line of sparks from the one holding to the one held, flickering. */
+    private static void tethers(MinecraftClient mc) {
+        if (mc.world == null || TETHERS.isEmpty()) return;
+        long now = clock();
+        for (var it = TETHERS.entrySet().iterator(); it.hasNext(); ) {
+            var en = it.next();
+            if (now > en.getValue()[1]) {
+                it.remove();
+                continue;
+            }
+            Entity held = mc.world.getEntityById(en.getKey()), by = mc.world.getEntityById((int) en.getValue()[0]);
+            if (held == null || by == null || (held.isOnGround() && by.isOnGround())) continue;
+            Vec3d a = by.getPos().add(0, by.getHeight() * 0.6, 0), b = held.getPos().add(0, held.getHeight() * 0.6, 0);
+            for (int i = 1; i < 8; i++) {
+                double f = i / 8.0 + mc.world.random.nextDouble() * 0.06;
+                Vec3d q = a.lerp(b, f);
+                mc.world.addParticle(i % 3 == 0 ? net.minecraft.particle.ParticleTypes.END_ROD : net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK, q.x, q.y, q.z, 0, 0, 0);
+            }
+        }
+    }
+
     /** Stars round a concussed head (every few ticks). */
     private static void stars(MinecraftClient mc) {
         if (mc.world == null || CONCUSSED.isEmpty()) return;
-        long now = System.nanoTime();
+        long now = clock();
         for (var en : CONCUSSED.entrySet()) {
             if (now > en.getValue()) continue;
             Entity e = mc.world.getEntityById(en.getKey());

@@ -41,6 +41,8 @@ public final class KataClient implements ClientModInitializer {
                     net.minecraft.text.Text.literal("Camera"), b -> client.setScreen(new KataCamScreen(screen))).dimensions(6, 6, 60, 20).build());
         });
         dodgeKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.dodge", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, "category.kata_core"));
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.RagOf.ID,
+            (payload, ctx) -> Ragdoll.heard(payload.entity(), payload.points()));
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.FightOf.ID,
             (payload, ctx) -> Fight.remote(payload.entity(), payload.kind(), payload.a()));
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.START.register(ctx -> {
@@ -74,6 +76,7 @@ public final class KataClient implements ClientModInitializer {
         Parkour.tick(mc);
         Fight.tick(mc);
         KataCam.tick(mc);
+        if (mc.player != null) Ragdoll.syncOut(mc.player);
         // Kata is played in third person, always (the body is the point).
         if (mc.player != null && mc.options.getPerspective() != Perspective.THIRD_PERSON_BACK) mc.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         while (editorKey.wasPressed()) if (mc.currentScreen == null) openEditor = true;

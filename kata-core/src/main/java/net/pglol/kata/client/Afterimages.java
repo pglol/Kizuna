@@ -87,8 +87,28 @@ public final class Afterimages {
         add(id, 0.02f, 0.3f, 0xCFE6FF, 0.3f, 0, Vec3d.ZERO);
     }
 
+    /** Stunned: grey ghosts pulse out of the body three times over a second. */
+    public static void stun(int id) {
+        long now = System.nanoTime();
+        for (int i = 0; i < 3; i++) LATER.add(new long[] {id, now + i * 330_000_000L});
+    }
+
+    private static final List<long[]> LATER = new ArrayList<>();
+
+    private static void pulses() {
+        long now = System.nanoTime();
+        for (Iterator<long[]> it = LATER.iterator(); it.hasNext(); ) {
+            long[] l = it.next();
+            if (now < l[1]) continue;
+            it.remove();
+            add((int) l[0], 0, 0.4f, 0x9A9A9A, 0.5f, 0.14f, Vec3d.ZERO);
+        }
+        if (LATER.size() > 64) LATER.clear();
+    }
+
     /** Draw them all (after the world's entities). */
     static void render(MatrixStack ms, VertexConsumerProvider vcp, Vec3d cam) {
+        pulses();
         if (GHOSTS.isEmpty()) return;
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.world == null) return;

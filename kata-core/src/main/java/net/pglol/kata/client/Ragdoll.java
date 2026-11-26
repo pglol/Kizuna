@@ -70,6 +70,8 @@ public final class Ragdoll {
     float age, still, getUp = -1, acc;
     /** Get up now (someone else's body whose own game has them up already). */
     boolean comeRound;
+    /** Someone else's body: it only gets up when their game says theirs is (not on its own). */
+    boolean followsOwner;
     /** Knocked down in a fight (not a fall): air slows it across, and it's up again quickly. */
     boolean combat;
     /** The next body to go limp was knocked down in a fight. */
@@ -277,7 +279,7 @@ public final class Ragdoll {
         still = speed < 0.35 ? still + dt : 0;
         // In water the body floats up and lies there a while (about 3 s) before it comes round.
         boolean afloat = inWater();
-        if (comeRound || (afloat ? wake && age > 1.0f : (age > (combat ? 0.3f : MIN_TIME) && still > (combat ? 0.06 : 0.12)) || age > (combat ? 1.4f : MAX_TIME))) {
+        if (comeRound || (!followsOwner && (afloat ? wake && age > 1.0f : (age > (combat ? 0.3f : MIN_TIME) && still > (combat ? 0.06 : 0.12)) || age > (combat ? 1.4f : MAX_TIME)))) {
             getUp = 0;
             // Which way up it ended: chest towards the sky (on its back) or not.
             double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];
@@ -430,6 +432,66 @@ public final class Ragdoll {
         age = Math.min(age, 0.3f);
         getUp = -1;
         pinR = pinL = null;
+    }
+
+    /** This body's points relative to pos, as shorts in 1/256 blocks (to send). */
+    short[] pack(Vec3d pos) {
+        short[] s = new short[N * 3 + 1];
+        s[N * 3] = (short) (getUp < 0 ? -1 : Math.round(getUp * 1000)); // getting up yet (and how far)
+        for (int i = 0; i < N; i++) {
+            s[i * 3] = (short) Math.max(-32000, Math.min(32000, Math.round((x[i] - pos.x) * 256)));
+            s[i * 3 + 1] = (short) Math.max(-32000, Math.min(32000, Math.round((y[i] - pos.y) * 256)));
+            s[i * 3 + 2] = (short) Math.max(-32000, Math.min(32000, Math.round((z[i] - pos.z) * 256)));
+        }
+        return s;
+    }
+
+    /**
+     * Someone else's body: pull every point towards where their own game has it (relative to pos), a
+     * share k of the way, without adding speed (so it settles into the same pose: on its back or its
+     * front, limbs where they are).
+     */
+    void match(short[] s, Vec3d pos, float k) {
+        if (s == null || s.length < N * 3) return;
+        for (int i = 0; i < N; i++) {
+            double tx = pos.x + s[i * 3] / 256.0, ty = pos.y + s[i * 3 + 1] / 256.0, tz = pos.z + s[i * 3 + 2] / 256.0;
+            double dx = (tx - x[i]) * k, dy = (ty - y[i]) * k, dz = (tz - z[i]) * k;
+            x[i] += dx;
+            px[i] += dx;
+            y[i] += dy;
+            py[i] += dy;
+            z[i] += dz;
+            pz[i] += dz;
+        }
+    }
+
+    /** The last points heard for someone else's body, and when. */
+    private static final java.util.Map<Integer, short[]> HEARD = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Long> HEARD_AT = new java.util.HashMap<>();
+    private static int sendTicks;
+
+    static void heard(int entity, short[] points) {
+        HEARD.put(entity, points);
+        HEARD_AT.put(entity, System.nanoTime());
+        if (HEARD.size() > 64) {
+            HEARD.clear();
+            HEARD_AT.clear();
+        }
+    }
+
+    /** Their game's latest points for this body, if heard in the last half second. */
+    static short[] heardFor(int entity) {
+        Long at = HEARD_AT.get(entity);
+        return at != null && System.nanoTime() - at < 500_000_000L ? HEARD.get(entity) : null;
+    }
+
+    /** Every other tick while you're limp: send where your body's points are, for everyone else. */
+    static void syncOut(net.minecraft.client.network.ClientPlayerEntity p) {
+        Ragdoll r = of(p);
+        if (r == null || ++sendTicks < 2) return;
+        sendTicks = 0;
+        if (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(net.pglol.kata.KataNet.Rag.ID))
+            net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new net.pglol.kata.KataNet.Rag(r.pack(p.getPos())));
     }
 
     /** Move the whole body by d (blocks) without changing how it's moving: carried along. */

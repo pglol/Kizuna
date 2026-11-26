@@ -73,6 +73,15 @@ public final class Hud {
 
         tag(c, mc, h, dt);
         c.getMatrices().pop();
+        // Your air string's count, beside the crosshair: big for a moment as each hit lands, then fading.
+        float since = (Fight.clock() - Fight.comboAt) / 1e9f;
+        if (Fight.combo >= 2 && since < 1.2f) {
+            float a = since < 0.9f ? 1 : 1 - (since - 0.9f) / 0.3f;
+            float sc = 1.6f - 0.5f * Math.min(1, since / 0.12f);
+            String n = String.valueOf(Fight.combo);
+            Ui.text(c, mc.textRenderer, n, w / 2f + 18, h / 2f - 10, sc, Ui.alpha(0xFFEDE5D3, a));
+            Ui.text(c, mc.textRenderer, "HITS", w / 2f + 19 + Ui.width(mc.textRenderer, n, sc), h / 2f - 4, 0.6f, Ui.alpha(0xFFD9472B, a));
+        }
         // The pop: in with a little punch, then fading up and away.
         if (popText != null) {
             float s = (now - popAt) / 1e9f;
