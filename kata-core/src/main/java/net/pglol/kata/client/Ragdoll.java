@@ -60,7 +60,7 @@ public final class Ragdoll {
         {RH, PELVIS, 0.3}, {LH, PELVIS, 0.3}, {RH, LS, 0.3}, {LH, RS, 0.3}, {RE, LS, 0.25}, {LE, RS, 0.25},
     };
     private static final float RADIUS = 0.09f, GRAVITY = 28.8f, MU = 0.6f; // MU: friction against the ground and walls
-    private static final float MIN_TIME = 0.55f, MAX_TIME = 2.2f, GET_UP = 1.15f;
+    private static final float MIN_TIME = 0.55f, MAX_TIME = 4.0f, GET_UP = 1.15f;
 
     private static final Map<Integer, Ragdoll> ACTIVE = new HashMap<>();
 
@@ -393,6 +393,24 @@ public final class Ragdoll {
     /** Is the body in water (any of its torso)? */
     boolean inWater() {
         return wet[PELVIS] || wet[NECK];
+    }
+
+    /**
+     * Hit while limp (or getting up): the force goes into the body (velocity in blocks a tick, a little
+     * more into the upper body) and it's sent flying again; any getting up starts over.
+     */
+    public void impulse(Vec3d v) {
+        double k = 20 / 240.0; // blocks a tick to distance a physics step
+        for (int i = 0; i < N; i++) {
+            double s = i == HEAD || i == NECK || i == RS || i == LS ? 1.15 : i == RF || i == LF ? 0.8 : 1;
+            px[i] -= v.x * k * s;
+            py[i] -= v.y * k * s;
+            pz[i] -= v.z * k * s;
+        }
+        still = 0;
+        age = Math.min(age, 0.3f);
+        getUp = -1;
+        pinR = pinL = null;
     }
 
     /** Catch the ledge: the hands are held at these points, the body hangs and swings from them. */

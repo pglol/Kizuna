@@ -889,6 +889,14 @@ public final class Parkour {
     /** Knocked off your feet by a hit (a full heavy, a big kick, a caught kick thrown back): limp, flying. */
     public static void knockdown(ClientPlayerEntity p, Vec3d v) {
         if (p.getAbilities().flying || p.isSpectator() || p.hasVehicle()) return;
+        if (mode == Mode.RAGDOLL) {
+            // Already down: knocked flying again.
+            Ragdoll r = Ragdoll.of(p);
+            if (r != null) r.impulse(v);
+            stoodUp = false;
+            limpHang = null;
+            return;
+        }
         airVel = v;
         p.setVelocity(v);
         landRough = 1;
@@ -1239,6 +1247,14 @@ public final class Parkour {
                 // You are the body: no walking; you go where it goes, up, down and across, so the camera
                 // rides the whole fall and the impact with it instead of landing before it.
                 Ragdoll r = Ragdoll.of(p);
+                // Any sideways speed here came from outside (we hold it at zero): a hit while you're down.
+                // It goes into the body, which goes flying again.
+                Vec3d hitV = p.getVelocity();
+                if (r != null && hitV.horizontalLengthSquared() > 0.02) {
+                    r.impulse(new Vec3d(hitV.x * 1.4, Math.max(hitV.y, 0) + 0.15, hitV.z * 1.4));
+                    stoodUp = false;
+                    limpHang = null;
+                }
                 p.setSprinting(false);
                 if (r != null && !r.resting()) {
                     Vec3d pel = r.pelvis();

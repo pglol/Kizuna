@@ -27,7 +27,8 @@ public final class DummyAnim {
     private static final class State {
         final float[][] ang = new float[Bone.values().length][3], vel = new float[Bone.values().length][3];
         long last;
-        boolean ragdoll;
+        boolean ragdoll, wasDown;
+        int knocks;
         Pose shown = new Pose();
     }
 
@@ -42,12 +43,17 @@ public final class DummyAnim {
         float by = MathHelper.lerpAngleDegrees(td, d.prevBodyYaw, d.bodyYaw);
 
         // Knocked down: limp, then up again.
-        if (d.down() > 0 && !s.ragdoll) {
+        boolean fresh = d.down() > 0 && (!s.wasDown || d.knocks() != s.knocks);
+        s.wasDown = d.down() > 0;
+        if (fresh && !s.ragdoll) {
             s.ragdoll = true;
             Ragdoll.start(d, s.shown, by, d.getVelocity().multiply(20));
+            s.knocks = d.knocks();
         }
         if (s.ragdoll) {
             Ragdoll r = Ragdoll.of(d);
+            if (r != null && d.knocks() != s.knocks) r.impulse(d.getVelocity().multiply(1.4)); // hit again while down
+            s.knocks = d.knocks();
             if (r != null && !r.finished()) {
                 r.step(d.getWorld(), dt);
                 Pose limp = r.pose(d, d.getLerpedPos(td), by, td);

@@ -40,6 +40,8 @@ public class Dummy extends PathAwareEntity {
     private static final TrackedData<Integer> STAGGER = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Integer> REACT_AT = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Integer> REACT = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
+    /** Counts every time it's knocked about while down (the client puts each one into its ragdoll). */
+    private static final TrackedData<Integer> KNOCKS = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
 
     /** Reactions shown on the client: 1 blocked from the right, 2 from the left, 3 parried, 4 caught a kick, 5 guard broken. */
     public static final int BLOCK_R = 1, BLOCK_L = 2, PARRY = 3, CATCH = 4, BROKEN = 5;
@@ -72,6 +74,7 @@ public class Dummy extends PathAwareEntity {
         b.add(STAGGER, 0);
         b.add(REACT_AT, -999);
         b.add(REACT, 0);
+        b.add(KNOCKS, 0);
     }
 
     @Override
@@ -105,6 +108,10 @@ public class Dummy extends PathAwareEntity {
         return dataTracker.get(STAGGER);
     }
 
+    public int knocks() {
+        return dataTracker.get(KNOCKS);
+    }
+
     public int reaction() {
         return dataTracker.get(REACT);
     }
@@ -122,7 +129,18 @@ public class Dummy extends PathAwareEntity {
     @Override
     public boolean damage(DamageSource source, float amount) {
         if (source.isOf(DamageTypes.GENERIC_KILL) || source.isOf(DamageTypes.OUT_OF_WORLD)) return super.damage(source, amount);
-        if (!getWorld().isClient && source.getAttacker() instanceof LivingEntity l && l != this) provoke(l);
+        if (!getWorld().isClient && source.getAttacker() instanceof LivingEntity l && l != this) {
+            provoke(l);
+            if (down() > 0) {
+                // Hit while it's down: knocked flying again, and it stays down longer.
+                Vec3d away = getPos().subtract(l.getPos()).multiply(1, 0, 1);
+                away = away.lengthSquared() < 1e-4 ? Vec3d.ZERO : away.normalize();
+                setVelocity(getVelocity().add(away.multiply(0.25 + amount * 0.05)).add(0, 0.2, 0));
+                velocityModified = true;
+                dataTracker.set(DOWN, Math.max(down(), 40));
+                dataTracker.set(KNOCKS, dataTracker.get(KNOCKS) + 1);
+            }
+        }
         // Never knocked out: a hit that would finish it resets it instead.
         if (amount >= getHealth() - 0.5f) setHealth(getMaxHealth());
         return super.damage(source, Math.min(amount, getMaxHealth() - 1));
