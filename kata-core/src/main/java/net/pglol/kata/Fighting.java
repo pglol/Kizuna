@@ -214,7 +214,9 @@ public final class Fighting {
     /** The limb (hand or foot) hit i of a move is thrown with from a stance: true = right. */
     public static boolean rightLimb(Move m, int stance, int hit) {
         boolean right;
-        if (m.from() == From.BACK) right = rightSide(stance); // turned away: the limb on the side you're turned
+        // Turned away: the spin carries on round, and the limb on the side that leads the turn strikes
+        // (back-right turns on to the right, so the left leads; back-left the other way).
+        if (m.from() == From.BACK) right = !rightSide(stance);
         else {
             boolean leadRight = !rightSide(stance); // top-right is orthodox (left lead)
             right = m.lead() == leadRight;
@@ -395,10 +397,10 @@ public final class Fighting {
      * A player's game saw a knocked-down dummy's body come to rest here (packed offset from where the
      * dummy is): it gets up there, not back where it was hit.
      */
-    static void dummyRest(ServerPlayerEntity p, int entity, int packed) {
+    static void dummyRest(ServerPlayerEntity p, int entity, int packed, boolean resting) {
         if (!(p.getWorld().getEntityById(entity) instanceof Dummy d) || d.squaredDistanceTo(p) > 32 * 32) return;
         double dx = ((packed >> 20) << 20 >> 20) / 100.0, dz = (((packed >> 8) & 0xFFF) << 20 >> 20) / 100.0, dy = ((byte) (packed & 0xFF)) / 20.0;
-        d.settleAt(d.getPos().add(dx, dy, dz));
+        d.settleAt(d.getPos().add(dx, dy, dz), resting);
     }
 
     public static int packOffset(double dx, double dy, double dz) {

@@ -29,11 +29,18 @@ public final class DummyAnim {
         final float[][] ang = new float[Bone.values().length][3], vel = new float[Bone.values().length][3];
         long last;
         boolean ragdoll, wasDown, reported;
+        long lastReport;
         int knocks;
         Pose shown = new Pose();
     }
 
     private static final Map<Integer, State> STATES = new HashMap<>();
+
+    private static boolean broken(Pose p) {
+        for (Bone b : Bone.values()) for (int a = 0; a < 3; a++) if (!Float.isFinite(p.get(b, a))) return true;
+        for (float o : p.offset) if (!Float.isFinite(o)) return true;
+        return false;
+    }
 
     /** The pose it's showing (for its hitboxes), without moving its animation on. */
     static Pose current(Dummy d, float td) {
@@ -65,13 +72,19 @@ public final class DummyAnim {
             if (r != null && !r.finished()) {
                 r.step(d.getWorld(), dt);
                 Pose limp = r.pose(d, d.getLerpedPos(td), by, td);
-                if (r.resting() && !s.reported) {
-                    // Came to rest: tell the server where the body is, so it gets up there.
-                    s.reported = true;
+                // Tell the server where the body is: as it flies (so the dummy really is there, to be hit
+                // again where it lies), and once more when it comes to rest (then it gets up there).
+                boolean rest = r.resting() && !s.reported;
+                if (rest || now - s.lastReport > 150_000_000L) {
+                    s.lastReport = now;
+                    if (rest) s.reported = true;
                     Vec3d off = r.pelvis().subtract(d.getPos()).add(0, -0.7, 0);
-                    if (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(net.pglol.kata.KataNet.Fight.ID))
-                        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new net.pglol.kata.KataNet.Fight(net.pglol.kata.KataNet.DUMMY_REST, d.getId(),
-                            Fighting.packOffset(off.x, Math.max(-0.5, off.y), off.z)));
+                    if (off.lengthSquared() > 0.04 || rest) {
+                        if (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(net.pglol.kata.KataNet.Fight.ID))
+                            net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new net.pglol.kata.KataNet.Fight(
+                                rest ? net.pglol.kata.KataNet.DUMMY_REST : net.pglol.kata.KataNet.DUMMY_AT, d.getId(),
+                                Fighting.packOffset(off.x, Math.max(-0.5, off.y), off.z)));
+                    }
                 }
                 s.shown = r.resting() ? r.getUpPose(limp, r.getUp, 0, 0) : limp;
                 return s.shown;
@@ -100,7 +113,9 @@ public final class DummyAnim {
         Pose out = new Pose();
         for (Bone b : Bone.values()) for (int a = 0; a < 3; a++) out.set(b, a, dt > 0 ? s.ang[b.ordinal()][a] : want.get(b, a));
         System.arraycopy(want.offset, 0, out.offset, 0, 3);
+        Pose before = out.copy();
         strike(d, td, by, out);
+        if (broken(out)) out = before; // a solve that went wrong never shows (a broken pose makes the model vanish)
         s.shown = out;
         return out;
     }

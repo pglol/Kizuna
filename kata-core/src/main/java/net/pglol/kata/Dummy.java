@@ -52,6 +52,7 @@ public class Dummy extends PathAwareEntity {
     private LivingEntity foe;
     private int calmAt, guardAt = -999, guardUntil, raiseAt = -1, cooldown = 40, contactAt = -1;
     private Fighting.Move swing;
+    private int stuck;
 
     public Dummy(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
@@ -172,7 +173,7 @@ public class Dummy extends PathAwareEntity {
     }
 
     /** Where its knocked-down body came to rest (seen on a player's screen): it gets up there. */
-    void settleAt(Vec3d at) {
+    void settleAt(Vec3d at, boolean resting) {
         if (down() <= 0 || getPos().squaredDistanceTo(at) > 12 * 12) return;
         // Stand where the body lies (lifted out of the floor it's lying on, if need be).
         for (double up = 0; up <= 1.5; up += 0.1) {
@@ -184,7 +185,8 @@ public class Dummy extends PathAwareEntity {
             }
         }
         getNavigation().stop();
-        dataTracker.set(DOWN, Math.min(down(), 24)); // getting up takes a moment, then it's back on its feet
+        // While it's flying the dummy goes with its body; at rest, getting up takes a moment, then it's back on its feet.
+        if (resting) dataTracker.set(DOWN, Math.min(down(), 24));
     }
 
     void blocked(int side) {
@@ -279,13 +281,21 @@ public class Dummy extends PathAwareEntity {
         getLookControl().lookAt(foe, 40, 40);
         double d = Math.sqrt(squaredDistanceTo(foe));
         // Keep to fighting distance: close in, but not chest to chest.
-        if (d > 2.4) {
+        if (swing != null) {
+            // Throwing something: feet planted.
+            getNavigation().stop();
+            stuck = 0;
+        } else if (d > 2.6) {
             if (age % 5 == 0) getNavigation().startMovingTo(foe, d > 5 ? 1.15 : 0.9);
-            // No path (they're up on something, or round an edge): head straight for them, hopping
-            // over what's in the way.
-            if (getNavigation().isIdle()) {
+            // No path (they're up on something, or round an edge): head straight for them, and hop over
+            // what's in the way once it's clearly stuck.
+            if (getNavigation().isIdle() && d > 3.2) {
                 getMoveControl().moveTo(foe.getX(), foe.getY(), foe.getZ(), d > 5 ? 1.15 : 0.9);
-                if (horizontalCollision && isOnGround()) getJumpControl().setActive();
+                stuck = horizontalCollision ? stuck + 1 : 0;
+                if (stuck > 8 && isOnGround()) {
+                    getJumpControl().setActive();
+                    stuck = 0;
+                }
             }
         } else {
             getNavigation().stop();
@@ -297,8 +307,9 @@ public class Dummy extends PathAwareEntity {
         // Face them square.
         double dx = foe.getX() - getX(), dz = foe.getZ() - getZ();
         float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-        setYaw(yaw);
-        bodyYaw = MathHelper.stepUnwrappedAngleTowards(bodyYaw, yaw, 20);
+        setYaw(MathHelper.stepUnwrappedAngleTowards(getYaw(), yaw, 15));
+        bodyYaw = MathHelper.stepUnwrappedAngleTowards(bodyYaw, getYaw(), 15);
+        headYaw = getYaw();
 
         // Its turn: throw something when in reach and its guard is down.
         if (--cooldown <= 0 && swing == null && !guarding() && d < 2.8) {

@@ -274,7 +274,7 @@ public final class Fight {
         boolean right = Fighting.rightLimb(m, stance, 0);
         // A spinning strike turns you as you throw it, its side leading the turn.
         if (m.turns()) {
-            SPIN.put(p.getId(), right ? 1 : -1);
+            SPIN.put(p.getId(), right ? -1 : 1); // the leading limb's side: a right one leads a turn to the left
             stanceTo(Fighting.end(m, stance));
         }
         // Anyone it's aimed at sees it coming.
@@ -443,7 +443,7 @@ public final class Fight {
                     Move m = Fighting.MOVES[id];
                     int st = STANCES.getOrDefault(entity, Fighting.TR);
                     MOVES.put(entity, new Act(m, st, ((a >> 9) & 0x7F) / 100f, System.nanoTime()));
-                    if (m.turns()) SPIN.put(entity, (a & 1 << 8) != 0 ? 1 : -1);
+                    if (m.turns()) SPIN.put(entity, (a & 1 << 8) != 0 ? -1 : 1);
                 }
                 STANCE_AT.put(entity, System.nanoTime());
             }
@@ -744,7 +744,18 @@ public final class Fight {
             case SIDE_KICK -> -22;
             default -> -14;
         };
-        out.set(Bone.ROOT, Pose.YAW, out.get(Bone.ROOT, Pose.YAW) + sign * hips * kk);
+        // The hips turn over the standing foot (it stays planted, the body pivoting on it), the chest
+        // counter-twisting a little so the turn reads through the whole body.
+        float turnBefore = out.get(Bone.ROOT, Pose.YAW);
+        out.set(Bone.ROOT, Pose.YAW, turnBefore + sign * hips * kk);
+        out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) - sign * hips * 0.35f * kk);
+        Vector3f standFoot = new Vector3f(right ? 1.9f : -1.9f, 0, 0);
+        Vector3f was = new org.joml.Quaternionf().rotationY((float) Math.toRadians(turnBefore)).transform(new Vector3f(standFoot));
+        Vector3f now = new org.joml.Quaternionf().rotationY((float) Math.toRadians(out.get(Bone.ROOT, Pose.YAW))).transform(new Vector3f(standFoot));
+        out.offset[0] += was.x - now.x;
+        out.offset[2] += was.z - now.z;
+        Bone standLeg = right ? Bone.LEFT_LEG : Bone.RIGHT_LEG;
+        out.set(standLeg, Pose.YAW, out.get(standLeg, Pose.YAW) - sign * hips * 0.6f * kk); // the foot stays pointing where it was
         out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) + lean * kk);
         if (m.path() == Path.SIDE_KICK) out.set(Bone.CHEST, Pose.ROLL, out.get(Bone.CHEST, Pose.ROLL) - out_ * 18 * kk);
         out.set(standShin, Pose.PITCH, out.get(standShin, Pose.PITCH) + 14 * kk);

@@ -45,6 +45,7 @@ public final class Parkour {
     private static Vec3d lastVel = Vec3d.ZERO;
     /** Limp, hands caught on a ledge: where you'd hang when you come round (null if not). */
     private static Vec3d limpHang;
+    private static boolean wasMoving;
     private static boolean lastFlying, lastWater;
     // A leap cut short in the air carries on as a real flight: for a while the hands still go for the
     // lip it was aimed at, in the direction it was aimed.
@@ -562,10 +563,12 @@ public final class Parkour {
                 if (!ground && r != null && !r.resting() && ticks > 2 && limpHang == null) reflex(p, sneak, true);
                 // Floating limp: it lies on the water until you move. Then up if there's ground under you,
                 // or you start swimming.
-                if (r != null && r.inWater() && !r.resting() && ticks > 20) {
-                    var in = p.input;
-                    boolean moving = Math.abs(in.movementForward) > 0.1f || Math.abs(in.movementSideways) > 0.1f || jump;
-                    if (moving) {
+                var in = p.input;
+                boolean moving = Math.abs(in.movementForward) > 0.1f || Math.abs(in.movementSideways) > 0.1f || jump;
+                boolean pressed = moving && !wasMoving; // a fresh press: keys still held from before don't count
+                wasMoving = moving;
+                if (r != null && r.inWater() && !r.resting() && ticks > 40) {
+                    if (pressed) {
                         Vec3d pel = r.pelvis();
                         boolean floor = !empty(p, new Box(pel.x - 0.25, pel.y - 1.6, pel.z - 0.25, pel.x + 0.25, pel.y - 0.05, pel.z + 0.25));
                         if (floor) r.wake = true;
