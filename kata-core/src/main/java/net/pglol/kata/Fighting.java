@@ -764,12 +764,18 @@ public final class Fighting {
         float power = m.heavy() ? MathHelper.clamp(((packed >> 9) & 0x7F) / 100f, 0.3f, 1f) : 1f;
         int now = p.getServer().getTicks();
         Integer last = LAST.get(p.getUuid());
-        if (last != null && now - last < 2) return; // faster than any string allows
+        if (last != null && now - last < 2) {
+            dbg(p, 1, now - last); // faster than any string allows
+            return;
+        }
         // A new strike only once the last has nearly run its course (later hits of the same move are fine).
         Integer lastId = LAST_ID.get(p.getUuid()), lastStart = LAST_START.get(p.getUuid());
         boolean sameMove = lastId != null && lastId == id && lastStart != null && now - lastStart < Math.round(m.length() * 20);
         if (!sameMove) {
-            if (lastId != null && lastStart != null && lastId < MOVES.length && now - lastStart < Math.round(MOVES[lastId].length() * 20 * 0.75f)) return;
+            if (lastId != null && lastStart != null && lastId < MOVES.length && now - lastStart < Math.round(MOVES[lastId].length() * 20 * 0.75f)) {
+                dbg(p, 2, now - lastStart);
+                return;
+            }
             LAST_ID.put(p.getUuid(), id);
             LAST_START.put(p.getUuid(), now);
             if (LAST_ID.size() > 1024) {
@@ -781,33 +787,60 @@ public final class Fighting {
         if (LAST.size() > 1024) LAST.clear();
         // Still reeling from a hit (a little slack for lag): nothing thrown lands.
         Integer fl = FLINCH_UNTIL.get(p.getUuid());
-        if (fl != null && now < fl - 2) return;
+        if (fl != null && now < fl - 2) {
+            dbg(p, 3, fl - now);
+            return;
+        }
         relay(p, KataNet.STRIKE, packed);
-        if (target < 0 || guarding(p)) return;
+        if (target < 0 || guarding(p)) {
+            dbg(p, target < 0 ? 4 : 5, 0);
+            return;
+        }
         Entity e = p.getWorld().getEntityById(target);
-        if (!(e instanceof LivingEntity t) || !t.isAlive() || t == p) return;
+        if (!(e instanceof LivingEntity t) || !t.isAlive() || t == p) {
+            dbg(p, 6, target);
+            return;
+        }
         // In reach (with some slack for lag) and somewhere in front.
         Vec3d eye = p.getEyePos();
         var b = t.getBoundingBox();
         Vec3d near = new Vec3d(MathHelper.clamp(eye.x, b.minX, b.maxX), MathHelper.clamp(eye.y, b.minY, b.maxY), MathHelper.clamp(eye.z, b.minZ, b.maxZ));
         // A downed dummy's body lies wherever it flew (its box may be elsewhere): judge by distance only.
         boolean lying = t instanceof Dummy dd && dd.down() > 0;
-        if (eye.distanceTo(near) > (lying ? 7 : REACH + (m.leg() ? KICK_EXTRA : 0) + 0.5)) return; // a little slack for lag
+        if (eye.distanceTo(near) > (lying ? 7 : REACH + (m.leg() ? KICK_EXTRA : 0) + 0.6)) { // a little slack for lag
+            dbg(p, 7, (int) Math.round(eye.distanceTo(near) * 100));
+            return;
+        }
         Vec3d to = t.getPos().subtract(p.getPos());
         Vec3d look = Vec3d.fromPolar(0, p.getYaw());
         double len = Math.hypot(to.x, to.z);
-        if (!lying && len > 0.3 && (to.x * look.x + to.z * look.z) / len < -0.2) return;
+        // Anywhere a limb really reached them counts (behind too): the touch was judged on the striker's side.
         Part part = Part.values()[Math.min(3, (packed >> 16) & 0x3)];
         strikeRight = (packed & 1 << 8) != 0;
         try {
-            land(p, t, m, power, part, look, p.getDamageSources().playerAttack(p));
+            boolean landed = land(p, t, m, power, part, look, p.getDamageSources().playerAttack(p));
+            dbg(p, landed ? 0 : 8, 0);
         } finally {
             strikeRight = null;
         }
     }
 
+    /** Players who asked to see why their strikes land or don't (/kdebug). */
+    private static final java.util.Set<UUID> DEBUG = new java.util.HashSet<>();
+
+    static void debug(ServerPlayerEntity p, boolean on) {
+        if (on) DEBUG.add(p.getUuid());
+        else DEBUG.remove(p.getUuid());
+    }
+
+    /** Tell a debugging player what became of their strike (a code, and a number for it). */
+    private static void dbg(ServerPlayerEntity p, int code, int value) {
+        if (DEBUG.contains(p.getUuid()) && ServerPlayNetworking.canSend(p, KataNet.FightOf.ID))
+            ServerPlayNetworking.send(p, new KataNet.FightOf(p.getId(), KataNet.DEBUG, code | (Math.max(0, Math.min(0xFFFFFF, value)) << 4)));
+    }
+
     /** A strike landing (from a player or a dummy): damage by part, guard, parry, knockback, launch, knockdown. */
-    static void land(LivingEntity by, LivingEntity t, Move m, float power, Part part, Vec3d look, net.minecraft.entity.damage.DamageSource src) {
+    static boolean land(LivingEntity by, LivingEntity t, Move m, float power, Part part, Vec3d look, net.minecraft.entity.damage.DamageSource src) {
         float dmg = m.damage() * (m.heavy() ? 0.5f + 0.5f * power : 1) * part.share;
         t.timeUntilRegen = 0; // strings land: no invulnerability gap between hits
         breaking = m.heavy() && power >= 0.98f;
@@ -822,7 +855,7 @@ public final class Fighting {
             strikingPart = null;
         }
         // A creative-mode player takes no damage, but still feels the hit (unless it was blocked).
-        if (!hit && !(t instanceof net.minecraft.entity.player.PlayerEntity pl && pl.isCreative() && !guarding(t))) return;
+        if (!hit && !(t instanceof net.minecraft.entity.player.PlayerEntity pl && pl.isCreative() && !guarding(t))) return false;
         // The hit's reaction, for everyone to see: where it landed, what kind of strike, from which side.
         Vec3d from = by.getPos().subtract(t.getPos());
         double ty = Math.toRadians(t.getYaw());
@@ -839,7 +872,7 @@ public final class Fighting {
             if (m.heavy()) smash(by, t, look);
             else juggle(by, t, look);
             t.getWorld().playSound(null, t.getX(), t.getY(), t.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, SoundCategory.PLAYERS, 0.9f, 1.1f + t.getRandom().nextFloat() * 0.2f);
-            return;
+            return true;
         }
         float shove = m.push() * (m.heavy() ? 0.6f + 0.6f * power : 1) * might(by);
         boolean down = m.knockdown() && (!m.heavy() || power >= 0.9f);
@@ -859,6 +892,7 @@ public final class Fighting {
         t.getWorld().playSound(null, t.getX(), t.getY(), t.getZ(),
             m.heavy() || down ? SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK : SoundEvents.ENTITY_PLAYER_ATTACK_STRONG,
             SoundCategory.PLAYERS, 0.9f, (m.heavy() ? 0.75f : 1f) + t.getRandom().nextFloat() * 0.2f);
+        return true;
     }
 
     /** Tell everyone who can see e (and e itself, if a player) about something that happened to it. */

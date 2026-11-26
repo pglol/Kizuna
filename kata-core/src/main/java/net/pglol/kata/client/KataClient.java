@@ -21,6 +21,12 @@ public final class KataClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         editorKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.pose_editor", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_O, "category.kata_core"));
+        ClientCommandRegistrationCallback.EVENT.register((d, reg) -> d.register(ClientCommandManager.literal("kdebug").executes(c -> {
+            Fight.debug = !Fight.debug;
+            Fight.send(net.pglol.kata.KataNet.DEBUG, Fight.debug ? 1 : 0, 0);
+            c.getSource().sendFeedback(net.minecraft.text.Text.literal("Kata strike debug " + (Fight.debug ? "on: your limb's path shows, and every strike reports what happened" : "off")));
+            return 1;
+        })));
         ClientCommandRegistrationCallback.EVENT.register((d, reg) -> d.register(ClientCommandManager.literal("kpose").executes(c -> {
             openEditor = true;
             return 1;

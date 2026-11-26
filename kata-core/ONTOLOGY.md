@@ -452,3 +452,7 @@ moves the body somewhere the physics wouldn't.
 ## Knockback
 - Ordinary hits push a little further along the ground (0.42 x push), knockdowns throw a little further (0.5 x push, at most 0.28 blocks a tick across).
 - (Revised) A strike touches from early in the swing through the beat it holds at full extension: the fist or foot along its path and the whole forearm or shin as it is. Whoever it touches, in front or at your side, is hit. The soft target takes anyone in front or out to the side (not behind).
+- A limb that reaches someone behind you hits them too: the server no longer refuses strikes at people behind (the touch is judged where the limb is).
+
+## /kdebug
+- Toggles strike debugging: the striking fist or foot leaves a trail (and the elbow or knee sparks), each strike reports what it touched, and the server answers with what became of it (landed, or why not: too soon, still reeling, guard up, out of reach with the distance, or the game refusing the damage).

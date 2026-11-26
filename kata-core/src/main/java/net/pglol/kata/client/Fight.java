@@ -42,6 +42,8 @@ public final class Fight {
     static int target = -1;
     static int stance = Fighting.TR;
     static boolean guard;
+    /** /kdebug: show the striking limb and report every strike's fate. */
+    static boolean debug;
     /** The deck's move preview: what to show on your body while the deck draws it, from which stance, since when. */
     static Move previewMove;
     static int previewStance;
@@ -433,6 +435,12 @@ public final class Fight {
                 send(KataNet.CHARGE, 1, 0); // they see it building
             }
         }
+        // Debug: the striking limb's path, as it goes.
+        if (debug && cur != null && mc.world != null) {
+            if (limbNow != null) mc.world.addParticle(net.minecraft.particle.ParticleTypes.END_ROD, limbNow.x, limbNow.y, limbNow.z, 0, 0, 0);
+            if (limbMid != null) mc.world.addParticle(net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK, limbMid.x, limbMid.y, limbMid.z, 0, 0, 0);
+            if (limbNow == null && mc.world.getTime() % 4 == 0) say("no limb to follow (your body isn't being drawn this frame)");
+        }
         // The move in progress: each of its hits lands (on whatever it first touches), then it's done.
         if (cur != null) {
             float s = secs(curStart);
@@ -460,6 +468,11 @@ public final class Fight {
                     boolean right = Fighting.rightLimb(cur, curStance, nextHit);
                     int packed = Fighting.id(cur) | (right ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9) | (lastPart.ordinal() << 16);
                     send(KataNet.STRIKE, packed, hit);
+                    if (debug) {
+                        Entity he = hit >= 0 ? p.getWorld().getEntityById(hit) : null;
+                        say("strike " + cur.name() + " (" + (drawn ? "limb touch" : "first-person line") + "): "
+                            + (he != null ? "touched " + he.getName().getString() + " " + lastPart : "touched nobody" + (drawn ? "" : "")) + ", nearby " + nearby(p).size());
+                    }
                     nextHit++;
                     if (hit >= 0 && cur.from() == Fighting.From.AIR) airLanded = true;
                     // It lands: the strike holds still for a moment (the impact), longer for a heavy.
@@ -822,6 +835,21 @@ public final class Fight {
                     net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + 0.25f); // a parry gives breath back
                 }
                 case KataNet.DODGE -> { }
+                case KataNet.DEBUG -> {
+                    int code = a & 0xF, v = a >>> 4;
+                    say("server: " + switch (code) {
+                        case 0 -> "landed";
+                        case 1 -> "refused: too soon after the last packet (" + v + " ticks)";
+                        case 2 -> "refused: a new strike before the last had run its course (" + v + " ticks)";
+                        case 3 -> "refused: you're still reeling from a hit (" + v + " ticks left)";
+                        case 4 -> "no target sent (the touch found nobody)";
+                        case 5 -> "refused: the server thinks your guard is up";
+                        case 6 -> "refused: no such living target (" + v + ")";
+                        case 7 -> "refused: out of reach (" + (v / 100f) + " blocks from your eyes to them)";
+                        case 8 -> "hit refused by the game (no damage: PvP off, invulnerable, or a team rule)";
+                        default -> "code " + code;
+                    });
+                }
                 case KataNet.AIR_HIT -> {
                     // An air hit, given or taken: hang there for the next. Given, another air strike is yours.
                     hangUntil = System.nanoTime() + a * 50_000_000L;
@@ -1449,6 +1477,11 @@ public final class Fight {
     static boolean concussed(LivingEntity e) {
         Long u = CONCUSSED.get(e.getId());
         return u != null && System.nanoTime() < u;
+    }
+
+    private static void say(String s) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null) mc.player.sendMessage(net.minecraft.text.Text.literal("[kata] " + s), false);
     }
 
     static boolean hitRecently(LivingEntity e) {
