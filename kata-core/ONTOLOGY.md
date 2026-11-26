@@ -430,7 +430,7 @@ moves the body somewhere the physics wouldn't.
 - Settings (Camera, at the top left of the pause menu and in the deck): third person on or off, shoulder view on lock-on, distance, shoulder offset, height, smoothing, speed trail. Saved in config/kizuna/kata_camera.json.
 
 ## Standing still
-- Standing still and not fighting, looking around turns the head, not the body; past about 75 degrees the body is drawn round after it. Moving or fighting, the body faces where you look.
+- Standing still and not fighting, looking around turns only the head (as far as a neck allows, 75 degrees either side); the body stays put. Moving, fighting or in the air, the body faces where you look; for 1.5 s after you stop it still settles round to your look, easing off, then holds.
 
 ## The deck preview is a fight
 - The preview shows the move as thrown in a fight: squared up (guard, the stance's shoulder-forward turn, a spinning move's full turn the long way round), aiming straight ahead of the body at the heights a real strike uses (as at an opponent in front). Frame exports show the same.

@@ -86,6 +86,7 @@ public final class Animator {
         boolean ragdolled;
         /** Where the body faces while standing still (the head looks around on its own). */
         float stillFace = Float.NaN;
+        long movedAt;
         Vec3d carried; // where someone else's limp body was carried to last frame
         // Hands to a wall right in front: how much, and how far off it is.
         float wallW;
@@ -229,10 +230,18 @@ public final class Animator {
             // its facing until the head is turned past what a neck allows, then it's drawn round after it.
             // Moving or fighting, the body faces where you look.
             float mv = (float) Math.sqrt(s.fwd * s.fwd + s.side * s.side);
-            if (Float.isNaN(s.stillFace) || mv > 0.4f || Fight.engagedOf(p) || !p.isOnGround()) s.stillFace = face;
-            else {
-                float off = MathHelper.wrapDegrees(face - s.stillFace);
-                if (Math.abs(off) > 75) s.stillFace += off - Math.signum(off) * 75;
+            long nowN = System.nanoTime();
+            if (Float.isNaN(s.stillFace) || mv > 0.4f || Fight.engagedOf(p) || !p.isOnGround()) {
+                s.stillFace = face;
+                s.movedAt = nowN;
+            } else {
+                // Just stopped: for a second and a half the body still settles round to where you look,
+                // easing off; after that it stays put and only the head looks about.
+                float since = (nowN - s.movedAt) / 1e9f;
+                if (since < 1.5f) {
+                    float rate = 8 * (1 - since / 1.5f);
+                    s.stillFace += MathHelper.wrapDegrees(face - s.stillFace) * Math.min(1, dt * rate);
+                }
             }
             turn = MathHelper.wrapDegrees(s.stillFace - body);
         }
