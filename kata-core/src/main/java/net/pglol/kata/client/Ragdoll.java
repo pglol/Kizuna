@@ -72,6 +72,8 @@ public final class Ragdoll {
     final boolean[] wet = new boolean[N];
     /** Hands caught on a ledge while limp (world points they're held to), or null. */
     Vec3d pinR, pinL;
+    /** Floating in water it lies there until told to come round (a movement key). */
+    boolean wake;
     float lastSplash = -1;
     /** Which way the body lay when it started getting up (degrees, like a player's yaw). */
     float lieYaw;
@@ -265,7 +267,7 @@ public final class Ragdoll {
         still = speed < 0.35 ? still + dt : 0;
         // In water the body floats up and lies there a while (about 3 s) before it comes round.
         boolean afloat = inWater();
-        if (afloat ? (age > 3.0f && still > 0.2) || age > 6.0f : (age > MIN_TIME && still > 0.2) || age > MAX_TIME) {
+        if (afloat ? wake && age > 1.0f : (age > MIN_TIME && still > 0.2) || age > MAX_TIME) {
             getUp = 0;
             // Which way up it ended: chest towards the sky (on its back) or not.
             double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];

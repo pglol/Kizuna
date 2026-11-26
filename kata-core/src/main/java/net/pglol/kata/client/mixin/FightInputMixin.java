@@ -30,6 +30,6 @@ public abstract class FightInputMixin {
 
     @Inject(method = "doItemUse", at = @At("HEAD"), cancellable = true)
     private void kata$guard(CallbackInfo ci) {
-        if (Fight.bareHands() && (crosshairTarget == null || crosshairTarget.getType() != HitResult.Type.BLOCK)) ci.cancel();
+        if (Fight.bareHands() && (Fight.limpNow() || crosshairTarget == null || crosshairTarget.getType() != HitResult.Type.BLOCK)) ci.cancel();
     }
 }

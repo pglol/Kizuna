@@ -445,6 +445,8 @@ public final class Parkour {
             boolean tumble = ground && !lastGround && hs > TUMBLE_SPEED;
             fastAir = !ground && p.getVelocity().horizontalLength() > FLUNG_SPEED ? fastAir + 1 : 0;
             // Stopping flight at speed: nothing is holding you up any more and you're still going.
+            // Leaving flight you carry on with about half the speed you had (all of it was too much).
+            if (lastFlying && !p.getAbilities().flying) p.setVelocity(p.getVelocity().multiply(0.5, 1, 0.5));
             boolean dropped = lastFlying && !ground && p.getVelocity().length() > 0.6;
             if (slam || tumble || dropped || fastAir >= 2) {
                 airVel = slam || tumble ? lastVel : p.getVelocity();
@@ -559,6 +561,23 @@ public final class Parkour {
                 // Still in the air: a hand can still find a lip. The limp body catches it (it keeps hanging
                 // limp from its hands, swinging), and takes hold properly if it comes round still there.
                 if (!ground && r != null && !r.resting() && ticks > 2 && limpHang == null) reflex(p, sneak, true);
+                // Floating limp: it lies on the water until you move. Then up if there's ground under you,
+                // or you start swimming.
+                if (r != null && r.inWater() && !r.resting() && ticks > 20) {
+                    var in = p.input;
+                    boolean moving = Math.abs(in.movementForward) > 0.1f || Math.abs(in.movementSideways) > 0.1f || jump;
+                    if (moving) {
+                        Vec3d pel = r.pelvis();
+                        boolean floor = !empty(p, new Box(pel.x - 0.25, pel.y - 1.6, pel.z - 0.25, pel.x + 0.25, pel.y - 0.05, pel.z + 0.25));
+                        if (floor) r.wake = true;
+                        else {
+                            Ragdoll.stop(p);
+                            set(Mode.NONE);
+                            p.setVelocity(0, 0.05, 0);
+                            break;
+                        }
+                    }
+                }
                 if (r != null && r.resting() && limpHang != null) {
                     Vec3d hang = limpHang;
                     limpHang = null;

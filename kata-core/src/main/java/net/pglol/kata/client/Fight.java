@@ -89,10 +89,21 @@ public final class Fight {
         return mc.world == null || target < 0 ? null : mc.world.getEntityById(target);
     }
 
-    /** Is the local player fighting bare-handed right now (the mouse buttons are Kata's)? */
+    /** Is the local player fighting bare-handed right now, or limp (the mouse buttons are Kata's)? */
     public static boolean bareHands() {
         ClientPlayerEntity p = MinecraftClient.getInstance().player;
-        return p != null && fists(p);
+        return p != null && (fists(p) || limp(p));
+    }
+
+    public static boolean limpNow() {
+        ClientPlayerEntity p = MinecraftClient.getInstance().player;
+        return p != null && limp(p);
+    }
+
+    /** Knocked flat (ragdoll, faceplant): no will, so no hands either. */
+    static boolean limp(ClientPlayerEntity p) {
+        Parkour.Mode m = Parkour.view(p).mode();
+        return m == Parkour.Mode.RAGDOLL || m == Parkour.Mode.FACEPLANT;
     }
 
     /** Bare fists, free to fight (on your feet or in the air). */
@@ -223,7 +234,9 @@ public final class Fight {
     /** Left button pressed. True when Kata handles it (bare fists). */
     public static boolean attack() {
         ClientPlayerEntity p = MinecraftClient.getInstance().player;
-        if (p == null || !fists(p)) return false;
+        if (p == null) return false;
+        if (limp(p)) return true; // a limp body throws nothing (and doesn't swing either)
+        if (!fists(p)) return false;
         if (guard || staggered()) return true; // hands up, or knocked off balance: nothing to throw
         pressing = true;
         pressAt = System.nanoTime();
