@@ -63,6 +63,8 @@ public final class Fight {
 
     // ---- everyone else (from the server) ----
     private record Act(Move move, boolean right, float power, long start) { }
+    /** Spinning: +1 turning right, -1 left (the striking arm's side leads), 0 not spinning. */
+    private static final Map<Integer, Integer> SPIN = new HashMap<>();
     private static final Map<Integer, Act> MOVES = new HashMap<>();
     private static final Map<Integer, Boolean> GUARDS = new HashMap<>();
     private static final Map<Integer, Integer> STANCES = new HashMap<>();
@@ -157,7 +159,7 @@ public final class Fight {
             if (!hitSent && s >= cur.contact()) {
                 hitSent = true;
                 int hit = struck(mc, p);
-                int packed = Fighting.id(cur) | (curRight ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9);
+                int packed = Fighting.id(cur) | (curRight ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9) | (lastPart.ordinal() << 16);
                 send(KataNet.STRIKE, packed, hit);
                 // It lands: the strike holds still for a moment (the impact), longer for a heavy.
                 if (hit >= 0) curStart += (long) ((cur.heavy() ? 0.09 : 0.05) * 1e9);
@@ -215,8 +217,11 @@ public final class Fight {
         curStart = System.nanoTime();
         hitSent = false;
         if (m.heavy()) chain = 0;
-        // A spinning strike turns you as you throw it.
-        if (m.turns()) stanceTo(Fighting.end(m, stance));
+        // A spinning strike turns you as you throw it, the striking arm's side leading the turn.
+        if (m.turns()) {
+            SPIN.put(p.getId(), curRight ? 1 : -1);
+            stanceTo(Fighting.end(m, stance));
+        }
         // The body steps in behind it.
         Vec3d f = Vec3d.fromPolar(0, p.getYaw());
         double step = m.heavy() ? 0.06 + 0.1 * curPower : 0.035;
@@ -229,13 +234,32 @@ public final class Fight {
         send(KataNet.STANCE, s, 0);
     }
 
-    /** What the strike hits: the locked opponent if they're in reach in front, else whoever's under the crosshair. */
+    /** The body part the last strike landed on. */
+    private static Fighting.Part lastPart = Fighting.Part.TORSO;
+
+    /**
+     * What the strike hits: traced along its line from the shoulder into the locked opponent (or
+     * whoever's under the crosshair), landing on the first limb it meets. -1 for a miss.
+     */
     private static int struck(MinecraftClient mc, ClientPlayerEntity p) {
         Entity t = targetEntity(mc);
-        if (t != null && inReach(p, t)) return t.getId();
-        Entity c = mc.targetedEntity;
-        if (c instanceof LivingEntity && inReach(p, c)) return c.getId();
-        return -1;
+        if (t == null && mc.targetedEntity instanceof LivingEntity c) t = c;
+        if (t == null) return -1;
+        Hitbox.Hit h = Hitbox.trace(t, 1, shoulder(p, 1), wanted(p, 1, cur, t), Fighting.REACH);
+        if (h == null) return -1;
+        lastPart = h.part();
+        return t.getId();
+    }
+
+    /** Roughly where the striking shoulder is (world). */
+    private static Vec3d shoulder(PlayerEntity p, float td) {
+        return p.getCameraPosVec(td).add(0, -0.3, 0);
+    }
+
+    /** Where a strike wants to go on its target: the head, the body for a palm. */
+    private static Vec3d wanted(PlayerEntity p, float td, Move m, Entity t) {
+        double h = m != null && m.path() == Path.PALM ? 0.62 : m != null && m.path() == Path.UPPER ? 0.8 : 0.88;
+        return t.getLerpedPos(td).add(0, t.getHeight() * h, 0);
     }
 
     private static boolean inReach(ClientPlayerEntity p, Entity t) {
@@ -271,10 +295,10 @@ public final class Fight {
      * side changes the side, up and down the front or back). Small movements fade away.
      */
     public static void look(double dx, double dy) {
-        flickX = flickX * 0.85 + dx;
-        flickY = flickY * 0.85 + dy;
+        flickX = flickX * 0.92 + dx;
+        flickY = flickY * 0.92 + dy;
         double mag = Math.hypot(flickX, flickY);
-        if (mag < 70 || cur != null) return;
+        if (mag < 26 || cur != null) return;
         boolean top = Fighting.top(stance), right = Fighting.rightSide(stance);
         if (Math.abs(flickX) > mag * 0.45) right = flickX > 0;
         if (Math.abs(flickY) > mag * 0.45) top = flickY < 0;
@@ -320,7 +344,11 @@ public final class Fight {
             case KataNet.GUARD -> GUARDS.put(entity, a != 0);
             case KataNet.STRIKE -> {
                 int id = a & 0xFF;
-                if (id < Fighting.MOVES.length) MOVES.put(entity, new Act(Fighting.MOVES[id], (a & 1 << 8) != 0, ((a >> 9) & 0x7F) / 100f, System.nanoTime()));
+                if (id < Fighting.MOVES.length) {
+                    Act act = new Act(Fighting.MOVES[id], (a & 1 << 8) != 0, ((a >> 9) & 0x7F) / 100f, System.nanoTime());
+                    MOVES.put(entity, act);
+                    if (act.move.turns()) SPIN.put(entity, act.right ? 1 : -1);
+                }
                 STANCE_AT.put(entity, System.nanoTime());
             }
             case KataNet.STANCE -> {
@@ -366,6 +394,15 @@ public final class Fight {
         }
         float c = TURN.getOrDefault(p.getId(), 0f);
         boolean busy = mine(p) ? cur != null : MOVES.containsKey(p.getId());
+        int spin = SPIN.getOrDefault(p.getId(), 0);
+        if (busy && spin != 0) {
+            // A spinning strike goes the long way round, the striking arm's side leading.
+            while (spin > 0 && want < c) want += 360;
+            while (spin < 0 && want > c) want -= 360;
+        } else {
+            SPIN.remove(p.getId());
+            c = want + MathHelper.wrapDegrees(c - want); // done spinning: the same turn, without the extra lap
+        }
         float k = 1 - (float) Math.exp(-dt * (busy ? 18 : 9));
         c += (want - c) * k; // not wrapped: a back stance is reached by turning, not snapping round
         TURN.put(p.getId(), c);
@@ -439,8 +476,7 @@ public final class Fight {
             case HOOK -> 30;
             case UPPER -> 22;
             case OVERHAND, PALM -> 32;
-            case BACKFIST -> 20;
-            case ELBOW -> 26;
+            case BACKFIST, ELBOW -> 0; // the spin itself turns the body (see bodyTurn)
         }) * mass;
         float sign = right ? -1 : 1; // a right-hand strike turns the chest to the left
         out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) + sign * twist * k);
@@ -458,47 +494,52 @@ public final class Fight {
         float bodyYaw = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
         Vector3f aim = Animator.toModel(aimPoint(p, td, m), pos, bodyYaw);
         Vector3f fist;
-        if (k < 0) {
+        float out_ = right ? -1 : 1; // the arm's outside (model x: right is negative)
+        if (m.path() == Path.BACKFIST) {
+            // The arm swings out wide to its side and the spin carries it round into them, back of the fist first.
+            fist = new Vector3f(guardFist).lerp(new Vector3f(out_ * 15.5f, 3, -3), Math.max(0, k));
+        } else if (m.path() == Path.ELBOW) {
+            // The elbow comes up level and out to the side, the fist tucked at the chest; the spin drives it in.
+            fist = new Vector3f(guardFist).lerp(new Vector3f(out_ * 2.5f, 2.5f, -4.5f), Math.max(0, k));
+        } else if (k < 0) {
             // Drawn back, away from the target.
             Vector3f back = new Vector3f(guardFist).sub(aim).normalize().mul(6 * -k);
             fist = new Vector3f(guardFist).add(back);
         } else {
             fist = new Vector3f(guardFist).lerp(aim, k);
             float arc = MathHelper.sin(MathHelper.PI * k);
-            float out_ = right ? -1 : 1; // the arm's outside (model x: right is negative)
             switch (m.path()) {
                 case HOOK -> fist.add(out_ * 6 * arc, -1 * arc, 0);
                 case OVERHAND -> fist.add(out_ * 2 * arc, -5 * arc, 0);
                 case UPPER -> fist.add(-out_ * 1 * arc, 5 * arc, -1 * arc); // dips, then drives up through the line
-                case BACKFIST -> fist.add(out_ * 9 * arc, 0, 0);
-                case ELBOW -> {
-                    // The elbow leads: the fist stays tucked to the chest while the arm folds across.
-                    fist = new Vector3f(guardFist).lerp(new Vector3f(-out_ * 1, 4, -5), k);
-                }
                 default -> { }
             }
         }
         Matrix4f frame = Animator.armFrame(out).invert();
-        Vector3f pole = m.path() == Path.ELBOW || m.path() == Path.HOOK || m.path() == Path.BACKFIST
-            ? new Vector3f(right ? -1 : 1, 0.2f, 0.3f)   // elbow out to the side
-            : new Vector3f(right ? -0.3f : 0.3f, 1, 0.45f); // elbow down, behind the punch
+        Vector3f pole = m.path() == Path.ELBOW || m.path() == Path.HOOK
+            ? new Vector3f(out_, -0.15f, 0.25f)           // elbow up and out to the side
+            : m.path() == Path.BACKFIST ? new Vector3f(out_ * 0.3f, 0.2f, 1) // arm out straight, elbow back
+            : new Vector3f(out_ * 0.3f, 1, 0.45f);        // elbow down, behind the punch
         Animator.reach(out, arm, fore, shoulder, fist, frame, 1, pole);
     }
 
-    /** Where a strike is aimed: the opponent's head (body for a palm), or straight out ahead. */
+    /**
+     * Where a strike is aimed: on the opponent, the point where its line first meets their body (a guard's
+     * forearm, say), so the fist lands on it and stops there. With nobody locked, straight out ahead.
+     */
     private static Vec3d aimPoint(PlayerEntity p, float td, Move m) {
         MinecraftClient mc = MinecraftClient.getInstance();
         Entity t = mine(p) ? targetEntity(mc) : null;
+        Vec3d eye = p.getCameraPosVec(td);
         if (t != null) {
-            double h = m.path() == Path.PALM ? 0.62 : m.path() == Path.UPPER ? 0.8 : 0.86;
-            Vec3d at = t.getLerpedPos(td).add(0, t.getHeight() * h, 0);
-            // Not past full reach (the arm would only point at it).
-            Vec3d eye = p.getCameraPosVec(td);
+            Vec3d want = wanted(p, td, m, t);
+            Hitbox.Hit h = Hitbox.trace(t, td, shoulder(p, td), want, Fighting.REACH);
+            Vec3d at = h != null ? h.point() : want;
             Vec3d d = at.subtract(eye);
-            return d.length() > 1.2 ? eye.add(d.normalize().multiply(1.2)) : at;
+            return d.length() > 1.2 ? eye.add(d.normalize().multiply(1.2)) : at; // past full reach the arm just points at it
         }
         Vec3d look = p.getRotationVec(td);
-        return p.getCameraPosVec(td).add(look.multiply(1.0)).add(0, m.path() == Path.PALM ? -0.45 : -0.2, 0);
+        return eye.add(look.multiply(1.0)).add(0, m.path() == Path.PALM ? -0.45 : -0.2, 0);
     }
 
     private static float ease(float x) {
@@ -511,12 +552,14 @@ public final class Fight {
      * stance the other way round. Guarding or winding up a heavy slows you down.
      */
     public static float speedScale(PlayerEntity p) {
-        if (!mine(p) || target < 0) return 1;
+        if (!mine(p)) return 1;
         ClientPlayerEntity c = (ClientPlayerEntity) p;
         float f = c.input.movementForward;
         float s = 1;
-        if (f > 0.1f) s = Fighting.top(stance) ? 1.15f : 0.85f;
-        else if (f < -0.1f) s = Fighting.top(stance) ? 0.85f : 1.15f;
+        if (target >= 0) {
+            if (f > 0.1f) s = Fighting.top(stance) ? 1.15f : 0.85f;
+            else if (f < -0.1f) s = Fighting.top(stance) ? 0.85f : 1.15f;
+        }
         if (guard) s *= 0.75f;
         if (charging) s *= 0.8f;
         return s;

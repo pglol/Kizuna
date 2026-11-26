@@ -33,7 +33,7 @@ moves the body somewhere the physics wouldn't.
 | **Movement input** | Forward/back/strafe keys, as a direction relative to where the player looks. |
 | **Jump input** | Tap, hold, or double tap of space. |
 | **Crouch input** | Shift, which also times a landing brace. |
-| **Sprint input** | Fast walk (double-tap forward, 0.82 × vanilla sprint) or run (sprint held, 1.6 ×: about twice the fast walk). |
+| **Movement speed** | Holding forward alone is a slow, paced walk (0.72 × vanilla walk). Double-tapping forward is a normal walk (1.0 ×). Holding sprint is a full sprint (2.0 ×, about 8.6 m/s); it burns stamina and always engages while held. |
 | **Intent** | What the player is trying to do with the next contact: none, grab (catch a lip), climb (get on top). Expires. |
 
 ### 1.3 Body resources
@@ -164,6 +164,8 @@ moves the body somewhere the physics wouldn't.
     - Sideways (A/D): shuffle, or with space, a side jump.
     - Space alone: ledge jump up.
 23a. **Catch reflex.** Falling past a lip (after at least 2.5 blocks of fall, and not the edge you just left), the hands grab it on any side, facing first. It works even while limp in the air. Falling faster than 1.1 blocks/tick tears the grip; holding crouch means letting yourself drop.
+23c. **Jumping backwards** is a both-feet hop: the legs tuck evenly and the hands come up for balance from the moment the feet leave, with no one-leg-out pose.
+23d. **Water carries you.** Not limp, you float up and tread water chest-deep (crouch to dive; swimming as normal). Water takes the fall, so reaching the bottom plays no landing squash. Hitting water hard (falling faster than 1 block/tick, about 10 blocks) smacks you limp on the surface.
 23b. **Thin tops are climbed over.** A rail, fence or coping less than about half a block deep, with air beyond: you go over it and down the far side instead of standing on it.
 23. **No spider climbing.** A wall can only be climbed through a lip, a run-up, or a mantle.
 
@@ -185,7 +187,7 @@ moves the body somewhere the physics wouldn't.
 ### 3.9 Hand to hand
 
 **Entities:**
-- **Style:** a fighting style, such as Taijutsu. It has a pool of moves (its move tree) and a starter deck.
+- **Style:** a fighting style, such as Taijutsu. It's defined in a data file, `kata_core/styles/<style>.json`, listed in `index.json`. The file holds its whole move tree (each move's id, name, path, hand, light/heavy, front/back, timing, damage and knockback), its colour and its starter deck. Moves are namespaced, for example `taijutsu:jab`. Every style and move is loaded from these files, on both client and server.
 - **Move:** a strike, with these properties:
   - path: straight, hook, uppercut, overhand, palm, backfist or elbow
   - lead or rear hand
@@ -195,6 +197,10 @@ moves the body somewhere the physics wouldn't.
   - damage and knockback
 - **Deck:** for each of the four stance quadrants, three light slots (a chain thrown in order) and one heavy slot. You choose the moves on the deck screen (K); each slot only takes moves that fit it.
 - **StanceQuadrant:** top-right, top-left, bottom-right or bottom-left, as body orientation relative to the locked opponent.
+
+- **Body parts (hitboxes):** capsules for the head, torso, each upper arm, forearm, thigh and shin.
+  - For players they're taken from the posed skeleton every frame, so a raised guard puts the forearms in front of the face.
+  - Other bodies get a standing human layout scaled to their size.
 
 **Rules:**
 31. **Controls.** With bare hands:
@@ -207,7 +213,7 @@ moves the body somewhere the physics wouldn't.
     - top stances: chest to them, turned about 30°
     - back stances: back turned, about 145°
     The diamond at your feet (shown while locked on) shades the quadrant you're in.
-33. **Stance changes only by intent.** A distinct mouse drag while locked on turns you into that quadrant: up = top, down = back, left/right = side. Clicking never switches sides by itself. Only a spinning back move turns you, from a back stance to the top stance on the same side.
+33. **Stance changes only by intent.** A deliberate mouse drag while locked on turns you into that quadrant (a light drag is enough): up = top, down = back, left/right = side. Clicking never switches sides by itself. Only a spinning back move turns you, from a back stance to the top stance on the same side.
 34. **Chains.** Quick clicks run the quadrant's light chain in order, and a click during a strike queues the next one. The chain resets after 0.55 s without a strike, or after a heavy.
 35. **Light vs heavy.**
     - **Lights:** fast, with contact 75–160 ms after the press, and low damage.
@@ -218,11 +224,10 @@ moves the body somewhere the physics wouldn't.
     - It accelerates into contact, then holds briefly on a hit: 50 ms for a light, 90 ms for a heavy.
     - Hips and chest turn through the strike, the weight shifts forward, and the body steps in behind it, a step that grows with a heavy's charge.
 37. **Guarding is omnidirectional.** It blocks every hit with an attacker except shield-bypassing damage and full heavies. A block still shoves you and jolts the guard. You can't strike with the guard up.
-38. **Landing a strike.** The target must be within 3 blocks of the eyes and in front of you; the server checks both. Combos aren't eaten by hit invulnerability.
-39. **Footwork.** Locked on:
-    - a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse
-    - guarding multiplies speed by 0.75
-    - winding up a heavy multiplies it by 0.8
+38. **Landing a strike.** A strike is traced from the shoulder along its line, up to 3 blocks, and lands on the first body part it meets, which can be a guarding forearm. The fist stops on that part. Damage by part: head 1.25×, torso 1×, legs 0.7×, arms 0.45×. The server checks reach and facing. Combos aren't eaten by hit invulnerability.
+39. **Footwork.**
+    - Locked on, a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse.
+    - Guarding multiplies speed by 0.75 and winding up a heavy by 0.8, whether locked on or not.
 40. **HUD.** Bottom left shows your style and the deck key. While locked on or winding up, it shows what a click and a hold will throw, plus the heavy's charge.
 41. **Taijutsu move pool.**
     - Lights: jab, straight, lead hook, rear hook, uppercut, palm jab; and from the back stances, spinning backfist.

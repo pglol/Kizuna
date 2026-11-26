@@ -43,7 +43,7 @@ public final class Parkour {
     /** Synced by ordinal: add new moves at the end. */
     // Momentum: last tick's velocity (what you hit things with), and how long you've been flying fast.
     private static Vec3d lastVel = Vec3d.ZERO;
-    private static boolean lastFlying;
+    private static boolean lastFlying, lastWater;
     // A leap cut short in the air carries on as a real flight: for a while the hands still go for the
     // lip it was aimed at, in the direction it was aimed.
     private static int flightTicks;
@@ -417,6 +417,24 @@ public final class Parkour {
         // Water ends any move, except going limp: a limp body lands in it and floats (see Ragdoll).
         boolean wetOnly = p.isTouchingWater() && !(p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isFallFlying() || p.isDead());
         if (free && mode != Mode.NONE && !(mode == Mode.RAGDOLL && wetOnly)) set(Mode.NONE);
+        // Water. Hitting it hard (about ten blocks of fall) smacks you limp on the surface; otherwise a
+        // body floats: you come up and tread water chest-deep (crouch to dive, swim and jump as usual).
+        boolean water = p.isTouchingWater();
+        if (water && mode == Mode.NONE && !p.getAbilities().flying && !p.isSpectator() && !p.hasVehicle()) {
+            if (!lastWater && lastVel.y < -1.0) {
+                airVel = lastVel;
+                landRough = 1;
+                stoodUp = false;
+                p.setSprinting(false);
+                set(Mode.RAGDOLL);
+            } else if (!sneak && !p.isSwimming()) {
+                double sub = p.getFluidHeight(net.minecraft.registry.tag.FluidTags.WATER);
+                double lift = MathHelper.clamp((sub - 1.0) * 0.08, 0, 0.05);
+                Vec3d v = p.getVelocity();
+                if (lift > 0 && v.y < 0.12) p.setVelocity(v.x, Math.min(0.12, v.y + lift), v.z);
+            }
+        }
+        lastWater = water;
         // Speed: slamming into a wall, landing fast across the ground, or being flung hard through the
         // air puts you down, with all the speed you had.
         if (!free && (mode == Mode.NONE || mode == Mode.VAULT)) {

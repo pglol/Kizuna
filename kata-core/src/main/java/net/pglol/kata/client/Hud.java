@@ -4,16 +4,19 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.math.MathHelper;
+import net.pglol.kata.Fighting.Move;
 
 /**
- * Two clean bars at the bottom of the screen: health, and stamina just above it, a bit narrower.
- * Health keeps a pale trail of what you just lost that catches up a moment later; stamina dims when
- * you've run yourself dry.
+ * The HUD, kept to the edges and out of the way.
+ *  - Bottom centre: health, a slim bar with a pale trail of what you just lost catching up a moment
+ *    later; stamina, a hairline above it that dims when you've run yourself dry.
+ *  - Bottom left: the fight tag. A small stance diamond and your style; squared up to someone, what a
+ *    click and a hold will throw, with the heavy's charge.
  */
 public final class Hud {
     private Hud() {}
 
-    private static float trail = -1, shown = -1;
+    private static float trail = -1, shown = -1, engage;
     private static long last;
 
     static void render(DrawContext c, float tickDelta) {
@@ -32,61 +35,69 @@ public final class Hud {
         Move.shownStamina += (Move.stamina - Move.shownStamina) * (1 - (float) Math.exp(-dt / 0.08f));
 
         int w = c.getScaledWindowWidth(), h = c.getScaledWindowHeight();
-        int hw = 182, sw = 124;
-        int hx = (w - hw) / 2, hy = h - 12;
-        int sx = (w - sw) / 2, sy = hy - 6;
+        int hw = 160, sw = 110;
+        int hx = (w - hw) / 2, hy = h - 10;
+        int sx = (w - sw) / 2, sy = hy - 5;
 
-        // Health
-        bar(c, hx, hy, hw, 4, trail, 0xFFE8D6C8);
-        int col = hp < 0.25f ? (((now / 250_000_000L) & 1) == 0 ? 0xFFE0383B : 0xFFB02A2D) : 0xFFD8403E;
-        fill(c, hx, hy, hw, 4, shown, col);
+        // Health: a slim bar on a dark track, ticks every tenth, the loss trail behind it.
+        track(c, hx, hy, hw, 3);
+        c.fill(hx, hy, hx + Math.round(hw * trail), hy + 3, 0xB0F0E2D6);
+        boolean low = hp < 0.25f;
+        int col = low ? (((now / 250_000_000L) & 1) == 0 ? 0xFFE8383C : 0xFFB02A2D) : 0xFFDC3F3C;
+        int fw = Math.round(hw * MathHelper.clamp(shown, 0, 1));
+        if (fw > 0) {
+            c.fillGradient(hx, hy, hx + fw, hy + 3, Ui.alpha(col, 1), Ui.darker(col, 0.75f));
+            c.fill(hx, hy, hx + fw, hy + 1, 0x50FFFFFF);
+            c.fill(hx + fw - 1, hy - 1, hx + fw, hy + 4, 0xC0FFFFFF); // the leading edge
+        }
+        for (int i = 1; i < 10; i++) c.fill(hx + hw * i / 10, hy, hx + hw * i / 10 + 1, hy + 3, 0x40000000);
 
-        // Stamina
-        float st = Move.shownStamina;
-        bar(c, sx, sy, sw, 2, 0, 0);
-        fill(c, sx, sy, sw, 2, st, Move.stamina < 0.25f ? 0xFF9C8F6A : 0xFFF2E6B8);
+        // Stamina: a hairline, warm when there's breath, dim when you're winded.
+        track(c, sx, sy, sw, 1);
+        int sf = Math.round(sw * MathHelper.clamp(Move.shownStamina, 0, 1));
+        if (sf > 0) c.fill(sx, sy, sx + sf, sy + 1, Move.winded() ? 0xFF8C8268 : 0xFFF3E7BE);
 
-        style(c, mc, w, h);
+        tag(c, mc, h, dt);
     }
 
-    /**
-     * Bottom left: the style you fight in and the key for the deck. Squared up to someone, what your
-     * next click throws (and the heavy behind a hold), with the heavy's charge while you wind it up.
-     */
-    private static void style(DrawContext c, MinecraftClient mc, int w, int h) {
+    private static void track(DrawContext c, int x, int y, int w, int h) {
+        c.fill(x - 1, y - 1, x + w + 1, y + h + 1, 0x80000000);
+        c.fill(x, y, x + w, y + h, 0x50262A33);
+    }
+
+    /** The fight tag, bottom left. */
+    private static void tag(DrawContext c, MinecraftClient mc, int h, float dt) {
         var tr = mc.textRenderer;
-        int x = 8, y = h - 24;
-        String name = Deck.style().name().toUpperCase();
-        String key = KataClient.deckKey.getBoundKeyLocalizedText().getString();
-        c.fill(x - 3, y - 3, x + tr.getWidth(name) + 4, y + 10, 0x70000000);
-        c.drawText(tr, name, x, y, 0xFFE8D6C8, false);
-        c.drawText(tr, "[" + key + "] Deck", x + tr.getWidth(name) + 8, y, 0xFF9AA0AC, true);
-        if (!Fight.locked() && !Fight.chargingHeavy()) return;
-        var light = Fight.nextLight();
-        var heavy = Fight.nextHeavy();
-        int ly = y - 12;
-        c.drawText(tr, "Click  " + (light == null ? "-" : light.name()), x, ly - 10, 0xFFF2F2F5, true);
-        c.drawText(tr, "Hold   " + (heavy == null ? "-" : heavy.name()), x, ly, 0xFFE0A060, true);
+        boolean fighting = Fight.locked() || Fight.chargingHeavy();
+        engage += ((fighting ? 1 : 0) - engage) * (1 - (float) Math.exp(-dt * 10));
+        int x = 8, y = h - 26;
+        int acc = Ui.accent();
+        // The diamond and the style.
+        Ui.diamond(c, x + 9, y + 9, 8, Fight.stance(), -1, 0.95f);
+        String name = Ui.caps(Deck.style().name());
+        Ui.text(c, tr, name, x + 22, y + 4, 0.6f, Ui.TEXT);
+        c.fill(x + 22, y + 11, x + 22 + 14, y + 12, acc);
+        if (engage < 0.02f) return;
+
+        // What a click and a hold will throw.
+        Move light = Fight.nextLight(), heavy = Fight.nextHeavy();
+        float a = engage;
+        int rowY = y - 22;
+        chip(c, tr, x, rowY, "TAP", light == null ? "—" : light.name(), Ui.alpha(Ui.TEXT, a), Ui.alpha(acc, a), a);
+        chip(c, tr, x, rowY + 10, "HOLD", heavy == null ? "—" : heavy.name(), Ui.alpha(Ui.TEXT, a), Ui.alpha(Ui.HEAVY, a), a);
         if (Fight.chargingHeavy()) {
             float k = Fight.charge();
-            int bw = 60;
-            c.fill(x, ly + 10, x + bw, ly + 12, 0x60000000);
-            c.fill(x, ly + 10, x + Math.round(bw * k), ly + 12, k >= 1 ? 0xFFFFD27A : 0xFFE0A060);
+            int bw = 70;
+            c.fill(x, rowY + 19, x + bw, rowY + 20, Ui.alpha(0xFF000000, 0.5f * a));
+            c.fill(x, rowY + 19, x + Math.round(bw * k), rowY + 20, k >= 1 ? 0xFFFFE0A0 : Ui.HEAVY);
         }
     }
 
-    /** The track (dark, with a thin outline), and optionally a trail fill. */
-    private static void bar(DrawContext c, int x, int y, int w, int h, float trailFrac, int trailCol) {
-        c.fill(x - 1, y - 1, x + w + 1, y + h + 1, 0x90000000);
-        c.fill(x, y, x + w, y + h, 0x60202020);
-        if (trailFrac > 0) c.fill(x, y, x + Math.round(w * trailFrac), y + h, trailCol & 0x00FFFFFF | 0xB0000000);
-    }
-
-    private static void fill(DrawContext c, int x, int y, int w, int h, float frac, int col) {
-        int fw = Math.round(w * MathHelper.clamp(frac, 0, 1));
-        if (fw <= 0) return;
-        c.fill(x, y, x + fw, y + h, col);
-        // A lighter top edge so it reads as a bar, not a line.
-        if (h > 2) c.fill(x, y, x + fw, y + 1, 0x40FFFFFF);
+    private static void chip(DrawContext c, net.minecraft.client.font.TextRenderer tr, int x, int y, String key, String move, int textCol, int keyCol, float a) {
+        float kw = Ui.width(tr, key, 0.5f);
+        c.fill(x, y, x + Math.round(kw) + 5, y + 7, Ui.alpha(0xFF000000, 0.45f * a));
+        c.fill(x, y + 7, x + Math.round(kw) + 5, y + 8, keyCol);
+        Ui.text(c, tr, key, x + 2.5f, y + 1.5f, 0.5f, keyCol);
+        Ui.text(c, tr, move, x + kw + 9, y + 0.5f, 0.7f, textCol);
     }
 }

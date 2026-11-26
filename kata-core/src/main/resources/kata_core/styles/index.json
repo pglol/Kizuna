@@ -1,0 +1,4 @@
+{
+  "_doc": "Every fighting style, in order. Each name is a file here: <name>.json.",
+  "styles": ["taijutsu"]
+}

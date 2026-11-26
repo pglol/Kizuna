@@ -11,21 +11,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The combat deck. Left: your four stances laid out like the diamond (top stances above, back stances
- * below), each with its light chain (three slots, thrown in order on quick clicks) and its heavy (hold
- * to charge). Right: the style's moves. Pick a slot, then a move to put in it; right-click a slot to
- * empty it.
+ * The combat deck, compact. Styles across the top. On the left, the stance diamond: pick a quadrant.
+ * On the right, that quadrant's chain (three lights, then the heavy) and, below it, the style's moves
+ * that fit the chosen slot, with pips for speed and power. Click a move to slot it; right-click a slot
+ * to empty it.
  */
 public class DeckScreen extends Screen {
-    private static final int PANEL = 0xD0101218, CARD = 0xC01A1D24, EDGE = 0x40FFFFFF, ACCENT = 0xFFE8D6C8, DIM = 0xFF8A8F9C, TEXT = 0xFFF2F2F5;
-    private static final String[] NAMES = {"Top right", "Top left", "Back right", "Back left"};
-    private static final String[] SUB = {"Chest to them", "Chest to them", "Back turned", "Back turned"};
+    private static final int W = 268, H = 150;
+    private static final String[] QUAD = {"TOP RIGHT", "TOP LEFT", "BACK RIGHT", "BACK LEFT"};
 
-    private int selStance = Fighting.TR, selSlot = 0;
-    private int hover = -1;
-    private final List<int[]> slotBoxes = new ArrayList<>(); // x, y, w, h, stance, slot
-    private final List<int[]> moveBoxes = new ArrayList<>(); // x, y, w, h, move index
-    private int[] resetBox, doneBox;
+    private int selStance = Fight.stance(), selSlot = 0;
+    private float open;
+    private final List<int[]> boxes = new ArrayList<>(); // x, y, w, h, kind (0 stance, 1 slot, 2 move, 3 style, 4 reset), value
 
     public DeckScreen() {
         super(Text.literal("Combat deck"));
@@ -37,125 +34,140 @@ public class DeckScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(DrawContext c, int mx, int my, float delta) {
+        // A light veil only: the world stays visible behind the deck.
+        c.fillGradient(0, 0, width, height, 0x60000000, 0x90000000);
+    }
+
+    @Override
     public void render(DrawContext c, int mx, int my, float delta) {
         super.render(c, mx, my, delta);
+        open = Math.min(1, open + delta * 0.25f);
+        float e = 1 - (1 - open) * (1 - open);
+        boxes.clear();
         Style style = Deck.style();
-        slotBoxes.clear();
-        moveBoxes.clear();
-        int w = width, h = height;
-        int pw = Math.min(w - 20, 460), ph = Math.min(h - 20, 250);
-        int x0 = (w - pw) / 2, y0 = (h - ph) / 2;
-        c.fill(x0, y0, x0 + pw, y0 + ph, PANEL);
-        outline(c, x0, y0, pw, ph, EDGE);
+        int acc = Ui.accent();
+        int x0 = (width - W) / 2, y0 = (height - H) / 2 + Math.round((1 - e) * 8);
+        Ui.panel(c, x0, y0, W, H);
+        c.fill(x0 + 2, y0, x0 + 40, y0 + 1, acc); // a short accent stroke on the top edge
 
-        // Header: the style and how to use the deck.
-        c.drawText(textRenderer, style.name().toUpperCase(), x0 + 10, y0 + 9, ACCENT, false);
-        c.drawText(textRenderer, style.blurb(), x0 + 12 + textRenderer.getWidth(style.name().toUpperCase()), y0 + 9, DIM, false);
-        c.drawText(textRenderer, "Click: light chain  ·  Hold: heavy  ·  Drag mouse: change stance", x0 + 10, y0 + 21, DIM, false);
+        // Styles (tabs) and reset.
+        int tx = x0 + 10;
+        for (Style s : Fighting.STYLES) {
+            String n = Ui.caps(s.name());
+            float tw = Ui.width(textRenderer, n, 0.75f);
+            boolean on = s == style;
+            Ui.text(c, textRenderer, n, tx, y0 + 8, 0.75f, on ? Ui.TEXT : Ui.FAINT);
+            if (on) c.fill(tx, y0 + 16, tx + Math.round(tw), y0 + 17, acc);
+            boxes.add(new int[] {tx - 2, y0 + 4, Math.round(tw) + 4, 14, 3, indexOf(s)});
+            tx += Math.round(tw) + 12;
+        }
+        String reset = "RESET";
+        float rw = Ui.width(textRenderer, reset, 0.6f);
+        int rx = x0 + W - 10 - Math.round(rw);
+        boolean overReset = in(mx, my, rx - 3, y0 + 5, Math.round(rw) + 6, 12);
+        Ui.text(c, textRenderer, reset, rx, y0 + 9, 0.6f, overReset ? Ui.TEXT : Ui.FAINT);
+        boxes.add(new int[] {rx - 3, y0 + 5, Math.round(rw) + 6, 12, 4, 0});
+        c.fill(x0 + 8, y0 + 22, x0 + W - 8, y0 + 23, Ui.EDGE);
 
-        // Left: the four stances.
-        int gx = x0 + 10, gy = y0 + 36, cw = 120, ch = 92, gap = 6;
-        int[][] at = {{1, 0}, {0, 0}, {1, 1}, {0, 1}}; // TR right-top, TL left-top, BR right-bottom, BL left-bottom
+        // Stance diamond.
+        float cx = x0 + 52, cy = y0 + 72, r = 34;
+        Ui.diamond(c, cx, cy, r, Fight.stance(), selStance, 1);
+        // Quadrant hit areas (each quadrant's half-square).
+        int[][] qa = {{1, -1}, {-1, -1}, {1, 1}, {-1, 1}};
         for (int q = 0; q < 4; q++) {
-            int cx = gx + at[q][0] * (cw + gap), cy = gy + at[q][1] * (ch + gap);
-            boolean cur = q == Fight.stance();
-            c.fill(cx, cy, cx + cw, cy + ch, CARD);
-            outline(c, cx, cy, cw, ch, cur ? 0xA0E8D6C8 : EDGE);
-            c.drawText(textRenderer, NAMES[q], cx + 6, cy + 5, TEXT, false);
-            c.drawText(textRenderer, SUB[q], cx + 6, cy + 15, DIM, false);
-            for (int i = 0; i < Fighting.SLOTS; i++) {
-                boolean heavy = i == Fighting.HEAVY_SLOT;
-                int sx = cx + 6, sy = cy + 27 + i * 15, sw = cw - 12, sh = 13;
-                boolean sel = q == selStance && i == selSlot;
-                boolean over = mx >= sx && mx < sx + sw && my >= sy && my < sy + sh;
-                c.fill(sx, sy, sx + sw, sy + sh, sel ? 0x60E8D6C8 : over ? 0x30FFFFFF : 0x20FFFFFF);
-                if (sel) outline(c, sx, sy, sw, sh, ACCENT);
-                String tag = heavy ? "HOLD" : String.valueOf(i + 1);
-                c.drawText(textRenderer, tag, sx + 3, sy + 3, heavy ? 0xFFE0A060 : DIM, false);
-                Move m = style.move(Deck.slot(q, i));
-                c.drawText(textRenderer, m == null ? "-" : m.name(), sx + (heavy ? 30 : 12), sy + 3, m == null ? DIM : TEXT, false);
-                slotBoxes.add(new int[] {sx, sy, sw, sh, q, i});
-            }
+            int bx = Math.round(cx + (qa[q][0] > 0 ? 0 : -r)), by = Math.round(cy + (qa[q][1] > 0 ? 0 : -r));
+            boxes.add(new int[] {bx, by, Math.round(r), Math.round(r), 0, q});
+        }
+        Ui.text(c, textRenderer, QUAD[selStance], cx - Ui.width(textRenderer, QUAD[selStance], 0.6f) / 2, cy + r + 8, 0.6f, Ui.SOFT);
+
+        // The chain: three lights, then the heavy.
+        int px = x0 + 104, py = y0 + 30, cw = 36, ch = 26, gap = 4;
+        for (int i = 0; i < Fighting.SLOTS; i++) {
+            boolean heavy = i == Fighting.HEAVY_SLOT;
+            int sx = px + i * (cw + gap) + (heavy ? 6 : 0);
+            boolean sel = i == selSlot, over = in(mx, my, sx, py, cw, ch);
+            c.fillGradient(sx, py, sx + cw, py + ch, sel ? 0x40FFFFFF : over ? 0x26FFFFFF : 0x14FFFFFF, sel ? 0x20FFFFFF : 0x08FFFFFF);
+            Ui.edge(c, sx, py, cw, ch, sel ? (heavy ? Ui.HEAVY : acc) : Ui.EDGE);
+            c.fill(sx + 3, py + ch - 3, sx + cw - 3, py + ch - 2, heavy ? Ui.alpha(Ui.HEAVY, 0.7f) : Ui.alpha(acc, 0.5f));
+            Ui.text(c, textRenderer, heavy ? "HOLD" : String.valueOf(i + 1), sx + 3, py + 3, 0.5f, heavy ? Ui.HEAVY : Ui.FAINT);
+            Move m = style.move(Deck.slot(selStance, i));
+            String name = m == null ? "—" : m.name();
+            drawWrapped(c, name, sx + 3, py + 9, cw - 6, m == null ? Ui.FAINT : Ui.TEXT);
+            boxes.add(new int[] {sx, py, cw, ch, 1, i});
+            if (i < Fighting.HEAVY_SLOT - 1) Ui.text(c, textRenderer, "›", sx + cw + 0.5f, py + 9, 0.75f, Ui.FAINT);
         }
 
-        // Right: the style's moves that fit the chosen slot.
-        int lx = gx + 2 * (cw + gap) + 4, ly = gy, lw = x0 + pw - 10 - lx;
-        boolean heavySlot = selSlot == Fighting.HEAVY_SLOT;
-        c.drawText(textRenderer, NAMES[selStance] + "  ·  " + (heavySlot ? "heavy" : "light " + (selSlot + 1)), lx, ly, ACCENT, false);
-        int row = ly + 13;
-        hover = -1;
+        // The moves that fit the chosen slot.
+        int ly = py + ch + 8, lx = px, lw = x0 + W - 10 - lx;
+        Ui.text(c, textRenderer, "SPEED", lx + lw - 50, ly - 1, 0.45f, Ui.FAINT);
+        Ui.text(c, textRenderer, "POWER", lx + lw - 23, ly - 1, 0.45f, Ui.FAINT);
+        ly += 5;
         Move[] pool = style.pool();
         for (int i = 0; i < pool.length; i++) {
             Move m = pool[i];
             if (!m.fits(selStance, selSlot)) continue;
-            int rh = 22;
-            boolean over = mx >= lx && mx < lx + lw && my >= row && my < row + rh;
-            boolean in = Deck.slot(selStance, selSlot) == i;
-            c.fill(lx, row, lx + lw, row + rh - 2, in ? 0x50E8D6C8 : over ? 0x30FFFFFF : 0x18FFFFFF);
-            c.drawText(textRenderer, m.name(), lx + 4, row + 2, TEXT, false);
-            String info = (m.lead() ? "lead" : "rear") + " · " + m.path().name().toLowerCase() + " · " + Math.round(m.contact() * 1000) + " ms";
-            c.drawText(textRenderer, info, lx + 4, row + 11, DIM, false);
-            // Damage, as a short bar.
-            int bw = Math.round(Math.min(1, m.damage() / 7f) * 40);
-            c.fill(lx + lw - 46, row + 4, lx + lw - 6, row + 7, 0x40FFFFFF);
-            c.fill(lx + lw - 46, row + 4, lx + lw - 46 + bw, row + 7, m.heavy() ? 0xFFE0A060 : 0xFFD8403E);
-            if (over) hover = i;
-            moveBoxes.add(new int[] {lx, row, lw, rh - 2, i});
-            row += rh;
+            if (ly + 11 > y0 + H - 6) break;
+            boolean in = Deck.slot(selStance, selSlot) == i, over = in(mx, my, lx, ly, lw, 11);
+            if (in || over) c.fill(lx, ly, lx + lw, ly + 11, in ? Ui.alpha(acc, 0.22f) : 0x18FFFFFF);
+            if (in) c.fill(lx, ly, lx + 1, ly + 11, acc);
+            Ui.text(c, textRenderer, m.name(), lx + 4, ly + 2.5f, 0.75f, in ? Ui.TEXT : Ui.SOFT);
+            Ui.text(c, textRenderer, (m.lead() ? "LEAD" : "REAR"), lx + 4 + Ui.width(textRenderer, m.name(), 0.75f) + 4, ly + 3.5f, 0.45f, Ui.FAINT);
+            int speed = Math.max(1, Math.min(5, Math.round(6 - m.contact() * 30)));
+            int power = Math.max(1, Math.min(5, Math.round(m.damage() / 1.4f)));
+            Ui.pips(c, lx + lw - 50, ly + 5, speed, 5, Ui.TEXT);
+            Ui.pips(c, lx + lw - 23, ly + 5, power, 5, m.heavy() ? Ui.HEAVY : acc);
+            boxes.add(new int[] {lx, ly, lw, 11, 2, i});
+            ly += 12;
         }
-
-        // Buttons.
-        int by = y0 + ph - 18;
-        resetBox = button(c, x0 + 10, by, "Reset to starter", mx, my);
-        doneBox = button(c, x0 + pw - 10 - (textRenderer.getWidth("Done") + 16), by, "Done", mx, my);
-        c.drawText(textRenderer, "Right-click a slot to empty it", x0 + 110, by + 4, DIM, false);
     }
 
-    private int[] button(DrawContext c, int x, int y, String label, int mx, int my) {
-        int bw = textRenderer.getWidth(label) + 16, bh = 14;
-        boolean over = mx >= x && mx < x + bw && my >= y && my < y + bh;
-        c.fill(x, y, x + bw, y + bh, over ? 0x50FFFFFF : 0x28FFFFFF);
-        outline(c, x, y, bw, bh, EDGE);
-        c.drawText(textRenderer, label, x + 8, y + 3, TEXT, false);
-        return new int[] {x, y, bw, bh};
+    /** A move name in a slot chip: small, on up to two lines. */
+    private void drawWrapped(DrawContext c, String s, int x, int y, int w, int col) {
+        float sc = 0.6f;
+        if (Ui.width(textRenderer, s, sc) <= w) {
+            Ui.text(c, textRenderer, s, x, y + 3, sc, col);
+            return;
+        }
+        int cut = s.lastIndexOf(' ');
+        if (cut <= 0) {
+            Ui.text(c, textRenderer, s, x, y + 3, 0.5f, col);
+            return;
+        }
+        Ui.text(c, textRenderer, s.substring(0, cut), x, y, sc, col);
+        Ui.text(c, textRenderer, s.substring(cut + 1), x, y + 6, sc, col);
     }
 
-    private static void outline(DrawContext c, int x, int y, int w, int h, int col) {
-        c.fill(x, y, x + w, y + 1, col);
-        c.fill(x, y + h - 1, x + w, y + h, col);
-        c.fill(x, y, x + 1, y + h, col);
-        c.fill(x + w - 1, y, x + w, y + h, col);
+    private static int indexOf(Style s) {
+        for (int i = 0; i < Fighting.STYLES.length; i++) if (Fighting.STYLES[i] == s) return i;
+        return 0;
     }
 
-    private static boolean in(int[] b, double mx, double my) {
-        return b != null && mx >= b[0] && mx < b[0] + b[2] && my >= b[1] && my < b[1] + b[3];
+    private static boolean in(double mx, double my, int x, int y, int w, int h) {
+        return mx >= x && mx < x + w && my >= y && my < y + h;
     }
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        for (int[] b : slotBoxes) {
-            if (!in(b, mx, my)) continue;
-            if (button == 1) Deck.set(b[4], b[5], -1);
-            else {
-                selStance = b[4];
-                selSlot = b[5];
+        for (int[] b : boxes) {
+            if (!in(mx, my, b[0], b[1], b[2], b[3])) continue;
+            switch (b[4]) {
+                case 0 -> {
+                    selStance = b[5];
+                    if (selSlot >= Fighting.SLOTS) selSlot = 0;
+                }
+                case 1 -> {
+                    if (button == 1) Deck.set(selStance, b[5], -1);
+                    else selSlot = b[5];
+                }
+                case 2 -> {
+                    Deck.set(selStance, selSlot, b[5]);
+                    if (selSlot < Fighting.HEAVY_SLOT - 1) selSlot++; // on to the next link of the chain
+                }
+                case 3 -> Deck.use(Fighting.STYLES[b[5]]);
+                case 4 -> Deck.reset();
+                default -> { }
             }
-            return true;
-        }
-        for (int[] b : moveBoxes) {
-            if (in(b, mx, my)) {
-                Deck.set(selStance, selSlot, b[4]);
-                // Move on to the next slot of the chain, for quick deck building.
-                if (selSlot < Fighting.HEAVY_SLOT - 1) selSlot++;
-                return true;
-            }
-        }
-        if (in(resetBox, mx, my)) {
-            Deck.reset();
-            return true;
-        }
-        if (in(doneBox, mx, my)) {
-            close();
             return true;
         }
         return super.mouseClicked(mx, my, button);

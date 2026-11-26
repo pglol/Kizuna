@@ -45,21 +45,22 @@ public final class Fighting {
         return stance == TR || stance == BR;
     }
 
-    // ---- moves ----
+    // ---- moves and styles ----
 
     /** How a strike travels: straight down the line, round in an arc, up from below, over the top, an open palm, a back-hand spin, an elbow. */
     public enum Path { STRAIGHT, HOOK, UPPER, OVERHAND, PALM, BACKFIST, ELBOW }
 
     /**
-     * One move.
+     * One move of a style.
+     *  - id: style:move, for example "taijutsu:jab"
      *  - lead: thrown with the lead hand (else the rear)
-     *  - heavy: a charged heavy (its slot is the heavy one), else a light for the chain
+     *  - heavy: a charged heavy (the heavy slot), else a light for the chain
      *  - back: thrown from a back stance, spinning round to face them
      *  - contact and length: seconds (from the press for a light, from the release for a heavy)
      *  - damage: in half-hearts
      *  - push: knockback
      */
-    public record Move(String name, Path path, boolean lead, boolean heavy, boolean back, float contact, float length, float damage, float push) {
+    public record Move(String id, String name, Path path, boolean lead, boolean heavy, boolean back, float contact, float length, float damage, float push) {
         public boolean turns() {
             return back;
         }
@@ -73,47 +74,96 @@ public final class Fighting {
     /** A deck has four quadrants of four slots: three lights (the chain), then the heavy. */
     public static final int SLOTS = 4, HEAVY_SLOT = 3;
 
-    /** A fighting style: the moves it knows (its move tree), and the deck it starts with. */
-    public record Style(String name, String blurb, Move[] pool, int[][] starter) {
+    /**
+     * A fighting style: everything it can throw (its move tree, in the order it's listed) and the deck
+     * a new fighter starts with (per stance, indexes into the pool; -1 empty).
+     */
+    public record Style(String id, String name, String blurb, int color, Move[] pool, int[][] starter) {
         public Move move(int i) {
             return i >= 0 && i < pool.length ? pool[i] : null;
         }
+
+        public int index(String moveId) {
+            for (int i = 0; i < pool.length; i++) if (pool[i].id().equals(moveId) || pool[i].id().endsWith(":" + moveId)) return i;
+            return -1;
+        }
     }
 
-    /** Taijutsu: fast hands, a strong body. Quick straight strings, hooks and uppercuts, a driving palm. */
-    public static final Style TAIJUTSU = new Style("Taijutsu", "Fast hands, a strong body.",
-        new Move[] {
-            /* 0 */ new Move("Jab", Path.STRAIGHT, true, false, false, 0.075f, 0.24f, 2.0f, 0.20f),
-            /* 1 */ new Move("Straight", Path.STRAIGHT, false, false, false, 0.095f, 0.30f, 3.0f, 0.30f),
-            /* 2 */ new Move("Lead hook", Path.HOOK, true, false, false, 0.12f, 0.36f, 3.5f, 0.40f),
-            /* 3 */ new Move("Rear hook", Path.HOOK, false, false, false, 0.14f, 0.40f, 4.0f, 0.45f),
-            /* 4 */ new Move("Uppercut", Path.UPPER, false, false, false, 0.13f, 0.40f, 4.0f, 0.35f),
-            /* 5 */ new Move("Palm jab", Path.PALM, true, false, false, 0.085f, 0.28f, 2.5f, 0.45f),
-            /* 6 */ new Move("Driving palm", Path.PALM, false, true, false, 0.13f, 0.50f, 6.0f, 0.90f),
-            /* 7 */ new Move("Overhand", Path.OVERHAND, false, true, false, 0.15f, 0.52f, 6.5f, 0.70f),
-            /* 8 */ new Move("Spinning backfist", Path.BACKFIST, false, false, true, 0.16f, 0.42f, 3.5f, 0.45f),
-            /* 9 */ new Move("Spinning elbow", Path.ELBOW, false, true, true, 0.17f, 0.52f, 6.5f, 0.80f),
-        },
-        new int[][] {
-            {0, 1, 2, 6}, // top-right
-            {0, 1, 2, 6}, // top-left
-            {8, -1, -1, 9}, // bottom-right
-            {8, -1, -1, 9}, // bottom-left
-        });
-
-    public static final Style[] STYLES = {TAIJUTSU};
-    /** Every move of every style, numbered (for the network). */
+    /** Every style, loaded from the mod's kata_core/styles/ files (see index.json there). */
+    public static final Style[] STYLES;
+    /** Every move of every style, numbered in style order (the same on both sides, for the network). */
     public static final Move[] MOVES;
 
     static {
+        java.util.List<Style> styles = new java.util.ArrayList<>();
+        try {
+            com.google.gson.JsonObject index = json("index.json");
+            for (com.google.gson.JsonElement n : index.getAsJsonArray("styles")) styles.add(loadStyle(json(n.getAsString() + ".json")));
+        } catch (Exception e) {
+            KataCore.LOG.error("Couldn't load the fighting styles", e);
+        }
+        if (styles.isEmpty()) {
+            // A fallback so fists always work: one jab.
+            Move jab = new Move("basic:jab", "Jab", Path.STRAIGHT, true, false, false, 0.08f, 0.25f, 2, 0.2f);
+            styles.add(new Style("basic", "Basic", "", 0xD8403E, new Move[] {jab}, new int[][] {{0, -1, -1, -1}, {0, -1, -1, -1}, {0, -1, -1, -1}, {0, -1, -1, -1}}));
+        }
+        STYLES = styles.toArray(new Style[0]);
         java.util.List<Move> all = new java.util.ArrayList<>();
-        for (Style s : STYLES) all.addAll(java.util.List.of(s.pool()));
+        for (Style st : STYLES) all.addAll(java.util.List.of(st.pool()));
         MOVES = all.toArray(new Move[0]);
+    }
+
+    private static com.google.gson.JsonObject json(String name) throws java.io.IOException {
+        try (var in = Fighting.class.getResourceAsStream("/kata_core/styles/" + name)) {
+            if (in == null) throw new java.io.FileNotFoundException(name);
+            return com.google.gson.JsonParser.parseReader(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+        }
+    }
+
+    private static Style loadStyle(com.google.gson.JsonObject o) {
+        String sid = o.get("id").getAsString();
+        java.util.List<Move> pool = new java.util.ArrayList<>();
+        for (com.google.gson.JsonElement e : o.getAsJsonArray("moves")) {
+            com.google.gson.JsonObject m = e.getAsJsonObject();
+            pool.add(new Move(sid + ":" + m.get("id").getAsString(), m.get("name").getAsString(),
+                Path.valueOf(m.get("path").getAsString().toUpperCase(java.util.Locale.ROOT)),
+                "lead".equals(m.get("hand").getAsString()), "heavy".equals(m.get("kind").getAsString()), "back".equals(m.get("from").getAsString()),
+                m.get("contact").getAsFloat(), m.get("length").getAsFloat(), m.get("damage").getAsFloat(), m.get("push").getAsFloat()));
+        }
+        Style partial = new Style(sid, o.get("name").getAsString(), o.has("blurb") ? o.get("blurb").getAsString() : "",
+            o.has("color") ? Integer.parseInt(o.get("color").getAsString().replace("#", ""), 16) : 0xD8403E, pool.toArray(new Move[0]), null);
+        String[] quads = {"top_right", "top_left", "back_right", "back_left"};
+        int[][] starter = new int[4][SLOTS];
+        com.google.gson.JsonObject st = o.getAsJsonObject("starter");
+        for (int q = 0; q < 4; q++) {
+            java.util.Arrays.fill(starter[q], -1);
+            var arr = st.getAsJsonArray(quads[q]);
+            for (int i = 0; i < SLOTS && i < arr.size(); i++) if (!arr.get(i).isJsonNull()) starter[q][i] = partial.index(arr.get(i).getAsString());
+        }
+        return new Style(sid, partial.name(), partial.blurb(), partial.color(), partial.pool(), starter);
+    }
+
+    public static Style style(String id) {
+        for (Style s : STYLES) if (s.id().equals(id)) return s;
+        return STYLES[0];
     }
 
     public static int id(Move m) {
         for (int i = 0; i < MOVES.length; i++) if (MOVES[i] == m) return i;
         return -1;
+    }
+
+    // ---- body parts (where a strike lands) ----
+
+    /** What a strike can land on, and how much of its damage gets through there. */
+    public enum Part {
+        HEAD(1.25f), TORSO(1f), ARM(0.45f), LEG(0.7f);
+
+        public final float share;
+
+        Part(float share) {
+            this.share = share;
+        }
     }
 
     /** The hand a move is thrown with from a stance: true = right. */
@@ -188,7 +238,8 @@ public final class Fighting {
 
     /**
      * A strike thrown at target (an entity id, or -1 for none in reach). packed: move id (low 8 bits),
-     * right hand (bit 8), heavy power in percent (bits 9-15). Checked, then landed.
+     * right hand (bit 8), heavy power in percent (bits 9-15), the body part it lands on (bits 16-17).
+     * Checked, then landed.
      */
     static void strike(ServerPlayerEntity p, int packed, int target) {
         int id = packed & 0xFF;
@@ -213,7 +264,8 @@ public final class Fighting {
         Vec3d look = Vec3d.fromPolar(0, p.getYaw());
         double len = Math.hypot(to.x, to.z);
         if (len > 0.3 && (to.x * look.x + to.z * look.z) / len < 0.3) return;
-        float dmg = m.damage() * (m.heavy() ? 0.5f + 0.5f * power : 1);
+        Part part = Part.values()[Math.min(3, (packed >> 16) & 0x3)];
+        float dmg = m.damage() * (m.heavy() ? 0.5f + 0.5f * power : 1) * part.share;
         t.timeUntilRegen = 0; // strings land: no invulnerability gap between hits
         breaking = m.heavy() && power >= 0.98f;
         boolean hit;

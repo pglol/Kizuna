@@ -10,18 +10,24 @@ import org.lwjgl.glfw.GLFW;
 /**
  * How you're moving and how much you have left.
  *
- * Double-tapping forward is a fast walk: quicker than walking, rough and pushy, and it costs nothing.
- * Holding sprint is a real run: faster (a touch slower than Minecraft's sprint), and it burns stamina.
- * Run dry and you drop to a fast walk until you've got a quarter back. Stamina comes back while you're
- * not running, after a short breath.
+ * Forward alone is a slow, paced walk. Double-tapping forward is a normal walk, and it costs nothing.
+ * Holding sprint is a full sprint, twice a normal walk, and it burns stamina. Run dry and you can only
+ * walk until you've got a quarter back. Stamina comes back while you're not running, after a short
+ * breath.
  */
 public final class Move {
     private Move() {}
 
     public enum Mode { WALK, FAST, RUN }
 
-    /** Ground speed against Minecraft's sprint speed (walking is 0.77 of it). */
-    private static final float FAST_SPEED = 0.82f, RUN_SPEED = 1.6f; // a full run is about twice a fast walk
+    /**
+     * Ground speeds against Minecraft's walking speed (4.3 m/s):
+     *  - W: a slow, paced walk
+     *  - double-tap W: a normal walk
+     *  - holding sprint: a full sprint, twice a normal walk
+     * Minecraft's own sprint is 1.3 times the walk; the factors below take that out.
+     */
+    private static final float WALK_SPEED = 0.72f, FAST_SPEED = 1.0f, RUN_SPEED = 2.0f, VANILLA_SPRINT = 1.3f;
     private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (5f * 20), FAST_REGEN = 1 / (12f * 20);
 
     public static Mode mode = Mode.WALK;
@@ -43,6 +49,8 @@ public final class Move {
         boolean free = p.getAbilities().flying || p.isSpectator() || p.hasVehicle() || p.isTouchingWater();
         // Knocked flat (or splatting into a landing): you aren't running any more, whatever is held.
         if (down(p)) p.setSprinting(false);
+        // Holding sprint and moving forward always sprints (whatever Minecraft made of the key).
+        if (held && !winded && !free && !p.isSneaking() && p.input.movementForward > 0.5f && !down(p)) p.setSprinting(true);
         // Winded: no running and no fast walk either, just walking until you've got your breath back.
         if (winded) p.setSprinting(false);
         if (!p.isSprinting() || free) mode = Mode.WALK;
@@ -127,11 +135,11 @@ public final class Move {
             boolean shuffle = cp.input.movementForward < 0 || (cp.input.movementForward == 0 && cp.input.movementSideways != 0);
             return (shuffle ? CROUCH_SHUFFLE : CROUCH_WALK) / VANILLA_SNEAK;
         }
-        if (!p.isSprinting()) return 1;
+        if (!p.isSprinting()) return p.getAbilities().flying ? 1 : WALK_SPEED;
         return switch (mode) {
-            case RUN -> RUN_SPEED;
-            case FAST -> FAST_SPEED;
-            default -> 1;
+            case RUN -> RUN_SPEED / VANILLA_SPRINT;
+            case FAST -> FAST_SPEED / VANILLA_SPRINT;
+            default -> WALK_SPEED;
         };
     }
 

@@ -93,6 +93,9 @@ public final class Animator {
         Vec3d[] plant, stepFrom;
         float[] stepT = {-1, -1};
         boolean leadRight;
+        /** This jump is backwards (both feet even, hands up); and how much of that is showing. */
+        boolean backJump;
+        float backW;
         // Movement, from position (works for other players too).
         float fwd, side, accFwd, accSide, lastYaw, yawRate;
         // Follow-through: the chest swings behind the body's changes of speed and turn, the arms behind
@@ -335,7 +338,12 @@ public final class Animator {
         boolean airborne = !(ground || special || p.isTouchingWater());
         s.air = approach(s.air, airborne ? 1 : 0, dt * (airborne ? 12 : 9));
         // Each jump leads with the other leg (holding jump alternates legs instead of repeating one).
-        if (airborne && s.wasGround && p.getVelocity().y > 0) s.leadRight = !s.leadRight;
+        if (airborne && s.wasGround && p.getVelocity().y > 0) {
+            s.leadRight = !s.leadRight;
+            s.backJump = s.fwd < -1.0f;
+        }
+        // A backwards hop: even feet and hands up straight away (no waiting for the fall to react).
+        s.backW = approach(s.backW, airborne && s.backJump ? 1 : 0, dt * (airborne ? 30 : 9));
         float w = s.gaitW * (1 - s.air);
         // Fast walk (double-tap forward) and run (holding sprint) look different: see Move.
         float mvNow = (float) Math.sqrt(s.fwd * s.fwd + s.side * s.side);
@@ -347,6 +355,7 @@ public final class Animator {
         // Landing: the body sinks into it and comes back up, deeper after a long fall.
         double vy = p.getVelocity().y;
         if (!ground) s.fallSpeed = Math.max(s.fallSpeed, -vy);
+        if (p.isTouchingWater()) s.fallSpeed = 0; // water takes the fall: no landing squash on the bottom
         if (ground && !s.wasGround) {
             float hard = (float) MathHelper.clamp((s.fallSpeed - 0.2) / 0.9, 0, 1);
             s.land = Math.max(s.land, 0.3f + 0.7f * hard);
@@ -461,20 +470,34 @@ public final class Animator {
         float leadHip = -55 * up - 42 * mid - 24 * down, leadKnee = 88 * up + 70 * mid + 38 * down;
         float trailHip = 30 * up + 18 * mid + 4 * down, trailKnee = 32 * up + 34 * mid + 26 * down;
         Bone leadLeg = s.leadRight ? Bone.RIGHT_LEG : Bone.LEFT_LEG, trailLeg = s.leadRight ? Bone.LEFT_LEG : Bone.RIGHT_LEG;
-        add(o, leadLeg, Pose.PITCH, ai * leadHip);
-        add(o, trailLeg, Pose.PITCH, ai * trailHip);
+        float bw = s.backW, one = ai * (1 - bw), even = ai * bw;
+        add(o, leadLeg, Pose.PITCH, one * leadHip);
+        add(o, trailLeg, Pose.PITCH, one * trailHip);
         if (s.leadRight) {
-            rKnee += ai * leadKnee;
-            lKnee += ai * trailKnee;
+            rKnee += one * leadKnee;
+            lKnee += one * trailKnee;
         } else {
-            lKnee += ai * leadKnee;
-            rKnee += ai * trailKnee;
+            lKnee += one * leadKnee;
+            rKnee += one * trailKnee;
         }
+        // Backwards: both legs tucked the same, a shoulder's width apart.
+        float evenHip = -30 * up - 22 * mid - 12 * down, evenKnee = 55 * up + 46 * mid + 30 * down;
+        add(o, Bone.RIGHT_LEG, Pose.PITCH, even * evenHip);
+        add(o, Bone.LEFT_LEG, Pose.PITCH, even * evenHip);
+        add(o, Bone.RIGHT_LEG, Pose.ROLL, even * 5);
+        add(o, Bone.LEFT_LEG, Pose.ROLL, -even * 5);
+        rKnee += even * evenKnee;
+        lKnee += even * evenKnee;
         Bone fwdArm = s.leadRight ? Bone.LEFT_ARM : Bone.RIGHT_ARM, backArm = s.leadRight ? Bone.RIGHT_ARM : Bone.LEFT_ARM;
-        add(o, fwdArm, Pose.PITCH, ai * (-48 * up - 34 * mid - 18 * down));
-        add(o, backArm, Pose.PITCH, ai * (32 * up + 20 * mid - 8 * down));
-        add(o, Bone.RIGHT_ARM, Pose.ROLL, ai * (8 + 20 * down));
-        add(o, Bone.LEFT_ARM, Pose.ROLL, -ai * (8 + 20 * down));
+        add(o, fwdArm, Pose.PITCH, one * (-48 * up - 34 * mid - 18 * down));
+        add(o, backArm, Pose.PITCH, one * (32 * up + 20 * mid - 8 * down));
+        add(o, Bone.RIGHT_ARM, Pose.ROLL, one * (8 + 20 * down));
+        add(o, Bone.LEFT_ARM, Pose.ROLL, -one * (8 + 20 * down));
+        // ...and the hands come up and out together for balance, from the moment the feet leave.
+        add(o, Bone.RIGHT_ARM, Pose.PITCH, even * -105);
+        add(o, Bone.LEFT_ARM, Pose.PITCH, even * -105);
+        add(o, Bone.RIGHT_ARM, Pose.ROLL, even * 28);
+        add(o, Bone.LEFT_ARM, Pose.ROLL, -even * 28);
         add(o, Bone.RIGHT_FOREARM, Pose.PITCH, ai * 28);
         add(o, Bone.LEFT_FOREARM, Pose.PITCH, ai * 28);
         add(o, Bone.CHEST, Pose.PITCH, ai * (9 * up + 4 * mid - 2 * down));

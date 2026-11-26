@@ -19,11 +19,12 @@ public final class Deck {
 
     private static final class Saved {
         String style;
-        int[][] slots;
+        /** Per stance (top right, top left, back right, back left): four move ids, null for empty. */
+        String[][] slots;
     }
 
-    private static Style style = Fighting.TAIJUTSU;
-    private static int[][] slots = copy(Fighting.TAIJUTSU.starter());
+    private static Style style = Fighting.STYLES[0];
+    private static int[][] slots = copy(Fighting.STYLES[0].starter());
     private static boolean loaded;
 
     private static Path file() {
@@ -37,13 +38,16 @@ public final class Deck {
             Path f = file();
             if (!Files.exists(f)) return;
             Saved s = new Gson().fromJson(Files.readString(f), Saved.class);
-            for (Style st : Fighting.STYLES) if (st.name().equals(s.style)) style = st;
+            style = Fighting.style(s.style);
+            slots = copy(style.starter());
             if (s.slots != null && s.slots.length == 4) {
                 int[][] in = copy(style.starter());
                 for (int q = 0; q < 4; q++) {
-                    for (int i = 0; i < Fighting.SLOTS && s.slots[q] != null && i < s.slots[q].length; i++) {
-                        Move m = style.move(s.slots[q][i]);
-                        in[q][i] = m != null && m.fits(q, i) ? s.slots[q][i] : -1;
+                    if (s.slots[q] == null) continue;
+                    for (int i = 0; i < Fighting.SLOTS && i < s.slots[q].length; i++) {
+                        int idx = s.slots[q][i] == null ? -1 : style.index(s.slots[q][i]);
+                        Move m = style.move(idx);
+                        in[q][i] = m != null && m.fits(q, i) ? idx : -1;
                     }
                     if (lights(in[q]) == 0) in[q] = style.starter()[q].clone(); // a quadrant always has a light
                 }
@@ -56,8 +60,12 @@ public final class Deck {
     static void save() {
         try {
             Saved s = new Saved();
-            s.style = style.name();
-            s.slots = copy(slots);
+            s.style = style.id();
+            s.slots = new String[4][Fighting.SLOTS];
+            for (int q = 0; q < 4; q++) for (int i = 0; i < Fighting.SLOTS; i++) {
+                Move m = style.move(slots[q][i]);
+                s.slots[q][i] = m == null ? null : m.id();
+            }
             Path f = file();
             Files.createDirectories(f.getParent());
             Files.writeString(f, new GsonBuilder().setPrettyPrinting().create().toJson(s));
@@ -88,6 +96,15 @@ public final class Deck {
         }
         save();
         return true;
+    }
+
+    /** Switch to another style (its starter deck, until you change it). */
+    public static void use(Style s) {
+        load();
+        if (s == style) return;
+        style = s;
+        slots = copy(s.starter());
+        save();
     }
 
     public static void reset() {
