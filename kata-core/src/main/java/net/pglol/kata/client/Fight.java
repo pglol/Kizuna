@@ -858,6 +858,7 @@ public final class Fight {
 
     /** Is this player fighting (guard up, a strike going, or squared up to someone)? */
     private static boolean engaged(PlayerEntity p) {
+        if (mine(p) && previewing) return true; // the deck's preview: squared up to someone in front
         if (mine(p)) return guard || cur != null || charging || target >= 0 || staggered();
         Act a = MOVES.get(p.getId());
         Long at = STANCE_AT.get(p.getId());
@@ -878,7 +879,35 @@ public final class Fight {
      * forward, or turned right round with the back to them. Eases there, fast during a strike; a
      * spinning strike goes the long way round, its side leading.
      */
+    /** Facing an opponent from this stance: how far the body is turned (degrees). */
+    private static float stanceTurn(int s) {
+        return switch (s) {
+            case Fighting.TR -> 30;
+            case Fighting.TL -> -30;
+            case Fighting.BR -> 145;
+            default -> -145;
+        };
+    }
+
+    /** The deck preview's body turn: its stance, and a spinning move's whole turn the long way round. */
+    private static float previewTurn() {
+        Move m = previewMove;
+        int st = previewStance;
+        float from = stanceTurn(st);
+        if (m == null || !m.turns()) return from;
+        float s = previewFixed >= 0 ? previewFixed : secs(previewStart) % (m.length() + 0.5f);
+        if (s > m.length()) return from;
+        float to = stanceTurn(Fighting.end(m, st));
+        int spin = Fighting.rightLimb(m, st, 0) ? 1 : -1;
+        while (spin > 0 && to < from + 60) to += 360;
+        while (spin < 0 && to > from - 60) to -= 360;
+        float prog = MathHelper.clamp(s / m.contact(), 0, 1);
+        float e = prog < 0.5f ? 4 * prog * prog * prog : 1 - (float) Math.pow(-2 * prog + 2, 3) / 2;
+        return from + (to - from) * e;
+    }
+
     public static float bodyTurn(PlayerEntity p, float dt) {
+        if (mine(p) && previewing) return previewTurn();
         float want = 0;
         if (engaged(p)) {
             int s = mine(p) ? stance : STANCES.getOrDefault(p.getId(), Fighting.TR);
@@ -1127,7 +1156,11 @@ public final class Fight {
 
         Vec3d pos = p.getLerpedPos(td);
         float bodyYaw = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
-        Vector3f aim = Animator.toModel(aimPoint(p, td, m), pos, bodyYaw);
+        // The deck preview aims straight ahead of the body as drawn (as at an opponent in front).
+        Vec3d aimW = mine(p) && previewing
+            ? pos.add(0, p.getStandingEyeHeight(), 0).add(Vec3d.fromPolar(0, bodyYaw).multiply(m.leg() ? 1.1 : 1.0)).add(0, aimDrop(m), 0)
+            : aimPoint(p, td, m);
+        Vector3f aim = Animator.toModel(aimW, pos, bodyYaw);
 
         if (m.leg()) {
             kick(p, out, m, k, right, out_, sign, mass, aim, pos, bodyYaw);
@@ -1615,14 +1648,18 @@ public final class Fight {
             return d.length() > max ? from.add(d.normalize().multiply(max)) : at; // past full reach the limb just points at it
         }
         Vec3d look = Vec3d.fromPolar(0, p.getYaw(td));
-        double h = switch (m.path()) {
+        return eye.add(look.multiply(m.leg() ? 1.1 : 1.0)).add(0, aimDrop(m), 0);
+    }
+
+    /** How far below the eyes a strike aims when there's no one to aim at (blocks). */
+    private static double aimDrop(Move m) {
+        return switch (m.path()) {
             case PALM -> -0.45;
             case FRONT_KICK, SIDE_KICK, BACK_KICK, KNEE, DROPKICK -> -0.75;
             case LOW_KICK -> -1.25;
             case ROUNDHOUSE -> -0.35;
             default -> -0.2;
         };
-        return eye.add(look.multiply(m.leg() ? 1.1 : 1.0)).add(0, h, 0);
     }
 
     private static float ease(float x) {

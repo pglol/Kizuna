@@ -222,7 +222,7 @@ public final class Animator {
         // (see Rig.neck), so it keeps Minecraft's own look exactly; nothing to undo, nothing to roll.
         Pose sh = s.shown;
         float turn = 0;
-        if (want.gait) {
+        if (want.gait && !(Fight.previewing && p == MinecraftClient.getInstance().player)) { // the deck preview faces where it's drawn
             float body = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
             float face = MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw);
             // Standing still and not fighting, looking around turns the head, not the body: the body keeps

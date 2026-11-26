@@ -431,3 +431,6 @@ moves the body somewhere the physics wouldn't.
 
 ## Standing still
 - Standing still and not fighting, looking around turns the head, not the body; past about 75 degrees the body is drawn round after it. Moving or fighting, the body faces where you look.
+
+## The deck preview is a fight
+- The preview shows the move as thrown in a fight: squared up (guard, the stance's shoulder-forward turn, a spinning move's full turn the long way round), aiming straight ahead of the body at the heights a real strike uses (as at an opponent in front). Frame exports show the same.
