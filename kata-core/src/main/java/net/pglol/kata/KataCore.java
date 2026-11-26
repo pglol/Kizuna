@@ -30,6 +30,8 @@ public final class KataCore implements ModInitializer {
     }
 
     public static final double SAFE_FALL = 4;
+    /** True only while the server checks a player's movement (see MoveCheckMixin / AirMoveMixin). */
+    public static boolean moveCheck;
     /** A caught landing (crouch just before touching down) takes this share of the fall damage. */
     public static final float CAUGHT_DAMAGE = 0.35f;
     private static final java.util.Map<java.util.UUID, Integer> BRACED = new java.util.HashMap<>();

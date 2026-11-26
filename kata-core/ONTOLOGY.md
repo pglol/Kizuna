@@ -461,3 +461,4 @@ moves the body somewhere the physics wouldn't.
 
 ## Player hits always count
 - A strike that really touched another player lands even if the game's PvP or team rules would turn it away (the fighting is the game). Creative and spectator players can't be hurt, and dodges, parries and blocks still turn hits away as before.
+- (Fix) The "just teleported" treatment that skips the movement check applies only while the server checks movement. Minecraft also makes a just-teleported player invulnerable, which had made every player in the air (or just landed) unhittable.

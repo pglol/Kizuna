@@ -9,10 +9,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Kata moves you faster than vanilla expects (springs, wall jumps, pounces, dodges, juggles), which the
- * server's movement check reads as "moved too quickly" and snaps you back, worst just as you come down
- * (crouching into a landing pops you up). In the air, and for half a second after you land, the server
- * treats you as it does right after a teleport (when it doesn't check), so it moves cleanly. (As the AoT
- * mod does for ODM flight.) It lives in this package but runs on the server.
+ * server's movement check reads as "moved too quickly" and snaps you back, worst just as you come down.
+ * In the air, and for half a second after you land, the movement check treats you as it does right
+ * after a teleport (when it doesn't check). Only the movement check: the same "just teleported" state
+ * also makes a player invulnerable, so anywhere else the answer is left alone (a fighter in the air can
+ * still be hit). See MoveCheckMixin for when the movement check is running. (Runs on the server.)
  */
 @Mixin(ServerPlayerEntity.class)
 public abstract class AirMoveMixin {
@@ -23,6 +24,6 @@ public abstract class AirMoveMixin {
         ServerPlayerEntity p = (ServerPlayerEntity) (Object) this;
         if (p.hasVehicle() || p.isFallFlying() || p.isSpectator() || p.getAbilities().flying) return;
         if (!p.isOnGround() && !p.isTouchingWater()) kata$airAge = p.age;
-        if (p.age - kata$airAge <= 10) cir.setReturnValue(true);
+        if (net.pglol.kata.KataCore.moveCheck && p.age - kata$airAge <= 10) cir.setReturnValue(true);
     }
 }

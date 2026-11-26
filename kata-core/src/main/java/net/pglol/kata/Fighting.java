@@ -531,6 +531,7 @@ public final class Fighting {
 
     /** Every tick: let go of whoever has floated long enough; concuss whoever a smash put into the ground. */
     static void tick(net.minecraft.server.MinecraftServer server) {
+        KataCore.moveCheck = false; // never left on past a tick (it only means "checking a move right now")
         int now = server.getTicks();
         if (!FLOAT_UNTIL.isEmpty()) {
             for (var it = FLOAT_UNTIL.entrySet().iterator(); it.hasNext(); ) {

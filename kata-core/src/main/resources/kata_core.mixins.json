@@ -30,6 +30,7 @@
   "mixins": [
     "FlightMixin",
     "AirMoveMixin",
+    "MoveCheckMixin",
     "FallMixin"
   ]
 }
