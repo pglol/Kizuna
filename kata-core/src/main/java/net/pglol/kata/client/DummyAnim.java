@@ -152,6 +152,7 @@ public final class DummyAnim {
         }
         s.prev = out.copy();
         Fight.react(d, out); // a hit landing on it
+        Afterimages.record(d, out, td);
         s.shown = out;
         return out;
     }

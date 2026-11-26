@@ -51,6 +51,10 @@ public final class KataClient implements ClientModInitializer {
             (payload, ctx) -> Parkour.remote(payload.entity(), payload.mode(), payload.side()));
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(Marker::render);
         HudRenderCallback.EVENT.register((c, tick) -> Hud.render(c, tick.getTickDelta(false)));
+        HudRenderCallback.EVENT.register(ImpactFrames::render);
+        net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(ctx -> {
+            if (ctx.consumers() != null) Afterimages.render(ctx.matrixStack(), ctx.consumers(), ctx.camera().getPos());
+        });
     }
 
     /** The number keys don't pick hotbar slots any more (no hotbar; they're for moves later). */

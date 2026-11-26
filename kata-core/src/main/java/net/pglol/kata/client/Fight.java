@@ -180,6 +180,7 @@ public final class Fight {
                 default -> Vec3d.ZERO;
             };
             dodgeSpeed = dir == 0 ? 1 : 0.4f; // a step back; the slips barely move
+            Afterimages.dodge(p.getId());
             dodgeTick = 0;
             if (dir == 4) p.setVelocity(p.getVelocity().x * 0.5, 0.34, p.getVelocity().z * 0.5);
         }
@@ -454,7 +455,9 @@ public final class Fight {
                     if (hit >= 0 && cur.from() == Fighting.From.AIR) airLanded = true;
                     // It lands: the strike holds still for a moment (the impact), longer for a heavy.
                     if (hit >= 0) {
-                        curStart += (long) ((cur.heavy() ? 0.09 : 0.05) * 1e9);
+                        // The hit stop: a heavy holds on contact longer the more it was charged.
+                        float stop = cur.heavy() ? (curPower >= 0.8f ? 0.15f : curPower >= 0.4f ? 0.11f : 0.07f) : 0.05f;
+                        curStart += (long) (stop * 1e9);
                         curLanded = true;
                     }
                     if (smashDive) {
@@ -748,7 +751,23 @@ public final class Fight {
 
     static void remote(int entity, int kind, int a) {
         MinecraftClient mc = MinecraftClient.getInstance();
+        // Seen by everyone: afterimages for parries, evasions and dodges.
+        if (mc.world != null) {
+            if (kind == KataNet.EVADED) Afterimages.evade(entity);
+            else if (kind == KataNet.PARRY) Afterimages.parry(entity);
+            else if (kind == KataNet.PARRIED) {
+                Entity pe = mc.world.getEntityById(entity);
+                Vec3d back = pe == null ? Vec3d.ZERO : Vec3d.fromPolar(0, pe.getYaw()).multiply(-0.8);
+                Afterimages.parried(entity, back);
+            } else if (kind == KataNet.DODGE && a < 16) Afterimages.dodge(entity);
+        }
         if (kind == KataNet.HIT) {
+            // A heavy landing (half charged or more): an impact frame for anyone close enough to see it.
+            int tier = (a >> 9) & 3;
+            if (tier > 0 && mc.world != null && mc.player != null) {
+                Entity he = mc.world.getEntityById(entity);
+                if (he != null && he.squaredDistanceTo(mc.player) < 16 * 16) ImpactFrames.hit(he.getEyePos().add(0, -0.3, 0), tier == 1 ? 0.55f : 1.0f);
+            }
             HITS.put(entity, new React(a, System.nanoTime()));
             if (HITS.size() > 256) HITS.clear();
             return;
@@ -792,10 +811,8 @@ public final class Fight {
                     parryAt = System.nanoTime();
                     parryKind = a;
                     net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + 0.25f); // a parry gives breath back
-                    Hud.pop("PARRY", 0xFF7FD8FF);
                 }
                 case KataNet.DODGE -> { }
-                case KataNet.PARRIED -> Hud.pop("PARRIED", 0xFFFF5A4A);
                 case KataNet.AIR_HIT -> {
                     // An air hit, given or taken: hang there for the next. Given, another air strike is yours.
                     hangUntil = System.nanoTime() + a * 50_000_000L;
@@ -811,7 +828,6 @@ public final class Fight {
                     CONCUSSED.put(entity, System.nanoTime() + a * 50_000_000L);
                     Hud.pop("CONCUSSED", 0xFFFF5A4A);
                 }
-                case KataNet.EVADED -> Hud.pop("EVADE", 0xFFF3E7BE);
                 case KataNet.KNOCKDOWN -> {
                     cur = null;
                     pendingLight = pressing = charging = false;

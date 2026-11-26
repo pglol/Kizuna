@@ -644,7 +644,7 @@ public final class Fighting {
     public static void knockdown(Entity e, Vec3d v) {
         // Fighters, not cannonballs: never more than a few blocks a second across, nor much up.
         double hl = Math.hypot(v.x, v.z);
-        if (hl > 0.22) v = new Vec3d(v.x * 0.22 / hl, v.y, v.z * 0.22 / hl);
+        if (hl > 0.28) v = new Vec3d(v.x * 0.28 / hl, v.y, v.z * 0.28 / hl);
         v = new Vec3d(v.x, Math.min(v.y, 0.3), v.z);
         if (e instanceof ServerPlayerEntity p) tell(p, KataNet.KNOCKDOWN, packVelocity(v));
         else if (e instanceof Dummy d) d.knockdown(v);
@@ -671,7 +671,7 @@ public final class Fighting {
 
     /** What happens to a player's body in a fight goes to them and to everyone who can see them. */
     private static void tell(Entity e, int kind, int a) {
-        if (e instanceof ServerPlayerEntity) relayAround(e, kind, a);
+        if (e instanceof LivingEntity) relayAround(e, kind, a); // dummies too (everyone sees their parries)
     }
 
     /** The guard packet: bit 0 up or down, bits 1-2 the side it was raised towards (for a parry). */
@@ -827,7 +827,9 @@ public final class Fighting {
         Vec3d from = by.getPos().subtract(t.getPos());
         double ty = Math.toRadians(t.getYaw());
         boolean fromRight = from.x * -Math.cos(ty) + from.z * -Math.sin(ty) > 0;
-        int react = part.ordinal() | m.path().ordinal() << 2 | (fromRight ? 1 << 7 : 0) | (m.heavy() ? 1 << 8 : 0);
+        // How charged a heavy was (0 barely, 1 half, 2 well): the impact frame it gets.
+        int tier = !m.heavy() ? 0 : power < 0.4f ? 0 : power < 0.8f ? 1 : 2;
+        int react = part.ordinal() | m.path().ordinal() << 2 | (fromRight ? 1 << 7 : 0) | (m.heavy() ? 1 << 8 : 0) | tier << 9;
         relayAround(t, KataNet.HIT, react);
         // Hitstun: long enough for the attacker's next strike in the string to arrive first.
         int stun = Math.round(m.length() * 20 * 0.85f) + (m.heavy() ? 6 : 3);
@@ -843,12 +845,12 @@ public final class Fighting {
         boolean down = m.knockdown() && (!m.heavy() || power >= 0.9f);
         if (down) {
             // Knocked down a couple of body lengths, not across the field: further only with more might.
-            knockdown(t, look.multiply(shove * 0.4).add(0, 0.14 + m.lift() * 0.6, 0));
+            knockdown(t, look.multiply(shove * 0.5).add(0, 0.15 + m.lift() * 0.6, 0));
         } else {
             // An ordinary hit moves you back a step along the ground, never off it: fighters stay in range
             // to trade. Only knockdowns send anyone flying.
             Vec3d flat = new Vec3d(look.x, 0, look.z);
-            if (flat.lengthSquared() > 1e-4) shove(t, flat.normalize(), shove * 0.3);
+            if (flat.lengthSquared() > 1e-4) shove(t, flat.normalize(), shove * 0.42);
             if (m.lift() > 0) {
                 t.addVelocity(0, m.lift() * (m.heavy() ? 0.6f + 0.6f * power : 1), 0);
                 t.velocityModified = true;

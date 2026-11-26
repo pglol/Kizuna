@@ -254,6 +254,7 @@ public final class Animator {
         // A strike lands on top of the springs: the body drives it, the fist travels its path.
         Fight.apply(p, td, out);
         Fight.react(p, out); // a hit landing: the body reacts to where and how it was struck
+        if (!(Fight.previewing && p == MinecraftClient.getInstance().player)) Afterimages.record(p, out, td);
         s.out = out;
         return out;
     }

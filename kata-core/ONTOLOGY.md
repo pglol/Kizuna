@@ -442,3 +442,12 @@ moves the body somewhere the physics wouldn't.
 
 ## Bodies are like walls
 - Walking up to someone (a player or a dummy), the hands come up onto them as onto a wall; side on, the near hand rests on them. Not while fighting (the hands are busy).
+
+## Afterimages (no text for parries and evasions)
+- Every body keeps a short trail of how it just stood. A parry bursts a bright cyan-white ghost out of the parrier, swelling as it fades, with two quick echoes, and throws a red ghost back off whoever was parried. An evade leaves a trail of four pale ghosts where the body was as the strike went through. A dodge leaves one faint ghost behind. They glow, are drawn through the full rig (every bend), and fade in under half a second. Everyone nearby sees them, dummies included.
+
+## Impact frames on heavies
+- How charged a heavy was decides it: barely (under 40%) none; half charged a light impact frame (one short black frame with white spikes, then thin speed lines); well charged (80% or more) a medium one (black frame, white frame, speed lines). Everyone within 16 blocks sees it, centred on the hit. The hit stop grows with the charge too (0.07, 0.11, 0.15 s).
+
+## Knockback
+- Ordinary hits push a little further along the ground (0.42 x push), knockdowns throw a little further (0.5 x push, at most 0.28 blocks a tick across).
