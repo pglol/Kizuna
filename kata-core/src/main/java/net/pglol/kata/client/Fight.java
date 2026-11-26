@@ -847,6 +847,68 @@ public final class Fight {
     }
 
     /**
+     * The body taking a hit, from where it landed, what kind of strike and which side it came from:
+     * an uppercut snaps the head back to look at the sky, a straight knocks it back, a hook or a kick to
+     * the head whips it away from the side it came from; a body shot folds you; a low kick buckles that
+     * knee. Heavies hit harder. Fast in, eased out. Added on top of everything else.
+     */
+    public static void react(LivingEntity e, Pose out) {
+        React r = HITS.get(e.getId());
+        if (r == null) return;
+        boolean heavy = (r.packed & 1 << 8) != 0;
+        float dur = heavy ? 0.55f : 0.38f, s = secs(r.at);
+        if (s > dur) return;
+        float w = s < 0.05f ? s / 0.05f : 1 - ease((s - 0.05f) / (dur - 0.05f));
+        w *= heavy ? 1.5f : 1;
+        Fighting.Part part = Fighting.Part.values()[(r.packed & 3) % Fighting.Part.values().length];
+        Path path = Path.values()[Math.min(Path.values().length - 1, (r.packed >> 2) & 0x1F)];
+        float side = (r.packed & 1 << 7) != 0 ? 1 : -1; // it came from their right (+1) or left
+        switch (part) {
+            case HEAD -> {
+                if (path == Path.UPPER) {
+                    add(out, Bone.HEAD, Pose.PITCH, -45 * w);
+                    add(out, Bone.CHEST, Pose.PITCH, -14 * w);
+                    out.offset[2] += 1 * w;
+                } else if (path == Path.STRAIGHT || path == Path.PALM || path == Path.SUPERMAN || path == Path.OVERHAND || path == Path.KNEE || path == Path.FRONT_KICK) {
+                    add(out, Bone.HEAD, Pose.PITCH, -24 * w);
+                    add(out, Bone.CHEST, Pose.PITCH, -10 * w);
+                    out.offset[2] += 1.5f * w;
+                } else {
+                    add(out, Bone.HEAD, Pose.YAW, -40 * side * w);
+                    add(out, Bone.HEAD, Pose.ROLL, 15 * side * w);
+                    add(out, Bone.CHEST, Pose.YAW, -12 * side * w);
+                    add(out, Bone.CHEST, Pose.ROLL, 6 * side * w);
+                }
+            }
+            case TORSO -> {
+                add(out, Bone.CHEST, Pose.PITCH, 24 * w);
+                add(out, Bone.HEAD, Pose.PITCH, 10 * w);
+                add(out, Bone.CHEST, Pose.YAW, -8 * side * w);
+                add(out, Bone.RIGHT_FOREARM, Pose.PITCH, 25 * w);
+                add(out, Bone.LEFT_FOREARM, Pose.PITCH, 25 * w);
+                out.offset[2] += 1.5f * w;
+                out.offset[1] += 0.8f * w;
+            }
+            case LEG -> {
+                Bone leg = side > 0 ? Bone.RIGHT_LEG : Bone.LEFT_LEG, shin = side > 0 ? Bone.RIGHT_SHIN : Bone.LEFT_SHIN;
+                add(out, leg, Pose.PITCH, 12 * w);
+                add(out, shin, Pose.PITCH, 45 * w);
+                add(out, Bone.CHEST, Pose.ROLL, 8 * side * w);
+                out.offset[1] += 1.6f * w;
+            }
+            default -> {
+                Bone arm = side > 0 ? Bone.RIGHT_ARM : Bone.LEFT_ARM;
+                add(out, arm, Pose.PITCH, 25 * w);
+                add(out, Bone.CHEST, Pose.YAW, -8 * side * w);
+            }
+        }
+    }
+
+    private static void add(Pose p, Bone b, int axis, float deg) {
+        p.set(b, axis, p.get(b, axis) + deg);
+    }
+
+    /**
      * Where a strike is aimed: on the locked opponent, the point where its line first meets their body
      * (a guard's forearm, say), so the fist or foot lands on it and stops there. Otherwise straight out.
      */
