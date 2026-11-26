@@ -51,7 +51,7 @@ public final class Nametags {
             ms.push();
             ms.translate(at.x - eye.x, at.y - eye.y, at.z - eye.z);
             ms.multiply(cam.getRotation());
-            ms.scale(-0.02f, -0.02f, 0.02f);
+            ms.scale(0.022f, -0.022f, 0.022f); // facing the camera (the camera's rotation already turns it round)
             Matrix4f m = ms.peek().getPositionMatrix();
 
             String name = e.getName().getString();
@@ -60,16 +60,16 @@ public final class Nametags {
             float x0 = -bw / 2f, x1 = bw / 2f;
             VertexConsumer bg = vcp.getBuffer(RenderLayer.getTextBackground());
             // The strip: faint, see-through, behind name and bars alike.
-            quad(bg, m, x0, -2, x1, 14, 0.01f, argb(a * 0.28f, 0x000000));
+            quad(bg, m, x0, -2, x1, 14, 0, argb(a * 0.28f, 0x000000));
             // Health: a two-pixel line, red over a darker track.
             float hp = MathHelper.clamp(e.getHealth() / Math.max(1, e.getMaxHealth()), 0, 1);
             float lx0 = x0 + 3, lx1 = x1 - 3, lw = lx1 - lx0;
-            quad(bg, m, lx0, 9, lx1, 10.6f, 0.005f, argb(a * 0.45f, 0x2A0E0E));
-            quad(bg, m, lx0, 9, lx0 + lw * hp, 10.6f, 0.002f, argb(a * 0.9f, hp < 0.25f ? 0xE8383C : 0xD23A34));
+            quad(bg, m, lx0, 9, lx1, 10.6f, 0, argb(a * 0.45f, 0x2A0E0E));
+            quad(bg, m, lx0, 9, lx0 + lw * hp, 10.6f, 0, argb(a * 0.9f, hp < 0.25f ? 0xE8383C : 0xD23A34));
             // Breath: a hairline under it, pale.
             float st = MathHelper.clamp(Fight.poise(e.getId()), 0, 1);
-            quad(bg, m, lx0, 11.6f, lx0 + lw * st, 12.3f, 0.002f, argb(a * 0.7f, st < 0.2f ? 0x8A8A8A : 0xF3E7BE));
-            tr.draw(name, -tw / 2f, 0, argb(a * 0.92f, 0xF4ECE2), false, m, vcp, TextRenderer.TextLayerType.NORMAL, 0, LIGHT);
+            quad(bg, m, lx0, 11.6f, lx0 + lw * st, 12.3f, 0, argb(a * 0.7f, st < 0.2f ? 0x8A8A8A : 0xF3E7BE));
+            tr.draw(name, -tw / 2f, 0, argb(a * 0.92f, 0xF4ECE2), false, m, vcp, TextRenderer.TextLayerType.POLYGON_OFFSET, 0, LIGHT);
             ms.pop();
         }
         if (SHOWN.size() > 128) SHOWN.clear();
@@ -80,6 +80,11 @@ public final class Nametags {
         vc.vertex(m, x0, y1, z).color(c).light(LIGHT);
         vc.vertex(m, x1, y1, z).color(c).light(LIGHT);
         vc.vertex(m, x1, y0, z).color(c).light(LIGHT);
+        // and the back, so it shows from either side whatever the culling
+        vc.vertex(m, x1, y0, z).color(c).light(LIGHT);
+        vc.vertex(m, x1, y1, z).color(c).light(LIGHT);
+        vc.vertex(m, x0, y1, z).color(c).light(LIGHT);
+        vc.vertex(m, x0, y0, z).color(c).light(LIGHT);
     }
 
     private static int argb(float a, int rgb) {

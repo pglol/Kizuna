@@ -220,7 +220,7 @@ public final class Fight {
             dodgeTick = 0;
             if (dir == 4) p.setVelocity(p.getVelocity().x * 0.5, 0.34, p.getVelocity().z * 0.5);
         }
-        net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - DODGE_COST);
+        net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - DODGE_COST); net.pglol.kata.client.Move.exert();
         dodgeAt = clock();
         pressing = false;
         DODGES.put(p.getId(), new React(dir, dodgeAt));
@@ -408,7 +408,7 @@ public final class Fight {
             if (rd != null && !rd.inWater() && (p.isOnGround() || rd.resting())) {
                 rd.comeRound = true;
                 rd.quickUp = true;
-                net.pglol.kata.client.Move.stamina -= 0.2f;
+                net.pglol.kata.client.Move.stamina -= 0.2f; net.pglol.kata.client.Move.exert();
             }
         }
         // Stringing someone in the air: you hang at their height, right with them.
@@ -671,7 +671,7 @@ public final class Fight {
         if (clock() < readyAt) return;
         // Breath: a light costs a little, a heavy a good deal more (the harder it's charged, the more).
         float cost = m.heavy() ? 0.12f + 0.1f * Math.max(0.3f, power) : m.from() == Fighting.From.AIR ? 0.04f : 0.05f;
-        net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - cost);
+        net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - cost); net.pglol.kata.client.Move.exert();
         cur = m;
         curLanded = false;
         curStance = stance;

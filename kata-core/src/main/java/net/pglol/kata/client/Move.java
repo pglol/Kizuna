@@ -28,13 +28,16 @@ public final class Move {
      * Minecraft's own sprint is 1.3 times the walk; the factors below take that out.
      */
     private static final float WALK_SPEED = 0.72f, FAST_SPEED = 1.0f, RUN_SPEED = 2.0f, VANILLA_SPRINT = 1.3f;
-    private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (5f * 20), FAST_REGEN = 1 / (12f * 20);
+    private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (16f * 20), FAST_REGEN = 1 / (32f * 20);
 
     public static Mode mode = Mode.WALK;
     /** 0..1 */
     public static float stamina = 1, shownStamina = 1;
     private static boolean winded;
     private static int rest;
+
+    /** Spent breath on something (a strike, a dodge, getting up): it waits two seconds before coming back. */
+    static void exert() { rest = 40; }
 
     static void tick(MinecraftClient mc) {
         ClientPlayerEntity p = mc.player;
@@ -63,12 +66,12 @@ public final class Move {
             && p.getVelocity().horizontalLengthSquared() > 0.01;
         if (running && !p.isCreative()) {
             stamina = Math.max(0, stamina - DRAIN);
-            rest = 20;
+            rest = 40;
             if (stamina <= 0) winded = true;
         } else if (rest > 0) rest--;
         else stamina = Math.min(1, stamina + (mode == Mode.FAST ? FAST_REGEN : REGEN));
         if (stamina <= 0.005f) winded = true; // however it went: running, strikes, dodges, getting up
-        if (winded && stamina >= 0.25f) winded = false;
+        if (winded && stamina >= 0.4f) winded = false;
     }
 
     private static boolean down(PlayerEntity p) {
