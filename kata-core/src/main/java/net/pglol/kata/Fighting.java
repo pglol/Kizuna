@@ -314,8 +314,8 @@ public final class Fighting {
     private static boolean kataRefused;
     /** Why Kata turned the last hit away (10 blocked, 11 parried, 12 evaded), for the report. */
     private static int refusal;
-    /** Whether the last strike dealt damage. */
-    private static boolean dealt;
+    /** Whether the last strike dealt damage; whether Minecraft thought the victim couldn't be hurt (and it was forced). */
+    private static boolean dealt, invulnerableNote;
 
     private static boolean allow(LivingEntity victim, net.minecraft.entity.damage.DamageSource source, float amount) {
             if (chip) return true;
@@ -842,7 +842,7 @@ public final class Fighting {
         strikeRight = (packed & 1 << 8) != 0;
         try {
             boolean landed = land(p, t, m, power, part, look, p.getDamageSources().playerAttack(p));
-            int code = dealt ? 0 : t instanceof ServerPlayerEntity vp && vp.isCreative() ? 9 : refusal != 0 ? refusal : landed ? 13 : 8;
+            int code = dealt ? (invulnerableNote ? 14 : 0) : t instanceof ServerPlayerEntity vp && vp.isCreative() ? 9 : refusal != 0 ? refusal : landed ? 13 : 8;
             dbg(p, code, Math.round(t.getHealth() * 10));
             if (t instanceof ServerPlayerEntity) {
                 report(p, code, Math.round(t.getHealth() * 10)); // player fights: always say what happened (dev build)
@@ -883,6 +883,7 @@ public final class Fighting {
         boolean hit;
         kataRefused = false;
         refusal = 0;
+        invulnerableNote = false;
         try {
             hit = t.damage(src, dmg);
             // A fighter's strike that really touched another player: the game's PvP and team rules
@@ -891,11 +892,25 @@ public final class Fighting {
                 && victim.isAlive() && !guarding(victim)) {
                 var key = net.minecraft.registry.RegistryKey.of(net.minecraft.registry.RegistryKeys.DAMAGE_TYPE, net.minecraft.util.Identifier.of(KataCore.ID, "strike"));
                 var type = t.getWorld().getRegistryManager().get(net.minecraft.registry.RegistryKeys.DAMAGE_TYPE).getEntry(key);
-                if (type.isPresent()) {
-                    t.timeUntilRegen = 0;
-                    hit = t.damage(new net.minecraft.entity.damage.DamageSource(type.get()), dmg);
-                    if (hit) t.setAttacker(by);
+                net.minecraft.entity.damage.DamageSource own = type.isPresent() ? new net.minecraft.entity.damage.DamageSource(type.get()) : t.getDamageSources().generic();
+                t.timeUntilRegen = 0;
+                hit = t.damage(own, dmg);
+                if (!hit && !kataRefused) {
+                    // Still turned away (Minecraft thinks they can't be hurt right now: a teleport, a join,
+                    // an invulnerable flag): the touch was real, so the health comes off directly.
+                    if (victim.isInvulnerableTo(own)) invulnerableNote = true;
+                    float left = victim.getHealth() - dmg;
+                    if (left > 0) victim.setHealth(left);
+                    else {
+                        victim.setHealth(0);
+                        victim.onDeath(own);
+                    }
+                    victim.timeUntilRegen = 10;
+                    victim.hurtTime = victim.maxHurtTime = 10;
+                    t.getWorld().sendEntityDamage(victim, own); // the hurt flash and sound, as for any hit
+                    hit = true;
                 }
+                if (hit) t.setAttacker(by);
             }
         } finally {
             breaking = false;

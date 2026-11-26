@@ -466,3 +466,7 @@ moves the body somewhere the physics wouldn't.
 ## Guard and kicks (from the frame exports)
 - Squared up, a fighter's guard: hands up at the chin, elbows bent and in (a touch looser than blocking). The off hand stays there through every strike, and both hands stay up through kicks.
 - A kick's foot goes out to the leg's full length along the line to where it's aimed, so the leg is straight at contact (front, side, roundhouse and back kicks all landed bent-kneed before).
+- (Last resort) A strike that really touched a player, that Kata didn't turn away (dodge, parry, block), and that Minecraft still refuses (it thinks they can't be hurt right now) takes the health off directly, with the hurt flash. Creative and spectator players are still never hurt.
+
+## What a strike can land on
+- Every body part counts: head (x1.25 damage), torso/chest (x1), legs (x0.7), arms (x0.45, a forearm in the way takes the hit). Whatever the striking fist, foot, forearm or shin touches first.

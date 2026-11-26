@@ -877,6 +877,7 @@ public final class Fight {
                         case 11 -> "parried";
                         case 12 -> "evaded (they dodged it)";
                         case 13 -> "landed but did no damage (health " + (v / 10f) + ")";
+                        case 14 -> "landed (forced: Minecraft thought they couldn't be hurt right now; health " + (v / 10f) + ")";
                         default -> "code " + code;
                     });
                 }
