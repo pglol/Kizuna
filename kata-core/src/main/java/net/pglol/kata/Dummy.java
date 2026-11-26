@@ -317,7 +317,7 @@ public class Dummy extends PathAwareEntity {
             // Throwing something: feet planted.
             getNavigation().stop();
             stuck = 0;
-        } else if (d > 2.3) {
+        } else if (d > 1.7) {
             if (age % 5 == 0) getNavigation().startMovingTo(foe, d > 5 ? 1.15 : 0.9);
             // No path (they're up on something, or round an edge): head straight for them, and hop over
             // what's in the way once it's clearly stuck.
@@ -331,7 +331,7 @@ public class Dummy extends PathAwareEntity {
             }
         } else {
             getNavigation().stop();
-            if (d < 1.3) {
+            if (d < 1.0) {
                 Vec3d away = getPos().subtract(foe.getPos()).multiply(1, 0, 1).normalize().multiply(0.06);
                 addVelocity(away.x, 0, away.z);
             }
@@ -345,14 +345,14 @@ public class Dummy extends PathAwareEntity {
 
         // Its turn: strings of one to three strikes, often; out of a block it counters (dropping the
         // guard to hit back); just out of reach it steps in to strike.
-        if (swing == null && d < 2.9 && --cooldown <= 0) {
+        if (swing == null && d < 2.3 && --cooldown <= 0) {
             boolean counter = guarding() && age - guardAt > 6;
             if (!guarding() || counter) {
                 if (counter) setGuard(false);
-                if (d > 2.1) {
+                if (d > 1.5) {
                     // A step in to reach: it closes the gap as it throws.
                     getNavigation().startMovingTo(foe, 1.2);
-                    Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(Math.min(0.18, (d - 1.8) * 0.12));
+                    Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(Math.min(0.2, (d - 1.2) * 0.16));
                     if (isOnGround()) addVelocity(in.x, 0, in.z);
                 }
                 Fighting.Style s = Fighting.style("taijutsu");
@@ -373,8 +373,17 @@ public class Dummy extends PathAwareEntity {
     }
 
     private void hit(LivingEntity foe, Fighting.Move m) {
-        double reach = m.leg() ? 2.9 : 2.5;
-        if (squaredDistanceTo(foe) > reach * reach) return;
+        // Only if the limb really reaches them: from the shoulder (a punch) or the hip (a kick) to the
+        // nearest part of their body, no further than an arm or a leg, and in front of it.
+        Vec3d fwd = Vec3d.fromPolar(0, getYaw());
+        Vec3d from = getPos().add(0, m.leg() ? 0.8 : 1.4, 0).add(fwd.multiply(0.1));
+        var b = foe.getBoundingBox();
+        Vec3d near = new Vec3d(MathHelper.clamp(from.x, b.minX, b.maxX), MathHelper.clamp(from.y, b.minY, b.maxY), MathHelper.clamp(from.z, b.minZ, b.maxZ));
+        Vec3d to = near.subtract(from);
+        double limb = m.leg() ? 1.25 : 0.95;
+        if (to.length() > limb) return;
+        Vec3d flat = new Vec3d(to.x, 0, to.z);
+        if (flat.lengthSquared() > 0.04 && flat.normalize().dotProduct(fwd) < 0.2) return;
         // Struck where its aim was: the head for hooks, straights and high kicks, the body for the rest,
         // the legs for a low kick.
         Fighting.Part part = m.path() == Fighting.Path.LOW_KICK ? Fighting.Part.LEG
