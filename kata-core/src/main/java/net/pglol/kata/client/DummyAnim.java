@@ -27,7 +27,7 @@ public final class DummyAnim {
     private static final class State {
         final float[][] ang = new float[Bone.values().length][3], vel = new float[Bone.values().length][3];
         long last;
-        boolean ragdoll, wasDown;
+        boolean ragdoll, wasDown, reported;
         int knocks;
         Pose shown = new Pose();
     }
@@ -49,14 +49,23 @@ public final class DummyAnim {
             s.ragdoll = true;
             Ragdoll.start(d, s.shown, by, d.getVelocity().multiply(20));
             s.knocks = d.knocks();
+            s.reported = false;
         }
         if (s.ragdoll) {
             Ragdoll r = Ragdoll.of(d);
-            if (r != null && d.knocks() != s.knocks) r.impulse(d.getVelocity().multiply(1.4)); // hit again while down
+            if (r != null && d.knocks() != s.knocks) r.impulse(d.getVelocity()); // hit again while down
             s.knocks = d.knocks();
             if (r != null && !r.finished()) {
                 r.step(d.getWorld(), dt);
                 Pose limp = r.pose(d, d.getLerpedPos(td), by, td);
+                if (r.resting() && !s.reported) {
+                    // Came to rest: tell the server where the body is, so it gets up there.
+                    s.reported = true;
+                    Vec3d off = r.pelvis().subtract(d.getPos()).add(0, -0.7, 0);
+                    if (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(net.pglol.kata.KataNet.Fight.ID))
+                        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new net.pglol.kata.KataNet.Fight(net.pglol.kata.KataNet.DUMMY_REST, d.getId(),
+                            Fighting.packOffset(off.x, Math.max(-0.5, off.y), off.z)));
+                }
                 s.shown = r.resting() ? r.getUpPose(limp, r.getUp, 0, 0) : limp;
                 return s.shown;
             }
@@ -98,6 +107,14 @@ public final class DummyAnim {
             o.set(Bone.RIGHT_ARM, Pose.PITCH, o.get(Bone.RIGHT_ARM, Pose.PITCH) - 14);
             o.set(Bone.LEFT_ARM, Pose.PITCH, o.get(Bone.LEFT_ARM, Pose.PITCH) - 14);
             o.set(Bone.CHEST, Pose.PITCH, o.get(Bone.CHEST, Pose.PITCH) + 8);
+            switch (d.blockKind()) {
+                // Meeting the strike: the arm on its side goes out to it, forearm up to take it.
+                case 1 -> o.set(Bone.RIGHT_ARM, -75, -10, 38).set(Bone.RIGHT_FOREARM, 70, 0, 0).set(Bone.CHEST, 6, -10, 0);
+                case 2 -> o.set(Bone.LEFT_ARM, -75, 10, -38).set(Bone.LEFT_FOREARM, 70, 0, 0).set(Bone.CHEST, 6, 10, 0);
+                // Checking a kick: the knee comes up and out to take it on the shin.
+                case 3 -> o.set(Bone.LEFT_LEG, -62, 0, -18).set(Bone.LEFT_SHIN, 85, 0, 0).set(Bone.RIGHT_SHIN, 12, 0, 0);
+                default -> { }
+            }
         } else if (near || d.move() >= 0) {
             o = Pose.lerp(new Pose(), Presets.GUARD, 0.65f);
             o.set(Bone.RIGHT_FOREARM, Pose.PITCH, 75).set(Bone.LEFT_FOREARM, Pose.PITCH, 80);

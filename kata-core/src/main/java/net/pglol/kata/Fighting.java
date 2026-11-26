@@ -60,6 +60,9 @@ public final class Fighting {
     /** Where a move is thrown from: the top stances, the back stances, or in the air. */
     public enum From { FRONT, BACK, AIR }
 
+    /** A light's place in a chain: openers start it (fast), links carry it, finishers end it (slower, harder). */
+    public enum Role { OPENER, LINK, FINISHER }
+
     /**
      * One move of a style.
      *  - id: style:move, for example "taijutsu:jab"
@@ -75,7 +78,7 @@ public final class Fighting {
      */
     public record Move(String id, String name, Path path, boolean lead, boolean heavy, From from, boolean spin,
                        float contact, float length, float damage, float push, float lift,
-                       int hits, float interval, boolean alternate, boolean knockdown) {
+                       int hits, float interval, boolean alternate, boolean knockdown, Role role) {
         public boolean turns() {
             return spin;
         }
@@ -89,10 +92,20 @@ public final class Fighting {
             return contact + i * interval;
         }
 
-        /** Can it go in this slot: a light slot (0-2) or the heavy slot (3), in this row of the deck? */
+        /**
+         * Can it go in this slot of this row? The heavy slot takes heavies. The chain keeps a flow: slot
+         * 1 takes openers (the fastest), slot 2 openers or links, slot 3 links or finishers (slower,
+         * harder).
+         */
         public boolean fits(int row, int slot) {
             From want = row == AIR ? From.AIR : top(row) ? From.FRONT : From.BACK;
-            return heavy == (slot == HEAVY_SLOT) && from == want;
+            if (heavy != (slot == HEAVY_SLOT) || from != want) return false;
+            if (heavy) return true;
+            return switch (slot) {
+                case 0 -> role == Role.OPENER;
+                case 1 -> role != Role.FINISHER;
+                default -> role != Role.OPENER || from != From.FRONT;
+            };
         }
     }
 
@@ -129,7 +142,7 @@ public final class Fighting {
         }
         if (styles.isEmpty()) {
             // A fallback so fists always work: one jab.
-            Move jab = new Move("basic:jab", "Jab", Path.STRAIGHT, true, false, From.FRONT, false, 0.08f, 0.25f, 2, 0.2f, 0, 1, 0, false, false);
+            Move jab = new Move("basic:jab", "Jab", Path.STRAIGHT, true, false, From.FRONT, false, 0.08f, 0.25f, 2, 0.2f, 0, 1, 0, false, false, Role.OPENER);
             styles.add(new Style("basic", "Basic", "", 0xD8403E, new Move[] {jab}, new int[][] {{0, -1, -1, -1}, {0, -1, -1, -1}, {-1, -1, -1, -1}, {-1, -1, -1, -1}, {-1, -1, -1, -1}}));
         }
         STYLES = styles.toArray(new Style[0]);
@@ -158,7 +171,8 @@ public final class Fighting {
                 m.get("contact").getAsFloat(), m.get("length").getAsFloat(), m.get("damage").getAsFloat(), m.get("push").getAsFloat(),
                 m.has("lift") ? m.get("lift").getAsFloat() : 0,
                 m.has("hits") ? m.get("hits").getAsInt() : 1, m.has("interval") ? m.get("interval").getAsFloat() : 0,
-                m.has("alternate") && m.get("alternate").getAsBoolean(), m.has("knockdown") && m.get("knockdown").getAsBoolean()));
+                m.has("alternate") && m.get("alternate").getAsBoolean(), m.has("knockdown") && m.get("knockdown").getAsBoolean(),
+                Role.valueOf((m.has("role") ? m.get("role").getAsString() : "link").toUpperCase(java.util.Locale.ROOT))));
         }
         Style partial = new Style(sid, o.get("name").getAsString(), o.has("blurb") ? o.get("blurb").getAsString() : "",
             o.has("color") ? Integer.parseInt(o.get("color").getAsString().replace("#", ""), 16) : 0xD8403E, pool.toArray(new Move[0]), null);
@@ -264,7 +278,8 @@ public final class Fighting {
             double rx = -Math.cos(Math.toRadians(victim.getYaw())), rz = -Math.sin(Math.toRadians(victim.getYaw()));
             int side = to.x * rx + to.z * rz >= 0 ? 1 : -1;
             // Raised right as it arrives, facing it: a perfect block.
-            if (front && guardAge(victim) <= PERFECT) {
+            boolean perfect = front && guardAge(victim) <= PERFECT && (!(victim instanceof Dummy) || w.random.nextFloat() < 0.3f);
+            if (perfect) {
                 parry(victim, by, striking);
                 return false;
             }
@@ -297,7 +312,7 @@ public final class Fighting {
             // Caught the foot: thrown back the way it came, off their feet.
             Vec3d away = by.getPos().subtract(victim.getPos()).multiply(1, 0, 1);
             away = away.lengthSquared() < 1e-4 ? Vec3d.fromPolar(0, victim.getYaw()) : away.normalize();
-            knockdown(by, away.multiply(0.9).add(0, 0.45, 0));
+            knockdown(by, away.multiply(0.6).add(0, 0.32, 0));
         } else stagger(by, 12);
     }
 
@@ -373,7 +388,23 @@ public final class Fighting {
                 }
             }
         }
-        if (e instanceof Dummy d) d.anticipate(p, m, Math.round(m.contact() * 20));
+        if (e instanceof Dummy d) d.anticipate(p, m, Math.round(m.contact() * 20), (packed & 1 << 8) != 0);
+    }
+
+    /**
+     * A player's game saw a knocked-down dummy's body come to rest here (packed offset from where the
+     * dummy is): it gets up there, not back where it was hit.
+     */
+    static void dummyRest(ServerPlayerEntity p, int entity, int packed) {
+        if (!(p.getWorld().getEntityById(entity) instanceof Dummy d) || d.squaredDistanceTo(p) > 32 * 32) return;
+        double dx = ((packed >> 20) << 20 >> 20) / 100.0, dz = (((packed >> 8) & 0xFFF) << 20 >> 20) / 100.0, dy = ((byte) (packed & 0xFF)) / 20.0;
+        d.settleAt(d.getPos().add(dx, dy, dz));
+    }
+
+    public static int packOffset(double dx, double dy, double dz) {
+        int x = MathHelper.clamp((int) Math.round(dx * 100), -2047, 2047) & 0xFFF, z = MathHelper.clamp((int) Math.round(dz * 100), -2047, 2047) & 0xFFF;
+        int y = MathHelper.clamp((int) Math.round(dy * 20), -127, 127) & 0xFF;
+        return x << 20 | z << 8 | y;
     }
 
     /**
@@ -424,11 +455,12 @@ public final class Fighting {
             breaking = false;
             striking = null;
         }
-        if (!hit) return;
+        // A creative-mode player takes no damage, but still feels the hit (unless it was blocked).
+        if (!hit && !(t instanceof net.minecraft.entity.player.PlayerEntity pl && pl.isCreative() && !guarding(t))) return;
         float shove = m.push() * (m.heavy() ? 0.6f + 0.6f * power : 1);
         boolean down = m.knockdown() && (!m.heavy() || power >= 0.9f);
         if (down) {
-            knockdown(t, look.multiply(shove * 1.1).add(0, 0.25 + m.lift(), 0));
+            knockdown(t, look.multiply(shove * 0.8).add(0, 0.2 + m.lift() * 0.75, 0));
         } else {
             t.takeKnockback(shove, -look.x, -look.z);
             if (m.lift() > 0) t.addVelocity(0, m.lift() * (m.heavy() ? 0.6f + 0.6f * power : 1), 0);

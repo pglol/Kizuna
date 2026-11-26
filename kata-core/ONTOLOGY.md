@@ -213,9 +213,10 @@ moves the body somewhere the physics wouldn't.
     - K: the deck.
 32. **Stance is body orientation.** Top stances have the chest to them, turned about 30°; back stances have the back turned, about 145°. The diamond at your feet shows the current one.
 33. **Stance changes only by intent:** a deliberate mouse drag while locked on. A spinning back move also turns you round to the top stance on the same side.
-34. **Chains and combos.** Quick clicks run the row's light chain. A click during a strike queues the next one, though never across ground and air. A combo move lands several hits, each hit landing and pausing on its own.
+34. **Chains flow by role.** Every light is an opener (the fastest, 70–85 ms to contact), a link (100–140 ms) or a finisher (140–160 ms, harder). Slot 1 takes openers, slot 2 openers or links, slot 3 links or finishers, so chains always build from fast to heavy.
+34a. **Chains and combos.** Quick clicks run the row's light chain. A click during a strike queues the next one, though never across ground and air. A combo move lands several hits, each hit landing and pausing on its own.
 35. **Light vs heavy.** Lights are fast. A heavy charges for up to 0.8 s, giving 0.5–1× damage and more knockback. A full charge breaks guard. Getting hit while winding up cancels the heavy.
-36. **Air attacks.** Off the ground, only the AIR row's moves come out: superman punch, flying knee, jumping roundhouse, dropkick. Each carries its own lunge. Ground moves can't fire in the air, and air moves can't fire on the ground.
+36. **Air attacks.** Off the ground, only the AIR row's moves come out: superman punch, flying knee, jumping roundhouse, dropkick. You get one per jump unless it lands; a landed air strike lets the air chain continue. Each lunge sets your flying speed (superman 0.26, dropkick 0.3, knee 0.22 blocks/tick) rather than adding to it. Ground moves can't fire in the air, and air moves can't fire on the ground.
 37. **Strikes have mass.**
     - The fist or foot follows a real path, solved with IK:
       - punches: straight, hooking, uppercut or overhand
@@ -234,13 +235,17 @@ moves the body somewhere the physics wouldn't.
 40. **Perfect block (parry).** Guard raised within 3 ticks (0.15 s) of a hit arriving, facing it:
     - a punch is turned aside: the attacker staggers for 0.6 s, their chain broken, can't act
     - a kick is caught: you grab the foot and throw them off their feet
-41. **Knockdowns.** A knockdown move (a full heavy, a push kick, a side kick, a dropkick and so on) puts the target into the ragdoll with the hit's velocity, launch included.
+41. **Knockdowns.** A knockdown move (a full heavy, a push kick, a side kick, a dropkick and so on) puts the target into the ragdoll with 80 % of the hit's push and 75 % of its lift. A caught kick throws at 0.6 forward and 0.32 up. A hit while down sends the body flying again.
+41a. **Spins turn smoothly.** A spinning strike turns the long way round, its side leading, with an ease-in-out arriving exactly at contact (0.26–0.32 s), so the whole turn is visible.
 42. **Footwork.** Locked on, a top stance walks in 15 % faster and backs off 15 % slower; a back stance is the reverse. Guarding ×0.75, winding up ×0.8, staggered ×0.5.
 43. **Training dummy.**
     - It stands at ease at its spot until hit.
     - When hit, it chases whoever hit it and keeps to fighting distance.
-    - It reads wind-ups and tries to raise its guard with human reaction time: it reads about 65 % of them, after 100–400 ms, so it's sometimes late and sometimes parries.
-    - It throws jabs, straights, one-twos and kicks, which you can block, parry or catch.
+    - It reads wind-ups and tries to raise its guard with human reaction time: it reads about 65 % of them, after 100–400 ms, so it's sometimes late. Of its well-timed blocks, about 30 % are parries.
+    - It meets the strike on the side it comes from: that arm out to take a hook or spin, a raised knee to check a roundhouse or low kick, and a high guard for straights.
+    - With no path to you (you're up on something), it heads straight for you and hops 1-block obstacles.
+    - Knocked down, it gets up where its body came to rest; a player's game reports that spot.
+    - It throws jabs, straights, one-twos and kicks, which you can block, parry or catch. They shove a creative-mode player even though they do no damage.
     - It staggers and gets knocked down into a real ragdoll.
     - After 10 s left alone, or with the target 20+ blocks away, it walks home and settles. It never goes down for good.
 44. **Taijutsu move tree.**

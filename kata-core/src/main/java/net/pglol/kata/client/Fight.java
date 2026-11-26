@@ -62,6 +62,8 @@ public final class Fight {
     /** Where the striking fist or foot is in the world, this frame and last (what it runs into on the way). */
     private static Vec3d limbNow, limbPrev;
     private static Fighting.Part lastPart = Fighting.Part.TORSO;
+    /** One air attack per jump, unless it lands (then the air chain can carry on). */
+    private static boolean airUsed, airLanded;
 
     // ---- everyone else (from the server) ----
     private record Act(Move move, int stance, float power, long start) { }
@@ -72,6 +74,8 @@ public final class Fight {
     /** The turn each body is showing (eases to its stance's), and which way a spin goes (+1 right, -1 left). */
     private static final Map<Integer, Float> TURN = new HashMap<>();
     private static final Map<Integer, Integer> SPIN = new HashMap<>();
+    /** Where a spin started from (degrees), so it turns smoothly all the way round. */
+    private static final Map<Integer, Float> SPIN_FROM = new HashMap<>();
 
     public static boolean locked() {
         return target >= 0;
@@ -145,6 +149,7 @@ public final class Fight {
     static void frame(MinecraftClient mc, float td, float dt) {
         ClientPlayerEntity p = mc.player;
         if (p == null) return;
+        if (!airborne(p)) airUsed = airLanded = false;
         // The left button: released quickly, a light; held, a heavy winding up until it's let go.
         if (pressing) {
             boolean held = mc.options.attackKey.isPressed();
@@ -178,6 +183,7 @@ public final class Fight {
                     int packed = Fighting.id(cur) | (right ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9) | (lastPart.ordinal() << 16);
                     send(KataNet.STRIKE, packed, hit);
                     nextHit++;
+                    if (hit >= 0 && cur.from() == Fighting.From.AIR) airLanded = true;
                     // It lands: the strike holds still for a moment (the impact), longer for a heavy.
                     if (hit >= 0) curStart += (long) ((cur.heavy() ? 0.09 : 0.05) * 1e9);
                     // A rising strike lifts you with it.
@@ -240,6 +246,11 @@ public final class Fight {
         if (m == null || staggered()) return;
         // In the air only air moves; on the ground none of them.
         if ((m.from() == Fighting.From.AIR) != airborne(p)) return;
+        if (m.from() == Fighting.From.AIR) {
+            if (airUsed && !airLanded) return; // one per jump, unless the last one landed
+            airUsed = true;
+            airLanded = false;
+        }
         cur = m;
         curStance = stance;
         curPower = m.heavy() ? Math.max(0.3f, power) : 1;
@@ -255,18 +266,22 @@ public final class Fight {
         }
         // Anyone it's aimed at sees it coming.
         Entity t = targetEntity(MinecraftClient.getInstance());
-        send(KataNet.WINDUP, Fighting.id(m), t != null ? t.getId() : -1);
+        send(KataNet.WINDUP, Fighting.id(m) | (right ? 1 << 8 : 0), t != null ? t.getId() : -1);
         // The body behind it: a step in on the ground; in the air, the lunge the move flies on.
         Vec3d f = Vec3d.fromPolar(0, p.getYaw());
         if (m.from() == Fighting.From.AIR) {
+            // The lunge sets how fast you fly in (it never stacks on what you already have).
             double fwd = switch (m.path()) {
-                case SUPERMAN -> 0.38;
-                case DROPKICK -> 0.42;
-                case KNEE -> 0.3;
-                default -> 0.12;
+                case SUPERMAN -> 0.26;
+                case DROPKICK -> 0.3;
+                case KNEE -> 0.22;
+                default -> 0.1;
             };
-            double up = m.path() == Path.KNEE ? 0.14 : m.path() == Path.SUPERMAN ? 0.08 : 0.04;
-            p.addVelocity(f.x * fwd, up, f.z * fwd);
+            double up = m.path() == Path.KNEE ? 0.08 : m.path() == Path.SUPERMAN ? 0.04 : 0;
+            Vec3d v = p.getVelocity();
+            double along = v.x * f.x + v.z * f.z;
+            double add = Math.max(0, fwd - along);
+            p.setVelocity(v.x + f.x * add, Math.max(v.y, up), v.z + f.z * add);
         } else if (p.isOnGround() && !m.leg()) {
             double step = m.heavy() ? 0.06 + 0.1 * curPower : 0.035;
             p.addVelocity(f.x * step, 0, f.z * step);
@@ -468,10 +483,30 @@ public final class Fight {
         boolean busy = mine(p) ? cur != null : MOVES.containsKey(p.getId()) && secs(MOVES.get(p.getId()).start) < MOVES.get(p.getId()).move.length();
         int spin = SPIN.getOrDefault(p.getId(), 0);
         if (busy && spin != 0) {
-            while (spin > 0 && want < c) want += 360;
-            while (spin < 0 && want > c) want -= 360;
+            // A spinning strike: a full, smooth turn the long way round (its side leading), arriving
+            // exactly as it lands, not a snap.
+            float from = SPIN_FROM.computeIfAbsent(p.getId(), k -> TURN.getOrDefault(p.getId(), 0f));
+            float to = want;
+            while (spin > 0 && to < from + 60) to += 360;
+            while (spin < 0 && to > from - 60) to -= 360;
+            Move m;
+            float s;
+            if (mine(p)) {
+                m = cur;
+                s = cur != null ? secs(curStart) : 0;
+            } else {
+                Act a = MOVES.get(p.getId());
+                m = a != null ? a.move : null;
+                s = a != null ? secs(a.start) : 0;
+            }
+            float prog = m == null ? 1 : MathHelper.clamp(s / m.contact(), 0, 1);
+            float e = prog < 0.5f ? 4 * prog * prog * prog : 1 - (float) Math.pow(-2 * prog + 2, 3) / 2;
+            c = from + (to - from) * e;
+            TURN.put(p.getId(), c);
+            return c;
         } else {
             SPIN.remove(p.getId());
+            SPIN_FROM.remove(p.getId());
             c = want + MathHelper.wrapDegrees(c - want); // done spinning: the same turn, without the extra lap
         }
         float k = 1 - (float) Math.exp(-dt * (busy ? 18 : 9));

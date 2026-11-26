@@ -1251,7 +1251,7 @@ public final class Parkour {
                 // It goes into the body, which goes flying again.
                 Vec3d hitV = p.getVelocity();
                 if (r != null && hitV.horizontalLengthSquared() > 0.02) {
-                    r.impulse(new Vec3d(hitV.x * 1.4, Math.max(hitV.y, 0) + 0.15, hitV.z * 1.4));
+                    r.impulse(new Vec3d(hitV.x, Math.max(hitV.y, 0) + 0.1, hitV.z));
                     stoodUp = false;
                     limpHang = null;
                 }

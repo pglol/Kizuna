@@ -40,6 +40,8 @@ public class Dummy extends PathAwareEntity {
     private static final TrackedData<Integer> STAGGER = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Integer> REACT_AT = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Integer> REACT = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
+    /** How it's blocking: 0 a plain high guard, 1 meeting it with the right arm, 2 the left arm, 3 a knee checking a kick. */
+    private static final TrackedData<Integer> BLOCK = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
     /** Counts every time it's knocked about while down (the client puts each one into its ragdoll). */
     private static final TrackedData<Integer> KNOCKS = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.INTEGER);
 
@@ -75,6 +77,7 @@ public class Dummy extends PathAwareEntity {
         b.add(REACT_AT, -999);
         b.add(REACT, 0);
         b.add(KNOCKS, 0);
+        b.add(BLOCK, 0);
     }
 
     @Override
@@ -106,6 +109,10 @@ public class Dummy extends PathAwareEntity {
 
     public int staggered() {
         return dataTracker.get(STAGGER);
+    }
+
+    public int blockKind() {
+        return dataTracker.get(BLOCK);
     }
 
     public int knocks() {
@@ -152,12 +159,24 @@ public class Dummy extends PathAwareEntity {
     }
 
     /** A strike is coming (a player's wind-up): try to get the guard up in time, like a person would. */
-    void anticipate(LivingEntity by, Fighting.Move m, int contactTicks) {
+    void anticipate(LivingEntity by, Fighting.Move m, int contactTicks, boolean rightLimb) {
         provoke(by);
         if (down() > 0 || staggered() > 0 || move() >= 0) return;
         if (random.nextFloat() > 0.65f) return; // didn't read it
         int delay = 2 + random.nextInt(7); // 100-400 ms to react
         raiseAt = age + Math.max(1, delay);
+        // Meet it where it's coming: a kick is checked with the knee; a hand strike with the arm on that
+        // side (their right comes in on its left).
+        boolean lowKick = m.leg() && m.path() != Fighting.Path.FRONT_KICK && m.path() != Fighting.Path.SIDE_KICK && m.path() != Fighting.Path.BACK_KICK && m.path() != Fighting.Path.DROPKICK;
+        dataTracker.set(BLOCK, lowKick ? 3 : m.path() == Fighting.Path.STRAIGHT || m.path() == Fighting.Path.PALM ? 0 : rightLimb ? 2 : 1);
+    }
+
+    /** Where its knocked-down body came to rest (seen on a player's screen): it gets up there. */
+    void settleAt(Vec3d at) {
+        if (getPos().squaredDistanceTo(at) > 12 * 12) return;
+        if (!getWorld().isSpaceEmpty(this, getBoundingBox().offset(at.subtract(getPos())))) return;
+        refreshPositionAndAngles(at.x, at.y, at.z, getYaw(), getPitch());
+        getNavigation().stop();
     }
 
     void blocked(int side) {
@@ -254,6 +273,12 @@ public class Dummy extends PathAwareEntity {
         // Keep to fighting distance: close in, but not chest to chest.
         if (d > 2.4) {
             if (age % 5 == 0) getNavigation().startMovingTo(foe, d > 5 ? 1.15 : 0.9);
+            // No path (they're up on something, or round an edge): head straight for them, hopping
+            // over what's in the way.
+            if (getNavigation().isIdle()) {
+                getMoveControl().moveTo(foe.getX(), foe.getY(), foe.getZ(), d > 5 ? 1.15 : 0.9);
+                if (horizontalCollision && isOnGround()) getJumpControl().setActive();
+            }
         } else {
             getNavigation().stop();
             if (d < 1.3) {
