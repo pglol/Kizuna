@@ -72,7 +72,7 @@ public final class Fight {
     private static long hangUntil;
     private static int parryKind, lastHurt;
     /** Where the striking fist or foot is in the world, this frame and last (what it runs into on the way). */
-    private static Vec3d limbNow, limbPrev;
+    private static Vec3d limbNow, limbPrev, limbMid;
     private static Fighting.Part lastPart = Fighting.Part.TORSO;
     /** One air attack per jump, unless it lands (then the air chain can carry on). */
     private static boolean airUsed, airLanded;
@@ -439,15 +439,24 @@ public final class Fight {
             if (nextHit < cur.hits()) {
                 float c = cur.contactOf(nextHit);
                 int early = -1;
-                if (s >= c - cur.contact() * (cur.turns() ? 0.75f : 0.6f) && limbPrev != null && limbNow != null && limbPrev.squaredDistanceTo(limbNow) > 1e-6) {
-                    Hitbox.Contact touch = Hitbox.sweep(nearby(p), td, limbPrev, limbNow, cur.leg() ? 0.13 : 0.1); // a fist or shin's thickness
+                // Touching anyone, from early in the swing through the beat it holds at full extension:
+                // the fist (or foot) along its path, and the whole forearm (or shin) as it is now.
+                boolean drawn = limbNow != null;
+                float late = c + (cur.heavy() ? 0.12f : 0.08f);
+                if (drawn && s >= c - cur.contact() * 0.85f && s <= late) {
+                    var others = nearby(p);
+                    double r = cur.leg() ? 0.13 : 0.1; // a fist or shin's thickness
+                    Hitbox.Contact touch = limbPrev != null && limbPrev.squaredDistanceTo(limbNow) > 1e-6 ? Hitbox.sweep(others, td, limbPrev, limbNow, r) : null;
+                    if (touch == null && limbMid != null) touch = Hitbox.sweep(others, td, limbMid, limbNow, r);
                     if (touch != null) {
                         lastPart = touch.hit().part();
                         early = touch.entity().getId();
                     }
                 }
-                if (early >= 0 || s >= c) {
-                    int hit = early >= 0 ? early : struck(mc, p);
+                // Drawn (third person): it lands on a touch, or misses once the extension is over.
+                // First person: at contact, along its line.
+                if (early >= 0 || (drawn ? s > late : s >= c)) {
+                    int hit = early >= 0 ? early : drawn ? -1 : struck(mc, p);
                     boolean right = Fighting.rightLimb(cur, curStance, nextHit);
                     int packed = Fighting.id(cur) | (right ? 1 << 8 : 0) | (Math.round(curPower * 100) << 9) | (lastPart.ordinal() << 16);
                     send(KataNet.STRIKE, packed, hit);
@@ -548,7 +557,7 @@ public final class Fight {
         curPower = m.heavy() ? Math.max(0.3f, power) : 1;
         curStart = System.nanoTime();
         nextHit = 0;
-        limbNow = limbPrev = null;
+        limbNow = limbPrev = limbMid = null;
         if (m.heavy()) chain = 0;
         boolean right = Fighting.rightLimb(m, stance, 0);
         // A spinning strike turns you as you throw it, its side leading the turn.
@@ -627,7 +636,7 @@ public final class Fight {
             Vec3d to = e.getPos().subtract(p.getPos()).multiply(1, 0, 1);
             double d = to.length();
             if (d > bestD || d < 1e-3) continue;
-            if (to.dotProduct(look) / d < 0.55) continue;
+            if (to.dotProduct(look) / d < 0.15) continue; // in front or out to the side, not behind
             if (Math.abs(e.getY() - p.getY()) > 2.2) continue;
             best = e;
             bestD = d;
@@ -1285,7 +1294,9 @@ public final class Fight {
         Animator.reach(out, arm, fore, shoulder, fist, frame, 1, pole);
         if (mine(p) && cur != null) {
             limbPrev = limbNow;
-            limbNow = Ragdoll.toWorld(Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH], pos, bodyYaw);
+            Vector3f[] jt = Ragdoll.joints(out);
+            limbNow = Ragdoll.toWorld(jt[right ? Ragdoll.RH : Ragdoll.LH], pos, bodyYaw);
+            limbMid = Ragdoll.toWorld(jt[right ? Ragdoll.RE : Ragdoll.LE], pos, bodyYaw); // the elbow: the forearm hits too
         }
     }
 
@@ -1384,6 +1395,7 @@ public final class Fight {
             limbPrev = limbNow;
             Vector3f[] j = Ragdoll.joints(out);
             limbNow = Ragdoll.toWorld(m.path() == Path.KNEE ? j[right ? Ragdoll.RK : Ragdoll.LK] : j[right ? Ragdoll.RF : Ragdoll.LF], pos, bodyYaw);
+            limbMid = Ragdoll.toWorld(m.path() == Path.KNEE ? j[right ? Ragdoll.RHIP : Ragdoll.LHIP] : j[right ? Ragdoll.RK : Ragdoll.LK], pos, bodyYaw); // the shin (the thigh for a knee)
         }
     }
 

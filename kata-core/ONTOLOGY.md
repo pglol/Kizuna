@@ -451,3 +451,4 @@ moves the body somewhere the physics wouldn't.
 
 ## Knockback
 - Ordinary hits push a little further along the ground (0.42 x push), knockdowns throw a little further (0.5 x push, at most 0.28 blocks a tick across).
+- (Revised) A strike touches from early in the swing through the beat it holds at full extension: the fist or foot along its path and the whole forearm or shin as it is. Whoever it touches, in front or at your side, is hit. The soft target takes anyone in front or out to the side (not behind).
