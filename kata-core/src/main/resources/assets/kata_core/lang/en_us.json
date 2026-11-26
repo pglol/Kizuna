@@ -3,6 +3,7 @@
   "key.kata_core.pose_editor": "Pose editor (test)",
   "key.kata_core.lock_on": "Lock on",
   "key.kata_core.dodge": "Dodge",
+  "key.kata_core.shoulder": "Swap camera shoulder",
   "entity.kata_core.dummy": "Training dummy",
   "key.kata_core.deck": "Combat deck"
 }

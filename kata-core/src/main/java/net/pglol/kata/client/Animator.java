@@ -84,6 +84,8 @@ public final class Animator {
         boolean wasHang;
         int lastHurt;
         boolean ragdolled;
+        /** Where the body faces while standing still (the head looks around on its own). */
+        float stillFace = Float.NaN;
         Vec3d carried; // where someone else's limp body was carried to last frame
         // Hands to a wall right in front: how much, and how far off it is.
         float wallW;
@@ -223,7 +225,16 @@ public final class Animator {
         if (want.gait) {
             float body = MathHelper.lerpAngleDegrees(td, p.prevBodyYaw, p.bodyYaw);
             float face = MathHelper.lerpAngleDegrees(td, p.prevHeadYaw, p.headYaw);
-            turn = MathHelper.wrapDegrees(face - body);
+            // Standing still and not fighting, looking around turns the head, not the body: the body keeps
+            // its facing until the head is turned past what a neck allows, then it's drawn round after it.
+            // Moving or fighting, the body faces where you look.
+            float mv = (float) Math.sqrt(s.fwd * s.fwd + s.side * s.side);
+            if (Float.isNaN(s.stillFace) || mv > 0.4f || Fight.engagedOf(p) || !p.isOnGround()) s.stillFace = face;
+            else {
+                float off = MathHelper.wrapDegrees(face - s.stillFace);
+                if (Math.abs(off) > 75) s.stillFace += off - Math.signum(off) * 75;
+            }
+            turn = MathHelper.wrapDegrees(s.stillFace - body);
         }
         Pose out = sh.copy();
         out.set(Bone.ROOT, Pose.YAW, sh.get(Bone.ROOT, Pose.YAW) + turn + Fight.bodyTurn(p, dt));

@@ -418,3 +418,16 @@ moves the body somewhere the physics wouldn't.
 
 ## Frame export (for fixing animations)
 - In the deck, EXPORT FRAMES under the preview steps the selected move through 12 frozen frames: a labelled contact sheet PNG and the exact pose of each frame as JSON, in screenshots/kata/. Upload them to kata-core/frames/ on GitHub for review.
+
+## Movement and the server
+- In the air and for half a second after landing, the server doesn't apply its "moved too quickly" check to you (as for ODM flight in the AoT mod): no snapping back on fast moves or when crouching into a landing.
+
+## Juggles carry them in front
+- An air hit carries them to just in front of the attacker (1.5 blocks along their look) at the attacker's height, a touch above, rising; the attacker rises with them, trailing them up the air.
+
+## Camera
+- Third person is the over-the-shoulder camera (Minecraft's own is replaced; the front view stays): off one shoulder, on a critically damped spring, trailing your speed, pulling in off walls, looking where you aim. It also comes in when you lock on. Swap shoulders: Caps Lock.
+- Settings (Camera, at the top left of the pause menu and in the deck): third person on or off, shoulder view on lock-on, distance, shoulder offset, height, smoothing, speed trail. Saved in config/kizuna/kata_camera.json.
+
+## Standing still
+- Standing still and not fighting, looking around turns the head, not the body; past about 75 degrees the body is drawn round after it. Moving or fighting, the body faces where you look.

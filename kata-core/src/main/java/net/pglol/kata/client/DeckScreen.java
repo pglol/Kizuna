@@ -49,7 +49,7 @@ public class DeckScreen extends Screen {
     private net.minecraft.client.texture.NativeImage sheet;
     private final StringBuilder capJson = new StringBuilder();
     private Move capMove;
-    private static final int K_EXPORT = 5;
+    private static final int K_EXPORT = 5, K_CAMERA = 6;
 
     public DeckScreen() {
         super(Text.literal("Combat deck"));
@@ -97,7 +97,10 @@ public class DeckScreen extends Screen {
             boxes.add(new int[] {x0, sy, sw, 16, K_STYLE, indexOf(s)});
             sy += 17;
         }
-        if (Deck.op()) Ui.text(c, textRenderer, "OPERATOR: ALL STYLES", x0 + 10, y0 + H - 28, 0.4f, PAPER_FAINT);
+        if (Deck.op()) Ui.text(c, textRenderer, "OPERATOR: ALL STYLES", x0 + 10, y0 + H - 27, 0.4f, PAPER_FAINT);
+        boolean overCam = in(mx, my, x0 + 6, y0 + H - 42, sw - 12, 12);
+        Ui.text(c, textRenderer, "CAMERA", x0 + 10, y0 + H - 39, 0.5f, overCam ? PAPER : PAPER_FAINT);
+        boxes.add(new int[] {x0 + 6, y0 + H - 42, sw - 12, 12, K_CAMERA, 0});
         boolean overReset = in(mx, my, x0 + 6, y0 + H - 18, sw - 12, 12);
         Ui.text(c, textRenderer, "RESET DECK", x0 + 10, y0 + H - 15, 0.5f, overReset ? PAPER : PAPER_FAINT);
         boxes.add(new int[] {x0 + 6, y0 + H - 18, sw - 12, 12, K_RESET, 0});
@@ -338,6 +341,9 @@ public class DeckScreen extends Screen {
                 } else dragId = b[5];
             }
             case K_RESET -> Deck.reset();
+            case K_CAMERA -> {
+                if (client != null) client.setScreen(new KataCamScreen(this));
+            }
             case K_EXPORT -> {
                 if (selMove != null && capFrame < 0) {
                     capMove = selMove;

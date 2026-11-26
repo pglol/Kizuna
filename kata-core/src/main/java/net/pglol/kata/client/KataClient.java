@@ -14,7 +14,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class KataClient implements ClientModInitializer {
     private static KeyBinding editorKey;
-    public static KeyBinding lockKey, deckKey, dodgeKey;
+    public static KeyBinding lockKey, deckKey, dodgeKey, shoulderKey;
     private static long lastFrame;
     private static boolean openEditor;
 
@@ -27,6 +27,13 @@ public final class KataClient implements ClientModInitializer {
         })));
         deckKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.deck", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_K, "category.kata_core"));
         lockKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.lock_on", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.kata_core"));
+        shoulderKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.shoulder", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_CAPS_LOCK, "category.kata_core"));
+        // A Camera button at the top left of the pause menu.
+        net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
+            if (screen instanceof net.minecraft.client.gui.screen.GameMenuScreen)
+                net.fabricmc.fabric.api.client.screen.v1.Screens.getButtons(screen).add(net.minecraft.client.gui.widget.ButtonWidget.builder(
+                    net.minecraft.text.Text.literal("Camera"), b -> client.setScreen(new KataCamScreen(screen))).dimensions(6, 6, 60, 20).build());
+        });
         dodgeKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.kata_core.dodge", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, "category.kata_core"));
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(net.pglol.kata.KataNet.FightOf.ID,
             (payload, ctx) -> Fight.remote(payload.entity(), payload.kind(), payload.a()));
@@ -56,6 +63,7 @@ public final class KataClient implements ClientModInitializer {
         Move.tick(mc);
         Parkour.tick(mc);
         Fight.tick(mc);
+        KataCam.tick(mc);
         // Kata is played in third person, always (the body is the point).
         if (mc.player != null && mc.options.getPerspective() != Perspective.THIRD_PERSON_BACK) mc.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         while (editorKey.wasPressed()) if (mc.currentScreen == null) openEditor = true;

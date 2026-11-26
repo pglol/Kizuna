@@ -21,13 +21,15 @@
     "JumpMixin",
     "FightInputMixin",
     "LookMixin",
-    "GravityMixin"
+    "GravityMixin",
+    "CameraMixin"
   ],
   "injectors": {
     "defaultRequire": 1
   },
   "mixins": [
     "FlightMixin",
+    "AirMoveMixin",
     "FallMixin"
   ]
 }

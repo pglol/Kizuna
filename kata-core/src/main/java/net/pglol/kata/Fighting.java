@@ -459,8 +459,15 @@ public final class Fighting {
     static void juggle(LivingEntity by, LivingEntity t, Vec3d look) {
         Vec3d flat = new Vec3d(look.x, 0, look.z);
         if (flat.lengthSquared() > 1e-4) flat = flat.normalize();
-        double up = t.isOnGround() ? 0.5 : 0.2;
-        t.setVelocity(flat.x * 0.05, up, flat.z * 0.05);
+        // Carried to just in front of the attacker at their height (a touch above), so the attacker
+        // trails them up through the air rather than hitting someone hanging over their head.
+        Vec3d spot = by.getPos().add(flat.multiply(1.5)).add(0, 0.15, 0);
+        Vec3d to = spot.subtract(t.getPos());
+        double rise = t.isOnGround() ? 0.42 : 0.16;
+        Vec3d v = new Vec3d(to.x * 0.4, to.y * 0.4 + rise, to.z * 0.4);
+        double hl = Math.hypot(v.x, v.z);
+        if (hl > 0.5) v = new Vec3d(v.x * 0.5 / hl, v.y, v.z * 0.5 / hl);
+        t.setVelocity(v.x, MathHelper.clamp(v.y, -0.1, 0.55), v.z);
         t.velocityModified = true;
         hold(t, FLOAT_TICKS);
         t.fallDistance = 0;

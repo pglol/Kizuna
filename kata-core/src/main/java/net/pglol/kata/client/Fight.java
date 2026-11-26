@@ -768,6 +768,11 @@ public final class Fight {
                     hangUntil = System.nanoTime() + a * 50_000_000L;
                     HANGS.put(entity, hangUntil);
                     airLanded = true;
+                    // Rising with them: the string carries you both up together.
+                    if (mc.player != null && !mc.player.isOnGround()) {
+                        Vec3d v = mc.player.getVelocity();
+                        mc.player.setVelocity(v.x, Math.max(v.y, 0.16), v.z);
+                    }
                 }
                 case KataNet.CONCUSS -> {
                     CONCUSSED.put(entity, System.nanoTime() + a * 50_000_000L);
@@ -845,6 +850,10 @@ public final class Fight {
     private static boolean mine(PlayerEntity p) {
         MinecraftClient mc = MinecraftClient.getInstance();
         return mc.player != null && p.getId() == mc.player.getId();
+    }
+
+    public static boolean engagedOf(PlayerEntity p) {
+        return engaged(p);
     }
 
     /** Is this player fighting (guard up, a strike going, or squared up to someone)? */
