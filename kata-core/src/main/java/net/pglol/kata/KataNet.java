@@ -60,7 +60,7 @@ public final class KataNet {
         @Override public Id<? extends CustomPayload> getId() { return ID; }
     }
 
-    public static final int GUARD = 0, STRIKE = 1, STANCE = 2, GUARD_HIT = 3, GUARD_BROKEN = 4, WINDUP = 5, STAGGER = 6, PARRY = 7, KNOCKDOWN = 8, DUMMY_REST = 9, DUMMY_AT = 10, HIT = 11, BLOCKED = 12, DODGE = 13, POISE = 14, FLINCH = 15;
+    public static final int GUARD = 0, STRIKE = 1, STANCE = 2, GUARD_HIT = 3, GUARD_BROKEN = 4, WINDUP = 5, STAGGER = 6, PARRY = 7, KNOCKDOWN = 8, DUMMY_REST = 9, DUMMY_AT = 10, HIT = 11, BLOCKED = 12, DODGE = 13, POISE = 14, FLINCH = 15, PARRIED = 16, EVADED = 17;
 
     /** Act mode meaning "crouched to catch a landing" (for the server's fall damage; not shown). */
     public static final int BRACE = 31;

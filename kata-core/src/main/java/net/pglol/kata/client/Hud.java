@@ -16,6 +16,16 @@ public final class Hud {
     private Hud() {}
 
     private static float trail = -1, shown = -1, engage, letterbox;
+    /** A word that pops up under the crosshair for a moment (PARRY, EVADE...). */
+    private static String popText;
+    private static int popColor;
+    private static long popAt;
+
+    public static void pop(String text, int color) {
+        popText = text;
+        popColor = color;
+        popAt = System.nanoTime();
+    }
     private static long last;
 
     static void render(DrawContext c, float tickDelta) {
@@ -70,6 +80,16 @@ public final class Hud {
 
         tag(c, mc, h, dt);
         c.getMatrices().pop();
+        // The pop: in with a little punch, then fading up and away.
+        if (popText != null) {
+            float s = (now - popAt) / 1e9f;
+            if (s < 0.8f) {
+                float a = s < 0.6f ? 1 : 1 - (s - 0.6f) / 0.2f;
+                float sc = 1.25f - 0.25f * Math.min(1, s / 0.08f);
+                float tw = Ui.width(mc.textRenderer, popText, sc);
+                Ui.text(c, mc.textRenderer, popText, (w - tw) / 2f, h / 2f + 14 - s * 6, sc, Ui.alpha(popColor, a));
+            } else popText = null;
+        }
     }
 
     private static void track(DrawContext c, int x, int y, int w, int h) {

@@ -908,6 +908,15 @@ public final class Parkour {
     }
 
     /** Knocked off your feet by a hit (a full heavy, a big kick, a caught kick thrown back): limp, flying. */
+    private static boolean combatDown;
+
+    /** Was the fall that's starting a fight's knockdown? (Asked once, as the body goes limp.) */
+    static boolean takeCombatDown() {
+        boolean c = combatDown;
+        combatDown = false;
+        return c;
+    }
+
     public static void knockdown(ClientPlayerEntity p, Vec3d v) {
         if (p.getAbilities().flying || p.isSpectator() || p.hasVehicle()) return;
         if (mode == Mode.RAGDOLL) {
@@ -920,6 +929,7 @@ public final class Parkour {
         }
         airVel = v;
         p.setVelocity(v);
+        combatDown = true; // a fight's knockdown: up again quickly
         landRough = 1;
         stoodUp = false;
         stepIn = 0;

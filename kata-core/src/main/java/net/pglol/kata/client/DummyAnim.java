@@ -86,6 +86,7 @@ public final class DummyAnim {
         s.wasDown = d.down() > 0;
         if (fresh && !s.ragdoll) {
             s.ragdoll = true;
+            Ragdoll.nextCombat = true;
             Ragdoll.start(d, s.shown, by, d.getVelocity().multiply(20));
             s.knocks = d.knocks();
             s.reported = false;

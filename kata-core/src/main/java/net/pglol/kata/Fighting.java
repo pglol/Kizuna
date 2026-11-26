@@ -248,6 +248,12 @@ public final class Fighting {
     private static final Map<UUID, Integer> PARRY_SIDE = new HashMap<>(), DODGE_AT = new HashMap<>();
     /** Hit and not yet able to throw back (server tick it ends): the attacker's string carries on unless blocked or parried. */
     private static final Map<UUID, Integer> FLINCH_UNTIL = new HashMap<>();
+    /** The side the guard is held towards now (0 square, 1 left, 2 right); what kind of dodge or avoid. */
+    private static final Map<UUID, Integer> GUARD_SIDE = new HashMap<>(), DODGE_KIND = new HashMap<>();
+    /** The last new strike: its move and when (for the spacing between strikes). */
+    private static final Map<UUID, Integer> LAST_ID = new HashMap<>(), LAST_START = new HashMap<>();
+    /** Where the strike being dealt lands. */
+    private static Part strikingPart;
     /** A dodge's invulnerable start (ticks): strikes pass through. */
     public static final int DODGE_IFRAMES = 5;
     /** The limb of the strike being dealt (true right, null unknown): it comes in on the other side of them. */
@@ -282,7 +288,10 @@ public final class Fighting {
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((victim, source, amount) -> {
             if (chip) return true;
             // Dodging, in its first moments: the strike goes through nothing.
-            if (striking != null && dodging(victim)) return false;
+            if (striking != null && evades(victim, striking, strikingPart)) {
+                evaded(victim, by);
+                return false;
+            }
             if (!guarding(victim)) return true;
             Entity by = source.getAttacker();
             if (by == null || source.isIn(DamageTypeTags.BYPASSES_SHIELD)) return true;
@@ -318,8 +327,20 @@ public final class Fighting {
                     return true;
                 }
             }
-            // A block: from any side, paid for in stamina by how hard the hit was. Not enough left and
-            // the guard breaks: stunned, and the hit lands.
+            // The guard faces forward: from behind or well round the side, it lands.
+            Vec3d face = Vec3d.fromPolar(0, victim.getYaw());
+            if ((to.x * face.x + to.z * face.z) / len < 0.34) return true;
+            // Straight strikes meet any guard. Swinging ones (hooks, roundhouses, backfists, elbows,
+            // spins) come round it: a guard turned to that side stops them, one turned the other way
+            // doesn't, and a square guard takes half.
+            boolean halfIn = false;
+            if (striking != null && curved(striking) && victim instanceof ServerPlayerEntity) {
+                int gs = GUARD_SIDE.getOrDefault(victim.getUuid(), 0), want = side > 0 ? 2 : 1;
+                if (gs != 0 && gs != want) return true;
+                halfIn = gs == 0;
+            }
+            // A block, paid for in stamina by how hard the hit was. Not enough left and the guard
+            // breaks: stunned, and the hit lands.
             float cost = amount * 0.05f + (striking != null && striking.heavy() ? 0.15f : 0);
             float po = poise(victim);
             if (cost > po) {
@@ -335,6 +356,15 @@ public final class Fighting {
             if (victim instanceof ServerPlayerEntity vp) relayAround(vp, KataNet.BLOCKED, side > 0 ? 1 : 0); // everyone sees the block
             if (victim instanceof Dummy d) d.blocked(side);
             shove(victim, new Vec3d(-to.x / len, 0, -to.z / len), 0.05 + amount * 0.008); // the guard gives a little
+            if (halfIn) {
+                chip = true;
+                try {
+                    victim.timeUntilRegen = 0;
+                    victim.damage(source, amount * 0.5f);
+                } finally {
+                    chip = false;
+                }
+            }
             return false;
         });
     }
@@ -345,6 +375,14 @@ public final class Fighting {
         w.playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.ITEM_SHIELD_BLOCK, SoundCategory.PLAYERS, 1f, 1.7f);
         boolean kick = m != null && m.leg();
         tell(victim, KataNet.PARRY, kick ? 2 : 1);
+        tell(by, KataNet.PARRIED, kick ? 2 : 1);
+        // Seen and heard: a bright clash between them and a ringing clang.
+        if (w instanceof net.minecraft.server.world.ServerWorld sw) {
+            Vec3d mid = victim.getEyePos().add(by.getEyePos()).multiply(0.5).add(0, -0.3, 0);
+            sw.spawnParticles(net.minecraft.particle.ParticleTypes.ENCHANTED_HIT, mid.x, mid.y, mid.z, 18, 0.15, 0.15, 0.15, 0.4);
+            sw.spawnParticles(net.minecraft.particle.ParticleTypes.CRIT, mid.x, mid.y, mid.z, 10, 0.1, 0.1, 0.1, 0.3);
+        }
+        w.playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.PLAYERS, 0.35f, 1.9f);
         if (victim instanceof Dummy d) d.parried(kick);
         if (kick) {
             // Caught the foot: thrown back the way it came, off their feet.
@@ -371,8 +409,7 @@ public final class Fighting {
             POISE.clear();
             POISE_AT.clear();
         }
-        if (e instanceof ServerPlayerEntity p && ServerPlayNetworking.canSend(p, KataNet.FightOf.ID))
-            ServerPlayNetworking.send(p, new KataNet.FightOf(p.getId(), KataNet.POISE, Math.round(Math.max(0, v) * 100)));
+        relayAround(e, KataNet.POISE, Math.round(Math.max(0, v) * 100)); // they see it in your body (strain)
     }
 
     static void flinch(LivingEntity e, int ticks) {
@@ -385,6 +422,51 @@ public final class Fighting {
         }
     }
 
+    /** Strikes that swing round a guard rather than straight through it. */
+    static boolean curved(Move m) {
+        return m.spin() || switch (m.path()) {
+            case HOOK, ROUNDHOUSE, BACKFIST, ELBOW, LOW_KICK -> true;
+            default -> false;
+        };
+    }
+
+    /** Strikes that drive straight in (a slip to the side lets them by). */
+    static boolean thrust(Move m) {
+        return switch (m.path()) {
+            case STRAIGHT, PALM, SUPERMAN, FRONT_KICK, SIDE_KICK, BACK_KICK, KNEE, DROPKICK, OVERHAND -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Did a dodge or an avoid take them out of this strike? A step back (or a flip): a few invulnerable
+     * ticks from anything. A duck: under anything to the head. A slip to the side: past straight
+     * thrusts. A hop: over low kicks and anything at the legs. The avoids hold a little longer, but only
+     * against what they're for.
+     */
+    static boolean evades(Entity e, Move m, Part part) {
+        if (!(e instanceof ServerPlayerEntity p)) return false;
+        Integer at = DODGE_AT.get(p.getUuid());
+        if (at == null) return false;
+        int age = p.getServer().getTicks() - at, kind = DODGE_KIND.getOrDefault(p.getUuid(), 0);
+        if (kind == 0 || kind >= 16) return age <= DODGE_IFRAMES;
+        if (age > 8) return false;
+        return switch (kind) {
+            case 1 -> part == Part.HEAD || m.path() == Path.HOOK || m.path() == Path.BACKFIST || m.path() == Path.OVERHAND;
+            case 2, 3 -> thrust(m);
+            case 4 -> part == Part.LEG || m.path() == Path.LOW_KICK;
+            default -> false;
+        };
+    }
+
+    /** Got out of the way: the one who missed spends breath on air, the one who avoided gets some back. */
+    private static void evaded(LivingEntity victim, Entity by) {
+        setPoise(victim, Math.min(1, poise(victim) + 0.15f));
+        if (by != null) setPoise(by, Math.max(0, poise(by) - 0.15f));
+        tell(victim, KataNet.EVADED, 0);
+        victim.getWorld().playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_NODAMAGE, SoundCategory.PLAYERS, 0.7f, 1.4f);
+    }
+
     static boolean dodging(Entity e) {
         if (!(e instanceof ServerPlayerEntity p)) return false;
         Integer at = DODGE_AT.get(p.getUuid());
@@ -395,7 +477,9 @@ public final class Fighting {
     static void dodge(ServerPlayerEntity p, int dir) {
         DODGE_AT.put(p.getUuid(), p.getServer().getTicks());
         if (DODGE_AT.size() > 1024) DODGE_AT.clear();
-        relay(p, KataNet.DODGE, MathHelper.clamp(dir, 0, 3));
+        DODGE_KIND.put(p.getUuid(), MathHelper.clamp(dir, 0, 31));
+        if (DODGE_KIND.size() > 1024) DODGE_KIND.clear();
+        relay(p, KataNet.DODGE, MathHelper.clamp(dir, 0, 31));
     }
 
     private static void breakGuard(Entity e) {
@@ -423,6 +507,10 @@ public final class Fighting {
     }
 
     public static void knockdown(Entity e, Vec3d v) {
+        // Fighters, not cannonballs: never more than a few blocks a second across, nor much up.
+        double hl = Math.hypot(v.x, v.z);
+        if (hl > 0.22) v = new Vec3d(v.x * 0.22 / hl, v.y, v.z * 0.22 / hl);
+        v = new Vec3d(v.x, Math.min(v.y, 0.3), v.z);
         if (e instanceof ServerPlayerEntity p) tell(p, KataNet.KNOCKDOWN, packVelocity(v));
         else if (e instanceof Dummy d) d.knockdown(v);
         else {
@@ -455,6 +543,9 @@ public final class Fighting {
     static void guard(ServerPlayerEntity p, int packed) {
         boolean on = (packed & 1) != 0;
         if (on && !GUARD.getOrDefault(p.getUuid(), false)) PARRY_SIDE.put(p.getUuid(), (packed >> 1) & 3);
+        GUARD_SIDE.put(p.getUuid(), on ? (packed >> 1) & 3 : 0);
+        if (GUARD_SIDE.size() > 1024) GUARD_SIDE.clear();
+        if (on && GUARD.getOrDefault(p.getUuid(), false)) return; // already up: only which way it's turned changed
         if (PARRY_SIDE.size() > 1024) PARRY_SIDE.clear();
         guard(p, on);
     }
@@ -532,6 +623,18 @@ public final class Fighting {
         int now = p.getServer().getTicks();
         Integer last = LAST.get(p.getUuid());
         if (last != null && now - last < 2) return; // faster than any string allows
+        // A new strike only once the last has nearly run its course (later hits of the same move are fine).
+        Integer lastId = LAST_ID.get(p.getUuid()), lastStart = LAST_START.get(p.getUuid());
+        boolean sameMove = lastId != null && lastId == id && lastStart != null && now - lastStart < Math.round(m.length() * 20);
+        if (!sameMove) {
+            if (lastId != null && lastStart != null && lastId < MOVES.length && now - lastStart < Math.round(MOVES[lastId].length() * 20 * 0.75f)) return;
+            LAST_ID.put(p.getUuid(), id);
+            LAST_START.put(p.getUuid(), now);
+            if (LAST_ID.size() > 1024) {
+                LAST_ID.clear();
+                LAST_START.clear();
+            }
+        }
         LAST.put(p.getUuid(), now);
         if (LAST.size() > 1024) LAST.clear();
         // Still reeling from a hit (a little slack for lag): nothing thrown lands.
@@ -567,12 +670,14 @@ public final class Fighting {
         t.timeUntilRegen = 0; // strings land: no invulnerability gap between hits
         breaking = m.heavy() && power >= 0.98f;
         striking = m;
+        strikingPart = part;
         boolean hit;
         try {
             hit = t.damage(src, dmg);
         } finally {
             breaking = false;
             striking = null;
+            strikingPart = null;
         }
         // A creative-mode player takes no damage, but still feels the hit (unless it was blocked).
         if (!hit && !(t instanceof net.minecraft.entity.player.PlayerEntity pl && pl.isCreative() && !guarding(t))) return;

@@ -134,6 +134,8 @@ public final class Animator {
                 s.ragdolled = true;
                 s.carried = null;
                 // Someone else's body: it starts still and goes where they go (follow, below).
+                // A fight's knockdown gets up quickly; someone else's, if they were just hit.
+                Ragdoll.nextCombat = local ? Parkour.takeCombatDown() : Fight.hitRecently(p);
                 Ragdoll.start(p, s.out, by, local ? Parkour.impact(p) : Vec3d.ZERO);
             }
             Ragdoll r = Ragdoll.of(p);

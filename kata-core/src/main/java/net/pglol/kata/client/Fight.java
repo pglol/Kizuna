@@ -42,6 +42,8 @@ public final class Fight {
     static int target = -1;
     static int stance = Fighting.TR;
     static boolean guard;
+    /** Which way the guard is turned: 0 square, 1 left, 2 right. */
+    static int guardSide;
     private static boolean sentGuard;
     private static boolean pressing, charging;
     private static long pressAt, chargeAt;
@@ -57,7 +59,8 @@ public final class Fight {
     /** A blocked hit's jolt (seconds left) and the side it came from (+1 right, -1 left). */
     private static float jolt;
     private static int joltSide;
-    private static long brokenUntil, staggerUntil, parryAt, flinchUntil;
+    private static long brokenUntil, staggerUntil, parryAt, flinchUntil, readyAt;
+    private static boolean curLanded;
     private static int parryKind, lastHurt;
     /** Where the striking fist or foot is in the world, this frame and last (what it runs into on the way). */
     private static Vec3d limbNow, limbPrev;
@@ -133,26 +136,65 @@ public final class Fight {
         return dodgeAt != 0 && secs(dodgeAt) < DODGE_RECOVER;
     }
 
+    /**
+     * The dodge key with a direction. On the ground: back (or nothing) is a short step back, invulnerable
+     * for a moment; forward ducks under (anything at the head); left or right slips aside (past straight
+     * thrusts); with jump held, a hop (over low kicks). The avoids barely move your feet. In the air:
+     * a flip whichever way you're pressing (once a jump), invulnerable while it starts.
+     */
     private static void dodge(ClientPlayerEntity p) {
-        if (!p.isOnGround() || limp(p) || cur != null || charging || staggered() || recovering() || flinching() || p.getAbilities().flying) return;
+        if (limp(p) || cur != null || charging || staggered() || recovering() || flinching() || p.getAbilities().flying) return;
         if (net.pglol.kata.client.Move.winded() || net.pglol.kata.client.Move.stamina < DODGE_COST) return;
+        MinecraftClient mc = MinecraftClient.getInstance();
         float f = p.input.movementForward, sdw = p.input.movementSideways;
+        Vec3d fw = Vec3d.fromPolar(0, p.getYaw()), left = new Vec3d(fw.z, 0, -fw.x);
         int dir;
-        if (Math.abs(sdw) > 0.3f && Math.abs(sdw) >= Math.abs(f)) dir = sdw > 0 ? 2 : 3;
-        else dir = f > 0.3f ? 1 : 0;
-        Vec3d fw = Vec3d.fromPolar(0, p.getYaw()), right = new Vec3d(-fw.z, 0, fw.x);
-        Vec3d d = switch (dir) {
-            case 1 -> fw;
-            case 2 -> right.multiply(-1);
-            case 3 -> right;
-            default -> fw.multiply(-1);
-        };
-        p.setVelocity(d.x * DODGE_SPEED, p.getVelocity().y, d.z * DODGE_SPEED);
+        if (!p.isOnGround()) {
+            if (flipUsed) return;
+            flipUsed = true;
+            // Any way at all: the angle of what you're pressing, in sixteenths (none: a back flip).
+            double ang = Math.abs(f) + Math.abs(sdw) < 0.2f ? Math.PI : Math.atan2(sdw, f);
+            int idx = Math.floorMod((int) Math.round(ang / (Math.PI * 2) * 16), 16);
+            dir = 16 + idx;
+            Vec3d d = fw.multiply(Math.cos(idx * Math.PI / 8)).add(left.multiply(Math.sin(idx * Math.PI / 8)));
+            Vec3d v = p.getVelocity();
+            p.setVelocity(v.x * 0.6 + d.x * 0.16, Math.max(v.y, 0.26), v.z * 0.6 + d.z * 0.16);
+        } else {
+            if (mc.options.jumpKey.isPressed()) dir = 4;
+            else if (Math.abs(sdw) > 0.3f && Math.abs(sdw) >= Math.abs(f)) dir = sdw > 0 ? 2 : 3;
+            else dir = f > 0.3f ? 1 : 0;
+            dodgeDir = switch (dir) {
+                case 0 -> fw.multiply(-1);
+                case 2 -> left;
+                case 3 -> left.multiply(-1);
+                default -> Vec3d.ZERO;
+            };
+            dodgeSpeed = dir == 0 ? 1 : 0.4f; // a step back; the slips barely move
+            dodgeTick = 0;
+            if (dir == 4) p.setVelocity(p.getVelocity().x * 0.5, 0.34, p.getVelocity().z * 0.5);
+        }
         net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - DODGE_COST);
         dodgeAt = System.nanoTime();
         pressing = false;
         DODGES.put(p.getId(), new React(dir, dodgeAt));
         send(KataNet.DODGE, dir, 0);
+    }
+
+    /** The dodge's step, eased over a few ticks: quick out, settling (never a shove). */
+    private static void dodgeStep(ClientPlayerEntity p) {
+        if (dodgeDir == null || dodgeTick >= DODGE_PROFILE.length) return;
+        double sp = DODGE_PROFILE[dodgeTick++] * dodgeSpeed;
+        Vec3d v = p.getVelocity();
+        p.setVelocity(dodgeDir.x * sp + v.x * 0.2, v.y, dodgeDir.z * sp + v.z * 0.2);
+    }
+
+    /** Whoever this is mid-flip: how far round (0..1) and which way (sixteenths), else null. */
+    static float[] flip(LivingEntity e) {
+        React d = DODGES.get(e.getId());
+        if (d == null || d.packed < 16) return null;
+        float s = secs(d.at);
+        if (s > FLIP_TIME) return null;
+        return new float[] {s / FLIP_TIME, d.packed - 16};
     }
 
     private static boolean othersStaggered(PlayerEntity p) {
@@ -185,16 +227,19 @@ public final class Fight {
         boolean free = fists(p) && mc.currentScreen == null;
         // Dodge: a quick step out of the way, the way you're pressing (back if nothing). Strikes pass
         // through its first moments; then a short recovery when you can't guard or throw.
+        if (p.isOnGround()) flipUsed = false;
         while (KataClient.dodgeKey.wasPressed()) dodge(p);
+        dodgeStep(p);
         guard = free && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && !recovering() && System.nanoTime() > brokenUntil;
         if (guard && target < 0) target = pick(p, 8, 50); // raising a guard locks onto whoever's in front
-        if (guard != sentGuard) {
+        // Pressing left or right while guarding turns the guard to that side (it stops swinging strikes
+        // from there); raised while pressing one, it's a parry towards that side.
+        float sideIn = p.input.movementSideways;
+        int gs = !guard ? 0 : sideIn > 0.3f ? 1 : sideIn < -0.3f ? 2 : 0;
+        if (guard != sentGuard || gs != guardSide) {
             sentGuard = guard;
-            // Raised while pressing left or right: a parry towards that side (it must match the side the
-            // strike comes in on).
-            float sideIn = p.input.movementSideways;
-            int ps = sideIn > 0.3f ? 1 : sideIn < -0.3f ? 2 : 0;
-            send(KataNet.GUARD, guard ? 1 | ps << 1 : 0, 0);
+            guardSide = gs;
+            send(KataNet.GUARD, guard ? 1 | gs << 1 : 0, 0);
         }
         if (jolt > 0) jolt = Math.max(0, jolt - 0.05f);
         // Hit while winding up: the heavy is gone.
@@ -243,20 +288,26 @@ public final class Fight {
                     nextHit++;
                     if (hit >= 0 && cur.from() == Fighting.From.AIR) airLanded = true;
                     // It lands: the strike holds still for a moment (the impact), longer for a heavy.
-                    if (hit >= 0) curStart += (long) ((cur.heavy() ? 0.09 : 0.05) * 1e9);
+                    if (hit >= 0) {
+                        curStart += (long) ((cur.heavy() ? 0.09 : 0.05) * 1e9);
+                        curLanded = true;
+                    }
                     // A rising strike lifts you with it.
                     if (cur.path() == Path.UPPER && cur.heavy() && p.isOnGround()) p.addVelocity(0, 0.3, 0);
                 }
             }
             if (s >= cur.length()) {
                 stanceTo(Fighting.end(cur, curStance));
+                // A beat before the next: longer after a heavy, longer still after a miss.
+                readyAt = System.nanoTime() + (long) (((cur.heavy() ? 0.16 : 0.07) + (curLanded ? 0 : 0.1)) * 1e9);
                 cur = null;
                 lastEnd = System.nanoTime();
-                if (pendingLight) {
-                    pendingLight = false;
-                    light(p);
-                }
             }
+        }
+        // The next in the chain, pressed during the last, goes as soon as the beat between them is over.
+        if (cur == null && pendingLight && System.nanoTime() >= readyAt) {
+            pendingLight = false;
+            light(p);
         }
         // Locked on: the camera holds them.
         Entity t = targetEntity(mc);
@@ -297,6 +348,10 @@ public final class Fight {
             if (secs(curStart) > cur.contact() * 0.5f && (cur.from() == Fighting.From.AIR) == airborne(p)) pendingLight = true;
             return;
         }
+        if (System.nanoTime() < readyAt) {
+            pendingLight = true; // too soon: it goes on the beat
+            return;
+        }
         if (secs(lastEnd) > 0.55f) chain = 0;
         begin(p, Deck.pick(row(p), false, chain), 1);
         chain++;
@@ -312,7 +367,9 @@ public final class Fight {
             airUsed = true;
             airLanded = false;
         }
+        if (System.nanoTime() < readyAt) return;
         cur = m;
+        curLanded = false;
         curStance = stance;
         curPower = m.heavy() ? Math.max(0.3f, power) : 1;
         curStart = System.nanoTime();
@@ -458,8 +515,15 @@ public final class Fight {
     private static final Map<Integer, React> JOLTS = new HashMap<>(), PARRIES = new HashMap<>(), DODGES = new HashMap<>();
     private static long dodgeAt;
     /** A dodge: how fast it carries you (blocks a tick), what it costs, how long until you can act again. */
-    private static final float DODGE_SPEED = 0.82f, DODGE_COST = 0.2f, DODGE_RECOVER = 0.42f;
+    private static final float DODGE_COST = 0.16f, DODGE_RECOVER = 0.3f, FLIP_TIME = 0.5f;
+    private static final double[] DODGE_PROFILE = {0.24, 0.2, 0.13, 0.06};
+    private static Vec3d dodgeDir;
+    private static float dodgeSpeed;
+    private static int dodgeTick = 99;
+    private static boolean flipUsed;
     private static final Map<Integer, Long> STAGGERS = new HashMap<>();
+    /** How much guard stamina others have left (it shows: a guard near breaking strains). */
+    private static final Map<Integer, Float> POISES = new HashMap<>();
 
     static void remote(int entity, int kind, int a) {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -493,6 +557,7 @@ public final class Fight {
                 case KataNet.POISE -> net.pglol.kata.client.Move.stamina = Math.min(net.pglol.kata.client.Move.stamina, a / 100f); // blocking costs the same breath running does
                 case KataNet.GUARD_BROKEN -> {
                     jolt = 0.22f;
+                    Hud.pop("GUARD BROKEN", 0xFFFF5A4A);
                     brokenUntil = System.nanoTime() + 700_000_000L;
                 }
                 case KataNet.STAGGER -> {
@@ -506,8 +571,11 @@ public final class Fight {
                     parryAt = System.nanoTime();
                     parryKind = a;
                     net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + 0.25f); // a parry gives breath back
+                    Hud.pop("PARRY", 0xFF7FD8FF);
                 }
                 case KataNet.DODGE -> { }
+                case KataNet.PARRIED -> Hud.pop("PARRIED", 0xFFFF5A4A);
+                case KataNet.EVADED -> Hud.pop("EVADE", 0xFFF3E7BE);
                 case KataNet.KNOCKDOWN -> {
                     cur = null;
                     pendingLight = pressing = charging = false;
@@ -530,6 +598,7 @@ public final class Fight {
             }
             case KataNet.PARRY -> PARRIES.put(entity, new React(a, System.nanoTime()));
             case KataNet.DODGE -> DODGES.put(entity, new React(a, System.nanoTime()));
+            case KataNet.POISE -> POISES.put(entity, a / 100f);
             case KataNet.KNOCKDOWN -> MOVES.remove(entity);
             case KataNet.STRIKE -> {
                 int id = a & 0xFF;
@@ -553,6 +622,7 @@ public final class Fight {
         if (PARRIES.size() > 256) PARRIES.clear();
         if (STAGGERS.size() > 256) STAGGERS.clear();
         if (DODGES.size() > 256) DODGES.clear();
+        if (POISES.size() > 256) POISES.clear();
     }
 
     // ---- what the body shows ----
@@ -654,6 +724,31 @@ public final class Fight {
             g.set(Bone.RIGHT_FOREARM, Pose.PITCH, 75);
             g.set(Bone.LEFT_FOREARM, Pose.PITCH, 80);
         }
+        if (guardUp(p)) {
+            // Turned to a side: the body and guard face that way, the arm on that side higher and out.
+            int turned = mine(p) ? guardSide : 0;
+            if (turned != 0) {
+                float sd = turned == 1 ? 1 : -1; // left is +x in the model
+                g.set(Bone.CHEST, Pose.YAW, g.get(Bone.CHEST, Pose.YAW) + 14 * sd);
+                Bone arm = turned == 1 ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
+                g.set(arm, Pose.PITCH, g.get(arm, Pose.PITCH) - 12);
+                g.set(arm, Pose.ROLL, g.get(arm, Pose.ROLL) + 14 * sd);
+            }
+            // The struggle: as the guard's stamina runs low the arms shake, the body sags back and the
+            // head drops behind the guard.
+            float po = mine(p) ? net.pglol.kata.client.Move.stamina : POISES.getOrDefault(p.getId(), 1f);
+            float strain = MathHelper.clamp((0.7f - po) / 0.7f, 0, 1);
+            if (strain > 0) {
+                float tt = (System.nanoTime() % 1_000_000_000_000L) / 1e9f;
+                float shake = MathHelper.sin(tt * 47) * 2.2f * strain, shake2 = MathHelper.sin(tt * 53 + 1.3f) * 2.2f * strain;
+                g.set(Bone.RIGHT_ARM, Pose.PITCH, g.get(Bone.RIGHT_ARM, Pose.PITCH) + shake);
+                g.set(Bone.LEFT_ARM, Pose.PITCH, g.get(Bone.LEFT_ARM, Pose.PITCH) + shake2);
+                g.set(Bone.RIGHT_FOREARM, Pose.PITCH, g.get(Bone.RIGHT_FOREARM, Pose.PITCH) - shake2);
+                g.set(Bone.LEFT_FOREARM, Pose.PITCH, g.get(Bone.LEFT_FOREARM, Pose.PITCH) - shake);
+                g.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) - 8 * strain + MathHelper.sin(tt * 6) * 2 * strain);
+                g.set(Bone.HEAD, Pose.PITCH, g.get(Bone.HEAD, Pose.PITCH) + 10 * strain);
+            }
+        }
         // A strike just blocked: the arm on its side goes out to meet it, forearm up to take it.
         React b = BLOCKS.get(p.getId());
         float bs = b == null ? 9 : secs(b.at);
@@ -688,7 +783,7 @@ public final class Fight {
             int joltSide = jSide;
             if (jl > 0) {
                 // A blocked hit drives the guard back into the face and turns the body away from its side.
-                float j = jl / 0.22f;
+                float j = jl / 0.22f * (1.4f - 0.6f * (mine(p) ? net.pglol.kata.client.Move.stamina : POISES.getOrDefault(p.getId(), 1f))); // harder the less is left
                 g.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) - 14 * j);
                 g.set(Bone.CHEST, Pose.YAW, g.get(Bone.CHEST, Pose.YAW) - 16 * j * joltSide);
                 g.set(Bone.CHEST, Pose.ROLL, g.get(Bone.CHEST, Pose.ROLL) + 6 * j * joltSide);
@@ -963,6 +1058,11 @@ public final class Fight {
      * the head whips it away from the side it came from; a body shot folds you; a low kick buckles that
      * knee. Heavies hit harder. Fast in, eased out. Added on top of everything else.
      */
+    static boolean hitRecently(LivingEntity e) {
+        React r = HITS.get(e.getId());
+        return r != null && secs(r.at) < 1.5f;
+    }
+
     public static void react(LivingEntity e, Pose out) {
         dodgePose(e, out);
         React r = HITS.get(e.getId());
@@ -1016,35 +1116,86 @@ public final class Fight {
         }
     }
 
-    /** A dodge as the body shows it: low and leaning out of the way it's going, hands kept up. */
+    /**
+     * A dodge, an avoid or a flip as the body shows it. Step back: leaning away, low. Duck: knees deep,
+     * folded under. Slip: the head and shoulders out to the side, feet nearly still. Hop: knees tucked
+     * up. Flip: a whole turn about the waist whichever way it was thrown, tucked tight, opening to land.
+     */
     private static void dodgePose(LivingEntity e, Pose out) {
         React d = DODGES.get(e.getId());
         if (d == null) return;
-        float s = secs(d.at), dur = DODGE_RECOVER;
+        float s = secs(d.at);
+        if (d.packed >= 16) {
+            if (s > FLIP_TIME) return;
+            float u = s / FLIP_TIME;
+            float turn = ease(u) * (float) (Math.PI * 2);
+            // Tucked through the middle of the turn, open at both ends.
+            float tuck = MathHelper.sin(MathHelper.PI * Math.min(1, u * 1.15f));
+            add(out, Bone.RIGHT_LEG, Pose.PITCH, -95 * tuck);
+            add(out, Bone.LEFT_LEG, Pose.PITCH, -95 * tuck);
+            add(out, Bone.RIGHT_SHIN, Pose.PITCH, 120 * tuck);
+            add(out, Bone.LEFT_SHIN, Pose.PITCH, 120 * tuck);
+            add(out, Bone.RIGHT_ARM, Pose.PITCH, -50 * tuck);
+            add(out, Bone.LEFT_ARM, Pose.PITCH, -50 * tuck);
+            add(out, Bone.CHEST, Pose.PITCH, 25 * tuck);
+            // The direction, in the model: forward is -z, left is +x. The turn tips the head that way.
+            double ang = (d.packed - 16) * Math.PI / 8;
+            float dx = (float) Math.sin(ang), dz = (float) -Math.cos(ang);
+            Vector3f axis = new Vector3f(-dz, 0, dx);
+            if (axis.lengthSquared() < 1e-6f) return;
+            axis.normalize();
+            // In the model y is down, so "tipping the head forward" is a positive turn about this axis.
+            org.joml.Quaternionf flip = new org.joml.Quaternionf().rotationAxis(turn, axis);
+            org.joml.Quaternionf was = new org.joml.Quaternionf().rotationZYX(out.rad(Bone.ROOT, Pose.ROLL), out.rad(Bone.ROOT, Pose.YAW), out.rad(Bone.ROOT, Pose.PITCH));
+            org.joml.Quaternionf now = new org.joml.Quaternionf(flip).mul(was);
+            // About the waist, not the feet: keep the waist where it was.
+            Vector3f waist = new Vector3f(0, -12, 0);
+            Vector3f a = was.transform(new Vector3f(waist)), b = now.transform(new Vector3f(waist));
+            out.offset[0] += a.x - b.x;
+            out.offset[1] += a.y - b.y;
+            out.offset[2] += a.z - b.z;
+            Vector3f eul = new org.joml.Matrix3f().set(now).getEulerAnglesZYX(new Vector3f());
+            out.set(Bone.ROOT, (float) Math.toDegrees(eul.x), (float) Math.toDegrees(eul.y), (float) Math.toDegrees(eul.z));
+            return;
+        }
+        float dur = DODGE_RECOVER + 0.05f;
         if (s > dur) return;
-        float w = s < 0.06f ? s / 0.06f : 1 - ease((s - 0.06f) / (dur - 0.06f));
+        float w = s < 0.05f ? s / 0.05f : 1 - ease((s - 0.05f) / (dur - 0.05f));
+        float knees = 1;
         switch (d.packed) {
-            case 1 -> { // forward: ducking in under it
-                add(out, Bone.CHEST, Pose.PITCH, 28 * w);
-                add(out, Bone.HEAD, Pose.PITCH, -12 * w);
+            case 1 -> { // duck: down and folded under it
+                add(out, Bone.CHEST, Pose.PITCH, 34 * w);
+                add(out, Bone.HEAD, Pose.PITCH, -16 * w);
+                knees = 2.1f;
             }
-            case 2, 3 -> { // to a side: the body leans out that way
-                float sd = d.packed == 2 ? 1 : -1; // left is +roll on the root
-                add(out, Bone.ROOT, Pose.ROLL, 10 * sd * w);
-                add(out, Bone.CHEST, Pose.ROLL, 12 * sd * w);
-                add(out, Bone.HEAD, Pose.ROLL, -8 * sd * w);
+            case 2, 3 -> { // slip: head and shoulders out of the line, feet nearly still
+                float sd = d.packed == 2 ? 1 : -1;
+                add(out, Bone.CHEST, Pose.ROLL, 20 * sd * w);
+                add(out, Bone.CHEST, Pose.YAW, 12 * sd * w);
+                add(out, Bone.HEAD, Pose.ROLL, 10 * sd * w);
+                add(out, Bone.ROOT, Pose.ROLL, 5 * sd * w);
+                out.offset[0] += 1.6f * sd * w;
+                knees = 0.8f;
             }
-            default -> { // back: leaning away from it
-                add(out, Bone.CHEST, Pose.PITCH, -16 * w);
+            case 4 -> { // hop: knees tucked up under it
+                add(out, Bone.RIGHT_LEG, Pose.PITCH, -40 * w);
+                add(out, Bone.LEFT_LEG, Pose.PITCH, -40 * w);
+                add(out, Bone.RIGHT_SHIN, Pose.PITCH, 70 * w);
+                add(out, Bone.LEFT_SHIN, Pose.PITCH, 70 * w);
+                knees = 0;
+            }
+            default -> { // step back: leaning away from it
+                add(out, Bone.CHEST, Pose.PITCH, -14 * w);
                 add(out, Bone.HEAD, Pose.PITCH, 8 * w);
             }
         }
-        // Knees bent, low through it.
-        add(out, Bone.RIGHT_LEG, Pose.PITCH, -14 * w);
-        add(out, Bone.LEFT_LEG, Pose.PITCH, -14 * w);
-        add(out, Bone.RIGHT_SHIN, Pose.PITCH, 30 * w);
-        add(out, Bone.LEFT_SHIN, Pose.PITCH, 30 * w);
-        out.offset[1] += 2.2f * w;
+        if (knees > 0) {
+            add(out, Bone.RIGHT_LEG, Pose.PITCH, -12 * w * knees);
+            add(out, Bone.LEFT_LEG, Pose.PITCH, -12 * w * knees);
+            add(out, Bone.RIGHT_SHIN, Pose.PITCH, 26 * w * knees);
+            add(out, Bone.LEFT_SHIN, Pose.PITCH, 26 * w * knees);
+            out.offset[1] += 1.8f * w * knees;
+        }
     }
 
     private static void add(Pose p, Bone b, int axis, float deg) {

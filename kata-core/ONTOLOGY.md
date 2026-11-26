@@ -346,3 +346,24 @@ moves the body somewhere the physics wouldn't.
 - A landed hit cancels what the one hit was throwing and stops them throwing (or dodging) for a moment: 85% of the strike's length, +3 ticks (+6 for a heavy). Enough that the attacker's next strike in the string arrives first.
 - Guard and parry still work while reeling: blocking or parrying is the way out of a string. The server rejects strikes thrown during hitstun.
 - Dummies too: hit, their swing is gone and their next strike waits.
+
+## Defense, revised
+### Guard is directional
+- The guard faces forward (about 70 degrees either side): from behind or well round the side, a strike lands.
+- Straight strikes meet any guard. Swinging strikes (hooks, roundhouses, backfists, elbows, low kicks, spins) come round it: hold A or D while guarding to turn the guard to that side. Turned that way, it stops them; turned the other way, they land; square, half gets through.
+- Blocking still costs stamina, and a guard near empty shows the strain: arms shaking, the body sagging back, the head down behind it; jolts hit harder.
+### Parries are seen and heard
+- A parry flashes between the two fighters (sparks) with a ringing clang. The parrier sees PARRY; the one parried sees PARRIED. GUARD BROKEN and EVADE pop up the same way.
+### Dodges and avoids (the dodge key, Left Alt)
+- On the ground, with a direction: S or none, a short step back (about a block, eased out over 4 ticks), invulnerable for 5 ticks. W ducks under anything to the head. A or D slips aside past straight thrusts. Jump held: a hop over low kicks and anything at the legs. The avoids hold for 8 ticks but only against what they're for.
+- An avoid or dodge that takes you out of a strike drains the attacker's stamina (0.15) and gives you some back.
+- Recovery 0.3 s; cost 0.16 stamina. Use it right as the strike comes.
+### Flips
+- The dodge key in the air: a full flip whichever way you're pressing (any of 16 directions; none is a back flip), about the waist, tucked through the middle and opening to land. Once per jump; invulnerable as it starts.
+
+## Strike spacing
+- A beat between strikes: 0.07 s after a light, 0.16 s after a heavy, 0.1 s more after a miss. A press during a strike goes on the beat. The server refuses a new strike before the last has run three quarters of its length.
+
+## Knockdowns in a fight
+- At most 0.22 blocks a tick across and 0.3 up when thrown; the air slows a knocked-down body hard across, so even off a height it lands near.
+- Up quickly: lying still a moment (0.3 s at least, 1.4 s at most), then 0.6 s to get up.

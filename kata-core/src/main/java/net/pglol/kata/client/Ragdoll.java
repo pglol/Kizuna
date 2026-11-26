@@ -70,6 +70,10 @@ public final class Ragdoll {
     float age, still, getUp = -1, acc;
     /** Get up now (someone else's body whose own game has them up already). */
     boolean comeRound;
+    /** Knocked down in a fight (not a fall): air slows it across, and it's up again quickly. */
+    boolean combat;
+    /** The next body to go limp was knocked down in a fight. */
+    static boolean nextCombat;
     /** Which points are under water (for the smack on the way in), and when it last splashed. */
     final boolean[] wet = new boolean[N];
     /** Hands caught on a ledge while limp (world points they're held to), or null. */
@@ -186,6 +190,8 @@ public final class Ragdoll {
         }
         for (int k = 0; k < LINKS.length; k++) r.rest[k] = r.dist(LINKS[k][0], LINKS[k][1]);
         for (int k = 0; k < SPANS.length; k++) r.span[k] = r.full(SPANS[k]) * 0.62;
+        r.combat = nextCombat;
+        nextCombat = false;
         ACTIVE.put(p.getId(), r);
         if (ACTIVE.size() > 64) ACTIVE.clear();
     }
@@ -223,7 +229,7 @@ public final class Ragdoll {
     void step(World w, float dt) {
         age += dt;
         if (getUp >= 0) {
-            getUp = Math.min(1, getUp + dt / GET_UP);
+            getUp = Math.min(1, getUp + dt / (combat ? 0.6f : GET_UP));
             return;
         }
         // Fixed steps (Verlet keeps speed as distance per step, so the step can't change size).
@@ -235,9 +241,11 @@ public final class Ragdoll {
         double moved = 0;
         // The same air drag a falling player has (0.98 a tick), so the body and the camera fall as one.
         double drag = Math.pow(0.98, 20 * h);
+        // Knocked down: it doesn't sail. Across, the air slows it hard (a couple of body lengths at most).
+        double across = combat ? drag * Math.exp(-1.8 * h) : drag;
         for (int s = 0; s < steps; s++) {
             for (int i = 0; i < N; i++) {
-                double vx = (x[i] - px[i]) * drag, vy = (y[i] - py[i]) * drag, vz = (z[i] - pz[i]) * drag;
+                double vx = (x[i] - px[i]) * across, vy = (y[i] - py[i]) * drag, vz = (z[i] - pz[i]) * across;
                 double sp = Math.sqrt(vx * vx + vy * vy + vz * vz), cap = 80 * h;
                 if (sp > cap) {
                     vx *= cap / sp;
@@ -269,7 +277,7 @@ public final class Ragdoll {
         still = speed < 0.35 ? still + dt : 0;
         // In water the body floats up and lies there a while (about 3 s) before it comes round.
         boolean afloat = inWater();
-        if (comeRound || (afloat ? wake && age > 1.0f : (age > MIN_TIME && still > 0.12) || age > MAX_TIME)) {
+        if (comeRound || (afloat ? wake && age > 1.0f : (age > (combat ? 0.3f : MIN_TIME) && still > (combat ? 0.06 : 0.12)) || age > (combat ? 1.4f : MAX_TIME))) {
             getUp = 0;
             // Which way up it ended: chest towards the sky (on its back) or not.
             double ux = x[NECK] - x[PELVIS], uy = y[NECK] - y[PELVIS], uz = z[NECK] - z[PELVIS];
