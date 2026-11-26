@@ -204,11 +204,15 @@ public final class DummyAnim {
         if (mc.player != null && mc.player.squaredDistanceTo(d) < 5 * 5) {
             Vec3d from = d.getEyePos().add(0, m.leg() ? -0.85 : -0.3, 0);
             Vec3d want = mc.player.getLerpedPos(td).add(0, mc.player.getHeight() * (m.leg() ? 0.55 : 0.86), 0);
-            Hitbox.Hit h = Hitbox.trace(mc.player, td, from, want, 3);
-            aimW = h != null ? h.point() : want;
-            Vec3d dd = aimW.subtract(from);
-            double max = m.leg() ? 1.3 : 1.2;
-            if (dd.length() > max) aimW = from.add(dd.normalize().multiply(max));
+            // Guarding: it lands on the forearms in front of your face.
+            if (Fight.guard && !m.leg()) want = mc.player.getCameraPosVec(td).add(Vec3d.fromPolar(0, mc.player.getYaw(td)).multiply(0.38)).add(0, -0.15, 0);
+            Vec3d dd = want.subtract(from);
+            Vec3d face = Vec3d.fromPolar(0, by);
+            // Only in front of it (an aim behind it would wrench the arm round).
+            if ((dd.x * face.x + dd.z * face.z) > 0.2 * dd.horizontalLength()) {
+                double max = m.leg() ? 1.3 : 1.2;
+                aimW = dd.length() > max ? from.add(dd.normalize().multiply(max)) : want;
+            }
         }
         if (aimW == null) aimW = d.getEyePos().add(Vec3d.fromPolar(0, by).multiply(1.0)).add(0, m.leg() ? -0.75 : -0.2, 0);
         Vector3f aim = Animator.toModel(aimW, pos, by);

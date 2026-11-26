@@ -52,7 +52,7 @@ public class Dummy extends PathAwareEntity {
     private LivingEntity foe;
     private int calmAt, guardAt = -999, guardUntil, raiseAt = -1, cooldown = 40, contactAt = -1;
     private Fighting.Move swing;
-    private int stuck;
+    private int stuck, string;
 
     public Dummy(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
@@ -169,7 +169,17 @@ public class Dummy extends PathAwareEntity {
         // Meet it where it's coming: a kick is checked with the knee; a hand strike with the arm on that
         // side (their right comes in on its left).
         boolean lowKick = m.leg() && m.path() != Fighting.Path.FRONT_KICK && m.path() != Fighting.Path.SIDE_KICK && m.path() != Fighting.Path.BACK_KICK && m.path() != Fighting.Path.DROPKICK;
-        dataTracker.set(BLOCK, lowKick ? 3 : m.path() == Fighting.Path.STRAIGHT || m.path() == Fighting.Path.PALM ? 0 : rightLimb ? 2 : 1);
+        if (lowKick) dataTracker.set(BLOCK, 3);
+        else if (m.leg()) dataTracker.set(BLOCK, 0);
+        else {
+            // Which of its sides the strike comes in on, from where the striking hand really is.
+            double ay = Math.toRadians(by.getYaw());
+            Vec3d hand = by.getPos().add(-Math.cos(ay) * (rightLimb ? 0.35 : -0.35), 0, -Math.sin(ay) * (rightLimb ? 0.35 : -0.35));
+            double my = Math.toRadians(bodyYaw);
+            Vec3d to = hand.subtract(getPos());
+            boolean onRight = to.x * -Math.cos(my) + to.z * -Math.sin(my) > 0;
+            dataTracker.set(BLOCK, onRight ? 1 : 2);
+        }
     }
 
     /** Where its knocked-down body came to rest (seen on a player's screen): it gets up there. */
@@ -252,7 +262,7 @@ public class Dummy extends PathAwareEntity {
         if (raiseAt >= 0 && age >= raiseAt && !busy && move() < 0) {
             raiseAt = -1;
             setGuard(true);
-            guardUntil = age + 14 + random.nextInt(8);
+            guardUntil = age + 10 + random.nextInt(6);
         }
         if (guarding() && (age > guardUntil || busy)) setGuard(false);
 
@@ -311,18 +321,30 @@ public class Dummy extends PathAwareEntity {
         bodyYaw = MathHelper.stepUnwrappedAngleTowards(bodyYaw, getYaw(), 15);
         headYaw = getYaw();
 
-        // Its turn: throw something when in reach and its guard is down.
-        if (--cooldown <= 0 && swing == null && !guarding() && d < 2.8) {
-            Fighting.Style s = Fighting.style("taijutsu");
-            String[] picks = {"jab", "jab", "straight", "straight", "front_kick", "roundhouse", "one_two"};
-            Fighting.Move m = s.move(s.index(picks[random.nextInt(picks.length)]));
-            if (m != null) {
-                swing = m;
-                dataTracker.set(MOVE, Fighting.id(m));
-                dataTracker.set(MOVE_AT, age);
-                contactAt = age + Math.max(1, Math.round(m.contact() * 20));
+        // Its turn: strings of one to three strikes, often; out of a block it counters (dropping the
+        // guard to hit back); just out of reach it steps in to strike.
+        if (swing == null && d < 3.4 && --cooldown <= 0) {
+            boolean counter = guarding() && age - guardAt > 6;
+            if (!guarding() || counter) {
+                if (counter) setGuard(false);
+                if (d > 2.5) {
+                    Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(0.22);
+                    addVelocity(in.x, 0, in.z);
+                }
+                Fighting.Style s = Fighting.style("taijutsu");
+                String[] picks = {"jab", "jab", "straight", "straight", "one_two", "lead_hook", "rear_hook", "front_kick", "roundhouse", "low_kick", "uppercut"};
+                Fighting.Move m = s.move(s.index(picks[random.nextInt(picks.length)]));
+                if (m != null) {
+                    swing = m;
+                    dataTracker.set(MOVE, Fighting.id(m));
+                    dataTracker.set(MOVE_AT, age);
+                    contactAt = age + Math.max(1, Math.round(m.contact() * 20));
+                    if (string <= 0) string = 1 + random.nextInt(3);
+                    string--;
+                    // The next strike of the string right after this one; a breather after the last.
+                    cooldown = Math.round(m.length() * 20) + (string > 0 ? 1 : 12 + random.nextInt(18));
+                }
             }
-            cooldown = 30 + random.nextInt(45);
         }
     }
 

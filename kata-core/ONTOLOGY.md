@@ -139,7 +139,7 @@ moves the body somewhere the physics wouldn't.
     - stopping flight in mid-air while moving faster than 0.6 blocks/tick
 10b. **Real friction.** Sliding along a surface loses speed in proportion to how hard the part presses into it (μ = 0.6). A hand brushing a wall slides freely; a body lying on the ground stops.
 10a. **Bodies bounce.** A ragdoll part hitting a surface faster than about 4 m/s rebounds 30–45 % of that speed; slower contacts stop dead so the body settles. Only the parts that hit are pushed back, so striking an edge or a fence flips the body over it.
-10d. **Floating limp.** A limp body in water floats up and lies there for as long as you leave it. A fresh press of a movement or jump key brings you round (after at least two seconds; keys still held from before don't count): you stand if there's ground under you, otherwise you start swimming.
+10d. **Floating limp.** A limp body in water (a part with water above it counts as fully under) floats up and lies there for as long as you leave it. A fresh press of a movement or jump key brings you round (after at least two seconds; keys still held from before don't count): you stand if there's ground under you, otherwise you start swimming.
 10c. **Limp in water.** A limp body hitting water fast smacks the surface: most of its speed is lost on impact and it splashes. Under the surface the water drags it and holds it up (torso and head float, limbs about neutral), so it floats. Coming round, it stands if there's ground within reach, otherwise it swims.
 11. **Limp means no will.** No hands either: no strikes, guard, swings, block breaking or item use.
 11b. **Limp means no will.** No walking, no sprinting, no sprint FOV. Position follows the pelvis.
@@ -246,7 +246,8 @@ moves the body somewhere the physics wouldn't.
     - It stands at ease at its spot until hit.
     - When hit, it chases whoever hit it and keeps to fighting distance.
     - It reads wind-ups and tries to raise its guard with human reaction time: it reads about 65 % of them, after 100–400 ms, so it's sometimes late. Of its well-timed blocks, about 30 % are parries.
-    - It meets the strike on the side it comes from: that arm out to take a hook or spin, a raised knee to check a roundhouse or low kick, and a high guard for straights.
+    - It meets the strike on the side it comes from, worked out from where the striking hand really is relative to its body: that arm goes out to take any hand strike, a raised knee checks a roundhouse or low kick, and a high guard covers other kicks.
+    - It attacks often: strings of 1–3 strikes, a 0.6–1.5 s breather between strings. It counters out of a block and steps in when you're just out of reach.
     - With no path to you (you're up on something), it heads straight for you and hops 1-block obstacles.
     - Knocked down, its real position travels with its body (a player's game reports it as it flies), so it can be hit again where it lies. It stays down until its body comes to rest (ten seconds at most). Then it stands there, lifted out of the floor if need be, and gets up over about a second before it moves again.
     - Its hitboxes come from its shown pose, ragdoll included. A downed dummy can be hit wherever its body lies (within 7 blocks).

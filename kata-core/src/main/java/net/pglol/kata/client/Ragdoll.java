@@ -355,6 +355,9 @@ public final class Ragdoll {
         BlockPos bp = BlockPos.ofFloored(x[i], y[i], z[i]);
         FluidState fs = w.getFluidState(bp);
         double depth = fs.isIn(FluidTags.WATER) ? bp.getY() + fs.getHeight(w, bp) - y[i] : -1;
+        // Water above too: fully under, however near the top of its own block it is (else the body would
+        // stall under every block's top instead of rising to the surface).
+        if (depth > 0 && w.getFluidState(bp.up()).isIn(FluidTags.WATER)) depth = 1;
         boolean in = depth > 0;
         if (in) {
             double vx = x[i] - px[i], vy = y[i] - py[i], vz = z[i] - pz[i];
