@@ -22,7 +22,8 @@
     "FightInputMixin",
     "LookMixin",
     "GravityMixin",
-    "CameraMixin"
+    "CameraMixin",
+    "NametagMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,5 +1,7 @@
 package net.pglol.kata.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -27,7 +29,8 @@ public final class Hud {
         popColor = color;
         popAt = System.nanoTime();
     }
-    private static long last;
+    private static long last, hurtAt;
+    private static float vis;
 
     static void render(DrawContext c, float tickDelta) {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -55,21 +58,31 @@ public final class Hud {
             c.fill(0, 0, w, bar, 0xFF000000);
             c.fill(0, h - bar, w, h, 0xFF000000);
         }
+        // The bars keep out of the way until they matter: hit, out of breath, squared up or nearly dead.
+        // They ease up out of the bottom and fade in, and sink away again a few seconds after.
+        if (p.hurtTime > 0) hurtAt = now;
+        boolean want = now - hurtAt < 5_000_000_000L || Move.stamina < 0.995f || Fight.locked() || hp < 0.3f;
+        vis += ((want ? 1 : 0) - vis) * (1 - (float) Math.exp(-dt / (want ? 0.12f : 0.45f)));
+        if (vis < 0.003f) vis = 0;
+        float ve = vis * vis * (3 - 2 * vis);
         c.getMatrices().push();
-        c.getMatrices().translate(0, -(h * 0.085f + 4) * lb, 0);
+        c.getMatrices().translate(0, -(h * 0.085f + 4) * lb + (1 - ve) * 18, 0);
         int hw = 160, sw = 104;
-        int hx = (w - hw) / 2, hy = h - 14;
-        int sx = hx + 4, sy = hy - 9; // under the start of the health stroke, clear of its flames
+        int hx = (w - hw) / 2, hy = h - 16;
+        int sx = (w - sw) / 2, sy = hy + 9; // centred under the health stroke
         float time = (now % 1_000_000_000_000L) / 1e9f;
 
+        RenderSystem.enableBlend();
+        RenderSystem.setShaderColor(1, 1, 1, ve);
         // Health: red in a ragged black ink stroke, flames licking off its end, ink dripping beneath.
         boolean low = hp < 0.25f;
         int col = low ? (((now / 250_000_000L) & 1) == 0 ? 0xFFE8383C : 0xFFB02A2D) : 0xFFD8302E;
         inkBar(c, hx, hy, hw, 5, MathHelper.clamp(shown, 0, 1), trail, col, 0xC0F0E2D6, time, 1f, 0, dt, low ? 2.5f : 1f);
 
         // Stamina: the same ink, finer, a pale breath colour; dim when you're winded.
-        int stam = Move.winded() ? 0xFF8C8268 : 0xFFF3E7BE;
-        inkBar(c, sx, sy, sw, 2, MathHelper.clamp(Move.shownStamina, 0, 1), -1, stam, 0, time, 0.45f, 1, dt, 0.35f);
+        int stam = Move.winded() ? 0xFF7E7E7E : 0xFFF3E7BE; // winded: the breath goes grey
+        if (ve > 0) inkBar(c, sx, sy, sw, 2, MathHelper.clamp(Move.shownStamina, 0, 1), -1, stam, 0, time, 0.45f, 1, dt, 0.35f);
+        RenderSystem.setShaderColor(1, 1, 1, 1);
 
         tag(c, mc, h, dt);
         c.getMatrices().pop();

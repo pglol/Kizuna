@@ -72,7 +72,7 @@ public final class Fight {
     private static float jolt;
     private static int joltSide;
     private static long brokenUntil, staggerUntil, parryAt, flinchUntil, readyAt;
-    private static boolean curLanded, smashDive;
+    private static boolean curLanded, smashDive, pressInAir, smashLanding;
     /** A heavy waiting to go (its charge), or -1. */
     private static float pendingHeavy = -1;
     /** Hanging in the air (an air hit, given or taken): gravity eased right off until then. */
@@ -402,6 +402,27 @@ public final class Fight {
             airTicks++;
             if (!jumpNow) releasedInAir = true;
         }
+        // Down (not in water): space gets you up straight away, if you've the breath for it.
+        if (jumpNow && !jumpWas && limp(p) && net.pglol.kata.client.Move.stamina >= 0.2f) {
+            Ragdoll rd = Ragdoll.of(p);
+            if (rd != null && !rd.inWater() && (p.isOnGround() || rd.resting())) {
+                rd.comeRound = true;
+                rd.quickUp = true;
+                net.pglol.kata.client.Move.stamina -= 0.2f;
+            }
+        }
+        // Stringing someone in the air: you hang at their height, right with them.
+        Entity held = heldByMe(p);
+        if (held != null && !p.isOnGround()) {
+            Vec3d v = p.getVelocity();
+            p.setVelocity(v.x, MathHelper.clamp((held.getY() - p.getY()) * 0.25, -0.08, 0.12), v.z);
+            p.fallDistance = 0;
+        }
+        // Coming down from a smash: the ground takes it (a shockwave, whether or not it hit anyone).
+        if (smashLanding && (p.isOnGround() || p.isTouchingWater())) {
+            smashLanding = false;
+            send(KataNet.SMASH_LAND, 0, 0);
+        }
         boolean fresh = jumpNow && !jumpWas && releasedInAir && airTicks > 2;
         jumpWas = jumpNow;
         if (clinging()) {
@@ -461,7 +482,12 @@ public final class Fight {
                     if (cur != null || clock() < readyAt) pendingHeavy = power;
                     else begin(p, Deck.pick(row(p), true, 0), power);
                 } else light(p);
-            } else if (airborne(p) && secs(pressAt) >= Fighting.HEAVY_AFTER) {
+            } else if (charging && airborne(p) && !pressInAir) {
+                // A charge from the ground doesn't carry into the air (no smash from a jump while holding).
+                charging = false;
+                pressing = false;
+                send(KataNet.CHARGE, 0, 0);
+            } else if (airborne(p) && pressInAir && secs(pressAt) >= Fighting.HEAVY_AFTER) {
                 // Held in the air: the smash, straight away, cutting off whatever air strike was going.
                 pressing = false;
                 pendingLight = false;
@@ -504,6 +530,21 @@ public final class Fight {
                         early = touch.entity().getId();
                     }
                 }
+                // The hammer smash comes down on whoever's under you (anywhere close below or around).
+                if (early < 0 && cur.from() == Fighting.From.AIR && cur.heavy() && s >= c) {
+                    Entity under = null;
+                    double best = 2.8;
+                    for (Entity e : nearby(p)) {
+                        double dy = e.getY() - p.getY(), dh = Math.hypot(e.getX() - p.getX(), e.getZ() - p.getZ());
+                        if (dy > 1 || dy < -3.5 || dh > best) continue;
+                        best = dh;
+                        under = e;
+                    }
+                    if (under != null) {
+                        early = under.getId();
+                        lastPart = Fighting.Part.TORSO;
+                    }
+                }
                 // Drawn (third person): it lands on a touch, or misses once the extension is over.
                 // First person: at contact, along its line.
                 if (early >= 0 || (drawn ? s > late : s >= c)) {
@@ -540,6 +581,7 @@ public final class Fight {
                     }
                     if (smashDive) {
                         smashDive = false;
+                        smashLanding = true;
                         hangUntil = 0;
                         Vec3d v = p.getVelocity();
                         p.setVelocity(v.x * 0.3, -0.9, v.z * 0.3); // down after them
@@ -596,6 +638,7 @@ public final class Fight {
         if (guard || staggered() || recovering() || flinching() || concussed(p)) return true; // hands up, off balance, out of a dodge or reeling: nothing to throw
         pressing = true;
         pressAt = clock();
+        pressInAir = airborne(p); // a smash comes only from a press made in the air
         return true;
     }
 
@@ -621,11 +664,14 @@ public final class Fight {
         // In the air only air moves; on the ground none of them.
         if ((m.from() == Fighting.From.AIR) != airborne(p)) return;
         if (m.from() == Fighting.From.AIR) {
-            if (airUsed && !airLanded) return; // one per jump, unless the last one landed
+            if (airUsed && !airLanded && !m.heavy()) return; // one per jump, unless the last one landed (the smash always can)
             airUsed = true;
             airLanded = false;
         }
         if (clock() < readyAt) return;
+        // Breath: a light costs a little, a heavy a good deal more (the harder it's charged, the more).
+        float cost = m.heavy() ? 0.12f + 0.1f * Math.max(0.3f, power) : m.from() == Fighting.From.AIR ? 0.04f : 0.05f;
+        net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - cost);
         cur = m;
         curLanded = false;
         curStance = stance;
@@ -653,12 +699,17 @@ public final class Fight {
                 smashDive = true;
             } else {
                 // Air strikes keep you up and drift you in to stay on them.
-                Entity tg = targetEntity(MinecraftClient.getInstance());
+                // Pulled in to who you're stringing (or locked on to, or right in front of you), to just inside
+                // a punch's reach, and up or down to their height.
+                Entity tg = heldByMe(p);
+                if (tg == null) tg = targetEntity(MinecraftClient.getInstance());
+                if (tg == null) tg = softTarget(p, m);
                 Vec3d in = tg != null ? tg.getPos().subtract(p.getPos()).multiply(1, 0, 1) : f;
                 double dist = in.length();
                 Vec3d dir = dist > 1e-3 ? in.multiply(1 / dist) : f;
-                double drift = tg != null ? MathHelper.clamp((dist - 1.4) * 0.12, 0, 0.14) : 0.06;
-                p.setVelocity(v.x * 0.4 + dir.x * drift, Math.max(v.y, 0.1), v.z * 0.4 + dir.z * drift);
+                double drift = tg != null ? MathHelper.clamp((dist - 1.0) * 0.35, 0, 0.45) : 0.06;
+                double up = tg != null ? MathHelper.clamp((tg.getY() - p.getY()) * 0.25 + 0.06, -0.1, 0.3) : Math.max(v.y, 0.1);
+                p.setVelocity(v.x * 0.3 + dir.x * drift, up, v.z * 0.3 + dir.z * drift);
             }
         } else if (p.isOnGround() && !m.leg()) {
             double step = m.heavy() ? 0.06 + 0.1 * curPower : 0.035;
@@ -830,6 +881,8 @@ public final class Fight {
     private static final Map<Integer, Long> STAGGERS = new HashMap<>();
     /** How much guard stamina others have left (it shows: a guard near breaking strains). */
     private static final Map<Integer, Float> POISES = new HashMap<>();
+    /** Someone's guard breath as last heard, 0..1 (1 if nothing heard). */
+    static float poise(int id) { return POISES.getOrDefault(id, 1f); }
     /** Air-string tethers: the one held -> {the one holding, until}. Your own string's hit count. */
     private static final Map<Integer, long[]> TETHERS = new HashMap<>();
     static int combo;
@@ -1422,6 +1475,7 @@ public final class Fight {
             : m.path() == Path.BACKFIST ? new Vector3f(out_ * 0.3f, 0.2f, 1)   // arm out straight, elbow back
             : new Vector3f(out_ * 0.3f, 1, 0.45f);                             // elbow down, behind the punch
         Animator.reach(out, arm, fore, shoulder, fist, frame, 1, pole);
+        if (m.from() == Fighting.From.AIR || m.heavy()) Trails.add(p.getId(), Ragdoll.toWorld(Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH], pos, bodyYaw), m.heavy());
         if (mine(p) && cur != null) {
             limbPrev = limbNow;
             Vector3f[] jt = Ragdoll.joints(out);
@@ -1525,6 +1579,10 @@ public final class Fight {
                 Animator.kickLeg(out, leg2, shin2, hip2, foot2, inv, 1, new Vector3f(-out_ * 0.15f, 0, -1));
             }
         }
+        if (m.from() == Fighting.From.AIR || m.heavy()) {
+            Vector3f[] jj = Ragdoll.joints(out);
+            Trails.add(p.getId(), Ragdoll.toWorld(m.path() == Path.KNEE ? jj[right ? Ragdoll.RK : Ragdoll.LK] : jj[right ? Ragdoll.RF : Ragdoll.LF], pos, bodyYaw), m.heavy());
+        }
         if (mine(p) && cur != null) {
             limbPrev = limbNow;
             Vector3f[] j = Ragdoll.joints(out);
@@ -1577,7 +1635,21 @@ public final class Fight {
 
     /** Is the local player hanging in the air from an air hit (gravity eased off)? */
     public static boolean hanging() {
-        return clock() < hangUntil;
+        return clock() < hangUntil || heldByMeId() >= 0;
+    }
+
+    /** The one you're holding in an air string right now (tethered to you), or null. */
+    static Entity heldByMe(ClientPlayerEntity p) {
+        int id = heldByMeId();
+        return id < 0 || p.getWorld() == null ? null : p.getWorld().getEntityById(id);
+    }
+
+    private static int heldByMeId() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null) return -1;
+        long now = clock();
+        for (var en : TETHERS.entrySet()) if (en.getValue()[0] == mc.player.getId() && now < en.getValue()[1]) return en.getKey();
+        return -1;
     }
 
     /** Concussed: slow and unsteady. */

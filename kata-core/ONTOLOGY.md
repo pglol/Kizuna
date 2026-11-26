@@ -493,3 +493,14 @@ moves the body somewhere the physics wouldn't.
 
 ## Ragdolls lie the same for everyone
 - Your game sends your limp body's points ten times a second; everyone else's copy is pulled onto them (on your back for you is on your back for them), and it gets up when yours does.
+
+## Breath, bars, tags and the air (batch)
+- Knocked down with breath to spare (≥ 0.2): tap jump to get up quickly (costs 0.2).
+- Strikes cost breath: light 0.05 (air 0.04), heavy 0.12 + 0.1 × charge. Hitting zero from anything winds you.
+- Winded: the stamina stroke and the whole screen go grey (wash + vignette) until breath is back to 0.25.
+- HUD bars hide until they matter (hit in the last 5 s, breath not full, locked on, health under 30%); they ease up and fade in. Stamina is centred under health.
+- Other players: Kata tags replace vanilla labels — slim name on a faint see-through strip, thin health line, breath hairline; fade in from 10 blocks, full by 6.
+- Air strings: the tether holds the victim 1.05 ahead (in punch reach); you hold their height while you're holding them, and an air light drifts you in toward them.
+- Smash: only from a press that began in the air; holding on the ground then jumping drops the charge instead of forcing a smash. Server reach +1.6 for it, the nearest body below is its target, and landing always sends a shockwave (dust ring, thud, small shove out).
+- Air strikes and heavies leave a short flowing light ribbon behind the striking fist or foot.
+- Wall cling never climbs you over an edge; vaults take 11 ticks (smoother).

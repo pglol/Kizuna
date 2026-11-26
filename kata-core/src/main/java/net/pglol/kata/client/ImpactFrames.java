@@ -80,6 +80,8 @@ public final class ImpactFrames {
         return new float[] {(float) Math.sin(t * 0.09) * 0.9f * a, (float) Math.cos(t * 0.11) * 0.7f * a};
     }
 
+    private static float winded;
+
     public static void render(DrawContext c, RenderTickCounter tick) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.options.hudHidden) return;
@@ -96,6 +98,12 @@ public final class ImpactFrames {
                 lines(m, o[0], o[1], w, h, new Random(seed), 30, a * 0.45f);
             }
         } else role = -1;
+        // Out of breath: the colour drains out of the world, greyest at the edges, until you've got it back.
+        float wd = winded += ((Move.winded() ? 1 : 0) - winded) * (Move.winded() ? 0.06f : 0.03f);
+        if (wd > 0.01f) {
+            fill(m, w, h, argb(wd * 0.22f, 0x8A8A8A));
+            vignette(m, w, h, argb(wd * 0.55f, 0x3A3A3A), 0.34f);
+        }
         // A dodged strike: the world goes cool and grey at the edges while time stretches.
         float sl = Fight.slowness();
         if (sl > 0.01f) {

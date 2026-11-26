@@ -67,6 +67,7 @@ public final class Move {
             if (stamina <= 0) winded = true;
         } else if (rest > 0) rest--;
         else stamina = Math.min(1, stamina + (mode == Mode.FAST ? FAST_REGEN : REGEN));
+        if (stamina <= 0.005f) winded = true; // however it went: running, strikes, dodges, getting up
         if (winded && stamina >= 0.25f) winded = false;
     }
 

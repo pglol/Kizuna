@@ -72,6 +72,8 @@ public final class Ragdoll {
     boolean comeRound;
     /** Someone else's body: it only gets up when their game says theirs is (not on its own). */
     boolean followsOwner;
+    /** Got up on purpose (space): up quicker. */
+    boolean quickUp;
     /** Knocked down in a fight (not a fall): air slows it across, and it's up again quickly. */
     boolean combat;
     /** The next body to go limp was knocked down in a fight. */
@@ -231,7 +233,7 @@ public final class Ragdoll {
     void step(World w, float dt) {
         age += dt;
         if (getUp >= 0) {
-            getUp = Math.min(1, getUp + dt / (combat ? 0.6f : GET_UP));
+            getUp = Math.min(1, getUp + dt / (quickUp ? 0.38f : combat ? 0.6f : GET_UP));
             return;
         }
         // Fixed steps (Verlet keeps speed as distance per step, so the step can't change size).

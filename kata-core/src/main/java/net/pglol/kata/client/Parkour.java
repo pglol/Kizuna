@@ -78,7 +78,7 @@ public final class Parkour {
         static final View NONE = new View(Mode.NONE, 0, 0, 0, 0, 0);
     }
 
-    private static final int VAULT_TICKS = 9, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 8;
+    private static final int VAULT_TICKS = 11, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 8;
     private static final float RUNUP_COST = 0.12f;
     /** Hanging: the lip is this far above your feet, so straight-ish arms reach it (shoulders at 1.29). */
     public static final double HANG_H = 1.72;
@@ -516,7 +516,7 @@ public final class Parkour {
                     }
                 }
                 if (flightTicks > 0 && (ground || --flightTicks <= 0)) flightTicks = 0;
-                if (flightTicks > 0) {
+                if (flightTicks > 0 && !Fight.clinging()) {
                     dir = flightDir;
                     if (wall(p, at, 0.3, 1.7)) {
                         Double l = lip(p, at, at.y, 1.3, 2.3);
@@ -527,7 +527,9 @@ public final class Parkour {
                     }
                     dir = p.getHorizontalFacing();
                 }
-                if (!ground && intent != Intent.NONE && wall(p, at, 0.3, 1.7)) reach(p, at, climbAsk);
+                // On a wall in a cling (a double jump): no climbing out of it; the jump is the wall jump.
+                if (Fight.clinging()) { }
+                else if (!ground && intent != Intent.NONE && wall(p, at, 0.3, 1.7)) reach(p, at, climbAsk);
                 else if (!ground && mode == Mode.NONE) reflex(p, sneak, false);
             }
             case VAULT -> {

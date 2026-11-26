@@ -483,7 +483,7 @@ public final class Fighting {
         if (flat.lengthSquared() > 1e-4) flat = flat.normalize();
         // Carried to just in front of the attacker at their height (a touch above), so the attacker
         // trails them up through the air rather than hitting someone hanging over their head.
-        Vec3d spot = by.getPos().add(flat.multiply(1.4)).add(0, 0.1, 0);
+        Vec3d spot = by.getPos().add(flat.multiply(1.05)).add(0, 0.05, 0);
         Vec3d to = spot.subtract(t.getPos());
         double rise = t.isOnGround() ? 0.3 : 0.08; // lifted off the ground, then held (the tether keeps them there)
         Vec3d v = new Vec3d(to.x * 0.4, to.y * 0.4 + rise, to.z * 0.4);
@@ -528,6 +528,29 @@ public final class Fighting {
         SMASHED.put(t.getUuid(), t.getServer().getTicks());
         SMASHING.put(t.getUuid(), t);
         flinch(t, 30);
+    }
+
+    /**
+     * The smasher hits the ground: a shockwave whether or not the smash landed on anyone. A ring of dust
+     * and sparks for everyone, a deep thud, and anyone close (not the smasher) is shoved out from it.
+     */
+    static void smashLand(ServerPlayerEntity p) {
+        var w = p.getWorld();
+        if (w instanceof net.minecraft.server.world.ServerWorld sw) {
+            for (int i = 0; i < 28; i++) {
+                double a = i * Math.PI * 2 / 28;
+                sw.spawnParticles(net.minecraft.particle.ParticleTypes.POOF, p.getX() + Math.cos(a) * 0.6, p.getY() + 0.1, p.getZ() + Math.sin(a) * 0.6, 0, Math.cos(a), 0.02, Math.sin(a), 0.32);
+            }
+            sw.spawnParticles(net.minecraft.particle.ParticleTypes.CRIT, p.getX(), p.getY() + 0.2, p.getZ(), 14, 0.5, 0.05, 0.5, 0.25);
+        }
+        w.playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.PLAYERS, 0.35f, 1.7f);
+        for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(2.5, 1, 2.5), x -> x != p && x.isAlive())) {
+            Vec3d out = e.getPos().subtract(p.getPos()).multiply(1, 0, 1);
+            if (out.lengthSquared() < 1e-4) continue;
+            out = out.normalize();
+            e.setVelocity(e.getVelocity().add(out.x * 0.35, 0.18, out.z * 0.35));
+            e.velocityModified = true;
+        }
     }
 
     /** Hit the ground from a smash: a burst of dust, a thud, knocked flat, then dazed a while. */
@@ -575,7 +598,7 @@ public final class Fighting {
                     continue;
                 }
                 Vec3d flat = Vec3d.fromPolar(0, by.getYaw());
-                Vec3d spot = by.getPos().add(flat.multiply(1.4)).add(0, 0.1, 0);
+                Vec3d spot = by.getPos().add(flat.multiply(1.05)).add(0, 0.05, 0); // just inside a punch's reach
                 Vec3d v = spot.subtract(t.getPos()).multiply(0.45);
                 if (v.length() > 0.6) v = v.normalize().multiply(0.6);
                 t.setVelocity(v);
@@ -867,7 +890,8 @@ public final class Fighting {
         Vec3d near = new Vec3d(MathHelper.clamp(eye.x, b.minX, b.maxX), MathHelper.clamp(eye.y, b.minY, b.maxY), MathHelper.clamp(eye.z, b.minZ, b.maxZ));
         // A downed dummy's body lies wherever it flew (its box may be elsewhere): judge by distance only.
         boolean lying = t instanceof Dummy dd && dd.down() > 0;
-        if (eye.distanceTo(near) > (lying ? 7 : REACH + (m.leg() ? KICK_EXTRA : 0) + 0.6)) { // a little slack for lag
+        double extra = m.from() == From.AIR && m.heavy() ? 1.6 : 0; // the smash comes down on whoever's under you
+        if (eye.distanceTo(near) > (lying ? 7 : REACH + (m.leg() ? KICK_EXTRA : 0) + 0.6 + extra)) { // a little slack for lag
             dbg(p, 7, (int) Math.round(eye.distanceTo(near) * 100));
             return;
         }
