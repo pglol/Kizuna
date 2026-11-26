@@ -289,7 +289,7 @@ public final class Fighting {
             if (chip) return true;
             // Dodging, in its first moments: the strike goes through nothing.
             if (striking != null && evades(victim, striking, strikingPart)) {
-                evaded(victim, by);
+                evaded(victim, source.getAttacker());
                 return false;
             }
             if (!guarding(victim)) return true;
