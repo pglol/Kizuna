@@ -131,7 +131,7 @@ public final class Fight {
 
     private static void dodge(ClientPlayerEntity p) {
         if (!p.isOnGround() || limp(p) || cur != null || charging || staggered() || recovering() || p.getAbilities().flying) return;
-        if (Move.winded() || Move.stamina < DODGE_COST) return;
+        if (net.pglol.kata.client.Move.winded() || net.pglol.kata.client.Move.stamina < DODGE_COST) return;
         float f = p.input.movementForward, sdw = p.input.movementSideways;
         int dir;
         if (Math.abs(sdw) > 0.3f && Math.abs(sdw) >= Math.abs(f)) dir = sdw > 0 ? 2 : 3;
@@ -144,7 +144,7 @@ public final class Fight {
             default -> fw.multiply(-1);
         };
         p.setVelocity(d.x * DODGE_SPEED, p.getVelocity().y, d.z * DODGE_SPEED);
-        Move.stamina = Math.max(0, Move.stamina - DODGE_COST);
+        net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - DODGE_COST);
         dodgeAt = System.nanoTime();
         pressing = false;
         DODGES.put(p.getId(), new React(dir, dodgeAt));
@@ -477,7 +477,7 @@ public final class Fight {
                     boolean top = Fighting.top(stance);
                     stanceTo(a > 0 ? (top ? Fighting.TL : Fighting.BL) : (top ? Fighting.TR : Fighting.BR));
                 }
-                case KataNet.POISE -> Move.stamina = Math.min(Move.stamina, a / 100f); // blocking costs the same breath running does
+                case KataNet.POISE -> net.pglol.kata.client.Move.stamina = Math.min(net.pglol.kata.client.Move.stamina, a / 100f); // blocking costs the same breath running does
                 case KataNet.GUARD_BROKEN -> {
                     jolt = 0.22f;
                     brokenUntil = System.nanoTime() + 700_000_000L;
@@ -492,7 +492,7 @@ public final class Fight {
                 case KataNet.PARRY -> {
                     parryAt = System.nanoTime();
                     parryKind = a;
-                    Move.stamina = Math.min(1, Move.stamina + 0.25f); // a parry gives breath back
+                    net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + 0.25f); // a parry gives breath back
                 }
                 case KataNet.DODGE -> { }
                 case KataNet.KNOCKDOWN -> {
