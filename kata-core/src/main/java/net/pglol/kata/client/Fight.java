@@ -47,6 +47,8 @@ public final class Fight {
     static int previewStance;
     static boolean previewing;
     static long previewStart;
+    /** Frozen at this time into the move (frame export), or -1 to play. */
+    static float previewFixed = -1;
     /** Which way the guard is turned: 0 square, 1 left, 2 right. */
     static int guardSide;
     private static boolean sentGuard;
@@ -163,6 +165,7 @@ public final class Fight {
             double ang = Math.abs(f) + Math.abs(sdw) < 0.2f ? Math.PI : Math.atan2(sdw, f);
             int idx = Math.floorMod((int) Math.round(ang / (Math.PI * 2) * 16), 16);
             dir = 16 + idx;
+            controlledUntil = System.nanoTime() + 1_000_000_000L;
             Vec3d d = fw.multiply(Math.cos(idx * Math.PI / 8)).add(left.multiply(Math.sin(idx * Math.PI / 8)));
             Vec3d v = p.getVelocity();
             p.setVelocity(v.x * 0.6 + d.x * 0.16, Math.max(v.y, 0.4), v.z * 0.6 + d.z * 0.16); // a real second jump
@@ -256,6 +259,7 @@ public final class Fight {
             speed = 0.95;
         }
         p.setVelocity(dir.x * speed, Math.max(dir.y * speed, 0.32), dir.z * speed);
+        controlledUntil = System.nanoTime() + 1_500_000_000L; // flying on purpose: land on your feet
         // A flip off it, whichever way you're going.
         double rel = Math.atan2(-(dir.x * Math.cos(Math.toRadians(p.getYaw())) + dir.z * Math.sin(Math.toRadians(p.getYaw()))),
             -dir.x * Math.sin(Math.toRadians(p.getYaw())) + dir.z * Math.cos(Math.toRadians(p.getYaw())));
@@ -352,7 +356,16 @@ public final class Fight {
         // Double jump: space again in the air (a fresh press, not the one you took off with) jumps again,
         // flipping whichever way you're pressing.
         boolean jumpNow = mc.options.jumpKey.isPressed() && mc.currentScreen == null;
-        boolean fresh = jumpNow && !jumpWas;
+        // A second jump needs the key let go of and pressed again after leaving the ground (this runs after
+        // the move that lifted you, so the press you took off with must never count).
+        if (p.isOnGround() || p.isTouchingWater()) {
+            airTicks = 0;
+            releasedInAir = false;
+        } else {
+            airTicks++;
+            if (!jumpNow) releasedInAir = true;
+        }
+        boolean fresh = jumpNow && !jumpWas && releasedInAir && airTicks > 2;
         jumpWas = jumpNow;
         if (clinging()) {
             // On the wall: jump off it (or at someone), or drop when time's up or you touch down.
@@ -680,7 +693,14 @@ public final class Fight {
     private static Vec3d dodgeDir;
     private static float dodgeSpeed;
     private static int dodgeTick = 99;
-    private static boolean flipUsed, jumpWas, clungThisJump;
+    private static boolean flipUsed, jumpWas, clungThisJump, releasedInAir;
+    private static int airTicks;
+    /** A launch you meant (off a wall, a pounce, a flip): no speed ragdoll for it until then. */
+    private static long controlledUntil;
+
+    public static boolean controlled() {
+        return System.nanoTime() < controlledUntil;
+    }
     /** On a wall until then (nanos), facing out along this normal. */
     private static long clingUntil;
     private static Vec3d clingNormal;
@@ -1025,7 +1045,7 @@ public final class Fight {
             m = previewMove;
             st = previewStance;
             float loop = m.length() + 0.5f;
-            s = secs(previewStart) % loop;
+            s = previewFixed >= 0 ? previewFixed : secs(previewStart) % loop;
             if (s > m.length()) return;
             power = 1;
         } else if (mine(p)) {
@@ -1067,23 +1087,10 @@ public final class Fight {
         float u = s - hit * m.interval();
         float end = hit < m.hits() - 1 ? m.interval() : m.length() - hit * m.interval();
         float c = m.contact(), hold = m.heavy() ? 0.07f : 0.04f;
-        float k;
-        if (wind > 0) k = -0.25f * ease(wind);
-        else if (m.turns() && u < c) k = MathHelper.clamp(u / c, 0, 1); // steady through the spin, fully out at contact
-        else if (u < c && !m.leg() && hit == 0) {
-            // The tell: the first part of the way in it loads (drawn back, coiled away, weight shifting
-            // to the side it comes from), then snaps through to contact.
-            float x = u / c, load = 0.45f;
-            if (x < load) k = -0.4f * ease(x / load);
-            else {
-                float y = (x - load) / (1 - load);
-                k = -0.4f + 1.4f * y * y * (1.4f - 0.4f * y);
-            }
-        } else if (u < c) {
-            float x = u / c;
-            k = x * x * (1.4f - 0.4f * x);
-        } else if (u < c + hold) k = 1;
-        else k = 1 - ease((u - c - hold) / Math.max(0.04f, end - c - hold));
+        float k = strikeK(m, u, c, end, hold, hit, wind);
+        // Part by part: the hips lead, the chest follows a beat later, the arm last (the fist arrives
+        // after the body has already turned into it), and they settle back in the same order.
+        float kHips = strikeK(m, u + 0.24f * c, c, end, hold, hit, wind), kChest = strikeK(m, u + 0.12f * c, c, end, hold, hit, wind);
         boolean right = Fighting.rightLimb(m, st, hit);
         float out_ = right ? -1 : 1; // the limb's outside (model x: right is negative)
         float mass = m.heavy() ? 0.6f + 0.8f * power : 1;
@@ -1127,8 +1134,8 @@ public final class Fight {
             case SUPERMAN -> 20;
             default -> 0; // spinning strikes: the spin itself turns the body (see bodyTurn)
         }) * mass;
-        out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) + sign * twist * k);
-        out.set(Bone.ROOT, Pose.YAW, out.get(Bone.ROOT, Pose.YAW) + sign * twist * 0.4f * k);
+        out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) + sign * twist * kChest);
+        out.set(Bone.ROOT, Pose.YAW, out.get(Bone.ROOT, Pose.YAW) + sign * twist * 0.4f * kHips);
         if (m.path() == Path.UPPER) {
             // Dip into the legs, then drive up through them onto the toes, chest rising and leaning back.
             float dip = k < 0.35f ? ease(k / 0.35f) : 1 - ease((k - 0.35f) / 0.4f);
@@ -1301,6 +1308,28 @@ public final class Fight {
      * the head whips it away from the side it came from; a body shot folds you; a low kick buckles that
      * knee. Heavies hit harder. Fast in, eased out. Added on top of everything else.
      */
+    /**
+     * How far out a strike is at time u into its hit (0 at the guard, 1 at full extension, negative while
+     * loading). A charging heavy holds a load; a spin turns steadily into contact; a hand strike loads for
+     * its first 45% and snaps through; otherwise it speeds into contact, holds a beat, and draws back.
+     */
+    private static float strikeK(Move m, float u, float c, float end, float hold, int hit, float wind) {
+        if (wind > 0) return -0.25f * ease(wind);
+        if (m.turns() && u < c) return MathHelper.clamp(u / c, 0, 1);
+        if (u < c && !m.leg() && hit == 0) {
+            float x = Math.max(0, u / c), load = 0.45f;
+            if (x < load) return -0.4f * ease(x / load);
+            float y = (x - load) / (1 - load);
+            return -0.4f + 1.4f * y * y * (1.4f - 0.4f * y);
+        }
+        if (u < c) {
+            float x = Math.max(0, u / c);
+            return x * x * (1.4f - 0.4f * x);
+        }
+        if (u < c + hold) return 1;
+        return 1 - ease(Math.min(1, (u - c - hold) / Math.max(0.04f, end - c - hold)));
+    }
+
     /** The heavy someone would throw from this stance with the starter deck (for showing their wind-up). */
     private static Move heavyFor(int stance) {
         Fighting.Style s = Fighting.STYLES[0];

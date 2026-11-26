@@ -55,6 +55,13 @@ public final class Parkour {
     /** Hitting a wall this fast (blocks a tick, ~11 m/s) knocks you flat; landing this fast across the
      *  ground tumbles you; flung through the air this fast you lose control. */
     private static final double SLAM_SPEED = 0.55, TUMBLE_SPEED = 0.62, FLUNG_SPEED = 0.9;
+    /** Last on the ground on something slippery (ice): a fast skip off it isn't a fall. */
+    private static boolean onIce;
+
+    private static boolean slippery(ClientPlayerEntity p) {
+        var b = net.minecraft.util.math.BlockPos.ofFloored(p.getX(), p.getY() - 0.2, p.getZ());
+        return p.getWorld().getBlockState(b).getBlock().getSlipperiness() > 0.7f;
+    }
     // Walking in to a ledge before the hop: ticks so far (0 = not), its height and the way.
     private static int stepIn;
     private static double stepRise;
@@ -440,7 +447,9 @@ public final class Parkour {
         lastWater = water;
         // Speed: slamming into a wall, landing fast across the ground, or being flung hard through the
         // air puts you down, with all the speed you had.
-        if (!free && (mode == Mode.NONE || mode == Mode.VAULT)) {
+        // Ice: skipping across it fast is just ice, not a fall.
+        if (ground) onIce = slippery(p);
+        if (!free && (mode == Mode.NONE || mode == Mode.VAULT) && !Fight.controlled() && !(onIce && !p.horizontalCollision)) {
             double hs = lastVel.horizontalLength();
             boolean slam = !ground && p.horizontalCollision && hs > SLAM_SPEED;
             boolean tumble = ground && !lastGround && hs > TUMBLE_SPEED;

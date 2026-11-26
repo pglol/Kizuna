@@ -408,3 +408,13 @@ moves the body somewhere the physics wouldn't.
 - Jump again from the wall:
   - Locked on, or looking at someone within 16 blocks: a pounce straight at them, and the opening air strike goes as you arrive (it lifts them for the juggle).
   - Otherwise: a boost the way you're looking, pushed out from the wall (never back into it), flipping as you go.
+
+## Launches that aren't falls
+- A launch you meant (off a wall, a pounce, a flip or double jump) never trips the speed ragdoll: you fly and land on your feet. Skipping fast across ice doesn't either (unless you hit a wall).
+- A double jump only counts once the jump key has been let go and pressed again in the air (never the press you took off with).
+
+## Strikes move part by part
+- The hips lead, the chest follows a beat later, the arm comes last, so the fist arrives after the body has turned into it; they settle back in the same order.
+
+## Frame export (for fixing animations)
+- In the deck, EXPORT FRAMES under the preview steps the selected move through 12 frozen frames: a labelled contact sheet PNG and the exact pose of each frame as JSON, in screenshots/kata/. Upload them to kata-core/frames/ on GitHub for review.

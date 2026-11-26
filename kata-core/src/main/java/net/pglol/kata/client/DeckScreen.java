@@ -43,6 +43,13 @@ public class DeckScreen extends Screen {
     private double pressX, pressY;
     private boolean dragging;
     private int rows;
+    // Frame export: which frame is being captured (-1 when not), the frames so far, and where they go.
+    private static final int CAP_FRAMES = 12, CAP_COLS = 4;
+    private int capFrame = -1;
+    private net.minecraft.client.texture.NativeImage sheet;
+    private final StringBuilder capJson = new StringBuilder();
+    private Move capMove;
+    private static final int K_EXPORT = 5;
 
     public DeckScreen() {
         super(Text.literal("Combat deck"));
@@ -139,17 +146,29 @@ public class DeckScreen extends Screen {
             Fight.previewMove = selMove;
             Fight.previewStance = selStance < 4 ? selStance : Fight.stance();
             Fight.previewing = true;
+            boolean capturing = capFrame >= 0 && capMove == selMove;
+            float capT = capturing ? selMove.length() * capFrame / (CAP_FRAMES - 1) : -1;
+            Fight.previewFixed = capT;
             try {
                 // Seen from a little to the side so a strike reads.
                 InventoryScreen.drawEntity(c, px, py, px + pw, py + ph - 14, 26, 0.0625f, px + pw * 0.5f + 60, py + ph * 0.4f, client.player);
+                if (capturing) {
+                    Ui.text(c, textRenderer, String.format("%d/%d  %.2fs", capFrame + 1, CAP_FRAMES, capT), px + 3, py + 3, 0.5f, PAPER);
+                    capture(c, px, py, pw, ph - 14, capT);
+                }
             } finally {
                 Fight.previewing = false;
+                Fight.previewFixed = -1;
             }
             Ui.text(c, textRenderer, selMove.name(), px + 3, py + ph - 12, 0.55f, PAPER);
             int speed = Math.max(1, Math.min(5, Math.round(6 - selMove.contact() * 12)));
             int power = Math.max(1, Math.min(5, Math.round(selMove.damage() / 1.4f)));
             Ui.pips(c, px + 3, py + ph - 4, speed, 5, PAPER_SOFT);
             Ui.pips(c, px + 26, py + ph - 4, power, 5, selMove.heavy() ? GOLD : VERMILION);
+            String ex = capFrame >= 0 ? "EXPORTING..." : "EXPORT FRAMES";
+            boolean overEx = in(mx, my, px + pw - 50, py + ph - 6, 50, 8);
+            Ui.text(c, textRenderer, ex, px + pw - Ui.width(textRenderer, ex, 0.4f) - 2, py + ph - 5, 0.4f, overEx ? VERMILION : PAPER_FAINT);
+            boxes.add(new int[] {px + pw - 50, py + ph - 6, 50, 8, K_EXPORT, 0});
         }
 
         // ---- Moves learned in the selected style ----
@@ -203,6 +222,57 @@ public class DeckScreen extends Screen {
             c.getMatrices().translate(0, 0, 300);
             Icons.draw(c, m, mx - 10, my - 10, 2, 0xFF0E0C0A, m.heavy() ? GOLD : accentOf(Fighting.styleOf(m)));
             c.getMatrices().pop();
+        }
+    }
+
+    /**
+     * Grab this frame of the preview (the box at x, y, w, h) into the contact sheet, and its pose into the
+     * JSON. After the last frame both are written to screenshots/kata/.
+     */
+    private void capture(DrawContext c, int x, int y, int w, int h, float time) {
+        if (client == null || client.player == null) return;
+        c.draw(); // everything so far onto the screen
+        double sf = client.getWindow().getScaleFactor();
+        int cx = (int) Math.round(x * sf), cy = (int) Math.round(y * sf), cw = (int) Math.round(w * sf), ch = (int) Math.round(h * sf);
+        try (net.minecraft.client.texture.NativeImage shot = net.minecraft.client.util.ScreenshotRecorder.takeScreenshot(client.getFramebuffer())) {
+            int rowsN = (CAP_FRAMES + CAP_COLS - 1) / CAP_COLS;
+            if (sheet == null) sheet = new net.minecraft.client.texture.NativeImage(cw * CAP_COLS, ch * rowsN, true);
+            int ox = (capFrame % CAP_COLS) * cw, oy = (capFrame / CAP_COLS) * ch;
+            for (int j = 0; j < ch; j++) for (int i = 0; i < cw; i++) {
+                int sx = cx + i, sy = cy + j;
+                if (sx >= 0 && sy >= 0 && sx < shot.getWidth() && sy < shot.getHeight()) sheet.setColor(ox + i, oy + j, shot.getColor(sx, sy));
+            }
+        } catch (Exception e) {
+            capFrame = -1;
+            return;
+        }
+        // The pose itself, angle by angle, for exact fixes.
+        net.pglol.kata.rig.Pose pose = Animator.pose(client.player, 1);
+        capJson.append(capJson.length() == 0 ? "[\n" : ",\n").append(String.format(java.util.Locale.ROOT, "  {\"frame\": %d, \"time\": %.3f, \"offset\": [%.2f, %.2f, %.2f], \"bones\": {",
+            capFrame + 1, time, pose.offset[0], pose.offset[1], pose.offset[2]));
+        net.pglol.kata.rig.Bone[] bones = net.pglol.kata.rig.Bone.values();
+        for (int b = 0; b < bones.length; b++) {
+            capJson.append(String.format(java.util.Locale.ROOT, "%s\"%s\": [%.1f, %.1f, %.1f]", b == 0 ? "" : ", ", bones[b].name().toLowerCase(java.util.Locale.ROOT),
+                pose.get(bones[b], 0), pose.get(bones[b], 1), pose.get(bones[b], 2)));
+        }
+        capJson.append("}}");
+        capFrame++;
+        if (capFrame >= CAP_FRAMES) {
+            capFrame = -1;
+            try {
+                java.nio.file.Path dir = client.runDirectory.toPath().resolve("screenshots").resolve("kata");
+                java.nio.file.Files.createDirectories(dir);
+                String name = capMove.id().replace(':', '_') + "_" + new java.text.SimpleDateFormat("MMdd-HHmmss").format(new java.util.Date());
+                sheet.writeTo(dir.resolve(name + ".png"));
+                capJson.append("\n]\n");
+                java.nio.file.Files.writeString(dir.resolve(name + ".json"), "{\"move\": \"" + capMove.id() + "\", \"stance\": " + selStance + ", \"frames\": " + capJson + "}\n");
+                Hud.pop("FRAMES SAVED: screenshots/kata", 0xFFEDE5D3);
+            } catch (Exception e) {
+                Hud.pop("COULDN'T SAVE FRAMES", 0xFFFF5A4A);
+            } finally {
+                sheet.close();
+                sheet = null;
+            }
         }
     }
 
@@ -268,6 +338,14 @@ public class DeckScreen extends Screen {
                 } else dragId = b[5];
             }
             case K_RESET -> Deck.reset();
+            case K_EXPORT -> {
+                if (selMove != null && capFrame < 0) {
+                    capMove = selMove;
+                    capFrame = 0;
+                    sheet = null;
+                    capJson.setLength(0);
+                }
+            }
             default -> { }
         }
         return true;
