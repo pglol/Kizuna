@@ -1803,6 +1803,14 @@ public final class Fight {
                 : new Vector3f(oGuard).lerp(new Vector3f(aim).add(-out_ * 3.2f, 1, 0), ease(k));
             Animator.reach(out, oArm, oFore, oShoulder, oFist, frame, 1, new Vector3f(-out_ * 0.3f, 1, 0.45f));
         }
+        if (wind_) senpuArms(out, m, k, right, out_);
+        if (wind_ && m.from() == Fighting.From.AIR && m.heavy()) {
+            // The meteor heel: the leg swung up overhead, then driven straight down like an axe.
+            Bone leg = right ? Bone.RIGHT_LEG : Bone.LEFT_LEG, shin = right ? Bone.RIGHT_SHIN : Bone.LEFT_SHIN;
+            float kk2 = Math.max(0, k), up = k < 0 ? Math.min(1, -k / 0.4f) : 1 - ease(kk2);
+            toward(out, leg, Math.max(Math.min(1, -k / 0.4f), Math.min(1, kk2 * 3)), -165 * up - 10 * (1 - up), 0, 0);
+            toward(out, shin, 1, 4, 0, 0);
+        }
         if (m.from() == Fighting.From.AIR || m.heavy() || wind_) Trails.add(p.getId(), Ragdoll.toWorld(Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH], pos, bodyYaw), m.heavy());
         if (mine(p) && cur != null) {
             limbPrev = limbNow;
@@ -1946,6 +1954,7 @@ public final class Fight {
                 Animator.kickLeg(out, leg2, shin2, hip2, foot2, inv, 1, new Vector3f(-out_ * 0.15f, 0, -1));
             }
         }
+        if (wind_) senpuLegs(out, m, kk, right, out_);
         if (m.from() == Fighting.From.AIR || m.heavy() || wind_) {
             Vector3f[] jj = Ragdoll.joints(out);
             Trails.add(p.getId(), Ragdoll.toWorld(m.path() == Path.KNEE ? jj[right ? Ragdoll.RK : Ragdoll.LK] : jj[right ? Ragdoll.RF : Ragdoll.LF], pos, bodyYaw), m.heavy());
@@ -1956,6 +1965,98 @@ public final class Fight {
             limbNow = Ragdoll.toWorld(m.path() == Path.KNEE ? j[right ? Ragdoll.RK : Ragdoll.LK] : j[right ? Ragdoll.RF : Ragdoll.LF], pos, bodyYaw);
             limbMidPrev = limbMid;
             limbMid = Ragdoll.toWorld(m.path() == Path.KNEE ? j[right ? Ragdoll.RHIP : Ragdoll.LHIP] : j[right ? Ragdoll.RK : Ragdoll.LK], pos, bodyYaw); // the shin (the thigh for a knee)
+        }
+    }
+
+    /** Blend a bone's three angles towards (pitch, yaw, roll) by w. */
+    private static void toward(Pose out, Bone b, float w, float pitch, float yaw, float roll) {
+        out.set(b, Pose.PITCH, MathHelper.lerp(w, out.get(b, Pose.PITCH), pitch));
+        out.set(b, Pose.YAW, MathHelper.lerp(w, out.get(b, Pose.YAW), yaw));
+        out.set(b, Pose.ROLL, MathHelper.lerp(w, out.get(b, Pose.ROLL), roll));
+    }
+
+    /**
+     * Senpu-ryu's arms, set joint by joint (not reached for), so each strike has its exact shape: a palm
+     * loads high beside the head and thrusts out straight and level, a backfist is flung out to the side
+     * and the spin whips it round, the elbow folds tight and leads, the tempest palm drives both out.
+     * Outward roll is -out_ (right arm +, left arm -).
+     */
+    private static void senpuArms(Pose out, Move m, float k, boolean right, float out_) {
+        Bone arm = right ? Bone.RIGHT_ARM : Bone.LEFT_ARM, fore = right ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM;
+        Bone oArm = right ? Bone.LEFT_ARM : Bone.RIGHT_ARM, oFore = right ? Bone.LEFT_FOREARM : Bone.RIGHT_FOREARM;
+        float load = k < 0 ? Math.min(1, -k / 0.4f) : 0, kk = Math.max(0, k), hit = ease(kk), outR = -out_;
+        if (m.from() == Fighting.From.AIR && m.heavy()) {
+            // The meteor heel is the legs' (see senpuLegs); the arms fling up and out above it.
+            toward(out, Bone.RIGHT_ARM, Math.max(load, hit), -150, 0, 30);
+            toward(out, Bone.LEFT_ARM, Math.max(load, hit), -150, 0, -30);
+            return;
+        }
+        switch (m.path()) {
+            case PALM -> {
+                // Loaded: the hand up and back by the ear, palm turned out; thrown: the arm straight and level.
+                toward(out, arm, load, -150, 0, outR * 22);
+                toward(out, fore, load, 75, 0, 0);
+                toward(out, arm, hit, -92, -outR * 6, outR * 4);
+                toward(out, fore, hit, 3, 0, 0);
+                if (m.heavy()) {
+                    // Tempest palm: both hands, side by side.
+                    toward(out, oArm, load, -150, 0, -outR * 22);
+                    toward(out, oFore, load, 75, 0, 0);
+                    toward(out, oArm, hit, -92, outR * 6, -outR * 4);
+                    toward(out, oFore, hit, 3, 0, 0);
+                }
+            }
+            case BACKFIST -> {
+                // Out to the side at shoulder height, straight; the turn of the body carries it round.
+                toward(out, arm, load, -40, 0, outR * 30);
+                toward(out, arm, hit, -88, 0, outR * 78);
+                toward(out, fore, hit, 6, 0, 0);
+                toward(out, oArm, hit, -30, 0, -outR * 10);
+                toward(out, oFore, hit, 100, 0, 0);
+            }
+            case ELBOW -> {
+                // Folded tight, raised level, the elbow point leading the spin.
+                toward(out, arm, hit, -92, 0, outR * 35);
+                toward(out, fore, hit, 140, 0, 0);
+            }
+            default -> { }
+        }
+    }
+
+    /**
+     * Senpu-ryu's legs, set joint by joint: crescents are straight legs that rise and sweep across in an
+     * arc (outside in; the reverse crescent inside out), the rising crescent a straight leg swung up high
+     * in front, the reaping sweep a low straight leg scything across, the meteor heel raised high and
+     * driven down. Outward roll is -out_ (right leg +, left leg -).
+     */
+    private static void senpuLegs(Pose out, Move m, float kk, boolean right, float out_) {
+        Bone leg = right ? Bone.RIGHT_LEG : Bone.LEFT_LEG, shin = right ? Bone.RIGHT_SHIN : Bone.LEFT_SHIN;
+        float outR = -out_;
+        float w = Math.min(1, kk * 3.5f); // into the authored shape fast, out of it as the move draws back
+        switch (m.path()) {
+            case ROUNDHOUSE -> {
+                boolean reverse = m.from() == Fighting.From.BACK && !m.heavy() ? false : m.id().endsWith("reverse_crescent");
+                float rise = ease(Math.min(1, kk / 0.3f));
+                float sweep = ease(MathHelper.clamp((kk - 0.25f) / 0.75f, 0, 1));
+                float from = reverse ? -22 : 52, to = reverse ? 55 : -24;
+                toward(out, leg, w, -112 * rise, 0, outR * MathHelper.lerp(sweep, from, to));
+                toward(out, shin, w, 6, 0, 0);
+            }
+            case FRONT_KICK -> {
+                // Up through them and on above head height, straight-legged; the body leaning back under it.
+                float up = kk < 0.75f ? ease(kk / 0.75f) * 0.86f : 0.86f + 0.14f * ease((kk - 0.75f) / 0.25f);
+                toward(out, leg, w, -150 * up, 0, outR * 8);
+                toward(out, shin, w, 4, 0, 0);
+            }
+            case LOW_KICK -> {
+                float sweep = ease(MathHelper.clamp((kk - 0.2f) / 0.8f, 0, 1));
+                toward(out, leg, w, -38, 0, outR * MathHelper.lerp(sweep, 45, -30));
+                toward(out, shin, w, 5, 0, 0);
+                out.offset[1] += 3 * w;
+                Bone standShin = right ? Bone.LEFT_SHIN : Bone.RIGHT_SHIN;
+                out.set(standShin, Pose.PITCH, out.get(standShin, Pose.PITCH) + 40 * w);
+            }
+            default -> { }
         }
     }
 
