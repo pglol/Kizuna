@@ -50,12 +50,15 @@ public final class Injuries {
     public static final Item BANDAGE = new BandageItem(new Item.Settings().maxCount(16));
     private static final Identifier SLOW = Identifier.of(KataCore.ID, "injury_slow"), HOP = Identifier.of(KataCore.ID, "injury_jump");
 
-    private static final Map<UUID, Integer> MASK = new HashMap<>();
+    /** Ticks left to heal, per part (left leg, right leg, left arm, right arm, ribs). */
+    private static final Map<UUID, int[]> LEFT = new HashMap<>();
     private static final Map<UUID, double[]> FALL = new HashMap<>(); // peak y (NaN on the ground), last y
     private static Path file;
 
     /** Falls up to this many blocks don't hurt. */
     static final double SAFE = 5;
+    /** A break mends on its own in five minutes, hurting less as it goes. */
+    static final int HEAL = 6000;
 
     public static void register() {
         Registry.register(Registries.ITEM, Identifier.of(KataCore.ID, "bandage"), BANDAGE);
@@ -66,35 +69,47 @@ public final class Injuries {
         ServerPlayConnectionEvents.JOIN.register((h, sender, srv) -> srv.execute(() -> {
             ServerPlayerEntity p = h.getPlayer();
             apply(p);
-            // A first visit: a couple of bandages to start with.
+            relay(p);
+            // A first visit: a few bandages to start with.
             if (!p.getCommandTags().contains("kata_bandaged")) {
                 p.addCommandTag("kata_bandaged");
                 p.giveItemStack(new ItemStack(BANDAGE, 3));
             }
         }));
         ServerPlayerEvents.AFTER_RESPAWN.register((o, n, alive) -> {
-            if (!alive) MASK.remove(n.getUuid());
+            if (!alive) LEFT.remove(n.getUuid());
             apply(n);
             relay(n);
         });
     }
 
     public static int mask(LivingEntity e) {
-        return MASK.getOrDefault(e.getUuid(), 0);
+        int[] l = LEFT.get(e.getUuid());
+        if (l == null) return 0;
+        int m = 0;
+        for (int i = 0; i < 5; i++) if (l[i] > 0) m |= 1 << i;
+        return m;
     }
 
-    private static int legs(int m) {
-        return Integer.bitCount(m & (L_LEG | R_LEG));
+    /** How bad a part still is, 0 (fine) to 1 (just broken). */
+    static float severity(LivingEntity e, int part) {
+        int[] l = LEFT.get(e.getUuid());
+        return l == null ? 0 : Math.min(1, l[part] / (float) HEAL);
     }
 
-    private static int arms(int m) {
-        return Integer.bitCount(m & (L_ARM | R_ARM));
+    /** What's relayed: four bits a part (0 healed, 15 fresh), left leg in the lowest. */
+    private static int packed(LivingEntity e) {
+        int[] l = LEFT.get(e.getUuid());
+        if (l == null) return 0;
+        int v = 0;
+        for (int i = 0; i < 5; i++) if (l[i] > 0) v |= Math.max(1, Math.min(15, (int) Math.ceil(l[i] * 15.0 / HEAL))) << (4 * i);
+        return v;
     }
 
     /** How hard a strike from `by` lands, with what's broken: a broken arm weakens punches, a broken leg kicks. */
     static float strikeScale(LivingEntity by, boolean leg) {
-        int m = mask(by);
-        return 1 - 0.3f * (leg ? legs(m) : arms(m));
+        float s = leg ? severity(by, 0) + severity(by, 1) : severity(by, 2) + severity(by, 3);
+        return 1 - 0.3f * s;
     }
 
     /** A full heavy landing on someone can break what it hits. */
@@ -110,57 +125,71 @@ public final class Injuries {
     }
 
     static void injure(ServerPlayerEntity p, int bit) {
-        int m = mask(p);
-        if ((m & bit) != 0) return;
-        MASK.put(p.getUuid(), m | bit);
+        int i = Integer.numberOfTrailingZeros(bit);
+        int[] l = LEFT.computeIfAbsent(p.getUuid(), k -> new int[5]);
+        if (l[i] > 0) {
+            l[i] = HEAL; // hurt again: back to the start
+            return;
+        }
+        l[i] = HEAL;
         apply(p);
         relay(p);
         p.getWorld().playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.BLOCK_BONE_BLOCK_BREAK, SoundCategory.PLAYERS, 1f, 0.7f);
-        p.sendMessage(Text.literal((bit == RIBS ? "Cracked your ribs" : "Broke your " + NAMES[Integer.numberOfTrailingZeros(bit)]) + "  ·  bandage it").formatted(Formatting.RED), true);
+        p.sendMessage(Text.literal((bit == RIBS ? "Cracked your ribs" : "Broke your " + NAMES[i]) + "  ·  it'll mend in a few minutes, faster bandaged").formatted(Formatting.RED), true);
     }
 
     /** A bandage: sets up to two injuries (legs first, then ribs, then arms). Returns how many. */
     static int bandage(ServerPlayerEntity p) {
-        int m = mask(p), healed = 0;
-        for (int bit : new int[] {L_LEG, R_LEG, RIBS, L_ARM, R_ARM}) {
+        int[] l = LEFT.get(p.getUuid());
+        if (l == null) return 0;
+        int healed = 0;
+        for (int i : new int[] {0, 1, 4, 2, 3}) {
             if (healed >= 2) break;
-            if ((m & bit) != 0) {
-                m &= ~bit;
+            if (l[i] > 0) {
+                l[i] = 0;
                 healed++;
             }
         }
-        if (healed == 0) return 0;
-        if (m == 0) MASK.remove(p.getUuid());
-        else MASK.put(p.getUuid(), m);
+        if (mask(p) == 0) LEFT.remove(p.getUuid());
         apply(p);
         relay(p);
         return healed;
     }
 
-    /** The stat side: a broken leg slows you (both, a lot) and you can't spring as high. */
+    /** The stat side, easing as it mends: a broken leg slows you (both, a lot) and you can't spring as high. */
     static void apply(ServerPlayerEntity p) {
-        int l = legs(mask(p));
+        float legs = severity(p, 0) + severity(p, 1);
         EntityAttributeInstance speed = p.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED);
         if (speed != null) {
             speed.removeModifier(SLOW);
-            if (l > 0) speed.addTemporaryModifier(new EntityAttributeModifier(SLOW, l == 1 ? -0.28 : -0.5, EntityAttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
+            if (legs > 0.01f) speed.addTemporaryModifier(new EntityAttributeModifier(SLOW, -Math.min(0.55, 0.12 + 0.22 * legs), EntityAttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
         }
         EntityAttributeInstance jump = p.getAttributeInstance(EntityAttributes.GENERIC_JUMP_STRENGTH);
         if (jump != null) {
             jump.removeModifier(HOP);
-            if (l > 0) jump.addTemporaryModifier(new EntityAttributeModifier(HOP, l == 1 ? -0.1 : -0.18, EntityAttributeModifier.Operation.ADD_VALUE));
+            if (legs > 0.01f) jump.addTemporaryModifier(new EntityAttributeModifier(HOP, -Math.min(0.18, 0.04 + 0.08 * legs), EntityAttributeModifier.Operation.ADD_VALUE));
         }
     }
 
     private static void relay(ServerPlayerEntity p) {
-        Fighting.relayAround(p, KataNet.INJURY, mask(p));
+        Fighting.relayAround(p, KataNet.INJURY, packed(p));
     }
 
     private static void tick(MinecraftServer s) {
         int t = s.getTicks();
         for (ServerPlayerEntity p : s.getPlayerManager().getPlayerList()) {
             fall(p);
-            if (t % 40 == 0 && MASK.containsKey(p.getUuid())) relay(p);
+            int[] l = LEFT.get(p.getUuid());
+            if (l == null || t % 20 != 0) continue;
+            // Mending, a second at a time.
+            for (int i = 0; i < 5; i++) {
+                if (l[i] <= 0) continue;
+                l[i] = Math.max(0, l[i] - 20);
+                if (l[i] == 0) p.sendMessage(Text.literal("Your " + NAMES[i] + (i == 4 ? " have" : " has") + " mended").formatted(Formatting.GRAY), true);
+            }
+            if (mask(p) == 0) LEFT.remove(p.getUuid());
+            if (t % 100 == 0 || !LEFT.containsKey(p.getUuid())) apply(p);
+            if (t % 40 == 0 || !LEFT.containsKey(p.getUuid())) relay(p);
         }
     }
 
@@ -212,12 +241,21 @@ public final class Injuries {
 
     private static void load(MinecraftServer s) {
         file = s.getSavePath(WorldSavePath.ROOT).resolve("kata_core").resolve("injuries.txt");
-        MASK.clear();
+        LEFT.clear();
         try {
             if (Files.exists(file))
                 for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
                     String[] p = line.trim().split(" ");
-                    if (p.length == 2) MASK.put(UUID.fromString(p[0]), Integer.parseInt(p[1]));
+                    if (p.length == 6) {
+                        int[] l = new int[5];
+                        for (int i = 0; i < 5; i++) l[i] = Integer.parseInt(p[i + 1]);
+                        LEFT.put(UUID.fromString(p[0]), l);
+                    } else if (p.length == 2) { // the older form: just what's broken
+                        int m = Integer.parseInt(p[1]);
+                        int[] l = new int[5];
+                        for (int i = 0; i < 5; i++) if ((m & 1 << i) != 0) l[i] = HEAL;
+                        LEFT.put(UUID.fromString(p[0]), l);
+                    }
                 }
         } catch (Exception e) {
             KataCore.LOG.warn("Could not read injuries.txt", e);
@@ -229,7 +267,11 @@ public final class Injuries {
         try {
             Files.createDirectories(file.getParent());
             StringBuilder b = new StringBuilder();
-            MASK.forEach((u, m) -> b.append(u).append(' ').append(m).append('\n'));
+            LEFT.forEach((u, l) -> {
+                b.append(u);
+                for (int v : l) b.append(' ').append(v);
+                b.append('\n');
+            });
             Files.writeString(file, b, StandardCharsets.UTF_8);
         } catch (Exception e) {
             KataCore.LOG.error("Could not save injuries.txt", e);

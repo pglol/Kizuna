@@ -73,7 +73,7 @@ public final class Town {
     /** The tree belt round the outside. */
     static final int BELT = 24;
     /** Bump to rebuild the town on every server that has an older one. */
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
 
     static int lx(int i) { return MIN + R + i * P; }
     static int lz(int j) { return MIN + R + j * P; }

@@ -260,6 +260,10 @@ public final class Fight {
 
     /** Land on the wall, sideways and crouched like a spider, for up to 1.5 s. */
     private static void cling(ClientPlayerEntity p, Vec3d normal) {
+        if (!canCling(normal)) return;
+        if (clungThisJump && clingGrant > 0 && (lastCling == null || normal.dotProduct(lastCling) >= 0.3)) clingGrant--;
+        lastCling = normal;
+        thrustUntil = 0;
         clingNormal = normal;
         clingUntil = clock() + 1_500_000_000L;
         clungThisJump = true;
@@ -295,15 +299,100 @@ public final class Fight {
             dir = l2.multiply(0.8).add(n.multiply(0.55)).normalize();
             speed = 0.95;
         }
-        p.setVelocity(dir.x * speed, Math.max(dir.y * speed, 0.32), dir.z * speed);
+        thrust(p, dir, speed);
+    }
+
+    /**
+     * The needle: straight out the way it's aimed, body stretched along the line, arms ahead. Off a wall,
+     * off the end of a wall run, or straight up a wall. Land it and you roll out (unless it's too fast).
+     */
+    private static void thrust(ClientPlayerEntity p, Vec3d dir, double speed) {
+        clingUntil = 0;
+        runUntil = 0;
+        p.setVelocity(dir.x * speed, Math.max(dir.y * speed, -0.6), dir.z * speed);
         controlledUntil = clock() + 1_500_000_000L; // flying on purpose: land on your feet
-        // A flip off it, whichever way you're going.
-        double rel = Math.atan2(-(dir.x * Math.cos(Math.toRadians(p.getYaw())) + dir.z * Math.sin(Math.toRadians(p.getYaw()))),
-            -dir.x * Math.sin(Math.toRadians(p.getYaw())) + dir.z * Math.cos(Math.toRadians(p.getYaw())));
-        int idx = Math.floorMod((int) Math.round(-rel / (Math.PI * 2) * 16), 16);
-        DODGES.put(p.getId(), new React(16 + idx, clock()));
-        send(KataNet.DODGE, 16 + idx, 0);
+        thrustUntil = clock() + 1_600_000_000L;
+        thrustGrace = clock() + 250_000_000L; // don't catch straight back onto what you left
+        rollBraced = false;
+        double pitch = Math.toDegrees(-Math.asin(MathHelper.clamp(dir.y, -1, 1)));
+        int code = 64 + MathHelper.clamp((int) Math.round((pitch + 90) / 15), 0, 12);
+        DODGES.put(p.getId(), new React(code, clock()));
+        send(KataNet.DODGE, code, 0);
         flipUsed = true;
+    }
+
+    /** Clinging and looking up the wall: a dash straight up it, and one more chance to catch on (or climb). */
+    private static void upDash(ClientPlayerEntity p) {
+        Vec3d n = clingNormal == null ? Vec3d.ZERO : clingNormal;
+        clingGrant = 1;
+        upDashed = true;
+        thrust(p, new Vec3d(-n.x * 0.04, 1, -n.z * 0.04).normalize(), 0.92);
+        thrustGrace = clock() + 500_000_000L; // catch on again near the top of the dash
+    }
+
+    /** Another wall this jump (wall to wall), or the same one if a dash earned it; the first one always. */
+    private static boolean canCling(Vec3d n) {
+        if (!clungThisJump) return true;
+        if (clingGrant > 0) return true;
+        return lastCling == null || n.dotProduct(lastCling) < 0.3;
+    }
+
+    /** The wall goes up past your head (a real wall to cling to or run on, not a ledge to climb). */
+    private static boolean tallWall(ClientPlayerEntity p, Vec3d n) {
+        var w = p.getWorld();
+        net.minecraft.util.math.BlockPos b = net.minecraft.util.math.BlockPos.ofFloored(p.getX() - n.x * 0.8, p.getY() + 2.3, p.getZ() - n.z * 0.8);
+        return !w.getBlockState(b).getCollisionShape(w, b).isEmpty();
+    }
+
+    static boolean wallRunning() {
+        return clock() < runUntil;
+    }
+
+    /** Running along a wall: sideways on it, momentum kept, an arc up then falling away. */
+    private static void startRun(ClientPlayerEntity p, Vec3d n) {
+        Vec3d v = p.getVelocity();
+        Vec3d flat = new Vec3d(v.x, 0, v.z);
+        Vec3d along = flat.subtract(n.multiply(flat.dotProduct(n)));
+        if (along.lengthSquared() < 1e-4) return;
+        runDir = along.normalize();
+        runSpeed = Math.max(0.3, flat.length() * 1.05);
+        runNormal = n;
+        runAt = clock();
+        runUntil = clock() + 1_400_000_000L;
+        ranThisJump = true;
+        lastCling = n;
+        clungThisJump = true;
+        int idx = Math.floorMod((int) Math.round(Math.atan2(n.z, n.x) / (Math.PI * 2) * 16), 16);
+        DODGES.put(p.getId(), new React(48 + idx, clock()));
+        send(KataNet.DODGE, 48 + idx, 0);
+    }
+
+    private static void runTick(ClientPlayerEntity p, boolean fresh) {
+        float t = secs(runAt);
+        Vec3d n = wallNormal(p);
+        if (p.isOnGround() || p.input.movementForward < 0.2f) {
+            runUntil = 0;
+            return;
+        }
+        if (fresh) {
+            // Jumping off mid-run: the needle, the way you look (never back into the wall).
+            Vec3d look = p.getRotationVec(1), wn = runNormal;
+            double into = look.dotProduct(wn);
+            Vec3d d = (into < 0 ? look.subtract(wn.multiply(into)) : look).add(wn.multiply(0.25)).normalize();
+            thrust(p, d, Math.max(0.95, runSpeed));
+            return;
+        }
+        if (n == null || n.dotProduct(runNormal) < 0.7 || t > 1.4f) {
+            // The wall ran out (or the run did): a moment to throw yourself off the end of it.
+            runUntil = 0;
+            runEndAt = clock();
+            return;
+        }
+        double sp = Math.max(0.24, runSpeed * (1 - t * 0.12));
+        double vy = 0.11 - t * 0.17;
+        p.setVelocity(runDir.x * sp - n.x * 0.03, vy, runDir.z * sp - n.z * 0.03);
+        p.fallDistance = 0;
+        controlledUntil = clock() + 400_000_000L;
     }
 
     /** Someone alive in front of you within range (a narrow cone round where you look), or null. */
@@ -425,21 +514,50 @@ public final class Fight {
         }
         boolean fresh = jumpNow && !jumpWas && releasedInAir && airTicks > 2;
         jumpWas = jumpNow;
-        if (clinging()) {
-            // On the wall: jump off it (or at someone), or drop when time's up or you touch down.
+        landRoll(p);
+        boolean aloft = !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying && Parkour.view(p).mode() == Parkour.Mode.NONE;
+        if (wallRunning()) runTick(p, fresh);
+        else if (clinging()) {
+            // On the wall: jump off it (looking up the wall: a dash up it), or drop when time's up or you touch down.
             p.fallDistance = 0;
             Vec3d v = p.getVelocity();
             p.setVelocity(0, Math.max(-0.03, Math.min(v.y, 0)) * 0.5, 0); // a slow slide
-            if (fresh) wallJump(mc, p);
-            else if (p.isOnGround() || clock() > clingUntil) clingUntil = 0;
-        } else if (fresh && !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying
-            && Parkour.view(p).mode() == Parkour.Mode.NONE) {
-            // A double jump at a wall lands you on it, sideways, crouched; otherwise a flip.
+            if (fresh) {
+                if (p.getPitch() < -50 && !upDashed) upDash(p);
+                else wallJump(mc, p);
+            } else if (p.isOnGround() || clock() > clingUntil) clingUntil = 0;
+        } else if (fresh && aloft && runEndAt != 0 && secs(runEndAt) < 0.45f) {
+            // Just off the end of a wall run: the needle, the way you look.
+            runEndAt = 0;
+            thrust(p, p.getRotationVec(1), Math.max(0.95, runSpeed));
+        } else if (aloft && airTicks > 3) {
+            // Coming into a wall in the air catches you on it by itself (like a ledge does): moving along
+            // it at speed, you run it; facing into it, you cling. Another wall, or one a dash earned, again.
             Vec3d wall = wallNormal(p);
-            if (wall != null && !clungThisJump) cling(p, wall);
-            else if (!flipUsed) dodge(p);
+            boolean took = false;
+            if (wall != null && tallWall(p, wall) && canCling(wall) && clock() > thrustGrace) {
+                Vec3d v = p.getVelocity();
+                double hs = Math.hypot(v.x, v.z);
+                Vec3d look = p.getRotationVec(1);
+                double facing = new Vec3d(look.x, 0, look.z).normalize().dotProduct(wall);
+                boolean forward = p.input.movementForward > 0.3f;
+                if (forward && hs > 0.2 && Math.abs(v.x * wall.x + v.z * wall.z) / hs < 0.55 && !ranThisJump) {
+                    startRun(p, wall);
+                    took = true;
+                } else if (facing < -0.35 && (forward || fresh)) {
+                    cling(p, wall);
+                    took = clinging();
+                }
+            }
+            if (!took && fresh && !flipUsed) dodge(p);
+        } else if (fresh && aloft && !flipUsed) dodge(p);
+        if (p.isOnGround()) {
+            clungThisJump = false;
+            ranThisJump = false;
+            upDashed = false;
+            clingGrant = 0;
+            lastCling = null;
         }
-        if (p.isOnGround()) clungThisJump = false;
         pounce(mc, p);
         if (mc.world != null && mc.world.getTime() % 3 == 0) stars(mc);
         tethers(mc);
@@ -869,6 +987,47 @@ public final class Fight {
     private static float dodgeSpeed;
     private static int dodgeTick = 99;
     private static boolean flipUsed, jumpWas, clungThisJump, releasedInAir;
+    private static boolean ranThisJump, upDashed, rollBraced, groundWas = true;
+    private static int clingGrant;
+    private static Vec3d lastCling, runDir = Vec3d.ZERO, runNormal = Vec3d.ZERO;
+    private static double runSpeed, lastVy;
+    private static long runUntil, runAt, runEndAt, thrustUntil, thrustGrace;
+
+    /**
+     * Coming down out of the needle: touching the ground you tuck and roll out of it, the speed carried
+     * on along the ground. Too hot (dropping fast): no roll, you land as you land.
+     */
+    private static void landRoll(ClientPlayerEntity p) {
+        boolean ground = p.isOnGround();
+        if (clock() < thrustUntil) {
+            if (p.getVelocity().y < -1.25) controlledUntil = 0; // too fast to roll: you'll come down hard
+            // About to touch down: tell the server it's a caught landing (sent a moment early so it's in first).
+            if (!rollBraced && p.getVelocity().y < 0 && p.getVelocity().y >= -1.25) {
+                var w = p.getWorld();
+                for (int k = 1; k <= 3; k++) {
+                    var b = net.minecraft.util.math.BlockPos.ofFloored(p.getX(), p.getY() - k, p.getZ());
+                    if (!w.getBlockState(b).getCollisionShape(w, b).isEmpty()) {
+                        rollBraced = true;
+                        if (ClientPlayNetworking.canSend(KataNet.Act.ID)) ClientPlayNetworking.send(new KataNet.Act(KataNet.BRACE, 0));
+                        break;
+                    }
+                }
+            }
+            if (ground && !groundWas) {
+                thrustUntil = 0;
+                if (lastVy >= -1.25) {
+                    Vec3d v = p.getVelocity();
+                    p.setVelocity(v.x * 0.85, v.y, v.z * 0.85);
+                    controlledUntil = clock() + 700_000_000L;
+                    if (ClientPlayNetworking.canSend(KataNet.Act.ID)) ClientPlayNetworking.send(new KataNet.Act(KataNet.BRACE, 0)); // a roll is a caught landing
+                    DODGES.put(p.getId(), new React(80, clock()));
+                    send(KataNet.DODGE, 80, 0);
+                }
+            }
+        }
+        lastVy = p.getVelocity().y;
+        groundWas = ground;
+    }
     private static int airTicks;
     /** A launch you meant (off a wall, a pounce, a flip): no speed ragdoll for it until then. */
     private static long controlledUntil;
@@ -889,7 +1048,17 @@ public final class Fight {
     /** What's broken on whom (Injuries bits: 1 left leg, 2 right leg, 4 left arm, 8 right arm, 16 ribs). */
     private static final Map<Integer, Integer> INJURED = new HashMap<>();
 
-    public static int injuries(int id) { return INJURED.getOrDefault(id, 0); }
+    /** What's broken on someone, as bits (1 left leg, 2 right leg, 4 left arm, 8 right arm, 16 ribs). */
+    public static int injuries(int id) {
+        int v = INJURED.getOrDefault(id, 0), m = 0;
+        for (int i = 0; i < 5; i++) if (((v >> (4 * i)) & 15) != 0) m |= 1 << i;
+        return m;
+    }
+
+    /** How much a part still hurts, 0 to 1 (it eases as it mends). */
+    public static float hurt(int id, int part) {
+        return ((INJURED.getOrDefault(id, 0) >> (4 * part)) & 15) / 15f;
+    }
 
     public static int myInjuries() {
         var p = MinecraftClient.getInstance().player;
@@ -1751,10 +1920,104 @@ public final class Fight {
      * folded under. Slip: the head and shoulders out to the side, feet nearly still. Hop: knees tucked
      * up. Flip: a whole turn about the waist whichever way it was thrown, tucked tight, opening to land.
      */
+    /** Turn the whole body by `deg` about a flat model axis, about the waist (not the feet). */
+    private static void tipAboutWaist(Pose out, Vector3f axis, float deg) {
+        if (axis.lengthSquared() < 1e-6f) return;
+        org.joml.Quaternionf tip = new org.joml.Quaternionf().rotationAxis((float) Math.toRadians(deg), new Vector3f(axis).normalize());
+        org.joml.Quaternionf was = new org.joml.Quaternionf().rotationZYX(out.rad(Bone.ROOT, Pose.ROLL), out.rad(Bone.ROOT, Pose.YAW), out.rad(Bone.ROOT, Pose.PITCH));
+        org.joml.Quaternionf now = new org.joml.Quaternionf(tip).mul(was);
+        Vector3f waist = new Vector3f(0, -12, 0);
+        Vector3f a = was.transform(new Vector3f(waist)), b = now.transform(new Vector3f(waist));
+        out.offset[0] += a.x - b.x;
+        out.offset[1] += a.y - b.y;
+        out.offset[2] += a.z - b.z;
+        Vector3f eul = new org.joml.Matrix3f().set(now).getEulerAnglesZYX(new Vector3f());
+        out.set(Bone.ROOT, (float) Math.toDegrees(eul.x), (float) Math.toDegrees(eul.y), (float) Math.toDegrees(eul.z));
+    }
+
+    /** The needle: the body laid along the line of flight (pitch bucket of 15 degrees, 0 = straight up), arms reaching ahead, legs together. */
+    private static void needle(LivingEntity e, int bucket, float s, Pose out) {
+        if (s > 1.6f || (e.isOnGround() && s > 0.15f)) return;
+        float w = Math.min(1, s / 0.1f);
+        float pitch = bucket * 15 - 90; // -90 up .. 90 down
+        float lean = 90 + pitch; // tipped forward this far from standing
+        out.set(Bone.RIGHT_ARM, Pose.PITCH, MathHelper.lerp(w, out.get(Bone.RIGHT_ARM, Pose.PITCH), -172));
+        out.set(Bone.LEFT_ARM, Pose.PITCH, MathHelper.lerp(w, out.get(Bone.LEFT_ARM, Pose.PITCH), -172));
+        out.set(Bone.RIGHT_ARM, Pose.ROLL, MathHelper.lerp(w, out.get(Bone.RIGHT_ARM, Pose.ROLL), -6));
+        out.set(Bone.LEFT_ARM, Pose.ROLL, MathHelper.lerp(w, out.get(Bone.LEFT_ARM, Pose.ROLL), 6));
+        out.set(Bone.RIGHT_FOREARM, Pose.PITCH, MathHelper.lerp(w, out.get(Bone.RIGHT_FOREARM, Pose.PITCH), 4));
+        out.set(Bone.LEFT_FOREARM, Pose.PITCH, MathHelper.lerp(w, out.get(Bone.LEFT_FOREARM, Pose.PITCH), 4));
+        for (Bone b : new Bone[] {Bone.RIGHT_LEG, Bone.LEFT_LEG}) {
+            out.set(b, Pose.PITCH, MathHelper.lerp(w, out.get(b, Pose.PITCH), 4));
+            out.set(b, Pose.ROLL, MathHelper.lerp(w, out.get(b, Pose.ROLL), 0));
+        }
+        out.set(Bone.RIGHT_SHIN, Pose.PITCH, MathHelper.lerp(w, out.get(Bone.RIGHT_SHIN, Pose.PITCH), 6));
+        out.set(Bone.LEFT_SHIN, Pose.PITCH, MathHelper.lerp(w, out.get(Bone.LEFT_SHIN, Pose.PITCH), 6));
+        out.set(Bone.CHEST, Pose.PITCH, MathHelper.lerp(w, out.get(Bone.CHEST, Pose.PITCH), 0));
+        out.set(Bone.HEAD, Pose.PITCH, MathHelper.lerp(w, out.get(Bone.HEAD, Pose.PITCH), -Math.min(60, lean * 0.6f)));
+        tipAboutWaist(out, new Vector3f(1, 0, 0), lean * w);
+    }
+
+    /** Running along a wall: leaning off it, legs pumping, arms driving. */
+    private static void wallRun(LivingEntity e, int idx, float s, Pose out) {
+        if (s > 1.6f || (e.isOnGround() && s > 0.1f)) return;
+        double ang = idx * Math.PI / 8;
+        float nx = (float) Math.cos(ang), nz = (float) Math.sin(ang);
+        double yaw = Math.toRadians(e.bodyYaw);
+        float fx = (float) -Math.sin(yaw), fz = (float) Math.cos(yaw), lx = (float) Math.cos(yaw), lz = (float) Math.sin(yaw);
+        float wx = -(nx * lx + nz * lz), wz = (nx * fx + nz * fz);
+        float w = Math.min(1, s / 0.1f);
+        float cyc = MathHelper.sin(s * 15);
+        out.set(Bone.RIGHT_LEG, Pose.PITCH, -55 * cyc * w - 15 * w);
+        out.set(Bone.LEFT_LEG, Pose.PITCH, 55 * cyc * w - 15 * w);
+        out.set(Bone.RIGHT_SHIN, Pose.PITCH, (40 + 50 * Math.max(0, cyc)) * w);
+        out.set(Bone.LEFT_SHIN, Pose.PITCH, (40 + 50 * Math.max(0, -cyc)) * w);
+        out.set(Bone.RIGHT_ARM, Pose.PITCH, 50 * cyc * w);
+        out.set(Bone.LEFT_ARM, Pose.PITCH, -50 * cyc * w);
+        out.set(Bone.RIGHT_FOREARM, Pose.PITCH, 70 * w);
+        out.set(Bone.LEFT_FOREARM, Pose.PITCH, 70 * w);
+        // The hand nearest the wall trails along it.
+        Bone near = wx > 0 ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
+        add(out, near, Pose.ROLL, (wx > 0 ? -1 : 1) * 40 * w);
+        add(out, Bone.CHEST, Pose.PITCH, 14 * w);
+        // Leaning off the wall, feet on it.
+        tipAboutWaist(out, new Vector3f(wz, 0, -wx), 30 * w);
+    }
+
+    /** The roll out of a landing: a forward roll, tucked tight and low, about half a second. */
+    private static void roll(LivingEntity e, float s, Pose out) {
+        float dur = 0.55f;
+        if (s > dur) return;
+        float u = s / dur;
+        float tuck = MathHelper.sin(MathHelper.PI * u);
+        add(out, Bone.RIGHT_LEG, Pose.PITCH, -110 * tuck);
+        add(out, Bone.LEFT_LEG, Pose.PITCH, -110 * tuck);
+        add(out, Bone.RIGHT_SHIN, Pose.PITCH, 130 * tuck);
+        add(out, Bone.LEFT_SHIN, Pose.PITCH, 130 * tuck);
+        add(out, Bone.RIGHT_ARM, Pose.PITCH, -70 * tuck);
+        add(out, Bone.LEFT_ARM, Pose.PITCH, -70 * tuck);
+        add(out, Bone.CHEST, Pose.PITCH, 40 * tuck);
+        add(out, Bone.HEAD, Pose.PITCH, 30 * tuck);
+        out.offset[1] += 11 * tuck; // down at the ground through the roll
+        tipAboutWaist(out, new Vector3f(1, 0, 0), ease(u) * 360);
+    }
+
     private static void dodgePose(LivingEntity e, Pose out) {
         React d = DODGES.get(e.getId());
         if (d == null) return;
         float s = secs(d.at);
+        if (d.packed == 80) {
+            roll(e, s, out);
+            return;
+        }
+        if (d.packed >= 64) {
+            needle(e, d.packed - 64, s, out);
+            return;
+        }
+        if (d.packed >= 48) {
+            wallRun(e, d.packed - 48, s, out);
+            return;
+        }
         if (d.packed >= 32) {
             // On a wall: tipped out from it with the feet on it, crouched deep, a hand back on it.
             if (s > 1.6f) return;

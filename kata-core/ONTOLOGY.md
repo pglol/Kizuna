@@ -521,3 +521,11 @@ moves the body somewhere the physics wouldn't.
 - Broken bones (Injuries bits 1 L leg, 2 R leg, 4 L arm, 8 R arm, 16 ribs; saved per world, cleared on death, relayed as KataNet.INJURY): falls of 11+ (16+ caught) can break a leg (very long ones both); full heavies (power >= 0.85) can break the arm/leg they hit or crack ribs.
 - Effects: leg = slower (-28%, both -50%), lower spring, no running, limp animation; arm = that side's strikes -30%, arm held across the stomach (cradled when standing); ribs = breath back at 55%, hunched. HUD line "BROKEN ..." above health.
 - Bandage (kata_core:bandage; 2 paper + string = 2; three on first join): hold use 1.5 s, sets up to two injuries (legs, ribs, arms), +1 heart.
+
+## Walls, the needle, rolls; pain that fades (batch)
+- In the air, coming into a tall wall catches you by itself (no extra press): moving along it at speed with forward held, a wall run (momentum kept, an arc up then falling away, up to 1.4 s); facing into it, a cling. Once per wall per jump; another wall (wall to wall) can always catch you.
+- Jump off a cling, mid-run, or within 0.45 s of a run ending: the needle, straight the way you look, body laid along the line, arms ahead (replaces the flip). Looking up the wall when you jump off a cling: a dash straight up it (about 6 blocks) and one more catch on that wall (or the ledge grab).
+- Landing out of the needle: a forward roll, speed carried on, counted as a caught landing; dropping faster than 1.25 blocks/tick: no roll.
+- Dodge codes: 16-31 flips, 32-47 cling, 48-63 wall run, 64-76 needle (15-degree pitch buckets, 0 straight up), 80 roll.
+- Injuries mend on their own in 5 minutes and hurt less as they go (relayed as 4 bits a part); speed/jump penalties, strike weakness and the look all ease with it. The limp drops hard onto the bad leg, the head and shoulders jerk, the hand on that side holds the thigh, the other arm swings out for balance.
+- Town v3: every climbing route is its own mix along a drainpipe (lips, AC units, window boxes, awnings, vent hoods, lit sign boards, beams, trapdoor shelves, a balcony every few steps).

@@ -682,9 +682,9 @@ public final class Fighting {
     static void dodge(ServerPlayerEntity p, int dir) {
         DODGE_AT.put(p.getUuid(), p.getServer().getTicks());
         if (DODGE_AT.size() > 1024) DODGE_AT.clear();
-        DODGE_KIND.put(p.getUuid(), MathHelper.clamp(dir, 0, 63));
+        DODGE_KIND.put(p.getUuid(), MathHelper.clamp(dir, 0, 127));
         if (DODGE_KIND.size() > 1024) DODGE_KIND.clear();
-        relay(p, KataNet.DODGE, MathHelper.clamp(dir, 0, 63));
+        relay(p, KataNet.DODGE, MathHelper.clamp(dir, 0, 127));
     }
 
     private static void breakGuard(Entity e) {

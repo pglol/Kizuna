@@ -207,30 +207,121 @@ final class TownWorks {
         }
     }
 
-    /**
-     * A climbing route up a wall: (x, z) is a block on the wall's face, out the way it faces, yTop the
-     * height to reach (the roof's edge). A crate and a barrel at the foot for a leg-up, then pairs of
-     * wooden lips every three blocks, zigzagging, each on a little bracket, the last within reach of the top.
-     */
+    /** A climbing route up a wall (see the five-argument form), wandering up to 4 blocks along it. */
     static void climb(int x, int z, Direction out, int yTop) {
-        Direction along = out.rotateYClockwise();
-        int bx = x + out.getOffsetX(), bz = z + out.getOffsetZ(), ax = along.getOffsetX(), az = along.getOffsetZ();
-        set(bx, G, bz, s(Blocks.STRIPPED_SPRUCE_WOOD));
-        set(bx + ax, G, bz + az, s(Blocks.BARREL));
-        BlockState lip = slab(Blocks.SPRUCE_SLAB, true), bracket = stair(Blocks.SPRUCE_STAIRS, out.getOpposite(), true);
-        int k = 0, last = G - 1;
-        for (int y = G + 2; y <= yTop - 2; y += 3) {
-            lipPair(bx, bz, ax, az, (k % 2) * 2, y, lip, bracket);
-            last = y;
-            k++;
-        }
-        if (yTop - last >= 4) lipPair(bx, bz, ax, az, (k % 2) * 2, yTop - 2, lip, bracket);
+        climb(x, z, out, yTop, 4);
     }
 
-    private static void lipPair(int bx, int bz, int ax, int az, int o, int y, BlockState lip, BlockState bracket) {
-        set(bx + ax * o, y, bz + az * o, lip);
-        set(bx + ax * (o + 1), y, bz + az * (o + 1), lip);
-        set(bx + ax * o, y - 1, bz + az * o, bracket);
+    /**
+     * A way up a wall, put together from what a wall like that would have on it: (x, z) is a block on
+     * the wall's face, out the way it faces, yTop the height to reach (the roof's edge), span how far
+     * along the wall the route may wander. A drainpipe runs the whole height beside it (follow it up);
+     * at the foot a leg-up (a dumpster, crates, a pallet stack); then, every two or three blocks, a step
+     * that's something real: wooden lips on brackets, an AC unit, a window box with a bush in it, a shop
+     * awning, a vent hood, a lit sign board, a beam jutting out; every few steps a little balcony to
+     * catch your breath on. Each route its own mix and its own wander, the last step in reach of the top.
+     */
+    static void climb(int x, int z, Direction out, int yTop, int span) {
+        Random r = new Random(x * 734287L ^ z * 912931L ^ yTop * 31L);
+        Direction along = out.rotateYClockwise();
+        int bx = x + out.getOffsetX(), bz = z + out.getOffsetZ(), ax = along.getOffsetX(), az = along.getOffsetZ();
+        int ox = out.getOffsetX(), oz = out.getOffsetZ();
+        Block[] awnings = {Blocks.RED_WOOL, Blocks.GREEN_WOOL, Blocks.BLUE_WOOL, Blocks.ORANGE_WOOL, Blocks.WHITE_WOOL};
+        Block[] boards = {Blocks.RED_CONCRETE, Blocks.CYAN_CONCRETE, Blocks.YELLOW_CONCRETE, Blocks.WHITE_CONCRETE, Blocks.MAGENTA_CONCRETE};
+        Block awning = awnings[r.nextInt(awnings.length)], board = boards[r.nextInt(boards.length)];
+        // The drainpipe.
+        for (int y = G; y <= yTop; y++) set(bx - ax, y, bz - az, s(Blocks.POLISHED_DEEPSLATE_WALL));
+        set(bx - ax, yTop + 1, bz - az, slab(Blocks.POLISHED_DEEPSLATE_SLAB, false));
+        // The leg-up.
+        switch (r.nextInt(3)) {
+            case 0 -> {
+                for (int k = 0; k <= 1; k++) {
+                    set(bx + ax * k, G, bz + az * k, s(Blocks.GREEN_TERRACOTTA));
+                    set(bx + ax * k, G + 1, bz + az * k, Blocks.DARK_OAK_TRAPDOOR.getDefaultState());
+                }
+            }
+            case 1 -> {
+                set(bx, G, bz, s(Blocks.STRIPPED_SPRUCE_WOOD));
+                set(bx + ax, G, bz + az, s(Blocks.BARREL));
+                set(bx + ox, G, bz + oz, slab(Blocks.OAK_SLAB, false));
+            }
+            default -> {
+                set(bx, G, bz, slab(Blocks.OAK_SLAB, true));
+                set(bx + ax, G, bz + az, s(Blocks.STRIPPED_SPRUCE_WOOD));
+                set(bx + ax, G + 1, bz + az, slab(Blocks.OAK_SLAB, false));
+            }
+        }
+        int o = 0, y = G + 2, steps = 0, last = G;
+        while (y <= yTop - 2) {
+            int sx = bx + ax * o, sz = bz + az * o;
+            if (steps > 0 && steps % 5 == 4) balcony(sx, y, sz, ax, az, ox, oz);
+            else step(r.nextInt(9), sx, y, sz, ax, az, ox, oz, out, awning, board);
+            last = y;
+            steps++;
+            y += 2 + r.nextInt(2);
+            o = Math.max(0, Math.min(span, o + r.nextInt(5) - 2));
+        }
+        if (yTop - last >= 4) step(0, bx + ax * o, yTop - 2, bz + az * o, ax, az, ox, oz, out, awning, board);
+    }
+
+    private static void step(int kind, int x, int y, int z, int ax, int az, int ox, int oz, Direction out, Block awning, Block board) {
+        switch (kind) {
+            case 0, 1 -> { // wooden lips on a bracket
+                set(x, y, z, slab(Blocks.SPRUCE_SLAB, true));
+                set(x + ax, y, z + az, slab(Blocks.SPRUCE_SLAB, true));
+                set(x, y - 1, z, stair(Blocks.SPRUCE_STAIRS, out.getOpposite(), true));
+            }
+            case 2 -> { // an AC unit with its drip pipe
+                set(x, y, z, s(Blocks.LIGHT_GRAY_CONCRETE));
+                set(x + ox, y, z + oz, Blocks.IRON_TRAPDOOR.getDefaultState().with(net.minecraft.block.TrapdoorBlock.OPEN, true)
+                    .with(net.minecraft.state.property.Properties.HORIZONTAL_FACING, out));
+                set(x, y - 1, z, s(Blocks.CHAIN));
+            }
+            case 3 -> { // a window box with a bush (two heights to step on)
+                set(x, y, z, slab(Blocks.DARK_OAK_SLAB, true));
+                set(x + ax, y, z + az, slab(Blocks.DARK_OAK_SLAB, true));
+                set(x, y + 1, z, leaves(Blocks.FLOWERING_AZALEA_LEAVES));
+            }
+            case 4 -> { // a shop awning
+                for (int k = 0; k <= 2; k++) set(x + ax * k, y, z + az * k, s(awning));
+                set(x + ax, y - 1, z + az, lantern(true));
+            }
+            case 5 -> { // a vent hood
+                set(x, y, z, slab(Blocks.SMOOTH_STONE_SLAB, true));
+                set(x + ax, y, z + az, slab(Blocks.SMOOTH_STONE_SLAB, true));
+                set(x, y - 1, z, Blocks.IRON_TRAPDOOR.getDefaultState().with(net.minecraft.block.TrapdoorBlock.OPEN, true)
+                    .with(net.minecraft.state.property.Properties.HORIZONTAL_FACING, out));
+            }
+            case 6 -> { // a lit sign board
+                for (int k = 0; k <= 2; k++) {
+                    set(x + ax * k, y, z + az * k, s(board));
+                    set(x + ax * k, y - 1, z + az * k, s(board));
+                }
+                set(x + ax + ox, y - 1, z + az + oz, AIR);
+                set(x + ax, y - 2, z + az, lantern(true));
+            }
+            case 7 -> { // a beam jutting out (reach out along it)
+                Direction.Axis ax2 = out.getAxis();
+                set(x, y, z, axis(Blocks.STRIPPED_SPRUCE_LOG, ax2));
+                set(x + ox, y, z + oz, axis(Blocks.STRIPPED_SPRUCE_LOG, ax2));
+                set(x + ox, y - 1, z + oz, s(Blocks.CHAIN));
+            }
+            default -> { // trapdoor shelf
+                BlockState shelf = Blocks.SPRUCE_TRAPDOOR.getDefaultState().with(net.minecraft.block.TrapdoorBlock.HALF, net.minecraft.block.enums.BlockHalf.TOP);
+                set(x, y, z, shelf);
+                set(x + ax, y, z + az, shelf);
+                set(x + ax * 2, y, z + az * 2, shelf);
+            }
+        }
+    }
+
+    /** A little balcony on the way up: grating, a railing, a pot plant; open on the side the route goes on. */
+    private static void balcony(int x, int y, int z, int ax, int az, int ox, int oz) {
+        for (int k = 0; k <= 2; k++)
+            for (int d = 0; d <= 1; d++) set(x + ax * k + ox * d, y, z + az * k + oz * d, grate());
+        for (int k = 0; k <= 2; k++) set(x + ax * k + ox * 2, y + 1, z + az * k + oz * 2, s(Blocks.IRON_BARS));
+        set(x - ax + ox, y + 1, z - az + oz, s(Blocks.IRON_BARS));
+        set(x + ax * 2 + ox, y + 1, z + az * 2 + oz, s(Blocks.FLOWER_POT));
     }
 
     /**
@@ -573,7 +664,7 @@ final class TownWorks {
         // A fire escape up the east face.
         if (floors >= 4 && r.nextInt(3) > 0) fireEscape(x1, zm, base, floors, top, st);
         // A route of wooden lips up the south face, from a crate at the foot to the roof.
-        climb(x0 + 3, z1, Direction.SOUTH, top + 1);
+        climb(x0 + 3, z1, Direction.SOUTH, top + 1, Math.max(3, wx - 14));
         // The roof.
         if (roofKind == 1) helipad(xm, zm, top, wx, wz, x0, z0);
         else if (roofKind == 2) roofGarden(x0, z0, x1, z1, top, r);
@@ -1342,8 +1433,8 @@ final class TownWorks {
         }
         // The roof: a fence round it (the classic place to settle things), with a way up the courtyard face.
         lwalls(0, top + 1, 0, len - 1, top + 2, dep - 1, s(Blocks.IRON_BARS));
-        climb(fx(3, 0), fz(3, 0), front, top + 1);
-        lbox(3, top + 1, 0, 6, top + 2, 0, AIR);
+        climb(fx(3, 0), fz(3, 0), front, top + 1, 4);
+        lbox(2, top + 1, 0, 9, top + 2, 0, AIR);
         if (entrance) {
             int mu = len / 2;
             lbox(mu - 2, base + 1, 0, mu + 1, base + 3, 0, AIR);

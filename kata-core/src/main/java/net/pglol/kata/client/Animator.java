@@ -286,54 +286,88 @@ public final class Animator {
      * cradling it, standing), cracked ribs hunch the chest. Strikes still go over the top of this.
      */
     private static void injured(PlayerEntity p, float td, Pose out) {
-        int m = Fight.injuries(p.getId());
+        int id = p.getId(), m = Fight.injuries(id);
         if (m == 0) return;
-        float speed = MathHelper.clamp(p.limbAnimator.getSpeed(td), 0, 1);
+        float speed = MathHelper.clamp(p.limbAnimator.getSpeed(td) * 1.6f, 0, 1);
         float phase = p.limbAnimator.getPos(td) * 0.6662f;
-        float c = MathHelper.cos(phase);
+        float c = MathHelper.cos(phase), sn = MathHelper.sin(phase);
+        float hl = Fight.hurt(id, 0), hr = Fight.hurt(id, 1);
         boolean lBad = (m & 1) != 0, rBad = (m & 2) != 0;
         if (lBad || rBad) {
+            // The bad leg barely bends and hardly swings; the good one does the work.
             if (rBad) {
-                out.set(Bone.RIGHT_LEG, Pose.PITCH, out.get(Bone.RIGHT_LEG, Pose.PITCH) * 0.35f);
-                out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) * 0.3f + 4);
+                out.set(Bone.RIGHT_LEG, Pose.PITCH, out.get(Bone.RIGHT_LEG, Pose.PITCH) * (1 - 0.7f * hr) + 6 * hr * speed);
+                out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) * (1 - 0.8f * hr) + 3);
+                out.set(Bone.RIGHT_LEG, Pose.ROLL, out.get(Bone.RIGHT_LEG, Pose.ROLL) + 5 * hr); // swung out round, not lifted
             }
             if (lBad) {
-                out.set(Bone.LEFT_LEG, Pose.PITCH, out.get(Bone.LEFT_LEG, Pose.PITCH) * 0.35f);
-                out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) * 0.3f + 4);
+                out.set(Bone.LEFT_LEG, Pose.PITCH, out.get(Bone.LEFT_LEG, Pose.PITCH) * (1 - 0.7f * hl) + 6 * hl * speed);
+                out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) * (1 - 0.8f * hl) + 3);
+                out.set(Bone.LEFT_LEG, Pose.ROLL, out.get(Bone.LEFT_LEG, Pose.ROLL) - 5 * hl);
             }
             if (lBad != rBad) {
-                // Weight kept off the bad leg: lean over the good one, dip each time the bad one takes a step.
-                float side = rBad ? -1 : 1;
+                float h = rBad ? hr : hl, side = rBad ? 1 : -1;
+                // Weight on the bad leg (its half of the stride): it hurts, so the body drops hard and fast
+                // over it, the head and shoulders jerk, then it's hauled off it onto the good one.
                 float onBad = Math.max(0, rBad ? -c : c);
-                add(out, Bone.ROOT, Pose.ROLL, side * (3 + 5 * onBad * speed));
-                add(out, Bone.CHEST, Pose.ROLL, -side * 3);
-                out.offset[1] += 1.6f * onBad * speed;
-                add(out, Bone.CHEST, Pose.PITCH, 4 * onBad * speed);
-            } else add(out, Bone.CHEST, Pose.PITCH, 10);
+                float stab = onBad * onBad * (3 - 2 * onBad); // sharp
+                float jerk = stab * speed * h;
+                add(out, Bone.ROOT, Pose.ROLL, side * (2 + 9 * jerk) - side * 3 * (1 - stab) * speed * h);
+                out.offset[1] += 3.2f * jerk;
+                out.offset[0] += side * 1.2f * jerk;
+                add(out, Bone.CHEST, Pose.PITCH, 6 * h + 12 * jerk);
+                add(out, Bone.CHEST, Pose.ROLL, -side * 7 * jerk);
+                add(out, Bone.HEAD, Pose.PITCH, 9 * jerk);
+                add(out, Bone.HEAD, Pose.ROLL, side * 6 * jerk);
+                // The hand on that side presses down on the thigh, holding it up, every step.
+                Bone arm = rBad ? Bone.RIGHT_ARM : Bone.LEFT_ARM, fore = rBad ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM;
+                float k = Math.min(1, h * 1.4f);
+                out.set(arm, Pose.PITCH, MathHelper.lerp(k, out.get(arm, Pose.PITCH), -18 - 10 * jerk));
+                out.set(arm, Pose.YAW, MathHelper.lerp(k, out.get(arm, Pose.YAW), side * 12));
+                out.set(arm, Pose.ROLL, MathHelper.lerp(k, out.get(arm, Pose.ROLL), side * 4));
+                out.set(fore, Pose.PITCH, MathHelper.lerp(k, out.get(fore, Pose.PITCH), 38 + 8 * jerk));
+                // The other arm swings out wide for balance.
+                Bone other = rBad ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
+                add(out, other, Pose.ROLL, -side * 14 * speed * h);
+                // Standing: weight off it, the bad foot just touching.
+                if (speed < 0.2f) {
+                    float st = (1 - speed / 0.2f) * h;
+                    add(out, Bone.ROOT, Pose.ROLL, -side * 4 * st);
+                    add(out, rBad ? Bone.RIGHT_LEG : Bone.LEFT_LEG, Pose.PITCH, -8 * st);
+                    add(out, rBad ? Bone.RIGHT_SHIN : Bone.LEFT_SHIN, Pose.PITCH, 14 * st);
+                    add(out, Bone.CHEST, Pose.PITCH, 5 * st * (1 + 0.3f * MathHelper.sin((System.nanoTime() % 6_283_000_000L) / 1e9f * 2.2f)));
+                }
+            } else {
+                float h = Math.max(hl, hr);
+                add(out, Bone.CHEST, Pose.PITCH, 12 * h);
+                out.offset[1] += 1.5f * h * (1 + sn * sn) * speed;
+            }
         }
+        float al = Fight.hurt(id, 2), ar = Fight.hurt(id, 3);
         boolean lArm = (m & 4) != 0, rArm = (m & 8) != 0;
-        if (rArm) holdArm(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, 1);
-        if (lArm) holdArm(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, -1);
-        // One arm broken and standing: the other hand comes over to cradle it.
-        if (rArm != lArm && speed < 0.3f) {
+        if (rArm) holdArm(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, 1, Math.min(1, ar * 1.5f));
+        if (lArm) holdArm(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, -1, Math.min(1, al * 1.5f));
+        // One arm broken and the legs fine: the other hand comes over to cradle it.
+        if (rArm != lArm && !lBad && !rBad && speed < 0.4f) {
             Bone arm = rArm ? Bone.LEFT_ARM : Bone.RIGHT_ARM, fore = rArm ? Bone.LEFT_FOREARM : Bone.RIGHT_FOREARM;
-            float k = 1 - speed / 0.3f, sd = rArm ? -1 : 1;
+            float k = (1 - speed / 0.4f) * Math.min(1, (rArm ? ar : al) * 1.5f), sd = rArm ? -1 : 1;
             out.set(arm, Pose.PITCH, MathHelper.lerp(k, out.get(arm, Pose.PITCH), -38));
             out.set(arm, Pose.YAW, MathHelper.lerp(k, out.get(arm, Pose.YAW), -sd * 30));
             out.set(fore, Pose.PITCH, MathHelper.lerp(k, out.get(fore, Pose.PITCH), 70));
         }
         if ((m & 16) != 0) {
-            add(out, Bone.CHEST, Pose.PITCH, 9);
-            add(out, Bone.CHEST, Pose.ROLL, 2);
+            float h = Fight.hurt(id, 4);
+            add(out, Bone.CHEST, Pose.PITCH, 10 * h);
+            add(out, Bone.CHEST, Pose.ROLL, 3 * h);
         }
     }
 
     /** A broken arm held in to the body: upper arm down and forward, forearm folded across the stomach. */
-    private static void holdArm(Pose out, Bone arm, Bone fore, float side) {
-        out.set(arm, Pose.PITCH, -22);
-        out.set(arm, Pose.YAW, side * 28);
-        out.set(arm, Pose.ROLL, side * 6);
-        out.set(fore, Pose.PITCH, 92);
+    private static void holdArm(Pose out, Bone arm, Bone fore, float side, float k) {
+        out.set(arm, Pose.PITCH, MathHelper.lerp(k, out.get(arm, Pose.PITCH), -22));
+        out.set(arm, Pose.YAW, MathHelper.lerp(k, out.get(arm, Pose.YAW), side * 28));
+        out.set(arm, Pose.ROLL, MathHelper.lerp(k, out.get(arm, Pose.ROLL), side * 6));
+        out.set(fore, Pose.PITCH, MathHelper.lerp(k, out.get(fore, Pose.PITCH), 92));
     }
 
     private static void follow(PlayerEntity p, State s, float dt, Pose out) {
