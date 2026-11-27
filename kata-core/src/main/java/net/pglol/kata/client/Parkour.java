@@ -79,7 +79,7 @@ public final class Parkour {
     }
 
     private static double vaultSpeed;
-    private static final int VAULT_TICKS = 11, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 8;
+    private static final int VAULT_TICKS = 11, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 13;
     private static final float RUNUP_COST = 0.12f;
     /** Hanging: the lip is this far above your feet, so straight-ish arms reach it (shoulders at 1.29). */
     public static final double HANG_H = 1.72;
@@ -1279,12 +1279,12 @@ public final class Parkour {
                 return true;
             }
             case RUNUP -> {
-                // Two or three hard steps up the wall, slowing as they go, catching any lip in reach.
+                // Steps up the wall, strong at first and easing off (no dead stop), catching any lip in reach.
                 ticks++;
-                double vy = Math.max(0, 0.34 - ticks * 0.04);
+                double vy = Math.max(0, 0.4 * (1 - Math.pow(ticks / (double) RUNUP_TICKS, 1.6)));
                 p.setVelocity(Vec3d.ZERO);
                 p.fallDistance = 0;
-                phase += 0.9f;
+                phase += 0.75f;
                 Vec3d at = p.getPos();
                 if (intent != Intent.NONE || MinecraftClient.getInstance().options.jumpKey.isPressed()) {
                     Double l = lip(p, at, at.y, 1.3, 2.3);
@@ -1297,9 +1297,12 @@ public final class Parkour {
                         return true;
                     }
                 }
-                if (vy <= 0 || ticks > RUNUP_TICKS || !wall(p, at, 0.2, 1.6) || !empty(p, column(at.x, at.y + vy, at.z, 1.8))) {
+                if (vy <= 0.01 || ticks > RUNUP_TICKS || !wall(p, at, 0.2, 1.6) || !empty(p, column(at.x, at.y + vy, at.z, 1.8))) {
                     set(Mode.NONE);
-                    p.setVelocity(-dir.getOffsetX() * 0.04, 0.05, -dir.getOffsetZ() * 0.04);
+                    // Run out of steps with the wall still there: catch it in a cling (jump out, dash up,
+                    // wall to wall from there); otherwise ease off it.
+                    if (wall(p, at, 0.2, 1.6)) Fight.clingFromRunUp(p, new Vec3d(-dir.getOffsetX(), 0, -dir.getOffsetZ()));
+                    else p.setVelocity(-dir.getOffsetX() * 0.04, 0.05, -dir.getOffsetZ() * 0.04);
                     return true;
                 }
                 p.move(MovementType.SELF, new Vec3d(0, vy, 0));

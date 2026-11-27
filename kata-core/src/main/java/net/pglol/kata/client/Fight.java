@@ -409,6 +409,13 @@ public final class Fight {
         return true;
     }
 
+    /** The end of a run up a wall (Parkour): into a cling on it. */
+    static void clingFromRunUp(ClientPlayerEntity p, Vec3d normal) {
+        clungThisJump = false;
+        doubled = true;
+        cling(p, normal);
+    }
+
     /** A wall right in front of you at head height (for the catch an up-dash earned, near the top of a wall). */
     private static boolean wallAtHead(ClientPlayerEntity p, Vec3d n) {
         var w = p.getWorld();
