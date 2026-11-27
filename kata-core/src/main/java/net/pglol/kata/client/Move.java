@@ -39,13 +39,39 @@ public final class Move {
     /** Spent breath on something (a strike, a dodge, getting up): it waits two seconds before coming back. */
     static void exert() { rest = 25; }
 
+    /** Crouched by a tap of sneak (stays down until tapped again, or you run or jump into the air). */
+    public static boolean crouchOn;
+    /** Sneak held down while moving: the crouch run (quicker, costs breath). */
+    public static boolean crouchRun;
+    private static long sneakDownAt;
+    private static boolean sneakWas;
+
+    /**
+     * Sneak: a tap crouches you (and another stands you up), a slow quiet crouch walk, the same speed
+     * whichever way you go; held down, a crouch run, quicker but it costs breath. Taps in the air are
+     * the landing catch, not a crouch.
+     */
+    private static void crouch(MinecraftClient mc, ClientPlayerEntity p, boolean sprintHeld) {
+        boolean key = mc.currentScreen == null && mc.options.sneakKey.isPressed();
+        long now = System.nanoTime();
+        if (key && !sneakWas) sneakDownAt = now;
+        if (!key && sneakWas && now - sneakDownAt < 250_000_000L && p.isOnGround()) crouchOn = !crouchOn;
+        sneakWas = key;
+        if (sprintHeld || p.getAbilities().flying || p.isTouchingWater() || p.hasVehicle() || down(p)) crouchOn = false;
+        boolean holding = key && now - sneakDownAt >= 250_000_000L;
+        boolean moving = Math.abs(p.input.movementForward) + Math.abs(p.input.movementSideways) > 0.1f;
+        crouchRun = holding && moving && p.isOnGround() && !winded && (Fight.myInjuries() & 3) == 0;
+    }
+
     static void tick(MinecraftClient mc) {
         ClientPlayerEntity p = mc.player;
         if (p == null) {
             stamina = 1;
             mode = Mode.WALK;
+            crouchOn = crouchRun = false;
             return;
         }
+        crouch(mc, p, mc.currentScreen == null && physicallyHeld(mc));
         // The sprint key physically held down (with "Sprint: Toggle" the key reads as held after one
         // press, which would make double-tapping forward a run).
         boolean held = mc.currentScreen == null && physicallyHeld(mc);
@@ -64,10 +90,10 @@ public final class Move {
         else mode = held ? Mode.RUN : Mode.FAST;
 
         // Running costs breath only while you're really running: on your feet and moving.
-        boolean running = mode == Mode.RUN && p.isOnGround() && Parkour.view(p).mode() == Parkour.Mode.NONE
-            && p.getVelocity().horizontalLengthSquared() > 0.01;
+        boolean running = (mode == Mode.RUN || crouchRun) && p.isOnGround() && Parkour.view(p).mode() == Parkour.Mode.NONE
+            && p.getVelocity().horizontalLengthSquared() > (crouchRun ? 0.003 : 0.01);
         if (running && !p.isCreative()) {
-            stamina = Math.max(0, stamina - DRAIN);
+            stamina = Math.max(0, stamina - (crouchRun ? DRAIN * 0.6f : DRAIN));
             rest = 25;
             if (stamina <= 0) winded = true;
         } else if (rest > 0) rest--;
@@ -130,8 +156,8 @@ public final class Move {
     }
 
     /** Sneaking: Minecraft's own sneak is 0.3 of walking. Kata's crouch walk is quicker than that, and
-     *  stepping sideways or back while crouched is quick footwork, a bit faster than a plain walk. */
-    private static final float VANILLA_SNEAK = 0.3f, CROUCH_WALK = 0.6f, CROUCH_SHUFFLE = 1.12f;
+     *  holding sneak down is the crouch run (see crouch()). */
+    private static final float VANILLA_SNEAK = 0.3f, CROUCH_WALK = 0.42f, CROUCH_RUN = 0.95f;
 
     /** Multiplier on the local player's ground speed. */
     public static float speedFactor(PlayerEntity p) {
@@ -140,8 +166,8 @@ public final class Move {
 
     private static float baseFactor(PlayerEntity p) {
         if (p.isInSneakingPose() && p instanceof net.minecraft.client.network.ClientPlayerEntity cp && !p.getAbilities().flying) {
-            boolean shuffle = cp.input.movementForward < 0 || (cp.input.movementForward == 0 && cp.input.movementSideways != 0);
-            return (shuffle ? CROUCH_SHUFFLE : CROUCH_WALK) / VANILLA_SNEAK;
+            // The same pace whichever way you go (sideways and back aren't a way round it).
+            return (crouchRun ? CROUCH_RUN : CROUCH_WALK) / VANILLA_SNEAK;
         }
         if (!p.isSprinting()) return p.getAbilities().flying ? 1 : WALK_SPEED;
         // Locked on or guarding: walking pace even if the game still has you sprinting this tick.

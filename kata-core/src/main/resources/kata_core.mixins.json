@@ -23,7 +23,8 @@
     "LookMixin",
     "GravityMixin",
     "CameraMixin",
-    "NametagMixin"
+    "NametagMixin",
+    "CrouchToggleMixin"
   ],
   "injectors": {
     "defaultRequire": 1

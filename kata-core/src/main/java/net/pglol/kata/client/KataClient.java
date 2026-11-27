@@ -60,11 +60,13 @@ public final class KataClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(Marker::render);
         HudRenderCallback.EVENT.register((c, tick) -> Hud.render(c, tick.getTickDelta(false)));
         HudRenderCallback.EVENT.register(ImpactFrames::render);
+        HudRenderCallback.EVENT.register((c, tick) -> AwarenessFx.hud(c));
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(ctx -> {
             if (ctx.consumers() != null) {
                 Afterimages.render(ctx.matrixStack(), ctx.consumers(), ctx.camera().getPos());
                 Trails.render(ctx.matrixStack(), ctx.consumers(), ctx.camera().getPos());
                 Nametags.render(ctx.matrixStack(), ctx.consumers(), ctx.camera());
+                AwarenessFx.render(ctx.matrixStack(), ctx.consumers(), ctx.camera());
             }
         });
     }

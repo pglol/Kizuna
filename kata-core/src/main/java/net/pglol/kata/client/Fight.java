@@ -1152,6 +1152,10 @@ public final class Fight {
     private static final Map<Integer, Long> CHARGES = new HashMap<>(), HANGS = new HashMap<>(), CONCUSSED = new HashMap<>();
 
     static void remote(int entity, int kind, int a) {
+        if (kind == KataNet.AWARE) {
+            AwarenessFx.heard(entity, a);
+            return;
+        }
         if (kind == KataNet.INJURY) {
             if (a == 0) INJURED.remove(entity);
             else INJURED.put(entity, a);
