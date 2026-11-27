@@ -369,11 +369,22 @@ public final class Fight {
 
     /** The wall goes up past your head (a real wall to cling to or run on, not a ledge to climb). */
     private static boolean tallWall(ClientPlayerEntity p, Vec3d n) {
-        // Well above your head (a ledge within reach is for climbing, not clinging under).
+        // Well above your head, and nothing to climb on in reach (a ledge, a lip, a sill, a step on the
+        // way up: those are for the climb, not a cling under them).
         var w = p.getWorld();
         for (double up : new double[] {2.3, 3.2, 4.1}) {
             net.minecraft.util.math.BlockPos b = net.minecraft.util.math.BlockPos.ofFloored(p.getX() - n.x * 0.8, p.getY() + up, p.getZ() - n.z * 0.8);
             if (w.getBlockState(b).getCollisionShape(w, b).isEmpty()) return false;
+        }
+        for (double up = 0.6; up <= 3.4; up += 0.4) {
+            net.minecraft.util.math.BlockPos wallB = net.minecraft.util.math.BlockPos.ofFloored(p.getX() - n.x * 0.8, p.getY() + up, p.getZ() - n.z * 0.8);
+            var shape = w.getBlockState(wallB).getCollisionShape(w, wallB);
+            if (!shape.isEmpty() && shape.getMax(net.minecraft.util.math.Direction.Axis.Y) < 0.99) return false; // a slab or step lip in the wall
+            net.minecraft.util.math.BlockPos ahead = net.minecraft.util.math.BlockPos.ofFloored(p.getX() - n.x * 0.35, p.getY() + up, p.getZ() - n.z * 0.35);
+            if (!ahead.equals(net.minecraft.util.math.BlockPos.ofFloored(p.getX(), p.getY() + up, p.getZ()))
+                || !w.getBlockState(ahead).getCollisionShape(w, ahead).isEmpty()) {
+                if (!w.getBlockState(ahead).getCollisionShape(w, ahead).isEmpty()) return false; // something sticking out of the wall to grab
+            }
         }
         return true;
     }
@@ -579,7 +590,7 @@ public final class Fight {
                 if (forward && hs > 0.2 && Math.abs(v.x * wall.x + v.z * wall.z) / hs < 0.55 && !ranThisJump) {
                     startRun(p, wall);
                     took = true;
-                } else if (facing < -0.35 && (forward || fresh)) {
+                } else if (facing < -0.35 && (fresh || (forward && v.y < 0.08))) {
                     cling(p, wall);
                     took = clinging();
                 }

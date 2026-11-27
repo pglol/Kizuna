@@ -230,8 +230,9 @@ final class TownWorks {
         Block[] boards = {Blocks.RED_CONCRETE, Blocks.CYAN_CONCRETE, Blocks.YELLOW_CONCRETE, Blocks.WHITE_CONCRETE, Blocks.MAGENTA_CONCRETE};
         Block awning = awnings[r.nextInt(awnings.length)], board = boards[r.nextInt(boards.length)];
         // The drainpipe.
-        for (int y = G; y <= yTop; y++) set(bx - ax, y, bz - az, s(Blocks.POLISHED_DEEPSLATE_WALL));
-        set(bx - ax, yTop + 1, bz - az, slab(Blocks.POLISHED_DEEPSLATE_SLAB, false));
+        // A slim downpipe (chain) against the wall, with a bracket every few blocks.
+        for (int y = G; y <= yTop; y++) set(bx - ax, y, bz - az, (y - G) % 5 == 4 ? Blocks.IRON_TRAPDOOR.getDefaultState()
+            .with(net.minecraft.block.TrapdoorBlock.HALF, net.minecraft.block.enums.BlockHalf.TOP) : axis(Blocks.CHAIN, Direction.Axis.Y));
         // The leg-up.
         switch (r.nextInt(3)) {
             case 0 -> {

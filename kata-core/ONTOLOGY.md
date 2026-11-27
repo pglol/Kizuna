@@ -528,7 +528,7 @@ moves the body somewhere the physics wouldn't.
 - Landing out of the needle: a forward roll, speed carried on, counted as a caught landing; dropping faster than 1.25 blocks/tick: no roll.
 - Dodge codes: 16-31 flips, 32-47 cling, 48-63 wall run, 64-76 needle (15-degree pitch buckets, 0 straight up), 80 roll.
 - Injuries mend on their own in 5 minutes and hurt less as they go (relayed as 4 bits a part); speed/jump penalties, strike weakness and the look all ease with it. The limp drops hard onto the bad leg, the head and shoulders jerk, the hand on that side holds the thigh, the other arm swings out for balance.
-- Town v3: every climbing route is its own mix along a drainpipe (lips, AC units, window boxes, awnings, vent hoods, lit sign boards, beams, trapdoor shelves, a balcony every few steps).
+- Town v3: every climbing route is its own mix along a slim chain downpipe (lips, AC units, window boxes, awnings, vent hoods, lit sign boards, beams, trapdoor shelves, a balcony every few steps).
 
 ## Heavies: hold only, armour, push
 - A heavy is a timed hold: it builds while held and goes by itself at full (0.35 s); letting go sooner throws it at what it reached. No second wind-up after the hold (the move starts 60% of the way to contact).
