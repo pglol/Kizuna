@@ -3,3 +3,14 @@
 modrinth fabric-api both
 modrinth modmenu client
 file dist/kata-core.jar both
+# Performance (the team's own builds, same as the AoT dev pack)
+exact 7a94dda82ffd1fe24cd1cacad70eb89dbe564ea6 mods client sodium https://github.com/pglol/minecraft/releases/download/mod-files/sodium-fabric-0.6.0-beta.2%2Bmc1.21.1.jar
+exact d5ad3bbc8a75fc2e8f3d957a85aa05f3e8b95fd0 mods client sodium-extra https://github.com/pglol/minecraft/releases/download/mod-files/sodium-extra-fabric-0.6.0-beta.3%2Bmc1.21.1.jar
+exact 7a2b9b23d3d05939f70244401e9c0a796942d13c mods client reeses-sodium-options https://github.com/pglol/minecraft/releases/download/mod-files/reeses-sodium-options-fabric-1.8.0-beta.4%2Bmc1.21.1.jar
+exact 46c17639a7c0bfec1f9fb4aae53f9163994a3a4e mods client immediatelyfast https://github.com/pglol/minecraft/releases/download/mod-files/ImmediatelyFast-Fabric-1.2.21%2B1.21.1.jar
+exact 821e7fce47749c662a37b58a2fc598fb9d709cd5 mods both c2me https://github.com/pglol/minecraft/releases/download/mod-files/c2me-fabric-mc1.21.1-0.3.0%2Balpha.0.291.jar
+exact cb76b60adedbcf1515c62b3614068fdc28a0e325 mods both vmp https://github.com/pglol/minecraft/releases/download/mod-files/vmp-fabric-mc1.21.1-0.2.0%2Bbeta.7.168-all.jar
+exact d18b0829416ec6948102524b6e913e5bc73ae402 mods client distanthorizons https://github.com/pglol/minecraft/releases/download/mod-files/DistantHorizons-3.3.2-1.21.1-fabric-neoforge.jar
+# Shaders
+exact 6481f2b12ec0d4040424b5f78d4b56faaf862ad5 mods client iris https://github.com/pglol/minecraft/releases/download/mod-files/iris-fabric-1.8.0-beta.4%2Bmc1.21.1.jar
+exact b560f646a124d5204b1fb7321fec373b9c346fa5 shaderpacks client complementary-reimagined

@@ -260,6 +260,7 @@ public final class Animator {
         follow(p, s, dt, out);
         hang(p, td, s, dt, out);
         touch(p, td, s, dt, out);
+        injured(p, td, out);
         // A strike lands on top of the springs: the body drives it, the fist travels its path.
         Fight.apply(p, td, out);
         Fight.react(p, out); // a hit landing: the body reacts to where and how it was struck
@@ -279,6 +280,62 @@ public final class Animator {
      * by how fast the one before it is moving, so the motion runs down the body instead of all of it
      * moving at once.
      */
+    /**
+     * Broken bones, seen: a broken leg barely swings and stays stiff at the knee while the body lurches
+     * down onto the good one each step, a broken arm is held in across the stomach (the other hand
+     * cradling it, standing), cracked ribs hunch the chest. Strikes still go over the top of this.
+     */
+    private static void injured(PlayerEntity p, float td, Pose out) {
+        int m = Fight.injuries(p.getId());
+        if (m == 0) return;
+        float speed = MathHelper.clamp(p.limbAnimator.getSpeed(td), 0, 1);
+        float phase = p.limbAnimator.getPos(td) * 0.6662f;
+        float c = MathHelper.cos(phase);
+        boolean lBad = (m & 1) != 0, rBad = (m & 2) != 0;
+        if (lBad || rBad) {
+            if (rBad) {
+                out.set(Bone.RIGHT_LEG, Pose.PITCH, out.get(Bone.RIGHT_LEG, Pose.PITCH) * 0.35f);
+                out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) * 0.3f + 4);
+            }
+            if (lBad) {
+                out.set(Bone.LEFT_LEG, Pose.PITCH, out.get(Bone.LEFT_LEG, Pose.PITCH) * 0.35f);
+                out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) * 0.3f + 4);
+            }
+            if (lBad != rBad) {
+                // Weight kept off the bad leg: lean over the good one, dip each time the bad one takes a step.
+                float side = rBad ? -1 : 1;
+                float onBad = Math.max(0, rBad ? -c : c);
+                add(out, Bone.ROOT, Pose.ROLL, side * (3 + 5 * onBad * speed));
+                add(out, Bone.CHEST, Pose.ROLL, -side * 3);
+                out.offset[1] += 1.6f * onBad * speed;
+                add(out, Bone.CHEST, Pose.PITCH, 4 * onBad * speed);
+            } else add(out, Bone.CHEST, Pose.PITCH, 10);
+        }
+        boolean lArm = (m & 4) != 0, rArm = (m & 8) != 0;
+        if (rArm) holdArm(out, Bone.RIGHT_ARM, Bone.RIGHT_FOREARM, 1);
+        if (lArm) holdArm(out, Bone.LEFT_ARM, Bone.LEFT_FOREARM, -1);
+        // One arm broken and standing: the other hand comes over to cradle it.
+        if (rArm != lArm && speed < 0.3f) {
+            Bone arm = rArm ? Bone.LEFT_ARM : Bone.RIGHT_ARM, fore = rArm ? Bone.LEFT_FOREARM : Bone.RIGHT_FOREARM;
+            float k = 1 - speed / 0.3f, sd = rArm ? -1 : 1;
+            out.set(arm, Pose.PITCH, MathHelper.lerp(k, out.get(arm, Pose.PITCH), -38));
+            out.set(arm, Pose.YAW, MathHelper.lerp(k, out.get(arm, Pose.YAW), -sd * 30));
+            out.set(fore, Pose.PITCH, MathHelper.lerp(k, out.get(fore, Pose.PITCH), 70));
+        }
+        if ((m & 16) != 0) {
+            add(out, Bone.CHEST, Pose.PITCH, 9);
+            add(out, Bone.CHEST, Pose.ROLL, 2);
+        }
+    }
+
+    /** A broken arm held in to the body: upper arm down and forward, forearm folded across the stomach. */
+    private static void holdArm(Pose out, Bone arm, Bone fore, float side) {
+        out.set(arm, Pose.PITCH, -22);
+        out.set(arm, Pose.YAW, side * 28);
+        out.set(arm, Pose.ROLL, side * 6);
+        out.set(fore, Pose.PITCH, 92);
+    }
+
     private static void follow(PlayerEntity p, State s, float dt, Pose out) {
         if (dt <= 0) return;
         boolean active = Parkour.view(p).mode() == Parkour.Mode.NONE && out.gait;

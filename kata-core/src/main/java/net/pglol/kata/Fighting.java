@@ -933,7 +933,7 @@ public final class Fighting {
 
     /** A strike landing (from a player or a dummy): damage by part, guard, parry, knockback, launch, knockdown. */
     static boolean land(LivingEntity by, LivingEntity t, Move m, float power, Part part, Vec3d look, net.minecraft.entity.damage.DamageSource src) {
-        float dmg = m.damage() * (m.heavy() ? 0.5f + 0.5f * power : 1) * part.share;
+        float dmg = m.damage() * (m.heavy() ? 0.5f + 0.5f * power : 1) * part.share * Injuries.strikeScale(by, m.leg());
         t.timeUntilRegen = 0; // strings land: no invulnerability gap between hits
         breaking = m.heavy() && power >= 0.98f;
         striking = m;
@@ -976,6 +976,7 @@ public final class Fighting {
             strikingPart = null;
         }
         dealt = hit;
+        if (hit) Injuries.struck(t, part, power, m.heavy());
         // A creative-mode player takes no damage, but still feels the hit (unless it was blocked).
         if (!hit && !(t instanceof net.minecraft.entity.player.PlayerEntity pl && pl.isCreative() && !guarding(t))) return false;
         // The hit's reaction, for everyone to see: where it landed, what kind of strike, from which side.
@@ -1018,7 +1019,7 @@ public final class Fighting {
     }
 
     /** Tell everyone who can see e (and e itself, if a player) about something that happened to it. */
-    private static void relayAround(Entity e, int kind, int value) {
+    static void relayAround(Entity e, int kind, int value) {
         if (e.getWorld().isClient) return;
         for (ServerPlayerEntity o : PlayerLookup.tracking(e)) {
             if (ServerPlayNetworking.canSend(o, KataNet.FightOf.ID)) ServerPlayNetworking.send(o, new KataNet.FightOf(e.getId(), kind, value));
@@ -1026,7 +1027,12 @@ public final class Fighting {
         if (e instanceof ServerPlayerEntity sp && ServerPlayNetworking.canSend(sp, KataNet.FightOf.ID)) ServerPlayNetworking.send(sp, new KataNet.FightOf(e.getId(), kind, value));
     }
 
-    private static void relay(ServerPlayerEntity p, int kind, int value) {
+    /** Held up in an air string (lifted, tethered): not a fall. */
+    static boolean airHeld(UUID id) {
+        return FLOAT_UNTIL.containsKey(id) || TETHER.containsKey(id);
+    }
+
+    static void relay(ServerPlayerEntity p, int kind, int value) {
         for (ServerPlayerEntity o : PlayerLookup.tracking(p)) {
             if (o != p && ServerPlayNetworking.canSend(o, KataNet.FightOf.ID)) ServerPlayNetworking.send(o, new KataNet.FightOf(p.getId(), kind, value));
         }

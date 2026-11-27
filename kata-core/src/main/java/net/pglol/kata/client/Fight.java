@@ -445,7 +445,7 @@ public final class Fight {
         tethers(mc);
         while (KataClient.dodgeKey.wasPressed()) dodge(p);
         dodgeStep(p);
-        guard = free && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && !recovering() && clock() > brokenUntil;
+        guard = free && !net.pglol.kata.client.Move.winded() && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && !recovering() && clock() > brokenUntil;
         if (guard && target < 0) target = pick(p, 8, 50); // raising a guard locks onto whoever's in front
         // Pressing left or right while guarding turns the guard to that side (it stops swinging strikes
         // from there); raised while pressing one, it's a parry towards that side.
@@ -577,6 +577,8 @@ public final class Fight {
                         // The hit stop: a heavy holds on contact longer the more it was charged.
                         float stop = cur.heavy() ? (curPower >= 0.8f ? 0.15f : curPower >= 0.4f ? 0.11f : 0.07f) : 0.05f;
                         curStart += (long) (stop * 1e9);
+                        // Landing it gives back half of what it cost (the first contact only).
+                        if (!curLanded) net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + curCost * 0.5f);
                         curLanded = true;
                     }
                     if (smashDive) {
@@ -669,9 +671,11 @@ public final class Fight {
             airLanded = false;
         }
         if (clock() < readyAt) return;
+        if (net.pglol.kata.client.Move.winded()) return; // out of breath: nothing behind it
         // Breath: a light costs a little, a heavy a good deal more (the harder it's charged, the more).
         float cost = m.heavy() ? 0.12f + 0.1f * Math.max(0.3f, power) : m.from() == Fighting.From.AIR ? 0.04f : 0.05f;
         net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - cost); net.pglol.kata.client.Move.exert();
+        curCost = cost;
         cur = m;
         curLanded = false;
         curStance = stance;
@@ -881,6 +885,16 @@ public final class Fight {
     private static final Map<Integer, Long> STAGGERS = new HashMap<>();
     /** How much guard stamina others have left (it shows: a guard near breaking strains). */
     private static final Map<Integer, Float> POISES = new HashMap<>();
+    private static float curCost;
+    /** What's broken on whom (Injuries bits: 1 left leg, 2 right leg, 4 left arm, 8 right arm, 16 ribs). */
+    private static final Map<Integer, Integer> INJURED = new HashMap<>();
+
+    public static int injuries(int id) { return INJURED.getOrDefault(id, 0); }
+
+    public static int myInjuries() {
+        var p = MinecraftClient.getInstance().player;
+        return p == null ? 0 : injuries(p.getId());
+    }
     /** Someone's guard breath as last heard, 0..1 (1 if nothing heard). */
     static float poise(int id) { return POISES.getOrDefault(id, 1f); }
     /** Air-string tethers: the one held -> {the one holding, until}. Your own string's hit count. */
@@ -891,6 +905,12 @@ public final class Fight {
     private static final Map<Integer, Long> CHARGES = new HashMap<>(), HANGS = new HashMap<>(), CONCUSSED = new HashMap<>();
 
     static void remote(int entity, int kind, int a) {
+        if (kind == KataNet.INJURY) {
+            if (a == 0) INJURED.remove(entity);
+            else INJURED.put(entity, a);
+            if (INJURED.size() > 256) INJURED.clear();
+            return;
+        }
         MinecraftClient mc = MinecraftClient.getInstance();
         // An air string's tether (entity: the one held, a: the one holding them): everyone sees the link.
         if (kind == KataNet.TETHER) {
@@ -906,7 +926,10 @@ public final class Fight {
         if (mc.world != null) {
             if (kind == KataNet.EVADED) {
                 Afterimages.evade(entity);
-                if (mc.player != null && entity == mc.player.getId()) slowDown(); // you slipped it: time stretches
+                if (mc.player != null && entity == mc.player.getId()) {
+                    slowDown(); // you slipped it: time stretches
+                    net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + 0.18f); // and a clean dodge puts breath back
+                }
             } else if (kind == KataNet.WHIFFED) {
                 if (mc.player != null && entity == mc.player.getId()) slowDown(); // yours went through nothing
                 return;

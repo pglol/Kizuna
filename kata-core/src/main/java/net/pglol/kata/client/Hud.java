@@ -98,6 +98,16 @@ public final class Hud {
         c.getMatrices().pop();
         RenderSystem.setShaderColor(1, 1, 1, 1);
 
+        int inj = Fight.myInjuries();
+        if (inj != 0) {
+            StringBuilder sb = new StringBuilder();
+            String[] nm = {"L LEG", "R LEG", "L ARM", "R ARM", "RIBS"};
+            for (int i = 0; i < 5; i++) if ((inj & (1 << i)) != 0) sb.append(sb.length() > 0 ? "  ·  " : "").append(nm[i]);
+            String sTxt = "BROKEN  " + sb;
+            int tw = mc.textRenderer.getWidth(sTxt);
+            float pulse = 0.75f + 0.25f * MathHelper.sin(time * 3);
+            c.drawText(mc.textRenderer, sTxt, (w - tw) / 2, hy - 12, Ui.alpha(0xFFE8564F, pulse), true);
+        }
         tag(c, mc, h, dt);
         c.getMatrices().pop();
         // Your air string's count, beside the crosshair: big for a moment as each hit lands, then fading.

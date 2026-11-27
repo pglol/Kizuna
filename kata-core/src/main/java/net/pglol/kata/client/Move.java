@@ -28,7 +28,7 @@ public final class Move {
      * Minecraft's own sprint is 1.3 times the walk; the factors below take that out.
      */
     private static final float WALK_SPEED = 0.72f, FAST_SPEED = 1.0f, RUN_SPEED = 2.0f, VANILLA_SPRINT = 1.3f;
-    private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (16f * 20), FAST_REGEN = 1 / (32f * 20);
+    private static final float DRAIN = 1 / (12f * 20), REGEN = 1 / (7f * 20), FAST_REGEN = 1 / (14f * 20);
 
     public static Mode mode = Mode.WALK;
     /** 0..1 */
@@ -37,7 +37,7 @@ public final class Move {
     private static int rest;
 
     /** Spent breath on something (a strike, a dodge, getting up): it waits two seconds before coming back. */
-    static void exert() { rest = 40; }
+    static void exert() { rest = 25; }
 
     static void tick(MinecraftClient mc) {
         ClientPlayerEntity p = mc.player;
@@ -56,6 +56,8 @@ public final class Move {
         if (held && !winded && !free && !p.isSneaking() && p.input.movementForward > 0.5f && !down(p)) p.setSprinting(true);
         // Winded: no running and no fast walk either, just walking until you've got your breath back.
         if (winded) p.setSprinting(false);
+        // A broken leg: no running, you limp.
+        if ((Fight.myInjuries() & 3) != 0) p.setSprinting(false);
         // Locked on to someone, guarding or charging: you're fighting, not running. You step and walk.
         if (Fight.locked() || Fight.guarding()) p.setSprinting(false);
         if (!p.isSprinting() || free) mode = Mode.WALK;
@@ -66,12 +68,12 @@ public final class Move {
             && p.getVelocity().horizontalLengthSquared() > 0.01;
         if (running && !p.isCreative()) {
             stamina = Math.max(0, stamina - DRAIN);
-            rest = 40;
+            rest = 25;
             if (stamina <= 0) winded = true;
         } else if (rest > 0) rest--;
-        else stamina = Math.min(1, stamina + (mode == Mode.FAST ? FAST_REGEN : REGEN));
+        else stamina = Math.min(1, stamina + (mode == Mode.FAST ? FAST_REGEN : REGEN) * ((Fight.myInjuries() & 16) != 0 ? 0.55f : 1f)); // cracked ribs: breath comes back slower
         if (stamina <= 0.005f) winded = true; // however it went: running, strikes, dodges, getting up
-        if (winded && stamina >= 0.4f) winded = false;
+        if (winded && stamina >= 0.3f) winded = false;
     }
 
     private static boolean down(PlayerEntity p) {

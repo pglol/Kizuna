@@ -513,3 +513,11 @@ moves the body somewhere the physics wouldn't.
 - Middle: Kizuna Academy (spawn) spanning two blocks: U of three-storey wings with classrooms, stairwells, fenced roof, clock tower, gym, track and pitch. South of it the Budokan (karate ring, stands, light rig) and the shopping street round the town park.
 - Neighbourhoods with houses all round and a dojo compound in the middle: Kaze, Tora, Ishi, Kumo, Ryu, Hana (blank styles for now).
 - Ops: `/kata town` (go there), `/kata town rebuild`.
+
+## Breath rules, falls and broken bones
+- Winded (breath ran out): no guard and no strikes until it's back to 30%. Recovery: full in ~7 s walking (14 s while fast-walking), after a 1.25 s pause from the last effort.
+- A strike that lands gives back half its cost; a clean dodge (EVADED) gives back 18%.
+- Falls are Kata's own (server, from the real drop since leaving the ground; Minecraft's is zeroed): safe to 5 blocks, then 0.75 per block, caught landings x0.35, water/climbing/hanging/air strings exempt, hay/slime/beds/leaves soften.
+- Broken bones (Injuries bits 1 L leg, 2 R leg, 4 L arm, 8 R arm, 16 ribs; saved per world, cleared on death, relayed as KataNet.INJURY): falls of 11+ (16+ caught) can break a leg (very long ones both); full heavies (power >= 0.85) can break the arm/leg they hit or crack ribs.
+- Effects: leg = slower (-28%, both -50%), lower spring, no running, limp animation; arm = that side's strikes -30%, arm held across the stomach (cradled when standing); ribs = breath back at 55%, hunched. HUD line "BROKEN ..." above health.
+- Bandage (kata_core:bandage; 2 paper + string = 2; three on first join): hold use 1.5 s, sets up to two injuries (legs, ribs, arms), +1 heart.
