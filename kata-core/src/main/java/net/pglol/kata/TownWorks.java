@@ -20,7 +20,7 @@ final class TownWorks {
 
     static void plan(boolean clear) {
         if (clear) {
-            int c0 = Math.floorDiv(MIN - BELT - 8, 16), c1 = Math.floorDiv(MAX + BELT + 8, 16);
+            int c0 = Math.floorDiv(-(MAX + 4 + WILD) - 8, 16), c1 = Math.floorDiv(MAX + 4 + WILD + 8, 16);
             for (int cx = c0; cx <= c1; cx++)
                 for (int cz = c0; cz <= c1; cz++) {
                     int a = cx, b = cz;
@@ -49,7 +49,7 @@ final class TownWorks {
         neighbourhood(lx(1), lz(3), Direction.NORTH, "Kumo", 4104L, false);
         neighbourhood(lx(2), lz(3), Direction.NORTH, "Ryu", 4105L, false);
         neighbourhood(lx(3), lz(3), Direction.WEST, "Hana", 4106L, true);
-        belt();
+        terrain();
     }
 
     // ================================================================== streets
@@ -66,13 +66,24 @@ final class TownWorks {
                 if (!ns && !ew) continue;
                 if (ns && ew) {
                     boolean corner = (ix < 2 || ix > 10) && (iz < 2 || iz > 10);
-                    if (corner) sidewalk(x, z);
-                    else set(x, G - 1, z, asphalt(x, z));
+                    if (corner) {
+                        sidewalk(x, z);
+                        if (ix == 1 && iz == 1) signal(x, z, 1);
+                        if (ix == 11 && iz == 11) signal(x, z, -1);
+                    } else set(x, G - 1, z, asphalt(x, z));
                     continue;
                 }
                 int c = ns ? ix : iz, a = ns ? iz : ix;
+                boolean wired = z >= lz(1) - R;
                 if (c < 2 || c > 10) {
                     sidewalk(x, z);
+                    if (c == 12 && wired && a >= R + 5 && a <= R + 86) {
+                        boolean pole = a == R + 5 || a == R + 32 || a == R + 59 || a == R + 86;
+                        if (pole) for (int y = G; y <= G + 7; y++) set(x, y, z, axis(Blocks.STRIPPED_SPRUCE_LOG, Direction.Axis.Y));
+                        else set(x, G + 7, z, axis(Blocks.CHAIN, ns ? Direction.Axis.Z : Direction.Axis.X));
+                    }
+                    if (c == 0 && a == R + 15) set(x, G, z, s(Blocks.CAULDRON));
+                    if (c == 11 && a == R + 36) set(x, G, z, s(Blocks.RED_NETHER_BRICK_WALL));
                     if ((c == 0 || c == 12) && (a == R + 14 || a == R + 43 || a == R + 72)) {
                         Direction toRoad = ns ? (c == 0 ? Direction.EAST : Direction.WEST) : (c == 0 ? Direction.SOUTH : Direction.NORTH);
                         lamp(x, z, toRoad);
@@ -80,12 +91,40 @@ final class TownWorks {
                     continue;
                 }
                 BlockState b = asphalt(x, z);
+                if (c == 2 && (a == R + 20 || a == R + 48 || a == R + 76)) {
+                    int hsh = (x * 7349 + z * 2917) & 7;
+                    if (hsh < 4) parked(x, z, ns, hsh);
+                }
                 boolean cross = (a >= R && a < R + 3) || a >= P - 3;
                 if (cross) {
                     if (c % 2 == 0) b = PAINT;
                 } else if (c == 6 && (a / 3) % 2 == 0) b = s(Blocks.YELLOW_CONCRETE);
                 set(x, G - 1, z, b);
             }
+    }
+
+    /** A car parked along the kerb, nose along the street. */
+    private static void parked(int x, int z, boolean ns, int pick) {
+        Block[] col = {Blocks.RED_CONCRETE, Blocks.WHITE_CONCRETE, Blocks.BLUE_CONCRETE, Blocks.BLACK_CONCRETE};
+        Block body = col[pick & 3];
+        if (ns) {
+            car(x, G, z, body);
+            return;
+        }
+        box(x, G, z, x + 3, G, z + 1, s(body));
+        box(x + 1, G + 1, z, x + 2, G + 1, z + 1, s(Blocks.BLACK_STAINED_GLASS));
+        set(x, G, z, s(Blocks.BLACK_CONCRETE));
+        set(x + 3, G, z + 1, s(Blocks.BLACK_CONCRETE));
+    }
+
+    /** Traffic lights on a corner: a pole, an arm out over the road (east if dir 1, west if -1), the light hanging off it. */
+    private static void signal(int x, int z, int dir) {
+        for (int y = G; y <= G + 5; y++) set(x, y, z, s(Blocks.POLISHED_BLACKSTONE_WALL));
+        for (int k = 0; k <= 4; k++) set(x + dir * k, G + 6, z, s(Blocks.POLISHED_BLACKSTONE));
+        set(x + dir * 4, G + 5, z, s(Blocks.BLACK_CONCRETE));
+        set(x + dir * 4, G + 4, z, s(Blocks.VERDANT_FROGLIGHT));
+        set(x + dir * 2, G + 5, z, s(Blocks.BLACK_CONCRETE));
+        set(x + dir * 2, G + 4, z, s(Blocks.OCHRE_FROGLIGHT));
     }
 
     private static BlockState asphalt(int x, int z) {
@@ -118,6 +157,11 @@ final class TownWorks {
 
     /** A tree standing on the ground at x z: 0 oak, 1 birch, 2 cherry, 3 spruce. */
     static void tree(int x, int z, int kind, Random r) {
+        treeAt(x, G, z, kind, r);
+    }
+
+    /** A tree whose trunk starts at y g (the first air above its ground). */
+    static void treeAt(int x, int g, int z, int kind, Random r) {
         Block log = switch (kind) {
             case 1 -> Blocks.BIRCH_LOG;
             case 2 -> Blocks.CHERRY_LOG;
@@ -131,25 +175,25 @@ final class TownWorks {
             default -> r.nextInt(5) == 0 ? Blocks.FLOWERING_AZALEA_LEAVES : Blocks.OAK_LEAVES;
         };
         BlockState leaf = leaves(lf);
-        set(x, G - 1, z, s(Blocks.DIRT));
+        set(x, g - 1, z, s(Blocks.DIRT));
         if (kind == 3) {
             int h = 7 + r.nextInt(4);
-            for (int y = 0; y < h; y++) set(x, G + y, z, s(log));
+            for (int y = 0; y < h; y++) set(x, g + y, z, s(log));
             for (int y = 2; y <= h; y++) {
                 int rad = y == h ? 0 : Math.max(1, (h - y) / 2 % 3 + ((h - y) % 2));
                 for (int dx = -rad; dx <= rad; dx++)
                     for (int dz = -rad; dz <= rad; dz++) {
                         if (dx * dx + dz * dz > rad * rad + 1 || (dx == 0 && dz == 0 && y < h)) continue;
-                        set(x + dx, G + y, z + dz, leaf);
+                        set(x + dx, g + y, z + dz, leaf);
                     }
             }
-            set(x, G + h, z, leaf);
+            set(x, g + h, z, leaf);
             return;
         }
         int h = 4 + r.nextInt(3);
         int rad = kind == 2 ? 3 : 2;
-        for (int y = 0; y < h; y++) set(x, G + y, z, s(log));
-        int top = G + h - 1;
+        for (int y = 0; y < h; y++) set(x, g + y, z, s(log));
+        int top = g + h - 1;
         for (int dy = -2; dy <= 1; dy++) {
             int rr = dy == 1 ? rad - 1 : dy == -2 && kind == 2 ? rad - 1 : rad;
             for (int dx = -rr; dx <= rr; dx++)
@@ -160,6 +204,81 @@ final class TownWorks {
                     if (edge && r.nextBoolean()) continue;
                     set(x + dx, top + dy, z + dz, leaf);
                 }
+        }
+    }
+
+    /**
+     * A climbing route up a wall: (x, z) is a block on the wall's face, out the way it faces, yTop the
+     * height to reach (the roof's edge). A crate and a barrel at the foot for a leg-up, then pairs of
+     * wooden lips every three blocks, zigzagging, each on a little bracket, the last within reach of the top.
+     */
+    static void climb(int x, int z, Direction out, int yTop) {
+        Direction along = out.rotateYClockwise();
+        int bx = x + out.getOffsetX(), bz = z + out.getOffsetZ(), ax = along.getOffsetX(), az = along.getOffsetZ();
+        set(bx, G, bz, s(Blocks.STRIPPED_SPRUCE_WOOD));
+        set(bx + ax, G, bz + az, s(Blocks.BARREL));
+        BlockState lip = slab(Blocks.SPRUCE_SLAB, true), bracket = stair(Blocks.SPRUCE_STAIRS, out.getOpposite(), true);
+        int k = 0, last = G - 1;
+        for (int y = G + 2; y <= yTop - 2; y += 3) {
+            lipPair(bx, bz, ax, az, (k % 2) * 2, y, lip, bracket);
+            last = y;
+            k++;
+        }
+        if (yTop - last >= 4) lipPair(bx, bz, ax, az, (k % 2) * 2, yTop - 2, lip, bracket);
+    }
+
+    private static void lipPair(int bx, int bz, int ax, int az, int o, int y, BlockState lip, BlockState bracket) {
+        set(bx + ax * o, y, bz + az * o, lip);
+        set(bx + ax * (o + 1), y, bz + az * (o + 1), lip);
+        set(bx + ax * o, y - 1, bz + az * o, bracket);
+    }
+
+    /**
+     * Two neighbouring towers joined for a rooftop run: plank boards out over the gap leave a three
+     * block jump. Roofs of different heights: the board goes out from the lower roof and lips run up
+     * the taller wall from just above it, so you jump to the wall and climb.
+     */
+    static void link(int[] a, int[] b, boolean alongX) {
+        int ta = G - 1 + 4 * (a[4] / 4), tb = G - 1 + 4 * (b[4] / 4);
+        int ea = alongX ? a[0] + a[2] - 1 : a[1] + a[3] - 1, eb = alongX ? b[0] : b[1];
+        int gap = eb - ea - 1;
+        if (gap < 3) return;
+        int c = alongX ? Math.min(a[1] + a[3], b[1] + b[3]) - 5 : Math.min(a[0] + a[2], b[0] + b[2]) - 5;
+        if (Math.abs(ta - tb) <= 2) {
+            int la = (gap - 2) / 2, lb = Math.max(0, gap - 3 - la);
+            board(ea, ta + 1, c, 1, la, alongX);
+            board(eb, tb + 1, c, -1, lb, alongX);
+            return;
+        }
+        boolean aLow = ta < tb;
+        int lowE = aLow ? ea : eb, highE = aLow ? eb : ea, dir = aLow ? 1 : -1, lowT = Math.min(ta, tb), highT = Math.max(ta, tb);
+        board(lowE, lowT + 1, c, dir, Math.max(0, gap - 4), alongX);
+        BlockState lip = slab(Blocks.SPRUCE_SLAB, true), bracket = stair(Blocks.SPRUCE_STAIRS, alongX ? (dir > 0 ? Direction.WEST : Direction.EAST) : (dir > 0 ? Direction.NORTH : Direction.SOUTH), true);
+        int at = highE - dir, last = lowT;
+        for (int y = lowT + 2; y <= highT - 1; y += 3) {
+            for (int cc = c; cc <= c + 1; cc++) {
+                if (alongX) set(at, y, cc, lip);
+                else set(cc, y, at, lip);
+            }
+            if (alongX) set(at, y - 1, c, bracket);
+            else set(c, y - 1, at, bracket);
+            last = y;
+        }
+    }
+
+    /** A two-wide plank board at height y from the roof edge e out len blocks (k = 0 replaces the parapet). */
+    private static void board(int e, int y, int c, int dir, int len, boolean alongX) {
+        for (int k = 0; k <= len; k++) {
+            int p = e + dir * k;
+            for (int cc = c; cc <= c + 1; cc++) {
+                if (alongX) set(p, y, cc, s(Blocks.SPRUCE_PLANKS));
+                else set(cc, y, p, s(Blocks.SPRUCE_PLANKS));
+            }
+            if (k > 0) {
+                Direction toWall = alongX ? (dir > 0 ? Direction.WEST : Direction.EAST) : (dir > 0 ? Direction.NORTH : Direction.SOUTH);
+                if (alongX) set(p, y - 1, c, stair(Blocks.SPRUCE_STAIRS, toWall, true));
+                else set(c, y - 1, p, stair(Blocks.SPRUCE_STAIRS, toWall, true));
+            }
         }
     }
 
@@ -240,12 +359,12 @@ final class TownWorks {
     private record Style(BlockState frame, BlockState band, BlockState pane, BlockState roof, BlockState parapet, Block ledge, int bay, boolean ribbon) { }
 
     private static final Style[] STYLES = {
-        new Style(s(Blocks.LIGHT_GRAY_CONCRETE), s(Blocks.SMOOTH_STONE), s(Blocks.LIGHT_BLUE_STAINED_GLASS_PANE), s(Blocks.GRAY_CONCRETE), s(Blocks.SMOOTH_STONE), Blocks.SMOOTH_STONE_SLAB, 4, false),
-        new Style(s(Blocks.POLISHED_BLACKSTONE), s(Blocks.POLISHED_BLACKSTONE_BRICKS), s(Blocks.GRAY_STAINED_GLASS_PANE), s(Blocks.GRAY_CONCRETE), s(Blocks.POLISHED_BLACKSTONE), Blocks.POLISHED_BLACKSTONE_SLAB, 3, false),
-        new Style(s(Blocks.BRICKS), s(Blocks.STONE_BRICKS), s(Blocks.GLASS_PANE), s(Blocks.GRAY_CONCRETE), s(Blocks.STONE_BRICKS), Blocks.STONE_BRICK_SLAB, 3, true),
-        new Style(s(Blocks.WHITE_CONCRETE), s(Blocks.WHITE_CONCRETE), s(Blocks.GRAY_STAINED_GLASS_PANE), s(Blocks.LIGHT_GRAY_CONCRETE), s(Blocks.WHITE_CONCRETE), Blocks.SMOOTH_QUARTZ_SLAB, 6, true),
-        new Style(s(Blocks.WAXED_OXIDIZED_CUT_COPPER), s(Blocks.WAXED_OXIDIZED_CUT_COPPER), s(Blocks.CYAN_STAINED_GLASS_PANE), s(Blocks.GRAY_CONCRETE), s(Blocks.WAXED_OXIDIZED_CUT_COPPER), Blocks.WAXED_OXIDIZED_CUT_COPPER_SLAB, 4, false),
-        new Style(s(Blocks.TUFF_BRICKS), s(Blocks.POLISHED_TUFF), s(Blocks.BROWN_STAINED_GLASS_PANE), s(Blocks.GRAY_CONCRETE), s(Blocks.TUFF_BRICKS), Blocks.TUFF_BRICK_SLAB, 3, true),
+        new Style(s(Blocks.LIGHT_GRAY_CONCRETE), s(Blocks.SMOOTH_STONE), s(Blocks.LIGHT_BLUE_STAINED_GLASS), s(Blocks.GRAY_CONCRETE), s(Blocks.SMOOTH_STONE), Blocks.SMOOTH_STONE_SLAB, 4, false),
+        new Style(s(Blocks.POLISHED_BLACKSTONE), s(Blocks.POLISHED_BLACKSTONE_BRICKS), s(Blocks.GRAY_STAINED_GLASS), s(Blocks.GRAY_CONCRETE), s(Blocks.POLISHED_BLACKSTONE), Blocks.POLISHED_BLACKSTONE_SLAB, 3, false),
+        new Style(s(Blocks.BRICKS), s(Blocks.STONE_BRICKS), s(Blocks.GLASS), s(Blocks.GRAY_CONCRETE), s(Blocks.STONE_BRICKS), Blocks.STONE_BRICK_SLAB, 3, true),
+        new Style(s(Blocks.WHITE_CONCRETE), s(Blocks.WHITE_CONCRETE), s(Blocks.GRAY_STAINED_GLASS), s(Blocks.LIGHT_GRAY_CONCRETE), s(Blocks.WHITE_CONCRETE), Blocks.SMOOTH_QUARTZ_SLAB, 6, true),
+        new Style(s(Blocks.WAXED_OXIDIZED_CUT_COPPER), s(Blocks.WAXED_OXIDIZED_CUT_COPPER), s(Blocks.CYAN_STAINED_GLASS), s(Blocks.GRAY_CONCRETE), s(Blocks.WAXED_OXIDIZED_CUT_COPPER), Blocks.WAXED_OXIDIZED_CUT_COPPER_SLAB, 4, false),
+        new Style(s(Blocks.TUFF_BRICKS), s(Blocks.POLISHED_TUFF), s(Blocks.BROWN_STAINED_GLASS), s(Blocks.GRAY_CONCRETE), s(Blocks.TUFF_BRICKS), Blocks.TUFF_BRICK_SLAB, 3, true),
     };
 
     private static final int[] HEIGHTS = {24, 32, 40, 48, 56, 64, 72, 84, 96};
@@ -300,6 +419,7 @@ final class TownWorks {
                 int[] ca = cell[a], cb = cell[b];
                 JOBS.add(() -> bridge(ca, cb, f, true));
             }
+        links(kind, cell);
         for (int row = 0; row < 2; row++)
             for (int col = 0; col < 3; col++) {
                 int a = row * 3 + col, b = a + 3;
@@ -312,12 +432,54 @@ final class TownWorks {
             }
     }
 
+    /** Downtown: boards and lips joining every pair of neighbouring towers. */
+    private static void links(int[] kind, int[][] cell) {
+        for (int row = 0; row < 3; row++)
+            for (int col = 0; col < 2; col++) {
+                int a = row * 3 + col, b = a + 1;
+                if (kind[a] == TOWER && kind[b] == TOWER) {
+                    int[] ca = cell[a], cb = cell[b];
+                    JOBS.add(() -> link(ca, cb, true));
+                }
+            }
+        for (int row = 0; row < 2; row++)
+            for (int col = 0; col < 3; col++) {
+                int a = row * 3 + col, b = a + 3;
+                if (kind[a] == TOWER && kind[b] == TOWER) {
+                    int[] ca = cell[a], cb = cell[b];
+                    JOBS.add(() -> link(ca, cb, false));
+                }
+            }
+    }
+
     /** Downtown paving: polished stone with a grid of lighter lines, planters and lamps in the alleys, a square where asked. */
     static void plaza(int x0, int z0, int[] kind, int[][] cell, long seed) {
         Random r = new Random(seed ^ 0x5EED);
         for (int x = x0; x < x0 + LOT; x++)
             for (int z = z0; z < z0 + LOT; z++)
                 set(x, G - 1, z, ((x - x0) % 8 == 0 || (z - z0) % 8 == 0) ? s(Blocks.SMOOTH_STONE) : s(Blocks.POLISHED_ANDESITE));
+        // Alleys: dumpsters, crates, pallets (cover, and a leg-up).
+        for (int ax : new int[] {27, 56})
+            for (int az : new int[] {5, 20, 34, 49, 63, 78}) {
+                if (r.nextInt(3) == 0) continue;
+                int dx = x0 + ax, dz = z0 + az;
+                if (r.nextBoolean()) {
+                    box(dx, G, dz, dx + 1, G, dz + 2, s(Blocks.GREEN_TERRACOTTA));
+                    box(dx, G + 1, dz, dx + 1, G + 1, dz + 2, Blocks.DARK_OAK_TRAPDOOR.getDefaultState());
+                } else {
+                    set(dx, G, dz, crate(r));
+                    set(dx + 1, G, dz, crate(r));
+                    set(dx, G + 1, dz, crate(r));
+                    set(dx, G, dz + 1, slab(Blocks.OAK_SLAB, false));
+                }
+            }
+        for (int ax : new int[] {5, 20, 34, 49, 63, 78})
+            for (int az : new int[] {27, 56}) {
+                if (r.nextInt(3) != 0) continue;
+                int dx = x0 + ax, dz = z0 + az;
+                set(dx, G, dz, crate(r));
+                set(dx, G, dz + 1, s(Blocks.BARREL));
+            }
         // Lamps where the alleys cross.
         for (int a : new int[] {28, 57})
             for (int b : new int[] {28, 57}) postLamp(x0 + a, z0 + b);
@@ -355,15 +517,16 @@ final class TownWorks {
         // Apron.
         box(x0 - 1, G - 1, z0 - 1, x1 + 1, G - 1, z1 + 1, s(Blocks.POLISHED_ANDESITE));
         // Shell.
+        // Glass is set one block in from the face, so every floor line is a ledge and every window a recess.
         for (int y = base + 1; y <= top; y++) {
             int fy = (y - base) % 4;
             for (int x = x0; x <= x1; x++) {
-                set(x, y, z0, shell(st, fy, x - x0, x == x0 || x == x1));
-                set(x, y, z1, shell(st, fy, x - x0, x == x0 || x == x1));
+                face(x, y, z0, x, z0 + 1, shell(st, fy, x - x0, x == x0 || x == x1), st);
+                face(x, y, z1, x, z1 - 1, shell(st, fy, x - x0, x == x0 || x == x1), st);
             }
             for (int z = z0 + 1; z < z1; z++) {
-                set(x0, y, z, shell(st, fy, z - z0, false));
-                set(x1, y, z, shell(st, fy, z - z0, false));
+                face(x0, y, z, x0 + 1, z, shell(st, fy, z - z0, false), st);
+                face(x1, y, z, x1 - 1, z, shell(st, fy, z - z0, false), st);
             }
         }
         // Floors, with lights set into each ceiling; the roof.
@@ -379,10 +542,10 @@ final class TownWorks {
         // A parapet round the roof.
         walls(x0, top + 1, z0, x1, top + 1, z1, st.parapet());
         // Doors on every side.
-        box(xm - 1, base + 1, z0, xm, base + 3, z0, AIR);
-        box(xm - 1, base + 1, z1, xm, base + 3, z1, AIR);
-        box(x0, base + 1, zm - 1, x0, base + 3, zm, AIR);
-        box(x1, base + 1, zm - 1, x1, base + 3, zm, AIR);
+        box(xm - 1, base + 1, z0, xm, base + 3, z0 + 1, AIR);
+        box(xm - 1, base + 1, z1 - 1, xm, base + 3, z1, AIR);
+        box(x0, base + 1, zm - 1, x0 + 1, base + 3, zm, AIR);
+        box(x1 - 1, base + 1, zm - 1, x1, base + 3, zm, AIR);
         // Ground floor lobby: a reception desk.
         box(xm - 2, base + 1, z0 + 4, xm + 1, base + 1, z0 + 4, slab(Blocks.SMOOTH_QUARTZ_SLAB, true));
         // Core: a ladder from the lobby to a hatch house on the roof.
@@ -409,10 +572,20 @@ final class TownWorks {
         }
         // A fire escape up the east face.
         if (floors >= 4 && r.nextInt(3) > 0) fireEscape(x1, zm, base, floors, top, st);
+        // A route of wooden lips up the south face, from a crate at the foot to the roof.
+        climb(x0 + 3, z1, Direction.SOUTH, top + 1);
         // The roof.
         if (roofKind == 1) helipad(xm, zm, top, wx, wz, x0, z0);
         else if (roofKind == 2) roofGarden(x0, z0, x1, z1, top, r);
         else roofProps(x0, z0, wx, wz, top, r);
+    }
+
+    /** A cell of a tower's face: windows go one block in (the face cell left open), the rest on the face. */
+    private static void face(int x, int y, int z, int ix, int iz, BlockState b, Style st) {
+        if (b == st.pane()) {
+            set(x, y, z, AIR);
+            set(ix, y, iz, b);
+        } else set(x, y, z, b);
     }
 
     private static BlockState shell(Style st, int fy, int along, boolean corner) {
@@ -431,7 +604,7 @@ final class TownWorks {
                 box(x1 + 2, y + 1, zc - 2, x1 + 2, y + 1, zc + 2, s(Blocks.IRON_BARS));
                 box(x1 + 1, y + 1, zc - 3, x1 + 2, y + 1, zc - 3, s(Blocks.IRON_BARS));
                 box(x1 + 1, y + 1, zc + 3, x1 + 2, y + 1, zc + 3, s(Blocks.IRON_BARS));
-                box(x1, y + 1, zc - 1, x1, y + 2, zc, AIR);
+                box(x1 - 1, y + 1, zc - 1, x1, y + 2, zc, AIR);
             }
             for (int k = 1; k <= 4; k++) {
                 set(x1 + 1, y + k, zc + 2, facing(Blocks.LADDER, Direction.EAST));
@@ -534,6 +707,8 @@ final class TownWorks {
             for (int x = xa; x <= xb; x++) {
                 box(x, y, zc - 2, x, y, zc + 2, s(Blocks.SMOOTH_QUARTZ));
                 box(x, y + 1, zc - 1, x, y + 3, zc + 1, AIR);
+                if (x == xa) box(x - 1, y + 1, zc - 1, x - 1, y + 3, zc + 1, AIR);
+                if (x == xb) box(x + 1, y + 1, zc - 1, x + 1, y + 3, zc + 1, AIR);
                 if (x > xa && x < xb) {
                     box(x, y + 1, zc - 2, x, y + 3, zc - 2, s(Blocks.LIGHT_BLUE_STAINED_GLASS));
                     box(x, y + 1, zc + 2, x, y + 3, zc + 2, s(Blocks.LIGHT_BLUE_STAINED_GLASS));
@@ -548,6 +723,8 @@ final class TownWorks {
             for (int z = za; z <= zb; z++) {
                 box(xc - 2, y, z, xc + 2, y, z, s(Blocks.SMOOTH_QUARTZ));
                 box(xc - 1, y + 1, z, xc + 1, y + 3, z, AIR);
+                if (z == za) box(xc - 1, y + 1, z - 1, xc + 1, y + 3, z - 1, AIR);
+                if (z == zb) box(xc - 1, y + 1, z + 1, xc + 1, y + 3, z + 1, AIR);
                 if (z > za && z < zb) {
                     box(xc - 2, y + 1, z, xc - 2, y + 3, z, s(Blocks.LIGHT_BLUE_STAINED_GLASS));
                     box(xc + 2, y + 1, z, xc + 2, y + 3, z, s(Blocks.LIGHT_BLUE_STAINED_GLASS));
@@ -751,6 +928,7 @@ final class TownWorks {
             set(dx1 + 1, base + 1, z1 + 1, s(Blocks.BLACK_CONCRETE));
         }
         door(x0, base + 1, z0 + wz / 2, Blocks.SPRUCE_DOOR, Direction.WEST);
+        climb(x0, z0 + 2, Direction.WEST, top + 1);
         sign(x0 - 1, base + 3, z0 + wz / 2 + 1, Blocks.SPRUCE_WALL_SIGN, Direction.WEST, "KIZUNA", "LOGISTICS", "", "Staff only");
         // Lanterns hanging on chains under the roof.
         for (int x = x0 + 4; x < x1; x += 8)
@@ -810,7 +988,7 @@ final class TownWorks {
     private static BlockState wall(int y, int base, int top, int along, boolean corner) {
         if (corner || along % 8 == 0) return s(Blocks.POLISHED_BLACKSTONE);
         if (y <= base + 2) return s(Blocks.DEEPSLATE_BRICKS);
-        if (y == top - 3 || y == top - 2) return s(Blocks.GLASS_PANE);
+        if (y == top - 3 || y == top - 2) return s(Blocks.GLASS);
         return along % 2 == 0 ? s(Blocks.LIGHT_GRAY_CONCRETE) : s(Blocks.WHITE_CONCRETE);
     }
 
@@ -871,7 +1049,7 @@ final class TownWorks {
                     if (x != x0 && x != x1 && z != z0 && z != z1) continue;
                     int along = (z == z0 || z == z1) ? x - x0 : z - z0;
                     boolean win = along % 4 >= 1 && along % 4 <= 2 && y >= base + 3 && y <= base + 9 && !(x == x0 || x == x1) == (z == z0 || z == z1);
-                    BlockState b = y <= base + 1 ? s(Blocks.STONE_BRICKS) : win ? s(Blocks.GLASS_PANE) : s(Blocks.BRICKS);
+                    BlockState b = y <= base + 1 ? s(Blocks.STONE_BRICKS) : win ? s(Blocks.GLASS) : s(Blocks.BRICKS);
                     set(x, y, z, b);
                 }
         // Flat roof with a raised glazed monitor down the middle.
@@ -879,8 +1057,8 @@ final class TownWorks {
         int zm = z0 + wz / 2;
         box(x0 + 2, top + 1, zm - 3, x1 - 2, top + 1, zm + 3, AIR);
         walls(x0 + 2, top + 1, zm - 4, x1 - 2, top + 3, zm + 4, s(Blocks.BRICKS));
-        box(x0 + 3, top + 2, zm - 4, x1 - 3, top + 3, zm - 4, s(Blocks.GLASS_PANE));
-        box(x0 + 3, top + 2, zm + 4, x1 - 3, top + 3, zm + 4, s(Blocks.GLASS_PANE));
+        box(x0 + 3, top + 2, zm - 4, x1 - 3, top + 3, zm - 4, s(Blocks.GLASS));
+        box(x0 + 3, top + 2, zm + 4, x1 - 3, top + 3, zm + 4, s(Blocks.GLASS));
         box(x0 + 2, top + 4, zm - 4, x1 - 2, top + 4, zm + 4, s(Blocks.GRAY_CONCRETE));
         walls(x0, top + 2, z0, x1, top + 2, z1, s(Blocks.STONE_BRICK_WALL));
         // Doors: a big one to the yard, a small one west.
@@ -902,6 +1080,7 @@ final class TownWorks {
                 set(x, top - 1, z, lantern(true));
             }
         sign(x0 - 1, base + 3, zm + 2, Blocks.SPRUCE_WALL_SIGN, Direction.WEST, "KIZUNA", "STEELWORKS", "", "No entry");
+        climb(x0, z0 + 2, Direction.WEST, top + 2);
         if (r.nextBoolean()) set(x0 + 2, base + 1, z0 + 2, s(Blocks.ANVIL));
     }
 
@@ -1122,7 +1301,7 @@ final class TownWorks {
         int len = (toCourt.getAxis() == Direction.Axis.Z ? bx - ax : bz - az) + 1;
         int dep = (toCourt.getAxis() == Direction.Axis.Z ? bz - az : bx - ax) + 1;
         int base = G - 1, top = base + 15;
-        BlockState wallB = s(Blocks.WHITE_TERRACOTTA), band = s(Blocks.LIGHT_GRAY_CONCRETE), pane = s(Blocks.GLASS_PANE);
+        BlockState wallB = s(Blocks.WHITE_TERRACOTTA), band = s(Blocks.LIGHT_GRAY_CONCRETE), pane = s(Blocks.GLASS);
         for (int y = base + 1; y <= top; y++) {
             int fy = (y - base) % 5;
             for (int u = 0; u < len; u++)
@@ -1161,8 +1340,10 @@ final class TownWorks {
                     }
             }
         }
-        // The roof: a fence round it (the classic place to settle things).
+        // The roof: a fence round it (the classic place to settle things), with a way up the courtyard face.
         lwalls(0, top + 1, 0, len - 1, top + 2, dep - 1, s(Blocks.IRON_BARS));
+        climb(fx(3, 0), fz(3, 0), front, top + 1);
+        lbox(3, top + 1, 0, 6, top + 2, 0, AIR);
         if (entrance) {
             int mu = len / 2;
             lbox(mu - 2, base + 1, 0, mu + 1, base + 3, 0, AIR);
@@ -1236,7 +1417,7 @@ final class TownWorks {
                     if (x != x0 && x != x1 && z != z0 && z != z1) continue;
                     int along = (z == z0 || z == z1) ? x - x0 : z - z0;
                     boolean win = y >= base + 6 && y <= base + 8 && along % 4 != 0;
-                    set(x, y, z, y <= base + 1 ? s(Blocks.STONE_BRICKS) : win ? s(Blocks.GLASS_PANE) : s(Blocks.WHITE_TERRACOTTA));
+                    set(x, y, z, y <= base + 1 ? s(Blocks.STONE_BRICKS) : win ? s(Blocks.GLASS) : s(Blocks.WHITE_TERRACOTTA));
                 }
         // The arch, along x, with its ends closed.
         int[] hgt = new int[wz];
@@ -1275,6 +1456,7 @@ final class TownWorks {
                 for (int k = 0; k < 4; k++) set(x, top + 1 - k + 4, z, s(Blocks.CHAIN));
                 set(x, top + 1, z, lantern(true));
             }
+        climb(x0 + 3, z1, Direction.SOUTH, top + 1 + hgt[wz - 1]);
         // Doors: two to the field, one to the school.
         box(x0 + 11, base + 1, z1, x0 + 13, base + 3, z1, AIR);
         box(x1 - 14, base + 1, z1, x1 - 12, base + 3, z1, AIR);
@@ -1336,7 +1518,7 @@ final class TownWorks {
                         BlockState b;
                         if (y <= base + 4 || corner) b = s(Blocks.DEEPSLATE_TILES);
                         else if (along % 6 == 0) b = s(Blocks.RED_CONCRETE);
-                        else if (y >= base + 14 && y <= base + 16) b = s(Blocks.GLASS_PANE);
+                        else if (y >= base + 14 && y <= base + 16) b = s(Blocks.GLASS);
                         else b = s(Blocks.WHITE_CONCRETE);
                         set(x, y, z, b);
                     }
@@ -1355,6 +1537,8 @@ final class TownWorks {
             sign(cx - 1, base + 9, bz1 + 1, Blocks.DARK_OAK_WALL_SIGN, Direction.SOUTH, "KIZUNA", "BUDOKAN", "", "");
             sign(cx, base + 9, bz1 + 1, Blocks.DARK_OAK_WALL_SIGN, Direction.SOUTH, "Karate", "Tournament", "", "All welcome");
             box(cx - 2, base + 1, bz0, cx + 1, base + 4, bz0, AIR);
+            climb(bx0, bz0 + 6, Direction.WEST, top + 1);
+            climb(bx1, bz1 - 10, Direction.EAST, top + 1);
         });
         JOBS.add(() -> {
             // The ring: a raised wooden platform, a red-bordered blue mat, a step all round.
@@ -1498,7 +1682,7 @@ final class TownWorks {
         lbox(1, base, 2, 11, base, 13, s(Blocks.POLISHED_ANDESITE));
         lwalls(1, base + 1, 2, 11, top, 13, s(sh.wall()));
         // Shopfront: glass with a door in the middle.
-        lbox(2, base + 1, 2, 10, base + 3, 2, s(Blocks.GLASS_PANE));
+        lbox(2, base + 1, 2, 10, base + 3, 2, s(Blocks.GLASS));
         lbox(1, base + 1, 2, 1, base + 4, 2, s(sh.trim()));
         lbox(11, base + 1, 2, 11, base + 4, 2, s(sh.trim()));
         lbox(6, base + 1, 2, 6, base + 2, 2, AIR);
@@ -1514,10 +1698,10 @@ final class TownWorks {
         ls(6, base + 5, 1, facing(Blocks.DARK_OAK_WALL_SIGN, front));
         sign(fx(6, 1), base + 5, fz(6, 1), Blocks.DARK_OAK_WALL_SIGN, front, sh.a(), sh.b(), "", "Open");
         if (tall) {
-            for (int u = 3; u <= 9; u += 3) ls(u, base + 7, 2, s(Blocks.GLASS_PANE));
+            for (int u = 3; u <= 9; u += 3) ls(u, base + 7, 2, s(Blocks.GLASS));
             for (int v = 5; v <= 11; v += 3) {
-                ls(1, base + 7, v, s(Blocks.GLASS_PANE));
-                ls(11, base + 7, v, s(Blocks.GLASS_PANE));
+                ls(1, base + 7, v, s(Blocks.GLASS));
+                ls(11, base + 7, v, s(Blocks.GLASS));
             }
             lbox(2, base + 5, 3, 10, base + 5, 12, s(Blocks.SPRUCE_PLANKS));
             ls(6, base + 5, 8, s(Blocks.SEA_LANTERN));
@@ -1535,6 +1719,8 @@ final class TownWorks {
             ls(10, base + 1, v, r.nextBoolean() ? s(Blocks.BOOKSHELF) : s(Blocks.BARREL));
         }
         lbox(4, base + 1, 11, 8, base + 1, 11, slab(Blocks.SMOOTH_QUARTZ_SLAB, true));
+        // Bins against the side wall and lips up it to the roof.
+        climb(fx(11, 6), fz(11, 6), right, top + 2);
         lbox(5, base + 1, 7, 7, base + 1, 7, slab(Blocks.SPRUCE_SLAB, true));
     }
 
@@ -1693,7 +1879,7 @@ final class TownWorks {
                     BlockState b;
                     if (edgeU && edgeV) b = post;
                     else if (fy == 0) b = s(H_RIDGE[roofI]);
-                    else if ((fy == 1 || fy == 2) && ((edgeV && (u == 3 || u == 4 || u == 8 || u == 9)) || (edgeU && (v == 6 || v == 7 || v == 10 || v == 11)))) b = s(Blocks.GLASS_PANE);
+                    else if ((fy == 1 || fy == 2) && ((edgeV && (u == 3 || u == 4 || u == 8 || u == 9)) || (edgeU && (v == 6 || v == 7 || v == 10 || v == 11)))) b = s(Blocks.GLASS);
                     else b = wallB;
                     ls(u, y, v, b);
                 }
@@ -1731,7 +1917,9 @@ final class TownWorks {
                 ls(u, y, 13, wallB);
             }
         }
-        ls(6, rb + 2, 4, s(Blocks.GLASS_PANE));
+        ls(6, rb + 2, 4, s(Blocks.GLASS));
+        // A rain barrel and a woodpile by the side wall, lips up to the eaves.
+        climb(fx(10, 7), fz(10, 7), right, top + 1);
         // A kitchen table and a bed-ish corner, so the windows show something.
         ls(8, base + 1, 7, slab(Blocks.SPRUCE_SLAB, true));
         ls(8, base + 1, 11, s(Blocks.RED_WOOL));
@@ -1754,7 +1942,7 @@ final class TownWorks {
                     BlockState b;
                     if (fy == 0) b = s(Blocks.SMOOTH_STONE);
                     else if (unitEdge || edgeU) b = wallA;
-                    else if (edgeV && (fy == 1 || fy == 2) && u % 7 >= 2 && u % 7 <= 5) b = s(Blocks.GLASS_PANE);
+                    else if (edgeV && (fy == 1 || fy == 2) && u % 7 >= 2 && u % 7 <= 5) b = s(Blocks.GLASS);
                     else b = wallB;
                     ls(u, y, v, b);
                 }
@@ -1798,6 +1986,12 @@ final class TownWorks {
             ls(u, top + 2, 10, Blocks.IRON_TRAPDOOR.getDefaultState());
         }
         ls(1, top + 3, 1, AIR);
+        // Dumpsters under the first balconies: from there it's railing to slab, floor by floor.
+        for (int u : new int[] {10, 38}) {
+            lbox(u, G, 0, u + 1, G, 0, s(Blocks.GREEN_TERRACOTTA));
+            lbox(u, G + 1, 0, u + 1, G + 1, 0, Blocks.DARK_OAK_TRAPDOOR.getDefaultState());
+        }
+        climb(fx(len - 1, 6), fz(len - 1, 6), right, top + 1);
     }
 
     /** The forecourt on the entry side: a stone path, a torii, lanterns, cherry trees, the dojo's sign. */
@@ -1917,7 +2111,7 @@ final class TownWorks {
                     if (isPost) b = post;
                     else if (y == G + 5) b = s(Blocks.DARK_OAK_PLANKS);
                     else if (y == G + 1) b = s(Blocks.DARK_OAK_PLANKS);
-                    else if (y >= G + 3 && (along / 3) % 2 == 1 && !(ev && v == 16)) b = s(Blocks.WHITE_STAINED_GLASS_PANE);
+                    else if (y >= G + 3 && (along / 3) % 2 == 1 && !(ev && v == 16)) b = s(Blocks.WHITE_STAINED_GLASS);
                     else b = s(Blocks.WHITE_CONCRETE);
                     ls(u, y, v, b);
                 }
@@ -1937,6 +2131,9 @@ final class TownWorks {
         ls(26, G + 3, 32, lantern(false));
         sign(fx(23, 32), G + 4, fz(23, 32), Blocks.DARK_OAK_WALL_SIGN, front, name + " Dojo", "", "Bow in,", "bow out");
         ls(24, G + 4, 32, s(Blocks.WHITE_WOOL));
+        // A woodpile on the back corner of the veranda: up onto the eaves from there.
+        lbox(8, G + 1, 34, 9, G + 2, 35, axis(Blocks.SPRUCE_LOG, Direction.Axis.X));
+        lbox(38, G + 1, 34, 39, G + 1, 35, axis(Blocks.SPRUCE_LOG, Direction.Axis.Z));
         // Racks along the side walls (empty for now).
         for (int v = 20; v <= 29; v += 3) {
             ls(11, G + 2, v, slab(Blocks.SPRUCE_SLAB, true));
@@ -1977,28 +2174,108 @@ final class TownWorks {
         }
     }
 
-    // ================================================================== the belt of trees round the town
+    // ================================================================== the land round the town
 
-    static void belt() {
-        for (int q = 0; q < 4; q++) {
-            int qq = q;
-            JOBS.add(() -> {
-                Random r = new Random(7000 + qq);
-                for (int a = MIN - BELT; a <= MAX + BELT; a += 5)
-                    for (int d = 4; d < BELT; d += 6) {
-                        int ja = a + r.nextInt(3) - 1, jd = d + r.nextInt(3) - 1;
-                        int x, z;
-                        switch (qq) {
-                            case 0 -> { x = ja; z = MIN - jd; }
-                            case 1 -> { x = ja; z = MAX + jd; }
-                            case 2 -> { x = MIN - jd; z = ja; }
-                            default -> { x = MAX + jd; z = ja; }
-                        }
-                        if (qq >= 2 && (z < MIN - 2 || z > MAX + 2)) continue;
-                        int k = r.nextInt(6);
-                        tree(x, z, k < 2 ? 0 : k < 4 ? 3 : k == 4 ? 1 : 2, r);
-                    }
-            });
+    /** How far the land runs past the town's edge. */
+    static final int WILD = 176;
+
+    private static double hash(int x, int z) {
+        long h = x * 341873128712L + z * 132897987541L + 0x9E3779B97F4A7C15L;
+        h = (h ^ (h >>> 29)) * 0xBF58476D1CE4E5B9L;
+        h ^= h >>> 32;
+        return (h & 0xFFFFFF) / (double) 0xFFFFFF;
+    }
+
+    private static double vnoise(double x, double z) {
+        int xi = (int) Math.floor(x), zi = (int) Math.floor(z);
+        double fx = x - xi, fz = z - zi;
+        double u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+        double a = hash(xi, zi), b = hash(xi + 1, zi), c = hash(xi, zi + 1), d = hash(xi + 1, zi + 1);
+        return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+    }
+
+    private static double fbm(int x, int z) {
+        return vnoise(x / 96.0, z / 96.0) * 0.55 + vnoise(x / 40.0, z / 40.0) * 0.3 + vnoise(x / 15.0, z / 15.0) * 0.15;
+    }
+
+    private static double clamp(double v) {
+        return Math.max(0, Math.min(1, v));
+    }
+
+    private static double smooth(double v) {
+        return v * v * (3 - 2 * v);
+    }
+
+    /** How much of the sea this column is (the coast is south of town). */
+    private static double sea(int x, int z) {
+        int m = Math.max(Math.abs(x), Math.abs(z));
+        int d = m - (MAX + 4);
+        if (d <= 0) return 0;
+        double south = clamp(z / (double) m);
+        return smooth(clamp((south - 0.55) / 0.25)) * smooth(clamp((d - 18) / 34.0));
+    }
+
+    /** Height of the land above the town's ground (negative: under the sea). Mountains north and east, hills west, the coast south. */
+    static int land(int x, int z) {
+        int m = Math.max(Math.abs(x), Math.abs(z));
+        int d = m - (MAX + 4);
+        if (d <= 0) return 0;
+        double sx = x / (double) m, sz = z / (double) m;
+        double north = clamp(-sz), east = clamp(sx), west = clamp(-sx);
+        double amp = 12 + 78 * Math.max(north, east * 0.8) + 22 * west;
+        double rise = smooth(clamp((d - 8) / 115.0));
+        double h = rise * amp * (0.4 + 0.95 * fbm(x, z)) + (d > 3 ? 2.5 * vnoise(x / 11.0, z / 11.0) : 0);
+        // Far out, the mountains ease back down to hills.
+        h *= 1 - 0.55 * smooth(clamp((d - 140) / 36.0));
+        double s = sea(x, z);
+        double depth = 2 + 7 * clamp((d - 40) / 45.0);
+        return (int) Math.round(h * (1 - s) - depth * s);
+    }
+
+    static void terrain() {
+        int t = MAX + 4 + WILD;
+        for (int xs = -t; xs <= t; xs += 16) {
+            int a = xs, b = Math.min(t, xs + 15);
+            JOBS.add(() -> terrainStrip(a, b, t));
         }
+    }
+
+    private static void terrainStrip(int xa, int xb, int t) {
+        Random r = new Random(xa * 31L + 7);
+        int in = MAX + 4;
+        for (int x = xa; x <= xb; x++)
+            for (int z = -t; z <= t; z++) {
+                if (Math.abs(x) <= in && Math.abs(z) <= in) continue;
+                int h = land(x, z);
+                int n0 = land(x + 1, z), n1 = land(x - 1, z), n2 = land(x, z + 1), n3 = land(x, z - 1);
+                int minN = Math.min(Math.min(n0, n1), Math.min(n2, n3)), maxN = Math.max(Math.max(n0, n1), Math.max(n2, n3));
+                int top = G - 1 + h;
+                double sea = sea(x, z);
+                int d = Math.max(Math.abs(x), Math.abs(z)) - in;
+                if (h < 0) {
+                    for (int y = top - 2; y <= top; y++) set(x, y, z, s(Blocks.SAND));
+                    for (int y = top + 1; y <= G - 1; y++) set(x, y, z, s(Blocks.WATER));
+                    if (hash(x * 3, z * 5) < 0.04) set(x, top + 1, z, s(Blocks.SEAGRASS));
+                    continue;
+                }
+                boolean beach = sea > 0.12 && h <= 2;
+                boolean steep = maxN - minN >= 3;
+                boolean snow = top > G + 66 + (int) (hash(x, z) * 6);
+                BlockState surface = snow ? s(Blocks.SNOW_BLOCK) : beach ? s(Blocks.SAND) : steep ? (hash(x, z) < 0.5 ? s(Blocks.STONE) : s(Blocks.ANDESITE)) : s(Blocks.GRASS_BLOCK);
+                BlockState under = beach ? s(Blocks.SAND) : steep || snow ? s(Blocks.STONE) : s(Blocks.DIRT);
+                int from = Math.max(G - 1, G - 1 + minN - 3);
+                if (h == 0) from = G - 1;
+                from = Math.min(from, top);
+                for (int y = from; y <= top; y++) set(x, y, z, y == top ? surface : y >= top - 3 ? under : s(Blocks.STONE));
+                if (surface.isOf(Blocks.GRASS_BLOCK)) {
+                    double roll = hash(x * 7 + 1, z * 13 + 5);
+                    double p = d < 26 ? 0.055 : top < G + 40 ? 0.03 : 0.018;
+                    if (roll < p && !steep) {
+                        int kind = top > G + 28 ? 3 : roll < p * 0.3 ? 1 : roll < p * 0.4 && d < 40 ? 2 : 0;
+                        treeAt(x, top + 1, z, kind, r);
+                    } else if (roll > 0.82) set(x, top + 1, z, s(Blocks.SHORT_GRASS));
+                    else if (roll > 0.8) set(x, top + 1, z, roll > 0.81 ? s(Blocks.POPPY) : s(Blocks.DANDELION));
+                }
+            }
     }
 }

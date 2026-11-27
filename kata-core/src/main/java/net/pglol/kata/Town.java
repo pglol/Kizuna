@@ -73,7 +73,7 @@ public final class Town {
     /** The tree belt round the outside. */
     static final int BELT = 24;
     /** Bump to rebuild the town on every server that has an older one. */
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
 
     static int lx(int i) { return MIN + R + i * P; }
     static int lz(int j) { return MIN + R + j * P; }
@@ -90,6 +90,7 @@ public final class Town {
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(Town::open);
         ServerLifecycleEvents.SERVER_STOPPING.register(s -> {
+            TownEdits.save();
             JOBS.clear();
             building = false;
             ready = false;
@@ -112,7 +113,16 @@ public final class Town {
                 if (ready) bring(p);
                 else c.getSource().sendFeedback(() -> Text.literal(building ? "The town is still being built (" + percent() + "%)." : "The town world isn't loaded."), false);
                 return 1;
-            }).then(CommandManager.literal("rebuild").executes(c -> {
+            }).then(CommandManager.literal("export").executes(c -> {
+                if (w == null) return 0;
+                int n = TownEdits.export(w);
+                c.getSource().sendFeedback(() -> Text.literal(n < 0 ? "Couldn't write the edits file (see the server log)."
+                    : "Saved " + n + " hand-built blocks to town_edits.txt in the server folder. Send that file over to have them folded into the town."), false);
+                return 1;
+            })).then(CommandManager.literal("edits").executes(c -> {
+                c.getSource().sendFeedback(() -> Text.literal(TownEdits.count() + " blocks changed by hand since the town was built. /kata town export saves them."), false);
+                return 1;
+            })).then(CommandManager.literal("rebuild").executes(c -> {
                 if (w == null) return 0;
                 start(true);
                 c.getSource().sendFeedback(() -> Text.literal("Rebuilding the town (" + jobsTotal + " steps)."), true);
@@ -128,6 +138,7 @@ public final class Town {
             return;
         }
         file = s.getSavePath(WorldSavePath.ROOT).resolve("kata_core").resolve("town.txt");
+        TownEdits.open(s);
         int v = 0;
         try {
             if (Files.exists(file)) v = Integer.parseInt(Files.readString(file, StandardCharsets.UTF_8).trim());
@@ -158,7 +169,12 @@ public final class Town {
         AFTER.clear();
         head = joinHead = 0;
         ready = false;
+        // Whatever's been built by hand is saved first and laid back on top at the end.
+        if (clear && TownEdits.count() > 0) TownEdits.export(w);
         TownWorks.plan(clear);
+        MinecraftServer srv = server;
+        ServerWorld tw = w;
+        JOBS.add(() -> TownEdits.applyAll(srv, tw));
         jobsTotal = JOBS.size();
         jobsDone = 0;
         building = true;
@@ -223,7 +239,17 @@ public final class Town {
     private static final int FLAGS = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS;
 
     private static void tick(MinecraftServer s) {
+        TownEdits.tick();
         if (!building || w == null) return;
+        TownEdits.ours = true;
+        try {
+            build(s);
+        } finally {
+            TownEdits.ours = false;
+        }
+    }
+
+    private static void build(MinecraftServer s) {
         long end = System.nanoTime() + (s.getCurrentPlayerCount() == 0 ? 45_000_000L : 18_000_000L);
         BlockPos.Mutable m = new BlockPos.Mutable();
         while (System.nanoTime() < end) {
@@ -302,6 +328,17 @@ public final class Town {
         STATES.add(s);
         Block b = s.getBlock();
         if (b instanceof PaneBlock || b instanceof FenceBlock || b instanceof WallBlock) JOIN.add(BlockPos.asLong(x, y, z));
+    }
+
+    /** A block exactly as given (no joining up to neighbours): hand-built edits. */
+    static void setExact(int x, int y, int z, BlockState s) {
+        if (y < 1 || y > 318) return;
+        POS.add(BlockPos.asLong(x, y, z));
+        STATES.add(s);
+    }
+
+    static void after(Runnable r) {
+        AFTER.add(r);
     }
 
     static void box(int x0, int y0, int z0, int x1, int y1, int z1, BlockState s) {
