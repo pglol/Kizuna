@@ -344,6 +344,13 @@ public final class Fight {
     }
 
     private static void dashTick(ClientPlayerEntity p) {
+        // A ledge caught out of the needle or a run: the climb takes over, no roll waiting for the ground.
+        if ((clock() < thrustUntil || wallRunning()) && Parkour.view(p).mode() != Parkour.Mode.NONE) {
+            thrustUntil = 0;
+            runUntil = 0;
+            React d = DODGES.get(p.getId());
+            if (d != null && d.packed >= 48 && d.packed < 80) DODGES.remove(p.getId());
+        }
         if (!noLedge()) return;
         dashTicks++;
         if (dashTicks > 4) {
@@ -1971,6 +1978,8 @@ public final class Fight {
     /** The needle: the body laid along the line of flight (pitch bucket of 15 degrees, 0 = straight up), arms reaching ahead, legs together. */
     private static void needle(LivingEntity e, int bucket, float s, Pose out) {
         if (s > 1.6f || (e.isOnGround() && s > 0.15f)) return;
+        // Caught a ledge (or anything parkour) on the way: that takes over, the needle's done.
+        if (e instanceof PlayerEntity pe && Parkour.view(pe).mode() != Parkour.Mode.NONE) return;
         float w = Math.min(1, s / 0.1f);
         float pitch = bucket * 15 - 90; // -90 up .. 90 down
         float lean = 90 + pitch; // tipped forward this far from standing
@@ -1994,6 +2003,7 @@ public final class Fight {
     /** Running along a wall: leaning off it, legs pumping, arms driving. */
     private static void wallRun(LivingEntity e, int idx, float s, Pose out) {
         if (s > 1.6f || (e.isOnGround() && s > 0.1f)) return;
+        if (e instanceof PlayerEntity pe && Parkour.view(pe).mode() != Parkour.Mode.NONE) return;
         double ang = idx * Math.PI / 8;
         float nx = (float) Math.cos(ang), nz = (float) Math.sin(ang);
         double yaw = Math.toRadians(e.bodyYaw);
