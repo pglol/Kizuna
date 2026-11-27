@@ -296,8 +296,10 @@ public final class Fight {
             // Never back into the wall: what's left of the look once its into-the-wall part is taken out.
             double into = look.dotProduct(n);
             Vec3d l2 = into < 0 ? look.subtract(n.multiply(into)) : look;
-            dir = l2.multiply(0.8).add(n.multiply(0.55)).normalize();
-            speed = 0.95;
+            // Looking up as you jump out: a lift on it (not a launch).
+            double upHelp = 0.32 * MathHelper.clamp(look.y / 0.6, 0, 1);
+            dir = l2.multiply(0.8).add(n.multiply(0.5)).add(0, upHelp, 0).normalize();
+            speed = 0.76;
             if (into < -0.3) {
                 // Looking into the wall: no needle facing it, a backflip out off it instead.
                 clingUntil = 0;
@@ -348,7 +350,7 @@ public final class Fight {
         dashTicks = 0;
         // Out from the wall a touch at first (clear of sills and lips right above you), drawn back in
         // as you rise (see dashTick), so you come up past the top rather than into what's on the wall.
-        thrust(p, new Vec3d(n.x * 0.22, 1, n.z * 0.22).normalize(), 0.95);
+        thrust(p, new Vec3d(n.x * 0.2, 1, n.z * 0.2).normalize(), 1.12);
         thrustGrace = clock() + 500_000_000L; // catch on again near the top of the dash
     }
 
@@ -405,6 +407,13 @@ public final class Fight {
             }
         }
         return true;
+    }
+
+    /** A wall right in front of you at head height (for the catch an up-dash earned, near the top of a wall). */
+    private static boolean wallAtHead(ClientPlayerEntity p, Vec3d n) {
+        var w = p.getWorld();
+        net.minecraft.util.math.BlockPos b = net.minecraft.util.math.BlockPos.ofFloored(p.getX() - n.x * 0.8, p.getY() + 1.5, p.getZ() - n.z * 0.8);
+        return !w.getBlockState(b).getCollisionShape(w, b).isEmpty();
     }
 
     static boolean wallRunning() {
@@ -599,7 +608,8 @@ public final class Fight {
             // it at speed, you run it; facing into it, you cling. Another wall, or one a dash earned, again.
             Vec3d wall = wallNormal(p);
             boolean took = false;
-            if (wall != null && tallWall(p, wall) && canCling(wall) && clock() > thrustGrace && !noLedge()) {
+            boolean earned = clingGrant > 0 && upDashed;
+            if (wall != null && (earned ? wallAtHead(p, wall) : tallWall(p, wall)) && canCling(wall) && clock() > thrustGrace && !noLedge()) {
                 Vec3d v = p.getVelocity();
                 double hs = Math.hypot(v.x, v.z);
                 Vec3d look = p.getRotationVec(1);
@@ -608,7 +618,7 @@ public final class Fight {
                 if (forward && hs > 0.2 && Math.abs(v.x * wall.x + v.z * wall.z) / hs < 0.55 && !ranThisJump) {
                     startRun(p, wall);
                     took = true;
-                } else if (facing < -0.35 && (fresh || (doubled && forward && v.y < 0.08))) {
+                } else if ((earned && v.y < 0.08) || (facing < -0.35 && (fresh || (doubled && forward && v.y < 0.08)))) {
                     cling(p, wall);
                     took = clinging();
                 }
