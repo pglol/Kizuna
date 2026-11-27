@@ -322,10 +322,12 @@ public final class Animator {
                 // The hand on that side presses down on the thigh, holding it up, every step.
                 Bone arm = rBad ? Bone.RIGHT_ARM : Bone.LEFT_ARM, fore = rBad ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM;
                 float k = Math.min(1, h * 1.4f);
-                out.set(arm, Pose.PITCH, MathHelper.lerp(k, out.get(arm, Pose.PITCH), -18 - 10 * jerk));
-                out.set(arm, Pose.YAW, MathHelper.lerp(k, out.get(arm, Pose.YAW), side * 12));
-                out.set(arm, Pose.ROLL, MathHelper.lerp(k, out.get(arm, Pose.ROLL), side * 4));
-                out.set(fore, Pose.PITCH, MathHelper.lerp(k, out.get(fore, Pose.PITCH), 38 + 8 * jerk));
+                // Arm down close to the side, hand on the front of the thigh, pressing harder as the weight comes on.
+                out.set(arm, Pose.PITCH, MathHelper.lerp(k, out.get(arm, Pose.PITCH), -9 - 5 * jerk));
+                out.set(arm, Pose.YAW, MathHelper.lerp(k, out.get(arm, Pose.YAW), -side * 6));
+                out.set(arm, Pose.ROLL, MathHelper.lerp(k, out.get(arm, Pose.ROLL), -side * 9));
+                out.set(fore, Pose.PITCH, MathHelper.lerp(k, out.get(fore, Pose.PITCH), 18 + 6 * jerk));
+                add(out, Bone.CHEST, Pose.ROLL, side * 3 * k); // shoulder dropped towards the hand
                 // The other arm swings out wide for balance.
                 Bone other = rBad ? Bone.LEFT_ARM : Bone.RIGHT_ARM;
                 add(out, other, Pose.ROLL, -side * 14 * speed * h);

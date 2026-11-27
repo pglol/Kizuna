@@ -248,7 +248,7 @@ public final class Fighting {
     /** How far a punch reaches (from the eyes); kicks reach a little further (KICK_EXTRA). */
     public static final double REACH = 2.4, KICK_EXTRA = 0.4;
     /** A heavy held this long (seconds) is fully charged: full power, and it breaks guard. */
-    public static final float FULL_CHARGE = 0.5f;
+    public static final float FULL_CHARGE = 0.35f;
     /** Pressed longer than this, a click becomes a charged heavy. */
     public static final float HEAVY_AFTER = 0.12f;
 

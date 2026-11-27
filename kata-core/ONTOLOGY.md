@@ -531,7 +531,7 @@ moves the body somewhere the physics wouldn't.
 - Town v3: every climbing route is its own mix along a drainpipe (lips, AC units, window boxes, awnings, vent hoods, lit sign boards, beams, trapdoor shelves, a balcony every few steps).
 
 ## Heavies: hold only, armour, push
-- A heavy is a timed hold: it builds while held and goes by itself at full (0.5 s); letting go sooner throws it at what it reached. No second wind-up after the hold (the move starts 60% of the way to contact).
+- A heavy is a timed hold: it builds while held and goes by itself at full (0.35 s); letting go sooner throws it at what it reached. No second wind-up after the hold (the move starts 60% of the way to contact).
 - Charging a heavy and for 0.7 s after: armoured against lights (75% damage taken, no flinch, no push, the heavy carries on). A heavy into a heavy still interrupts.
 - Heavies shove the target back along the ground (more the longer held); only a full hold knocks down.
 - The air-dodge flip (double jump, dodge key in the air) is unchanged; only the jump off a wall/run is the needle.
