@@ -31,12 +31,12 @@ metafile = true
 
 [[files]]
 file = "mods/kata-core.pw.toml"
-hash = "21518180a23370357ed97be3c09a29a3ec922aaa322e590f41b552fa368ed67e"
+hash = "0aac1b007d8b5572202c91310d42b47607b937b965a77780716d8d6b59e84a6c"
 metafile = true
 
 [[files]]
 file = "mods/kata.pw.toml"
-hash = "846ae86afefd697f50dcc504adee98944a52afcc7e8a588ff1b70a67ed724a87"
+hash = "f2e2fb7162def1c826ce6aafac34d4b789f4fdade8af0d1f14a0f9abb13d27ec"
 metafile = true
 
 [[files]]
