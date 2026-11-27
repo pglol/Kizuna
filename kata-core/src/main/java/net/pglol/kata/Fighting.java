@@ -803,7 +803,19 @@ public final class Fighting {
 
     /** A heavy being charged (1) or let go of (0): everyone sees the wind-up building. */
     static void charge(ServerPlayerEntity p, int on) {
+        // Charging, and through the swing after it: armoured against light strikes.
+        ARMOUR_UNTIL.put(p.getUuid(), on != 0 ? Integer.MAX_VALUE : p.getServer().getTicks() + 14);
+        if (ARMOUR_UNTIL.size() > 1024) ARMOUR_UNTIL.clear();
         relay(p, KataNet.CHARGE, on != 0 ? 1 : 0);
+    }
+
+    private static final Map<UUID, Integer> ARMOUR_UNTIL = new HashMap<>();
+
+    /** Mid-heavy (charging it or throwing it): lights don't stop it. */
+    static boolean armoured(LivingEntity t) {
+        if (!(t instanceof ServerPlayerEntity p)) return false;
+        Integer u = ARMOUR_UNTIL.get(p.getUuid());
+        return u != null && p.getServer().getTicks() <= u;
     }
 
     /**
@@ -934,6 +946,9 @@ public final class Fighting {
     /** A strike landing (from a player or a dummy): damage by part, guard, parry, knockback, launch, knockdown. */
     static boolean land(LivingEntity by, LivingEntity t, Move m, float power, Part part, Vec3d look, net.minecraft.entity.damage.DamageSource src) {
         float dmg = m.damage() * (m.heavy() ? 0.5f + 0.5f * power : 1) * part.share * Injuries.strikeScale(by, m.leg());
+        // A light into someone throwing a heavy: they take it (a little less) and keep going.
+        boolean tanked = !m.heavy() && armoured(t);
+        if (tanked) dmg *= 0.75f;
         t.timeUntilRegen = 0; // strings land: no invulnerability gap between hits
         breaking = m.heavy() && power >= 0.98f;
         striking = m;
@@ -987,6 +1002,10 @@ public final class Fighting {
         int tier = !m.heavy() ? 0 : power < 0.4f ? 0 : power < 0.8f ? 1 : 2;
         int react = part.ordinal() | m.path().ordinal() << 2 | (fromRight ? 1 << 7 : 0) | (m.heavy() ? 1 << 8 : 0) | tier << 9;
         relayAround(t, KataNet.HIT, react);
+        if (tanked) {
+            t.getWorld().playSound(null, t.getX(), t.getY(), t.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_WEAK, SoundCategory.PLAYERS, 0.8f, 0.8f);
+            return true; // no flinch, no push: the heavy goes on
+        }
         // Hitstun: long enough for the attacker's next strike in the string to arrive first.
         int stun = Math.round(m.length() * 20 * 0.85f) + (m.heavy() ? 6 : 3);
         flinch(t, stun);
@@ -998,7 +1017,9 @@ public final class Fighting {
             return true;
         }
         float shove = m.push() * (m.heavy() ? 0.6f + 0.6f * power : 1) * might(by);
-        boolean down = m.knockdown() && (!m.heavy() || power >= 0.9f);
+        // Heavies push people back across the ground, harder the longer they were held; only a full hold
+        // puts them down.
+        boolean down = m.heavy() ? power >= 0.98f : m.knockdown();
         if (down) {
             // Knocked down a couple of body lengths, not across the field: further only with more might.
             knockdown(t, look.multiply(shove * 0.5).add(0, 0.15 + m.lift() * 0.6, 0));
@@ -1006,7 +1027,7 @@ public final class Fighting {
             // An ordinary hit moves you back a step along the ground, never off it: fighters stay in range
             // to trade. Only knockdowns send anyone flying.
             Vec3d flat = new Vec3d(look.x, 0, look.z);
-            if (flat.lengthSquared() > 1e-4) shove(t, flat.normalize(), shove * 0.42);
+            if (flat.lengthSquared() > 1e-4) shove(t, flat.normalize(), shove * (m.heavy() ? 0.45 + 0.6 * power : 0.42));
             if (m.lift() > 0) {
                 t.addVelocity(0, m.lift() * (m.heavy() ? 0.6f + 0.6f * power : 1), 0);
                 t.velocityModified = true;

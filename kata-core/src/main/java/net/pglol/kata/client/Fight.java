@@ -575,8 +575,8 @@ public final class Fight {
             send(KataNet.GUARD, guard ? 1 | gs << 1 : 0, 0);
         }
         if (jolt > 0) jolt = Math.max(0, jolt - 0.05f);
-        // Hit while winding up: the heavy is gone.
-        if (p.hurtTime > lastHurt && charging) charging = pressing = false;
+        // A light landing on you doesn't stop a heavy you've started (you tank it); a heavy does (the
+        // server sends that as a flinch).
         lastHurt = p.hurtTime;
         if (!free) pressing = charging = false;
     }
@@ -590,6 +590,8 @@ public final class Fight {
         // The left button: released quickly, a light; held, a heavy winding up until it's let go.
         if (pressing) {
             boolean held = mc.options.attackKey.isPressed();
+            // Held all the way: it goes by itself at full power (no letting go needed).
+            if (held && charging && secs(chargeAt) >= Fighting.FULL_CHARGE) held = false;
             if (!held) {
                 pressing = false;
                 if (charging) {
@@ -799,6 +801,9 @@ public final class Fight {
         curStance = stance;
         curPower = m.heavy() ? Math.max(0.3f, power) : 1;
         curStart = clock();
+        // A ground heavy: the hold was its wind-up (the load shown while charging), so it goes from
+        // there straight through to the hit, not winding up all over again.
+        if (m.heavy() && m.from() != Fighting.From.AIR) curStart -= (long) (m.contact() * 0.6f * 1e9);
         nextHit = 0;
         limbNow = limbPrev = limbMid = limbMidPrev = null;
         if (m.heavy()) chain = 0;
