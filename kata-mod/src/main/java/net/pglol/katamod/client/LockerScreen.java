@@ -58,6 +58,7 @@ public final class LockerScreen extends Screen {
     private long doorAt = System.nanoTime();
     private final Map<String, ItemState> items = new LinkedHashMap<>();
     private final Map<String, float[]> bounds = new HashMap<>();
+    private final Map<String, java.util.List<float[]>> faces = new HashMap<>();
     private String hovered, chosen;
 
     public LockerScreen() {
@@ -168,7 +169,7 @@ public final class LockerScreen extends Screen {
         vcp.draw();
         // Your locker, in the middle, with its items.
         VertexConsumer mine = vcp.getBuffer(RenderLayer.getEntityTranslucent(TEX));
-        locker.render(ms, mine, pose, 0xFFFFFFFF, bounds);
+        locker.render(ms, mine, pose, 0xFFFFFFFF, bounds, faces);
         vcp.draw();
         ms.pop();
         RenderSystem.disableDepthTest();
@@ -176,10 +177,9 @@ public final class LockerScreen extends Screen {
         // What's under the mouse.
         hovered = null;
         if (door == Door.OPEN) {
-            for (Item it : ITEMS) {
-                float[] b = bounds.get("item_" + it.key);
-                if (b[2] > b[0] && mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3]) hovered = it.key;
-            }
+            // The item actually under the mouse (its faces, the frontmost where two overlap).
+            String bone = BbModel.hit(faces, mouseX, mouseY);
+            if (bone != null && bone.startsWith("item_")) hovered = bone.substring(5);
         }
         ms.push();
         ms.translate(0, 0, 900);

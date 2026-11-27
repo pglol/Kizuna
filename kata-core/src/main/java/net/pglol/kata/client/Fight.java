@@ -889,7 +889,8 @@ public final class Fight {
         curStart = clock();
         // A ground heavy: the hold was its wind-up (the load shown while charging), so it goes from
         // there straight through to the hit, not winding up all over again.
-        if (m.heavy() && m.from() != Fighting.From.AIR) curStart -= (long) (m.contact() * 0.6f * 1e9);
+        // (A spinning one keeps its whole turn: the spin is timed from the start; other kicks skip less.)
+        if (m.heavy() && m.from() != Fighting.From.AIR && !m.turns()) curStart -= (long) (m.contact() * (m.leg() ? 0.3f : 0.6f) * 1e9);
         nextHit = 0;
         limbNow = limbPrev = limbMid = limbMidPrev = null;
         if (m.heavy()) chain = 0;

@@ -205,7 +205,51 @@ final class BbModel {
      * them) are written into bounds as screen rectangles {minX, minY, maxX, maxY}.
      */
     void render(MatrixStack ms, VertexConsumer vc, Map<String, BonePose> pose, int argb, Map<String, float[]> bounds) {
+        render(ms, vc, pose, argb, bounds, null);
+    }
+
+    /** As render, also collecting each named bone's faces on screen (for exact hovering: see hit). */
+    void render(MatrixStack ms, VertexConsumer vc, Map<String, BonePose> pose, int argb, Map<String, float[]> bounds, Map<String, List<float[]>> faces) {
+        this.faces = faces;
         for (Bone b : roots) bone(ms, vc, b, pose, argb, bounds, null);
+        this.faces = null;
+        cur = null;
+    }
+
+    private Map<String, List<float[]>> faces;
+    private List<float[]> cur;
+
+    /**
+     * Which named bone's faces are under (x, y), the frontmost if several overlap (nearest the viewer:
+     * the largest screen z), or null.
+     */
+    static String hit(Map<String, List<float[]>> faces, double x, double y) {
+        String best = null;
+        float bestZ = -Float.MAX_VALUE;
+        for (Map.Entry<String, List<float[]>> en : faces.entrySet())
+            for (float[] q : en.getValue()) {
+                if (!inside(q, x, y)) continue;
+                float z = (q[2] + q[5] + q[8] + q[11]) / 4;
+                if (z > bestZ) {
+                    bestZ = z;
+                    best = en.getKey();
+                }
+            }
+        return best;
+    }
+
+    private static boolean inside(float[] q, double x, double y) {
+        // A convex quad on screen: the point is on the same side of all four edges.
+        int sign = 0;
+        for (int i = 0; i < 4; i++) {
+            float ax = q[i * 3], ay = q[i * 3 + 1], bx = q[((i + 1) % 4) * 3], by = q[((i + 1) % 4) * 3 + 1];
+            double cr = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+            int s = cr > 0 ? 1 : cr < 0 ? -1 : 0;
+            if (s == 0) continue;
+            if (sign == 0) sign = s;
+            else if (s != sign) return false;
+        }
+        return sign != 0;
     }
 
     private void bone(MatrixStack ms, VertexConsumer vc, Bone b, Map<String, BonePose> pose, int argb, Map<String, float[]> bounds, float[] box) {
@@ -227,13 +271,24 @@ final class BbModel {
         if (bp != null && bp.scale != null) ms.scale(bp.scale[0], bp.scale[1], bp.scale[2]);
         ms.translate(-b.origin[0], -b.origin[1], -b.origin[2]);
         float[] mine = box;
+        List<float[]> was = cur;
         if (bounds != null && bounds.containsKey(b.name)) {
             mine = bounds.get(b.name);
             mine[0] = mine[1] = Float.MAX_VALUE;
             mine[2] = mine[3] = -Float.MAX_VALUE;
+            if (faces != null) {
+                cur = faces.computeIfAbsent(b.name, k -> new ArrayList<>());
+                cur.clear();
+            }
         }
+        // Glow shells and sparkles don't count for hovering (only the thing itself).
+        boolean shell = b.name.endsWith("_glow") || b.name.endsWith("_sparkles");
+        List<float[]> keep = cur;
+        if (shell) cur = null;
         for (Cube c : b.cubes) cube(ms, vc, c, argb, mine);
         for (Bone k : b.kids) bone(ms, vc, k, pose, argb, bounds, mine);
+        cur = shell ? keep : cur;
+        if (bounds != null && bounds.containsKey(b.name)) cur = was;
         ms.pop();
     }
 
@@ -269,8 +324,15 @@ final class BbModel {
             float[][] uvs = {{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}};
             int a = argb >>> 24;
             int r = (int) (((argb >> 16) & 255) * shade[f]), g = (int) (((argb >> 8) & 255) * shade[f]), bl = (int) ((argb & 255) * shade[f]);
+            float[] sq = cur != null ? new float[12] : null;
             for (int k = 0; k < 4; k++) {
                 float[] p = q[f][k];
+                if (sq != null) {
+                    Vector3f s = m.transformPosition(new Vector3f(p[0], p[1], p[2]));
+                    sq[k * 3] = s.x;
+                    sq[k * 3 + 1] = s.y;
+                    sq[k * 3 + 2] = s.z;
+                }
                 vc.vertex(m, p[0], p[1], p[2]).color(r, g, bl, a).texture(uvs[k][0], uvs[k][1]).overlay(OverlayTexture.DEFAULT_UV)
                     .light(0xF000F0).normal(e, normal[f][0], normal[f][1], normal[f][2]);
                 if (box != null) {
@@ -281,6 +343,7 @@ final class BbModel {
                     box[3] = Math.max(box[3], s.y);
                 }
             }
+            if (sq != null) cur.add(sq);
         }
         ms.pop();
     }
