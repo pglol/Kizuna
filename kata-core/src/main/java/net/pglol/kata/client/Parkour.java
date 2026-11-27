@@ -78,6 +78,7 @@ public final class Parkour {
         static final View NONE = new View(Mode.NONE, 0, 0, 0, 0, 0);
     }
 
+    private static double vaultSpeed;
     private static final int VAULT_TICKS = 11, PULL_TICKS = 13, MANTLE_TICKS = 9, HOP_TICKS = 7, RUNUP_TICKS = 8;
     private static final float RUNUP_COST = 0.12f;
     /** Hanging: the lip is this far above your feet, so straight-ish arms reach it (shoulders at 1.29). */
@@ -500,8 +501,9 @@ public final class Parkour {
                         boolean thin = empty(p, column(ahead(at, 1.9).x, feet, ahead(at, 1.9).z, 1.8))
                             && empty(p, column(ahead(at, 1.05).x, low + 0.05, ahead(at, 1.05).z, 1.8));
                         if (thin) {
-                            double speed = Math.max(0.34, p.getVelocity().horizontalLength());
-                            p.setVelocity(dir.getOffsetX() * speed, 0.42 + Math.max(0, h - 1.0) * 0.36, dir.getOffsetZ() * speed);
+                            double speed = Math.max(0.4, p.getVelocity().horizontalLength() * 1.05);
+                            vaultSpeed = speed;
+                            p.setVelocity(dir.getOffsetX() * speed, 0.36 + Math.max(0, h - 1.0) * 0.32, dir.getOffsetZ() * speed);
                             set(Mode.VAULT);
                             break;
                         }
@@ -516,7 +518,7 @@ public final class Parkour {
                     }
                 }
                 if (flightTicks > 0 && (ground || --flightTicks <= 0)) flightTicks = 0;
-                if (flightTicks > 0 && !Fight.clinging()) {
+                if (flightTicks > 0 && !Fight.clinging() && !Fight.noLedge()) {
                     dir = flightDir;
                     if (wall(p, at, 0.3, 1.7)) {
                         Double l = lip(p, at, at.y, 1.3, 2.3);
@@ -528,12 +530,17 @@ public final class Parkour {
                     dir = p.getHorizontalFacing();
                 }
                 // On a wall in a cling (a double jump): no climbing out of it; the jump is the wall jump.
-                if (Fight.clinging()) { }
+                if (Fight.clinging() || Fight.noLedge()) { }
                 else if (!ground && intent != Intent.NONE && wall(p, at, 0.3, 1.7)) reach(p, at, climbAsk);
                 else if (!ground && mode == Mode.NONE) reflex(p, sneak, false);
             }
             case VAULT -> {
                 ticks++;
+                // Carried over at the speed you came in with: no stall on top, no hop in place.
+                if (!ground) {
+                    Vec3d v = p.getVelocity();
+                    p.setVelocity(dir.getOffsetX() * vaultSpeed, v.y, dir.getOffsetZ() * vaultSpeed);
+                }
                 if (ticks > VAULT_TICKS + 4 || (ground && ticks > 3)) set(Mode.NONE);
             }
             case HANG -> {

@@ -326,8 +326,31 @@ public final class Fight {
         Vec3d n = clingNormal == null ? Vec3d.ZERO : clingNormal;
         clingGrant = 1;
         upDashed = true;
-        thrust(p, new Vec3d(-n.x * 0.04, 1, -n.z * 0.04).normalize(), 0.92);
+        dashNormal = n;
+        dashTicks = 0;
+        // Out from the wall a touch at first (clear of sills and lips right above you), drawn back in
+        // as you rise (see dashTick), so you come up past the top rather than into what's on the wall.
+        thrust(p, new Vec3d(n.x * 0.22, 1, n.z * 0.22).normalize(), 0.95);
         thrustGrace = clock() + 500_000_000L; // catch on again near the top of the dash
+    }
+
+    private static Vec3d dashNormal = Vec3d.ZERO;
+    private static int dashTicks;
+
+    /** Rising out of an up-wall dash: no grabbing ledges on the way (you go up past the roof), drawn back over the wall. */
+    static boolean noLedge() {
+        var p = MinecraftClient.getInstance().player;
+        return upDashed && p != null && clock() < thrustUntil && p.getVelocity().y > 0;
+    }
+
+    private static void dashTick(ClientPlayerEntity p) {
+        if (!noLedge()) return;
+        dashTicks++;
+        if (dashTicks > 4) {
+            Vec3d v = p.getVelocity();
+            double out = v.x * dashNormal.x + v.z * dashNormal.z;
+            if (out > -0.12) p.setVelocity(v.x - dashNormal.x * 0.05, v.y, v.z - dashNormal.z * 0.05);
+        }
     }
 
     /** Another wall this jump (wall to wall), or the same one if a dash earned it; the first one always. */
@@ -339,9 +362,13 @@ public final class Fight {
 
     /** The wall goes up past your head (a real wall to cling to or run on, not a ledge to climb). */
     private static boolean tallWall(ClientPlayerEntity p, Vec3d n) {
+        // Well above your head (a ledge within reach is for climbing, not clinging under).
         var w = p.getWorld();
-        net.minecraft.util.math.BlockPos b = net.minecraft.util.math.BlockPos.ofFloored(p.getX() - n.x * 0.8, p.getY() + 2.3, p.getZ() - n.z * 0.8);
-        return !w.getBlockState(b).getCollisionShape(w, b).isEmpty();
+        for (double up : new double[] {2.3, 3.2, 4.1}) {
+            net.minecraft.util.math.BlockPos b = net.minecraft.util.math.BlockPos.ofFloored(p.getX() - n.x * 0.8, p.getY() + up, p.getZ() - n.z * 0.8);
+            if (w.getBlockState(b).getCollisionShape(w, b).isEmpty()) return false;
+        }
+        return true;
     }
 
     static boolean wallRunning() {
@@ -515,6 +542,7 @@ public final class Fight {
         boolean fresh = jumpNow && !jumpWas && releasedInAir && airTicks > 2;
         jumpWas = jumpNow;
         landRoll(p);
+        dashTick(p);
         boolean aloft = !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying && Parkour.view(p).mode() == Parkour.Mode.NONE;
         if (wallRunning()) runTick(p, fresh);
         else if (clinging()) {
@@ -535,7 +563,7 @@ public final class Fight {
             // it at speed, you run it; facing into it, you cling. Another wall, or one a dash earned, again.
             Vec3d wall = wallNormal(p);
             boolean took = false;
-            if (wall != null && tallWall(p, wall) && canCling(wall) && clock() > thrustGrace) {
+            if (wall != null && tallWall(p, wall) && canCling(wall) && clock() > thrustGrace && !noLedge()) {
                 Vec3d v = p.getVelocity();
                 double hs = Math.hypot(v.x, v.z);
                 Vec3d look = p.getRotationVec(1);
@@ -2003,7 +2031,7 @@ public final class Fight {
         add(out, Bone.LEFT_ARM, Pose.PITCH, -70 * tuck);
         add(out, Bone.CHEST, Pose.PITCH, 40 * tuck);
         add(out, Bone.HEAD, Pose.PITCH, 30 * tuck);
-        out.offset[1] += 11 * tuck; // down at the ground through the roll
+        out.offset[1] -= 9 * tuck; // lifted through the roll so the body turns over the ground, not into it
         tipAboutWaist(out, new Vector3f(1, 0, 0), ease(u) * 360);
     }
 

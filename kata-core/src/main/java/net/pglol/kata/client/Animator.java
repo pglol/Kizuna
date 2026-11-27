@@ -707,8 +707,26 @@ public final class Animator {
             float weight = 1;
             switch (pv.mode()) {
                 case VAULT -> {
-                    want = Presets.VAULT;
-                    weight = MathHelper.sin(MathHelper.PI * Math.min(1, k * 1.1f));
+                    // In three beats: the hand goes down on it, the legs swing through over it, open to land.
+                    Pose swing = Presets.VAULT.copy();
+                    swing.set(Bone.RIGHT_LEG, Pose.PITCH, -72);
+                    swing.set(Bone.LEFT_LEG, Pose.PITCH, -58);
+                    swing.set(Bone.RIGHT_SHIN, Pose.PITCH, 28);
+                    swing.set(Bone.LEFT_SHIN, Pose.PITCH, 40);
+                    swing.set(Bone.ROOT, Pose.PITCH, -8);
+                    swing.set(Bone.CHEST, Pose.PITCH, 6);
+                    Pose open = new Pose();
+                    open.set(Bone.RIGHT_LEG, Pose.PITCH, -24);
+                    open.set(Bone.LEFT_LEG, Pose.PITCH, -12);
+                    open.set(Bone.RIGHT_SHIN, Pose.PITCH, 30);
+                    open.set(Bone.LEFT_SHIN, Pose.PITCH, 22);
+                    open.set(Bone.RIGHT_ARM, Pose.PITCH, -35);
+                    open.set(Bone.LEFT_ARM, Pose.PITCH, -20);
+                    open.set(Bone.CHEST, Pose.PITCH, 10);
+                    if (k < 0.3f) want = Pose.lerp(new Pose(), Presets.VAULT, ease(k / 0.3f));
+                    else if (k < 0.68f) want = Pose.lerp(Presets.VAULT, swing, ease((k - 0.3f) / 0.38f));
+                    else want = Pose.lerp(swing, open, ease(Math.min(1, (k - 0.68f) / 0.32f)));
+                    weight = k > 0.88f ? MathHelper.clamp((1.05f - k) / 0.17f, 0, 1) : 1;
                 }
                 case HANG, CORNER -> want = Presets.HANG;
                 case RUNUP -> want = Presets.runUp(pv.phase());
