@@ -3,6 +3,7 @@
 modrinth fabric-api both
 modrinth modmenu client
 file dist/kata-core.jar both
+file dist/kata.jar both
 # Performance (the team's own builds, same as the AoT dev pack)
 exact 7a94dda82ffd1fe24cd1cacad70eb89dbe564ea6 mods client sodium https://github.com/pglol/minecraft/releases/download/mod-files/sodium-fabric-0.6.0-beta.2%2Bmc1.21.1.jar
 exact d5ad3bbc8a75fc2e8f3d957a85aa05f3e8b95fd0 mods client sodium-extra https://github.com/pglol/minecraft/releases/download/mod-files/sodium-extra-fabric-0.6.0-beta.3%2Bmc1.21.1.jar

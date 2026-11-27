@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "kata",
+  "version": "${version}",
+  "name": "Kata",
+  "description": "The Kata server's own game: Kizuna town (the world, its build and its hand-made edits), its commands, and the Kata interface. Runs on Kata Core.",
+  "authors": ["pglol"],
+  "license": "All-Rights-Reserved",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["net.pglol.katamod.KataMod"],
+    "client": ["net.pglol.katamod.client.KataModClient"]
+  },
+  "mixins": ["kata.mixins.json"],
+  "depends": { "fabricloader": ">=0.16.0", "minecraft": "~1.21.1", "java": ">=21", "fabric-api": "*", "kata_core": "*" }
+}

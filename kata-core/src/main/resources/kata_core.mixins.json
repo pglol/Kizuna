@@ -33,7 +33,6 @@
     "FlightMixin",
     "AirMoveMixin",
     "MoveCheckMixin",
-    "FallMixin",
-    "TownEditMixin"
+    "FallMixin"
   ]
 }

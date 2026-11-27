@@ -164,13 +164,17 @@ public final class Fighting {
         for (com.google.gson.JsonElement e : o.getAsJsonArray("moves")) {
             com.google.gson.JsonObject m = e.getAsJsonObject();
             String from = m.has("from") ? m.get("from").getAsString() : "front";
+            // The tempo of a fight: everything a beat slower than written, so it can be seen and felt
+            // (lights most, heavies a little less, air strings least so juggles still connect).
+            boolean heavyM = "heavy".equals(m.get("kind").getAsString()), airM = "air".equals(from);
+            float tempo = airM ? 1.2f : heavyM ? 1.25f : 1.35f;
             pool.add(new Move(sid + ":" + m.get("id").getAsString(), m.get("name").getAsString(),
                 Path.valueOf(m.get("path").getAsString().toUpperCase(java.util.Locale.ROOT)),
                 "lead".equals(m.get("hand").getAsString()), "heavy".equals(m.get("kind").getAsString()),
                 From.valueOf(from.toUpperCase(java.util.Locale.ROOT)), m.has("spin") && m.get("spin").getAsBoolean(),
-                m.get("contact").getAsFloat(), m.get("length").getAsFloat(), m.get("damage").getAsFloat(), m.get("push").getAsFloat(),
+                m.get("contact").getAsFloat() * tempo, m.get("length").getAsFloat() * tempo, m.get("damage").getAsFloat(), m.get("push").getAsFloat(),
                 m.has("lift") ? m.get("lift").getAsFloat() : 0,
-                m.has("hits") ? m.get("hits").getAsInt() : 1, m.has("interval") ? m.get("interval").getAsFloat() : 0,
+                m.has("hits") ? m.get("hits").getAsInt() : 1, m.has("interval") ? m.get("interval").getAsFloat() * tempo : 0,
                 m.has("alternate") && m.get("alternate").getAsBoolean(), m.has("knockdown") && m.get("knockdown").getAsBoolean(),
                 Role.valueOf((m.has("role") ? m.get("role").getAsString() : "link").toUpperCase(java.util.Locale.ROOT))));
         }

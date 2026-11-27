@@ -2105,14 +2105,18 @@ public final class Fight {
         if (wind > 0) return -0.25f * ease(wind);
         if (m.turns() && u < c) return MathHelper.clamp(u / c, 0, 1);
         if (u < c && !m.leg() && hit == 0) {
-            float x = Math.max(0, u / c), load = 0.45f;
-            if (x < load) return -0.4f * ease(x / load);
-            float y = (x - load) / (1 - load);
-            return -0.4f + 1.4f * y * y * (1.4f - 0.4f * y);
+            // Speed ramp: a readable wind-up, a beat planted at the end of it (the weight set), then the
+            // power let go, accelerating all the way into contact.
+            float x = Math.max(0, u / c), load = 0.42f, plant = 0.54f;
+            if (x < load) return -0.45f * ease(x / load);
+            if (x < plant) return -0.45f;
+            float y = (x - plant) / (1 - plant);
+            return -0.45f + 1.45f * (float) Math.pow(y, 2.2);
         }
         if (u < c) {
+            // Kicks and follow-up hits: slow out of the chamber, fast through the target.
             float x = Math.max(0, u / c);
-            return x * x * (1.4f - 0.4f * x);
+            return (float) Math.pow(x, 2.3);
         }
         if (u < c + hold) return 1;
         return 1 - ease(Math.min(1, (u - c - hold) / Math.max(0.04f, end - c - hold)));

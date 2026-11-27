@@ -87,7 +87,6 @@ public final class KataCore implements ModInitializer {
         KataEntities.init();
         KataNet.register();
         Fighting.register();
-        Town.register();
         Injuries.register();
         Awareness.register();
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((h, s, server) -> body(h.getPlayer()));

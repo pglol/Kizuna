@@ -1,4 +1,5 @@
-package net.pglol.kata;
+package net.pglol.katamod;
+
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -8,7 +9,7 @@ import net.minecraft.util.math.Direction;
 
 import java.util.Random;
 
-import static net.pglol.kata.Town.*;
+import static net.pglol.katamod.Town.*;
 
 /**
  * What Kizuna town is made of: the street grid and every building, each queued as a job (see

@@ -288,6 +288,7 @@ public final class Animator {
     private static void injured(PlayerEntity p, float td, Pose out) {
         int id = p.getId(), m = Fight.injuries(id);
         if (m == 0) return;
+        float sinkWas = out.offset[1];
         float speed = MathHelper.clamp(p.limbAnimator.getSpeed(td) * 1.6f, 0, 1);
         float phase = p.limbAnimator.getPos(td) * 0.6662f;
         float c = MathHelper.cos(phase), sn = MathHelper.sin(phase);
@@ -344,6 +345,18 @@ public final class Animator {
                 add(out, Bone.CHEST, Pose.PITCH, 12 * h);
                 out.offset[1] += 1.5f * h * (1 + sn * sn) * speed;
             }
+        }
+        // The body sank for the limp: the knees take it (bent just enough that the feet stay on the floor
+        // instead of sinking into it), the good leg most, the stiff one a little.
+        float sink = Math.max(0, out.offset[1] - sinkWas);
+        if (sink > 0.01f && (lBad || rBad)) {
+            float bend = (float) Math.toDegrees(2 * Math.acos(1 - Math.min(sink, 6f) / 12f));
+            float goodK = lBad && rBad ? 0.8f : 1f, badK = lBad && rBad ? 0.8f : 0.45f;
+            float lk = lBad ? badK : goodK, rk = rBad ? badK : goodK;
+            out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) + bend * lk);
+            out.set(Bone.LEFT_LEG, Pose.PITCH, out.get(Bone.LEFT_LEG, Pose.PITCH) - bend * lk * 0.5f);
+            out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) + bend * rk);
+            out.set(Bone.RIGHT_LEG, Pose.PITCH, out.get(Bone.RIGHT_LEG, Pose.PITCH) - bend * rk * 0.5f);
         }
         float al = Fight.hurt(id, 2), ar = Fight.hurt(id, 3);
         boolean lArm = (m & 4) != 0, rArm = (m & 8) != 0;

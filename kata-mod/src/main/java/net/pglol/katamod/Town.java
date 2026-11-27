@@ -1,4 +1,6 @@
-package net.pglol.kata;
+package net.pglol.katamod;
+
+import net.pglol.kata.KataCore;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;

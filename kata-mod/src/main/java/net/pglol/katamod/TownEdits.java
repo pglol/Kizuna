@@ -1,4 +1,6 @@
-package net.pglol.kata;
+package net.pglol.katamod;
+
+import net.pglol.kata.KataCore;
 
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.block.BlockState;
