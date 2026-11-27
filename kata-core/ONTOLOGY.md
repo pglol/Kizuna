@@ -541,3 +541,5 @@ moves the body somewhere the physics wouldn't.
 - Senpu-ryu (id "senpu"), the Whirlwind School: gusting palm strikes and palm flurries, crescent and spinning kicks, turning strikes from the back stances, tornado air strings and a meteor heel smash. Starter deck in senpu.json.
 - For now every player knows every style and its starter moves (the deck's style list).
 - Body reactions to walls and people start a little sooner (forward probe 1.2, from 1.15; sides 0.85).
+- The needle follows its real arc (the body tips from rising to diving with the velocity), arched through the back with the legs trailing; with the ground close ahead it starts to tuck. The roll (codes 80-92: 80 + the landing angle in 15-degree steps) carries on from that angle round to standing.
+- Clinging needs a double jump in that airtime (the press at the wall, or touching a wall after it) or coming off another wall; a plain jump into a wall doesn't cling. Wall runs still start from any jump.
