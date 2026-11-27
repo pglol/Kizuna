@@ -1606,6 +1606,7 @@ public final class Fight {
      * the fist or foot travels its path from where it is to where it lands.
      */
     static void apply(PlayerEntity p, float td, Pose out) {
+        StrikeGlow.clear(p.getId());
         Move m;
         int st;
         float s, power;
@@ -1662,6 +1663,7 @@ public final class Fight {
         // after the body has already turned into it), and they settle back in the same order.
         float kHips = strikeK(m, u + 0.24f * c, c, end, hold, hit, wind), kChest = strikeK(m, u + 0.12f * c, c, end, hold, hit, wind);
         boolean right = Fighting.rightLimb(m, st, hit);
+        StrikeGlow.set(p.getId(), m.leg() ? (right ? StrikeGlow.RIGHT_LEG : StrikeGlow.LEFT_LEG) : (right ? StrikeGlow.RIGHT_ARM : StrikeGlow.LEFT_ARM), m.heavy(), k, wind, power);
         float out_ = right ? -1 : 1; // the limb's outside (model x: right is negative)
         float mass = m.heavy() ? 0.6f + 0.8f * power : 1;
         float sign = right ? -1 : 1; // a right-side strike turns the chest to the left

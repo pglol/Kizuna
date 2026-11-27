@@ -60,6 +60,10 @@ public final class KataClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(Marker::render);
         HudRenderCallback.EVENT.register((c, tick) -> Hud.render(c, tick.getTickDelta(false)));
         HudRenderCallback.EVENT.register(ImpactFrames::render);
+        // The striking limb's glow, on every player.
+        net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, ctx) -> {
+            if (renderer instanceof net.minecraft.client.render.entity.PlayerEntityRenderer pr) helper.register(new StrikeGlow(pr));
+        });
         HudRenderCallback.EVENT.register((c, tick) -> AwarenessFx.hud(c));
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(ctx -> {
             if (ctx.consumers() != null) {
