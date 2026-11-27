@@ -55,8 +55,11 @@ public final class Deck {
     static void load() {
         if (loaded) return;
         loaded = true;
-        KNOWN.add(Fighting.STYLES[0].id());
-        for (int[] row : starter(Fighting.STYLES[0])) for (int id : row) if (id >= 0) LEARNED.add(Fighting.MOVES[id].id());
+        // While the styles are being tried out, everyone knows every style and its starter moves.
+        for (Style st : Fighting.STYLES) {
+            KNOWN.add(st.id());
+            for (int[] row : starter(st)) for (int id : row) if (id >= 0) LEARNED.add(Fighting.MOVES[id].id());
+        }
         try {
             Path f = file();
             if (!Files.exists(f)) return;

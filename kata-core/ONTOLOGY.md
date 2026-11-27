@@ -535,3 +535,9 @@ moves the body somewhere the physics wouldn't.
 - Charging a heavy and for 0.7 s after: armoured against lights (75% damage taken, no flinch, no push, the heavy carries on). A heavy into a heavy still interrupts.
 - Heavies shove the target back along the ground (more the longer held); only a full hold knocks down.
 - The air-dodge flip (double jump, dodge key in the air) is unchanged; only the jump off a wall/run is the needle.
+
+## Styles
+- "taijutsu" (id kept so saved decks still work) is now named Kenka: delinquent back-alley brawling (hands, hooks, a hard head).
+- Senpu-ryu (id "senpu"), the Whirlwind School: gusting palm strikes and palm flurries, crescent and spinning kicks, turning strikes from the back stances, tornado air strings and a meteor heel smash. Starter deck in senpu.json.
+- For now every player knows every style and its starter moves (the deck's style list).
+- Body reactions to walls and people start a little sooner (forward probe 1.2, from 1.15; sides 0.85).

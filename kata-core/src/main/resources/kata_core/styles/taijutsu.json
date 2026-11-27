@@ -1,8 +1,8 @@
 {
   "_doc": "A fighting style: its moves (the move tree) and the deck a new fighter starts with. path: straight | hook | upper | overhand | palm | backfist | elbow | superman | front_kick | roundhouse | side_kick | back_kick | low_kick | knee | dropkick. hand: lead | rear (the limb: hand or foot). kind: light (a quick click, a chain slot) | heavy (hold to charge, the heavy slot). from: front (top stances) | back (back stances) | air (jumping). spin: turns you round as it's thrown. contact/length/interval: seconds. damage: half-hearts per hit. push: knockback; lift: upward launch. hits: strikes in the move (alternate: switching limbs). knockdown: puts them down (heavies near full charge). role (lights): opener (the fastest; slot 1, or 2) | link (slot 2 or 3) | finisher (slower, harder; slot 3).",
   "id": "taijutsu",
-  "name": "Taijutsu",
-  "blurb": "Fast hands, a strong body.",
+  "name": "Kenka",
+  "blurb": "Back-alley delinquent brawling: fast hands, a hard head, never backing down.",
   "color": "#D8403E",
   "moves": [
     {

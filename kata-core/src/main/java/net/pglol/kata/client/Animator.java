@@ -1031,8 +1031,8 @@ public final class Animator {
         // Other bodies count like walls (bumping into someone, the hands come up onto them), except
         // in a fight, when the hands are busy.
         boolean bodies = !Fight.engagedOf(p);
-        double hit = free ? near(probe(p, pos.x, pos.z, fx, fz, y, 0.3, 1.0), bodies ? body(p, pos, fx, fz, y, 1.0) : -1) : -1;
-        float want = hit < 0 ? 0 : MathHelper.clamp((float) (0.95 - hit) / 0.45f, 0, 1);
+        double hit = free ? near(probe(p, pos.x, pos.z, fx, fz, y, 0.3, 1.2), bodies ? body(p, pos, fx, fz, y, 1.2) : -1) : -1;
+        float want = hit < 0 ? 0 : MathHelper.clamp((float) (1.15 - hit) / 0.55f, 0, 1); // reacts a little sooner
         s.wallW += (want - s.wallW) * k;
         if (hit >= 0) s.wallHit = hit;
 
@@ -1042,8 +1042,8 @@ public final class Animator {
         double sy = pos.y + 1.3;
         for (int i = 0; i < 2; i++) {
             double sx = i == 0 ? rx : -rx, sz = i == 0 ? rz : -rz;
-            double h = free ? near(probe(p, pos.x, pos.z, sx, sz, sy, 0.22, 0.7), bodies ? body(p, pos, sx, sz, sy, 0.7) : -1) : -1;
-            float sw = h < 0 ? 0 : MathHelper.clamp((float) (0.7 - h) / 0.3f, 0, 1);
+            double h = free ? near(probe(p, pos.x, pos.z, sx, sz, sy, 0.22, 0.85), bodies ? body(p, pos, sx, sz, sy, 0.85) : -1) : -1;
+            float sw = h < 0 ? 0 : MathHelper.clamp((float) (0.85 - h) / 0.36f, 0, 1);
             s.sideW[i] += (sw - s.sideW[i]) * k;
             if (h >= 0) s.sideHit[i] = h;
         }
