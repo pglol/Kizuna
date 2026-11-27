@@ -652,7 +652,7 @@ public final class Fighting {
      * against what they're for.
      */
     static boolean evades(Entity e, Move m, Part part) {
-        if (!(e instanceof ServerPlayerEntity p)) return false;
+        if (!(e instanceof LivingEntity p) || p.getServer() == null) return false;
         Integer at = DODGE_AT.get(p.getUuid());
         if (at == null) return false;
         int age = p.getServer().getTicks() - at, kind = DODGE_KIND.getOrDefault(p.getUuid(), 0);
@@ -677,9 +677,17 @@ public final class Fighting {
     }
 
     static boolean dodging(Entity e) {
-        if (!(e instanceof ServerPlayerEntity p)) return false;
+        if (!(e instanceof LivingEntity p) || p.getServer() == null) return false;
         Integer at = DODGE_AT.get(p.getUuid());
         return at != null && p.getServer().getTicks() - at <= DODGE_IFRAMES;
+    }
+
+    /** Any fighter that isn't a player (an NPC) dodging: the same i-frames and the same show for everyone. */
+    static void dodgeOf(LivingEntity e, int dir) {
+        if (e.getServer() == null) return;
+        DODGE_AT.put(e.getUuid(), e.getServer().getTicks());
+        DODGE_KIND.put(e.getUuid(), MathHelper.clamp(dir, 0, 127));
+        relayAround(e, KataNet.DODGE, MathHelper.clamp(dir, 0, 127));
     }
 
     /** A dodge begins (dir: 0 back, 1 forward, 2 left, 3 right): i-frames, and everyone sees it. */

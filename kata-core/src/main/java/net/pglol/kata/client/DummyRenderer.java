@@ -15,6 +15,7 @@ public class DummyRenderer extends BipedEntityRenderer<Dummy, PlayerEntityModel<
 
     public DummyRenderer(EntityRendererFactory.Context ctx) {
         super(ctx, new PlayerEntityModel<>(ctx.getPart(EntityModelLayers.PLAYER), false), 0.5f);
+        addFeature(new StrikeGlow<>(this)); // the striking limb glows, as on players
     }
 
     @Override

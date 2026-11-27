@@ -20,15 +20,15 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 /**
- * A sparring partner for the gym.
+ * A sparring partner, and the template for Kata's NPC fighters.
  *
- * Left alone it stands easy at its spot. Hit it and it fights back:
- *  - it chases whoever hit it and keeps to fighting distance
- *  - it reads your wind-ups and tries to get its guard up in time, with a human's reaction: sometimes
- *    late, sometimes guessing wrong, now and then a perfect parry
- *  - it throws jabs, straights and kicks of its own
- * Leave it be for a while (or get far enough away) and it walks back to its spot and settles. It never
- * goes down for good: a finishing hit resets it, and it heals while it rests.
+ * Left alone it stands easy at its spot. Hit it and it fights back, deciding each tick what to do
+ * (see decide): close in, keep its spacing, strike (strings of one to three, countering out of a
+ * block), guard, or take it to the air (a jump at them, a second jump with a flip near the top,
+ * air strikes in reach). A strike coming at it (anticipate) it reads like a person: guards it on the
+ * right side, dodges it (back, or aside from a straight line, with the same i-frames a player gets),
+ * or misreads it. Its striking limb glows as it comes, like a player's. Leave it be and it walks back
+ * to its spot and settles; it never goes down for good, and heals while it rests.
  */
 public class Dummy extends PathAwareEntity {
     private static final TrackedData<Boolean> GUARD = DataTracker.registerData(Dummy.class, TrackedDataHandlerRegistry.BOOLEAN);
@@ -61,7 +61,8 @@ public class Dummy extends PathAwareEntity {
     }
     private int calmAt, guardAt = -999, guardUntil, raiseAt = -1, cooldown = 40, contactAt = -1;
     private Fighting.Move swing;
-    private int stuck, string;
+    private int stuck, string, airCooldown, dodgeAt = -1, dodgeDir;
+    private boolean secondJump;
 
     public Dummy(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
@@ -174,16 +175,15 @@ public class Dummy extends PathAwareEntity {
     void anticipate(LivingEntity by, Fighting.Move m, int contactTicks, boolean rightLimb) {
         provoke(by);
         if (down() > 0 || staggered() > 0 || move() >= 0) return;
-        if (random.nextFloat() > 0.65f) return; // didn't read it
-        int delay = 2 + random.nextInt(7); // 100-400 ms to react
-        raiseAt = age + Math.max(1, delay);
-        // Meet it where it's coming: a kick is checked with the knee; a hand strike with the arm on that
-        // side (their right comes in on its left).
+        evadeOrGuard(by, m, rightLimb);
+    }
+
+    /** Meet it where it's coming: a kick checked with the knee; a hand strike with the arm on that side (their right comes in on its left). */
+    private void blockSide(LivingEntity by, Fighting.Move m, boolean rightLimb) {
         boolean lowKick = m.leg() && m.path() != Fighting.Path.FRONT_KICK && m.path() != Fighting.Path.SIDE_KICK && m.path() != Fighting.Path.BACK_KICK && m.path() != Fighting.Path.DROPKICK;
         if (lowKick) dataTracker.set(BLOCK, 3);
         else if (m.leg()) dataTracker.set(BLOCK, 0);
         else {
-            // Which of its sides the strike comes in on, from where the striking hand really is.
             double ay = Math.toRadians(by.getYaw());
             Vec3d hand = by.getPos().add(-Math.cos(ay) * (rightLimb ? 0.35 : -0.35), 0, -Math.sin(ay) * (rightLimb ? 0.35 : -0.35));
             double my = Math.toRadians(bodyYaw);
@@ -283,6 +283,11 @@ public class Dummy extends PathAwareEntity {
             guardUntil = age + 10 + random.nextInt(6);
         }
         if (guarding() && (age > guardUntil || busy)) setGuard(false);
+        if (dodgeAt >= 0 && age >= dodgeAt) {
+            dodgeAt = -1;
+            if (!busy && swing == null) dodgeNow();
+        }
+        if (isOnGround() && airCooldown > 0) airCooldown--;
 
         // Its own strike: contact, then done.
         if (swing != null) {
@@ -309,67 +314,159 @@ public class Dummy extends PathAwareEntity {
         }
     }
 
+    // ---- the brain: each tick it reads the fight and picks one thing to do ----
+
+    /** What it means to do right now. */
+    private enum Intent { CLOSE, SPACE, ATTACK, GUARD, AERIAL }
+
     private void fight(LivingEntity foe) {
-        getLookControl().lookAt(foe, 40, 40);
         double d = Math.sqrt(squaredDistanceTo(foe));
-        // Keep to fighting distance: close in, but not chest to chest.
-        if (swing != null) {
-            // Throwing something: feet planted.
-            getNavigation().stop();
-            stuck = 0;
-        } else if (d > 1.7) {
-            if (age % 5 == 0) getNavigation().startMovingTo(foe, d > 5 ? 1.15 : 0.9);
-            // No path (they're up on something, or round an edge): head straight for them, and hop over
-            // what's in the way once it's clearly stuck.
-            if (getNavigation().isIdle() && d > 3.2) {
-                getMoveControl().moveTo(foe.getX(), foe.getY(), foe.getZ(), d > 5 ? 1.15 : 0.9);
-                stuck = horizontalCollision ? stuck + 1 : 0;
-                if (stuck > 8 && isOnGround()) {
-                    getJumpControl().setActive();
-                    stuck = 0;
-                }
-            }
-        } else {
-            getNavigation().stop();
-            if (d < 1.0) {
-                Vec3d away = getPos().subtract(foe.getPos()).multiply(1, 0, 1).normalize().multiply(0.06);
-                addVelocity(away.x, 0, away.z);
-            }
+        face(foe);
+        Intent intent = decide(foe, d);
+        switch (intent) {
+            case CLOSE -> close(foe, d);
+            case SPACE -> space(foe, d);
+            case ATTACK -> attack(foe, d, false);
+            case AERIAL -> aerial(foe, d);
+            case GUARD -> getNavigation().stop();
         }
-        // Face them square.
+    }
+
+    /**
+     * Read the fight. Mid-strike or guarding: keep at it. Them up in the air within reach, or itself
+     * already up: take it to the air. Out of range: close in. Too close: give itself room. In range
+     * and ready: strike.
+     */
+    private Intent decide(LivingEntity foe, double d) {
+        if (swing != null) return isOnGround() ? Intent.SPACE : Intent.AERIAL; // throwing something: feet planted (or still in the air)
+        if (guarding()) return Intent.GUARD;
+        boolean theyreUp = !foe.isOnGround() && foe.getY() - getY() > 0.8;
+        if (!isOnGround() || (theyreUp && d < 4.5 && airCooldown <= 0)) return Intent.AERIAL;
+        if (d > 1.7) return d < 2.3 && cooldown <= 1 ? Intent.ATTACK : Intent.CLOSE;
+        if (d < 1.0) return Intent.SPACE;
+        return Intent.ATTACK;
+    }
+
+    private void face(LivingEntity foe) {
+        getLookControl().lookAt(foe, 40, 40);
         double dx = foe.getX() - getX(), dz = foe.getZ() - getZ();
         float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
         setYaw(MathHelper.stepUnwrappedAngleTowards(getYaw(), yaw, 15));
         bodyYaw = MathHelper.stepUnwrappedAngleTowards(bodyYaw, getYaw(), 15);
         headYaw = getYaw();
+    }
 
-        // Its turn: strings of one to three strikes, often; out of a block it counters (dropping the
-        // guard to hit back); just out of reach it steps in to strike.
-        if (swing == null && d < 2.3 && --cooldown <= 0) {
-            boolean counter = guarding() && age - guardAt > 6;
-            if (!guarding() || counter) {
-                if (counter) setGuard(false);
-                if (d > 1.5) {
-                    // A step in to reach: it closes the gap as it throws.
-                    getNavigation().startMovingTo(foe, 1.2);
-                    Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(Math.min(0.2, (d - 1.2) * 0.16));
-                    if (isOnGround()) addVelocity(in.x, 0, in.z);
-                }
-                Fighting.Style s = Fighting.style("taijutsu");
-                String[] picks = {"jab", "jab", "straight", "straight", "one_two", "lead_hook", "rear_hook", "front_kick", "roundhouse", "low_kick", "uppercut"};
-                Fighting.Move m = s.move(s.index(picks[random.nextInt(picks.length)]));
-                if (m != null) {
-                    swing = m;
-                    dataTracker.set(MOVE, Fighting.id(m));
-                    dataTracker.set(MOVE_AT, age);
-                    contactAt = age + Math.max(1, Math.round(m.contact() * 20));
-                    if (string <= 0) string = 1 + random.nextInt(3);
-                    string--;
-                    // The next strike of the string right after this one; a breather after the last.
-                    cooldown = Math.round(m.length() * 20) + (string > 0 ? 1 : 6 + random.nextInt(12));
-                }
+    /** Close the distance: walk in (run when far); no path (they're up on something): straight at them, hopping what's in the way. */
+    private void close(LivingEntity foe, double d) {
+        if (age % 5 == 0) getNavigation().startMovingTo(foe, d > 5 ? 1.15 : 0.9);
+        if (getNavigation().isIdle() && d > 3.2) {
+            getMoveControl().moveTo(foe.getX(), foe.getY(), foe.getZ(), d > 5 ? 1.15 : 0.9);
+            stuck = horizontalCollision ? stuck + 1 : 0;
+            if (stuck > 8 && isOnGround()) {
+                getJumpControl().setActive();
+                stuck = 0;
             }
         }
+        cooldown--;
+    }
+
+    /** Hold its ground (planted while striking), easing back off if it's chest to chest. */
+    private void space(LivingEntity foe, double d) {
+        getNavigation().stop();
+        stuck = 0;
+        if (d < 1.0 && swing == null) {
+            Vec3d away = getPos().subtract(foe.getPos()).multiply(1, 0, 1).normalize().multiply(0.06);
+            addVelocity(away.x, 0, away.z);
+        }
+        cooldown--;
+    }
+
+    /**
+     * Its turn: strings of one to three strikes; out of a block it counters (dropping the guard to hit
+     * back); just out of reach it steps in as it throws. In the air, air strikes.
+     */
+    private void attack(LivingEntity foe, double d, boolean air) {
+        getNavigation().stop();
+        if (swing != null || --cooldown > 0) return;
+        if (!air && d > 1.5) {
+            Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(Math.min(0.2, (d - 1.2) * 0.16));
+            if (isOnGround()) addVelocity(in.x, 0, in.z);
+        }
+        Fighting.Style s = Fighting.style("taijutsu");
+        String[] picks = air ? new String[] {"air_jab", "air_hook", "air_knee", "whirl_kick"}
+            : new String[] {"jab", "jab", "straight", "straight", "one_two", "lead_hook", "rear_hook", "front_kick", "roundhouse", "low_kick", "uppercut"};
+        Fighting.Move m = s.move(s.index(picks[random.nextInt(picks.length)]));
+        if (m == null) return;
+        swing = m;
+        dataTracker.set(MOVE, Fighting.id(m));
+        dataTracker.set(MOVE_AT, age);
+        contactAt = age + Math.max(1, Math.round(m.contact() * 20));
+        if (string <= 0) string = 1 + random.nextInt(3);
+        string--;
+        // The next strike of the string right after this one; a breather after the last.
+        cooldown = Math.round(m.length() * 20) + (string > 0 ? 1 : 6 + random.nextInt(12));
+    }
+
+    /**
+     * After them into the air: a jump at them, a second jump near the top of the first if they're still
+     * above, and air strikes once they're in reach. Lands, and waits a moment before going up again.
+     */
+    private void aerial(LivingEntity foe, double d) {
+        getNavigation().stop();
+        if (isOnGround()) {
+            if (swing != null) return;
+            Vec3d to = foe.getPos().subtract(getPos()).multiply(1, 0, 1);
+            to = to.lengthSquared() > 1e-4 ? to.normalize() : Vec3d.ZERO;
+            setVelocity(to.x * 0.28, 0.5, to.z * 0.28);
+            velocityModified = true;
+            secondJump = true;
+            airCooldown = 30;
+            return;
+        }
+        double above = foe.getY() - getY();
+        if (secondJump && getVelocity().y < 0.08 && above > 0.4) {
+            // The second jump, with a flip.
+            secondJump = false;
+            Vec3d to = foe.getPos().subtract(getPos()).multiply(1, 0, 1);
+            to = to.lengthSquared() > 1e-4 ? to.normalize() : Vec3d.ZERO;
+            setVelocity(to.x * 0.22, 0.44, to.z * 0.22);
+            velocityModified = true;
+            Fighting.dodgeOf(this, 16);
+        }
+        if (d < 2.4) attack(foe, d, true);
+    }
+
+    /**
+     * A strike is coming at it: guard it, or dodge it (back out of its reach, or aside from a straight
+     * line), or misread it and do nothing, like a person would. Reaction time 100 to 400 ms.
+     */
+    private void evadeOrGuard(LivingEntity by, Fighting.Move m, boolean rightLimb) {
+        float roll = random.nextFloat();
+        if (roll > 0.8f) return; // didn't read it
+        if (roll < 0.28f && isOnGround() && down() <= 0) {
+            dodgeAt = age + 2 + random.nextInt(4);
+            boolean straight = !m.leg() && (m.path() == Fighting.Path.STRAIGHT || m.path() == Fighting.Path.PALM);
+            dodgeDir = straight && random.nextBoolean() ? (random.nextBoolean() ? 2 : 3) : 0;
+            return;
+        }
+        raiseAt = age + 2 + random.nextInt(7);
+        blockSide(by, m, rightLimb);
+    }
+
+    private void dodgeNow() {
+        LivingEntity f = foe;
+        Vec3d fwd = f != null ? f.getPos().subtract(getPos()).multiply(1, 0, 1) : Vec3d.fromPolar(0, getYaw());
+        fwd = fwd.lengthSquared() > 1e-4 ? fwd.normalize() : Vec3d.ZERO;
+        Vec3d left = new Vec3d(fwd.z, 0, -fwd.x);
+        Vec3d push = switch (dodgeDir) {
+            case 2 -> left.multiply(0.42);
+            case 3 -> left.multiply(-0.42);
+            default -> fwd.multiply(-0.5);
+        };
+        setVelocity(push.x, 0.08, push.z);
+        velocityModified = true;
+        Fighting.dodgeOf(this, dodgeDir);
+        cooldown = Math.max(cooldown, 4); // a counter right after
     }
 
     private void hit(LivingEntity foe, Fighting.Move m) {

@@ -141,7 +141,9 @@ public final class DummyAnim {
         for (Bone b : Bone.values()) for (int a = 0; a < 3; a++) out.set(b, a, dt > 0 ? s.ang[b.ordinal()][a] : want.get(b, a));
         System.arraycopy(want.offset, 0, out.offset, 0, 3);
         Pose before = out.copy();
+        StrikeGlow.clear(d.getId());
         strike(d, td, by, out);
+        Fight.dodgeShape(d, out); // a dodge or a flip, the same as a player's
         if (broken(out)) out = before; // a solve that went wrong never shows (a broken pose makes the model vanish)
         // Never a jump between frames: each angle (and the body's offset) moves the short way round, fast
         // but continuously, from what was shown last frame.
@@ -235,6 +237,9 @@ public final class DummyAnim {
         k = k * k * (3 - 2 * k);
         boolean right = Fighting.rightLimb(m, Fighting.TR, hit);
         float out_ = right ? -1 : 1, sign = right ? -1 : 1;
+        // The striking limb glows as it comes (the same as a player's).
+        float glowK = u < c ? -0.4f * (1 - u / c) + (u / c) : k;
+        StrikeGlow.set(d.getId(), m.leg() ? (right ? StrikeGlow.RIGHT_LEG : StrikeGlow.LEFT_LEG) : (right ? StrikeGlow.RIGHT_ARM : StrikeGlow.LEFT_ARM), m.heavy(), glowK, 0, 1);
         Vec3d pos = d.getLerpedPos(td);
         MinecraftClient mc = MinecraftClient.getInstance();
         Vec3d aimW = null;

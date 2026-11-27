@@ -2339,6 +2339,11 @@ public final class Fight {
         tipAboutWaist(out, new Vector3f(1, 0, 0), start + (360 - start) * ease(u));
     }
 
+    /** A dodge or flip shown on anyone's body (dummies and NPCs use this too). */
+    static void dodgeShape(LivingEntity e, Pose out) {
+        dodgePose(e, out);
+    }
+
     private static void dodgePose(LivingEntity e, Pose out) {
         React d = DODGES.get(e.getId());
         if (d == null) return;

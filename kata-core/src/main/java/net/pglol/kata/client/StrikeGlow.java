@@ -1,7 +1,6 @@
 package net.pglol.kata.client;
 
 import net.minecraft.client.model.ModelPart;
-import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
@@ -21,7 +20,7 @@ import java.util.Map;
  * fading as it's drawn back. Lights glow a cool blue, heavies a fiery orange that builds while charged
  * (gold at full charge). Drawn as a slightly larger glowing shell over the limb, for everyone watching.
  */
-public final class StrikeGlow extends FeatureRenderer<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> {
+public final class StrikeGlow<T extends net.minecraft.entity.LivingEntity> extends FeatureRenderer<T, PlayerEntityModel<T>> {
     public static final int RIGHT_ARM = 0, LEFT_ARM = 1, RIGHT_LEG = 2, LEFT_LEG = 3;
     private static final Identifier WHITE = Identifier.ofVanilla("textures/misc/white.png");
 
@@ -29,7 +28,7 @@ public final class StrikeGlow extends FeatureRenderer<AbstractClientPlayerEntity
 
     private static final Map<Integer, Glow> GLOWS = new HashMap<>();
 
-    public StrikeGlow(FeatureRendererContext<AbstractClientPlayerEntity, PlayerEntityModel<AbstractClientPlayerEntity>> ctx) {
+    public StrikeGlow(FeatureRendererContext<T, PlayerEntityModel<T>> ctx) {
         super(ctx);
     }
 
@@ -54,11 +53,11 @@ public final class StrikeGlow extends FeatureRenderer<AbstractClientPlayerEntity
     }
 
     @Override
-    public void render(MatrixStack ms, VertexConsumerProvider vcp, int light, AbstractClientPlayerEntity e, float limbAngle, float limbDistance,
+    public void render(MatrixStack ms, VertexConsumerProvider vcp, int light, T e, float limbAngle, float limbDistance,
                        float tickDelta, float animationProgress, float headYaw, float headPitch) {
         Glow g = GLOWS.get(e.getId());
         if (g == null || e.isInvisible()) return;
-        PlayerEntityModel<AbstractClientPlayerEntity> model = getContextModel();
+        PlayerEntityModel<T> model = getContextModel();
         ModelPart part = switch (g.limb) {
             case RIGHT_ARM -> model.rightArm;
             case LEFT_ARM -> model.leftArm;
