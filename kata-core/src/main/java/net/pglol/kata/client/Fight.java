@@ -298,6 +298,22 @@ public final class Fight {
             Vec3d l2 = into < 0 ? look.subtract(n.multiply(into)) : look;
             dir = l2.multiply(0.8).add(n.multiply(0.55)).normalize();
             speed = 0.95;
+            if (into < -0.3) {
+                // Looking into the wall: no needle facing it, a backflip out off it instead.
+                clingUntil = 0;
+                runUntil = 0;
+                Vec3d out = n.multiply(0.55).add(0, 0.5, 0);
+                p.setVelocity(out.x, out.y, out.z);
+                controlledUntil = clock() + 1_200_000_000L;
+                double rel = Math.atan2(-(out.x * Math.cos(Math.toRadians(p.getYaw())) + out.z * Math.sin(Math.toRadians(p.getYaw()))),
+                    -out.x * Math.sin(Math.toRadians(p.getYaw())) + out.z * Math.cos(Math.toRadians(p.getYaw())));
+                int idx = Math.floorMod((int) Math.round(-rel / (Math.PI * 2) * 16), 16);
+                DODGES.put(p.getId(), new React(16 + idx, clock()));
+                send(KataNet.DODGE, 16 + idx, 0);
+                flipUsed = true;
+                thrustGrace = clock() + 250_000_000L;
+                return;
+            }
         }
         thrust(p, dir, speed);
     }
