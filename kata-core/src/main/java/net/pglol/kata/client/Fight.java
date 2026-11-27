@@ -299,7 +299,7 @@ public final class Fight {
             // Looking up as you jump out: a lift on it (not a launch).
             double upHelp = 0.32 * MathHelper.clamp(look.y / 0.6, 0, 1);
             dir = l2.multiply(0.8).add(n.multiply(0.5)).add(0, upHelp, 0).normalize();
-            speed = 0.76;
+            speed = 0.84; // about 10% further out than before
             if (into < -0.3) {
                 // Looking into the wall: no needle facing it, a backflip out off it instead.
                 clingUntil = 0;
