@@ -1649,6 +1649,21 @@ public final class Fight {
         float mass = m.heavy() ? 0.6f + 0.8f * power : 1;
         float sign = right ? -1 : 1; // a right-side strike turns the chest to the left
 
+        if (wind > 0 && whirlwind(m)) {
+            // Gathering the wind: both arms turning slow circles out to the sides, sinking lower as it builds.
+            float tt = (System.nanoTime() % 6_283_185_307L) / 1e9f * 6;
+            float g = ease(wind);
+            out.set(Bone.RIGHT_ARM, Pose.PITCH, out.get(Bone.RIGHT_ARM, Pose.PITCH) * (1 - g) + g * (-50 + 28 * MathHelper.sin(tt)));
+            out.set(Bone.LEFT_ARM, Pose.PITCH, out.get(Bone.LEFT_ARM, Pose.PITCH) * (1 - g) + g * (-50 + 28 * MathHelper.sin(tt + MathHelper.PI)));
+            out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) * (1 - g) + g * (38 + 12 * MathHelper.cos(tt)));
+            out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) * (1 - g) + g * (-38 - 12 * MathHelper.cos(tt)));
+            out.set(Bone.RIGHT_FOREARM, Pose.PITCH, MathHelper.lerp(g, out.get(Bone.RIGHT_FOREARM, Pose.PITCH), 30));
+            out.set(Bone.LEFT_FOREARM, Pose.PITCH, MathHelper.lerp(g, out.get(Bone.LEFT_FOREARM, Pose.PITCH), 30));
+            out.offset[1] += 2.2f * g;
+            out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) + 28 * g);
+            out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) + 28 * g);
+            return;
+        }
         // How loaded it is (0..1): the wind-up of a heavy, or the first part of any strike.
         float tell = k < 0 ? -k / 0.4f : 0;
         if (tell > 0) {
@@ -1716,6 +1731,26 @@ public final class Fight {
             if (m.heavy()) out.offset[1] += 0.9f * Math.abs(k);
         }
 
+        boolean wind_ = whirlwind(m);
+        if (wind_) {
+            // Senpu-ryu: low and flowing. The body sinks and lunges in behind the strike, the free hand
+            // leads open towards them and then snaps back to the hip as the strike lands (pulling them in).
+            float kk = Math.max(0, k);
+            out.set(Bone.CHEST, Pose.YAW, out.get(Bone.CHEST, Pose.YAW) + sign * twist * 0.35f * kChest);
+            out.offset[1] += 1.3f + 0.6f * kk;
+            out.offset[2] -= 1.8f * kk;
+            out.set(Bone.RIGHT_SHIN, Pose.PITCH, out.get(Bone.RIGHT_SHIN, Pose.PITCH) + 18);
+            out.set(Bone.LEFT_SHIN, Pose.PITCH, out.get(Bone.LEFT_SHIN, Pose.PITCH) + 18);
+            if (!(m.heavy() && m.path() == Path.PALM)) {
+                Bone oArm = right ? Bone.LEFT_ARM : Bone.RIGHT_ARM, oFore = right ? Bone.LEFT_FOREARM : Bone.RIGHT_FOREARM;
+                float lead = k < 0 ? 1 : 1 - ease(Math.min(1, kk * 1.4f));
+                out.set(oArm, Pose.PITCH, MathHelper.lerp(lead, 25, -72));
+                out.set(oArm, Pose.YAW, MathHelper.lerp(lead, 0, out_ * 18));
+                out.set(oArm, Pose.ROLL, MathHelper.lerp(lead, -out_ * 12, out_ * 6));
+                out.set(oFore, Pose.PITCH, MathHelper.lerp(lead, 95, 12));
+            }
+        }
+
         // The fist's path, from where the guard holds it to where it lands.
         Bone arm = right ? Bone.RIGHT_ARM : Bone.LEFT_ARM, fore = right ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM;
         Vector3f shoulder = new Vector3f(right ? -5 : 5, 2, 0);
@@ -1731,9 +1766,19 @@ public final class Fight {
             // Down to the hip first, then up through the line.
             Vector3f low = new Vector3f(out_ * 1.5f, 10, -4);
             fist = k < 0.35f ? new Vector3f(guardFist).lerp(low, ease(k / 0.35f)) : new Vector3f(low).lerp(aim, ease((k - 0.35f) / 0.65f));
+        } else if (k < 0 && wind_) {
+            // Senpu: the hand circles up and back beside the head before it comes in.
+            float tl = Math.min(1, -k / 0.4f);
+            fist = new Vector3f(guardFist).add(out_ * 2.5f * tl, -5.5f * tl, 3.5f * tl);
         } else if (k < 0) {
             Vector3f back = new Vector3f(guardFist).sub(aim).normalize().mul(6 * -k); // drawn back, away from them
             fist = new Vector3f(guardFist).add(back);
+        } else if (wind_) {
+            // Senpu: in on a spiral, never a straight line (each hit of a flurry turning the other way).
+            fist = new Vector3f(guardFist).lerp(aim, ease(k));
+            float arc = MathHelper.sin(MathHelper.PI * k);
+            float turn = hit % 2 == 0 ? 1 : -1;
+            fist.add(out_ * 4.5f * arc, -3.5f * arc * turn, 1.5f * arc);
         } else {
             fist = new Vector3f(guardFist).lerp(aim, k);
             float arc = MathHelper.sin(MathHelper.PI * k);
@@ -1749,7 +1794,16 @@ public final class Fight {
             : m.path() == Path.BACKFIST ? new Vector3f(out_ * 0.3f, 0.2f, 1)   // arm out straight, elbow back
             : new Vector3f(out_ * 0.3f, 1, 0.45f);                             // elbow down, behind the punch
         Animator.reach(out, arm, fore, shoulder, fist, frame, 1, pole);
-        if (m.from() == Fighting.From.AIR || m.heavy()) Trails.add(p.getId(), Ragdoll.toWorld(Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH], pos, bodyYaw), m.heavy());
+        if (wind_ && m.heavy() && m.path() == Path.PALM) {
+            // Tempest palm: both palms driven out together, side by side.
+            Bone oArm = right ? Bone.LEFT_ARM : Bone.RIGHT_ARM, oFore = right ? Bone.LEFT_FOREARM : Bone.RIGHT_FOREARM;
+            Vector3f oShoulder = new Vector3f(right ? 5 : -5, 2, 0);
+            Vector3f oGuard = Ragdoll.joints(out)[right ? Ragdoll.LH : Ragdoll.RH];
+            Vector3f oFist = k < 0 ? new Vector3f(oGuard).add(-out_ * 2.5f * Math.min(1, -k / 0.4f), -5.5f * Math.min(1, -k / 0.4f), 3.5f * Math.min(1, -k / 0.4f))
+                : new Vector3f(oGuard).lerp(new Vector3f(aim).add(-out_ * 3.2f, 1, 0), ease(k));
+            Animator.reach(out, oArm, oFore, oShoulder, oFist, frame, 1, new Vector3f(-out_ * 0.3f, 1, 0.45f));
+        }
+        if (m.from() == Fighting.From.AIR || m.heavy() || wind_) Trails.add(p.getId(), Ragdoll.toWorld(Ragdoll.joints(out)[right ? Ragdoll.RH : Ragdoll.LH], pos, bodyYaw), m.heavy());
         if (mine(p) && cur != null) {
             limbPrev = limbNow;
             Vector3f[] jt = Ragdoll.joints(out);
@@ -1807,6 +1861,28 @@ public final class Fight {
             out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) - 40 * kk);
         }
 
+        boolean wind_ = whirlwind(m);
+        if (wind_) {
+            // Senpu kicks: up on the toes of the standing foot, arms flung out wide like wings, the body
+            // corkscrewing in the air; the cyclone kick leaves the ground altogether.
+            out.offset[1] -= 1.2f * kk;
+            out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) + 48 * kk);
+            out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) - 48 * kk);
+            out.set(Bone.RIGHT_ARM, Pose.PITCH, MathHelper.lerp(kk, out.get(Bone.RIGHT_ARM, Pose.PITCH), -18));
+            out.set(Bone.LEFT_ARM, Pose.PITCH, MathHelper.lerp(kk, out.get(Bone.LEFT_ARM, Pose.PITCH), -18));
+            out.set(Bone.RIGHT_FOREARM, Pose.PITCH, MathHelper.lerp(kk, out.get(Bone.RIGHT_FOREARM, Pose.PITCH), 12));
+            out.set(Bone.LEFT_FOREARM, Pose.PITCH, MathHelper.lerp(kk, out.get(Bone.LEFT_FOREARM, Pose.PITCH), 12));
+            if (m.from() == Fighting.From.AIR) out.set(Bone.ROOT, Pose.ROLL, out.get(Bone.ROOT, Pose.ROLL) + sign * 28 * MathHelper.sin(MathHelper.PI * kk));
+            if (m.heavy() && m.turns()) {
+                float hop = MathHelper.sin(MathHelper.PI * kk);
+                out.offset[1] -= 6 * hop;
+                out.set(standShin, Pose.PITCH, out.get(standShin, Pose.PITCH) + 70 * hop);
+                out.set(right ? Bone.LEFT_LEG : Bone.RIGHT_LEG, Pose.PITCH, out.get(right ? Bone.LEFT_LEG : Bone.RIGHT_LEG, Pose.PITCH) - 40 * hop);
+                out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) - 14 * hop);
+            }
+            if (m.path() == Path.SIDE_KICK && m.heavy()) out.set(Bone.CHEST, Pose.ROLL, out.get(Bone.CHEST, Pose.ROLL) - out_ * 20 * kk);
+        }
+
         Matrix4f inv = Ragdoll.rootFrame(out).invert();
         if (m.path() == Path.KNEE) {
             // The knee drives up into them; the foot tucked under.
@@ -1834,6 +1910,23 @@ public final class Fight {
                 if (kk < 0.3f) foot = restB.lerp(chamberB, ease(kk / 0.3f));
                 else if (kk < 0.85f) foot = chamberB.lerp(wide, ease((kk - 0.3f) / 0.4f));
                 else foot = wide.lerp(target, ease((kk - 0.85f) / 0.15f));
+            } else if (wind_ && m.path() == Path.ROUNDHOUSE) {
+                // The crescent: the leg swings up wide on its own side, across the front through them in
+                // an arc, and on past to the inside.
+                Vector3f wideOut = new Vector3f(hip.x + out_ * 9, 13, -4);
+                Vector3f over = new Vector3f(target).add(out_ * 1.5f, -4.5f, 0);
+                Vector3f past = new Vector3f(target).add(-out_ * 6, 1.5f, 1);
+                if (kk < 0.25f) foot = new Vector3f(rest).lerp(wideOut, ease(kk / 0.25f));
+                else {
+                    float x = (kk - 0.25f) / 0.75f, a = (1 - x) * (1 - x), b = 2 * (1 - x) * x, cq = x * x;
+                    foot = new Vector3f(wideOut).mul(a).add(new Vector3f(over).mul(b)).add(new Vector3f(past).mul(cq));
+                }
+                out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) - 10 * kk);
+            } else if (wind_ && m.path() == Path.FRONT_KICK) {
+                // The rising crescent: a straight leg swept up high in front, through them and above.
+                Vector3f high = new Vector3f(target).add(0, -7, 1);
+                foot = kk < 0.75f ? new Vector3f(rest).lerp(target, ease(kk / 0.75f)) : new Vector3f(target).lerp(high, ease((kk - 0.75f) / 0.25f));
+                out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) - 22 * kk);
             } else if (kk < 0.4f) foot = new Vector3f(rest).lerp(chamber, ease(kk / 0.4f));
             else {
                 float x = (kk - 0.4f) / 0.6f;
@@ -1853,7 +1946,7 @@ public final class Fight {
                 Animator.kickLeg(out, leg2, shin2, hip2, foot2, inv, 1, new Vector3f(-out_ * 0.15f, 0, -1));
             }
         }
-        if (m.from() == Fighting.From.AIR || m.heavy()) {
+        if (m.from() == Fighting.From.AIR || m.heavy() || wind_) {
             Vector3f[] jj = Ragdoll.joints(out);
             Trails.add(p.getId(), Ragdoll.toWorld(m.path() == Path.KNEE ? jj[right ? Ragdoll.RK : Ragdoll.LK] : jj[right ? Ragdoll.RF : Ragdoll.LF], pos, bodyYaw), m.heavy());
         }
@@ -1864,6 +1957,11 @@ public final class Fight {
             limbMidPrev = limbMid;
             limbMid = Ragdoll.toWorld(m.path() == Path.KNEE ? j[right ? Ragdoll.RHIP : Ragdoll.LHIP] : j[right ? Ragdoll.RK : Ragdoll.LK], pos, bodyYaw); // the shin (the thigh for a knee)
         }
+    }
+
+    /** A Senpu-ryu move (it has its own way of moving: see apply and kick). */
+    static boolean whirlwind(Move m) {
+        return m != null && m.id().startsWith("senpu:");
     }
 
     private static Vector3f clampReach(Vector3f root, Vector3f at, float reach) {
