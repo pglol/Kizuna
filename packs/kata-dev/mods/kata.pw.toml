@@ -1,0 +1,9 @@
+# managed by mods.txt
+name = "kata.jar"
+filename = "kata.jar"
+side = "both"
+
+[download]
+url = "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/dist/kata.jar"
+hash-format = "sha256"
+hash = "12828545f91132bba03a97c49619547ac3b14e8900a299c8bf7db50fd73297c3"

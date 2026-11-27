@@ -5,8 +5,8 @@
       "name": "Paradis",
       "tagline": "Beyond the walls, the titans wait.",
       "status": "public",
-      "instance": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/dist/instances/aot.zip",
-      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml"
+      "instance": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/dist/instances/aot.zip",
+      "pack": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/pack/pack.toml"
     }
   ]
 }

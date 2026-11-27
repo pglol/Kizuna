@@ -13,10 +13,10 @@
       "accent": "#a8432a",
       "kanji": "\u5de8",
       "theme": "wall",
-      "icon": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/servers/art/aot-icon.png",
+      "icon": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/servers/art/aot-icon.png",
       "logo": "",
-      "background": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/servers/art/aot-cover.webp",
-      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml",
+      "background": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/servers/art/aot-cover.webp",
+      "pack": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/pack/pack.toml",
       "news": [
         {
           "title": "Swing sites: ruins, spires, groves and wall breaches in every region",
@@ -52,7 +52,7 @@
           "name": "Public",
           "note": "",
           "address": "25.52.234.232:25565",
-          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/pack/pack.toml",
+          "pack": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/pack/pack.toml",
           "addresses": []
         },
         {
@@ -60,7 +60,7 @@
           "name": "Early Access",
           "note": "Patreon supporters",
           "address": "CHANGE_ME_EARLY:25565",
-          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/aot-early/pack.toml",
+          "pack": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/packs/aot-early/pack.toml",
           "addresses": [],
           "codeHash": "98388f8a942342ef2db453236542dd209eb951b2dc10b3298a355ee067ec62ca"
         },
@@ -69,7 +69,7 @@
           "name": "Development Build",
           "note": "Team builds",
           "address": "25.52.234.232:25565",
-          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/aot-dev/pack.toml",
+          "pack": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/packs/aot-dev/pack.toml",
           "addresses": [
             {
               "label": "Hamachi",
@@ -100,7 +100,7 @@
       "icon": "",
       "logo": "",
       "background": "",
-      "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata/pack.toml",
+      "pack": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/packs/kata/pack.toml",
       "news": [
         {
           "title": "Bodies that bend: elbows, knees and waist, with a pose editor to try them",
@@ -143,7 +143,7 @@
           "name": "Public",
           "note": "",
           "address": "CHANGE_ME_KATA:25565",
-          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata/pack.toml",
+          "pack": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/packs/kata/pack.toml",
           "addresses": []
         },
         {
@@ -151,7 +151,7 @@
           "name": "Development Build",
           "note": "Team test build. For the test zone, make a creative world and run /kata testzone.",
           "address": "25.52.234.232:25566",
-          "pack": "https://raw.githubusercontent.com/pglol/minecraft/claude/minecraft-aot-map-uucuom/packs/kata-dev/pack.toml",
+          "pack": "https://raw.githubusercontent.com/pglol/Kizuna/claude/minecraft-aot-map-uucuom/packs/kata-dev/pack.toml",
           "addresses": [],
           "codeHash": "24844d566607d685f630522b6857a01d77fcf6e89837a82bdaf82700cbc320ff"
         }
