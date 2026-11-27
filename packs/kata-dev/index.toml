@@ -5,16 +5,61 @@ file = "config/modmenu.json"
 hash = "5207f1b2c56f66bd1b637485347d47b17e829576c9a216e47198360c3e124ca0"
 
 [[files]]
+file = "mods/c2me.pw.toml"
+hash = "2d33683f583dcd7ee9798a9dab5b6f46cdd94d6ac8660929718680e78bbbee2f"
+metafile = true
+
+[[files]]
+file = "mods/distanthorizons.pw.toml"
+hash = "87e57cfca3ae99ae31cf1c4755efc651a75a7817398d4bd192073b394b9efd4a"
+metafile = true
+
+[[files]]
 file = "mods/fabric-api.pw.toml"
 hash = "9e884d3ed93f3309077173c94a551b9cce6a0809ca668fc4a0b5aa94c89815c4"
 metafile = true
 
 [[files]]
+file = "mods/immediatelyfast.pw.toml"
+hash = "141f794149259bc56b4bdbe5e67b8e8e50db76e3dd5009cdbebebc004daf3f29"
+metafile = true
+
+[[files]]
+file = "mods/iris.pw.toml"
+hash = "fe27f4e0bf37103951014cd30e95e1ac9c18988dd6e2bfe4ef6b64f05d79cf14"
+metafile = true
+
+[[files]]
 file = "mods/kata-core.pw.toml"
-hash = "6c43ebd155e54c9334678568168715024583e9b0479708e0216f659a3b2e201a"
+hash = "60c81d26bdf103b4c2da4c9537d53521ec354dea5c43af1e57ca9af4289c5890"
 metafile = true
 
 [[files]]
 file = "mods/modmenu.pw.toml"
 hash = "4df57770819b5d7283735b85d79162c86fdb13d9484a0074c5e11ac6eef39b9a"
+metafile = true
+
+[[files]]
+file = "mods/reeses-sodium-options.pw.toml"
+hash = "a33ff22ed613dd4e9b386f2224822b13789598627e92277d3f419da405dd0bcb"
+metafile = true
+
+[[files]]
+file = "mods/sodium-extra.pw.toml"
+hash = "6387f6e9063103e88ac2c0f29f39642267e487e0cf5c94ef2f162958e459e39a"
+metafile = true
+
+[[files]]
+file = "mods/sodium.pw.toml"
+hash = "0825c83873745cf06b4de68ba52761323fc9126fcf5731cddd18c2f6e3cba98e"
+metafile = true
+
+[[files]]
+file = "mods/vmp.pw.toml"
+hash = "450ff30abc7fc06687ddf1a2492552c2d7fe3c290360e5a05365d10fae56dfa9"
+metafile = true
+
+[[files]]
+file = "shaderpacks/complementary-reimagined.pw.toml"
+hash = "92c0efeb0270b88a62896e159f372c120d89338dc161677dda3d664b81b52a57"
 metafile = true

@@ -1,0 +1,15 @@
+# managed by mods.txt
+# sha1 821e7fce47749c662a37b58a2fc598fb9d709cd5
+name = "c2me"
+filename = "c2me-fabric-mc1.21.1-0.3.0+alpha.0.291.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/VSNURh3q/versions/jrLI3FkH/c2me-fabric-mc1.21.1-0.3.0%2Balpha.0.291.jar"
+hash-format = "sha512"
+hash = "2578bba518b1a48f5d399ac88f65775119de7d57664ea788d4b9c426cfffe40e851fb0a99c3692d6da01003154e08282686cbae915e7c3d3dd5a68a22b7f9999"
+
+[update]
+[update.modrinth]
+mod-id = "VSNURh3q"
+version = "jrLI3FkH"
