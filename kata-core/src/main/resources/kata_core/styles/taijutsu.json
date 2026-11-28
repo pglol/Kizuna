@@ -48,19 +48,16 @@
       "role": "opener"
     },
     {
-      "id": "flurry",
-      "name": "Flurry",
-      "path": "straight",
+      "id": "lead_elbow",
+      "name": "Lead elbow",
+      "path": "elbow",
       "hand": "lead",
       "kind": "light",
       "from": "front",
-      "contact": 0.13,
-      "length": 0.72,
-      "damage": 1.4,
-      "push": 0.12,
-      "hits": 4,
-      "interval": 0.174,
-      "alternate": true,
+      "contact": 0.16,
+      "length": 0.42,
+      "damage": 3.6,
+      "push": 0.3,
       "role": "link"
     },
     {

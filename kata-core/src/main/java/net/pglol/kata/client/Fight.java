@@ -871,7 +871,8 @@ public final class Fight {
         if (staggered()) return;
         if (cur != null) {
             // Pressed during a strike: the next in the chain follows straight on (not across ground and air).
-            if (secs(curStart) > cur.contact() * 0.5f && (cur.from() == Fighting.From.AIR) == airborne(p)) pendingLight = true;
+            // (A flying kick is the exception: it carries straight on into the air row, an aerial assault.)
+            if (secs(curStart) > cur.contact() * 0.5f && ((cur.from() == Fighting.From.AIR) == airborne(p) || hopping)) pendingLight = true;
             return;
         }
         if (clock() < readyAt) {
@@ -942,7 +943,18 @@ public final class Fight {
                 double up = tg != null ? MathHelper.clamp((tg.getY() - p.getY()) * 0.25 + 0.06, -0.1, 0.3) : Math.max(v.y, 0.1);
                 p.setVelocity(v.x * 0.3 + dir.x * drift, up, v.z * 0.3 + dir.z * drift);
             }
-        } else if (p.isOnGround()) startLunge(p, m);
+        } else if (p.isOnGround()) {
+            startLunge(p, m);
+            // A flying kick: up off the floor with it (it floats at the top, see lungeTick).
+            float hop = Fighting.hop(m);
+            if (hop > 0) {
+                Vec3d v = p.getVelocity();
+                p.setVelocity(v.x, hop * (m.heavy() ? 0.85f + 0.15f * curPower : 1), v.z);
+                p.setOnGround(false);
+                hopping = true;
+                floated = false;
+            }
+        }
     }
 
     // ---- the lunge: every ground strike carries the body in behind it ----
@@ -952,6 +964,8 @@ public final class Fight {
     private static double lungeLeft;
     private static Vec3d lungeDir = Vec3d.ZERO;
     private static int lungeAt = -1;
+    /** In a flying kick (sprung off the floor by it), and whether it has reached the float at its top yet. */
+    private static boolean hopping, floated;
 
     /**
      * A strike drives you forward through its startup (Absolver's skating): half a block to a block and a
@@ -960,9 +974,10 @@ public final class Fight {
      */
     private static void startLunge(ClientPlayerEntity p, Move m) {
         Entity tg = targetEntity(MinecraftClient.getInstance());
-        if (tg == null) tg = softTarget(p, m);
+        if (tg == null) tg = lungeTarget(p);
         Vec3d f = Vec3d.fromPolar(0, p.getYaw());
-        double max = m.heavy() ? 0.7 + 0.8 * curPower : m.leg() ? 0.55 : 0.6;
+        double max = m.heavy() ? 1.0 + 0.9 * curPower : m.leg() ? 0.95 : 0.9;
+        if (Fighting.hop(m) > 0) max += 0.5; // a flying kick covers ground
         double stop = m.leg() ? 1.45 : 1.15; // centre to centre where the limb lands at full extension
         if (tg != null) {
             Vec3d to = tg.getPos().subtract(p.getPos()).multiply(1, 0, 1);
@@ -975,13 +990,44 @@ public final class Fight {
             lungeLeft = max * 0.45; // nobody there: a short step in, not a charge at the air
             lungeAt = -1;
         }
-        lungeTicks = Math.max(2, Math.round(m.contactOf(0) * 20));
+        // Front-loaded: most of the distance is covered in the first ticks (a snap in, not a glide).
+        lungeTicks = Math.max(2, Math.round(m.contactOf(0) * 20 * 0.7f));
+        lungeTotal = lungeTicks;
+    }
+
+    private static int lungeTotal;
+
+    /** Who a strike throws you at with nobody locked: the nearest in a wide cone ahead, a little out of reach too. */
+    private static Entity lungeTarget(ClientPlayerEntity p) {
+        Vec3d look = Vec3d.fromPolar(0, p.getYaw());
+        Entity best = null;
+        double bestD = Fighting.REACH + 2.2;
+        for (Entity e : p.getWorld().getOtherEntities(p, p.getBoundingBox().expand(bestD))) {
+            if (!(e instanceof LivingEntity) || !e.isAlive() || e instanceof ArmorStandEntity || e.isSpectator()) continue;
+            Vec3d to = e.getPos().subtract(p.getPos()).multiply(1, 0, 1);
+            double d = to.length();
+            if (d > bestD || d < 1e-3 || to.dotProduct(look) / d < 0.5) continue; // within 60 degrees
+            if (Math.abs(e.getY() - p.getY()) > 2.2) continue;
+            best = e;
+            bestD = d;
+        }
+        return best;
     }
 
     private static void lungeTick(ClientPlayerEntity p) {
+        // A flying kick: up off the floor, then it hangs at the top (nearly weightless) through the kick.
+        if (hopping) {
+            if (cur == null || p.isOnGround() && !floatJustStarted(p)) hopping = false;
+            else if (!floated && p.getVelocity().y < 0.06) {
+                floated = true;
+                float left = cur.length() - secs(curStart);
+                hangUntil = Math.max(hangUntil, clock() + (long) (MathHelper.clamp(left * 0.8f, 0.15f, 0.55f) * 1e9));
+            }
+        }
         if (lungeTicks <= 0) return;
-        if (cur == null || !p.isOnGround() || frozen(p)) {
-            if (cur == null || !p.isOnGround()) lungeTicks = 0;
+        boolean air = hopping;
+        if (cur == null || !(p.isOnGround() || air) || frozen(p)) {
+            if (cur == null || !(p.isOnGround() || air)) lungeTicks = 0;
             return;
         }
         Entity tg = lungeAt >= 0 && p.getWorld() != null ? p.getWorld().getEntityById(lungeAt) : null;
@@ -995,8 +1041,8 @@ public final class Fight {
                 if (target < 0) {
                     float want = (float) Math.toDegrees(Math.atan2(-to.x, to.z));
                     float diff = MathHelper.wrapDegrees(want - p.getYaw());
-                    if (Math.abs(diff) < 70) {
-                        float turn = MathHelper.clamp(diff * 0.3f, -8, 8);
+                    if (Math.abs(diff) < 75) {
+                        float turn = MathHelper.clamp(diff * 0.55f, -18, 18);
                         p.setYaw(p.getYaw() + turn);
                         p.setBodyYaw(p.getYaw());
                     }
@@ -1004,12 +1050,27 @@ public final class Fight {
             }
             if (d < (cur.leg() ? 1.4 : 1.1)) lungeLeft = 0; // there: no further, or you'd be in them
         }
-        double step = lungeLeft / lungeTicks;
+        // Front-loaded: the first tick takes the biggest share (a burst), tailing off into the strike.
+        int done = lungeTotal - lungeTicks;
+        float wt = 0, sum = 0;
+        for (int i = done; i < lungeTotal; i++) {
+            float wi = lungeTotal - i;
+            sum += wi;
+            if (i == done) wt = wi;
+        }
+        double step = sum > 0 ? lungeLeft * wt / sum : lungeLeft;
         lungeLeft -= step;
         lungeTicks--;
         Vec3d v = p.getVelocity();
-        // The lunge replaces most of your own running for its moment (a strike, not a sprint).
-        p.setVelocity(v.x * 0.25 + lungeDir.x * step, v.y, v.z * 0.25 + lungeDir.z * step);
+        // A little extra on the ground (your own running is mostly taken out of it).
+        double k = p.isOnGround() ? 1.25 : 1.0;
+        // The lunge replaces your own running for its moment (a strike, not a sprint).
+        p.setVelocity(v.x * 0.15 + lungeDir.x * step * k, v.y, v.z * 0.15 + lungeDir.z * step * k);
+    }
+
+    /** Just sprung off: the game may still call you on the ground for the tick you left it. */
+    private static boolean floatJustStarted(ClientPlayerEntity p) {
+        return cur != null && secs(curStart) < 0.12f;
     }
 
     /** The lunge stops dead the moment the strike connects. */
@@ -1037,6 +1098,65 @@ public final class Fight {
     private static void freeze(int id, float secs) {
         FREEZE.merge(id, clock() + (long) (secs * 1e9), Math::max);
         if (FREEZE.size() > 128) FREEZE.clear();
+    }
+
+    /**
+     * A block, met limb by limb (players and dummies alike), from what the server said was blocked:
+     *  - a straight punch or palm: the forearm on its side meets it and pushes it out wide
+     *  - a hook, backfist or elbow: the forearm up beside the head, elbow tight, to take it
+     *  - an overhand: the forearm up over the head
+     *  - an uppercut: both forearms crossed down in front of the chin
+     *  - a roundhouse, back kick or knee: the elbow down over the ribs on that side, the other hand
+     *    across to catch the leg
+     *  - a front, side or dropkick: both palms down and forward, pushing the foot down
+     *  - a low kick: the knee up and out, checking it on the shin
+     * Quick to meet it (60 ms), held for the impact, eased off by 0.4 s.
+     */
+    static Pose blockShape(Pose g, LivingEntity e) {
+        React b = BLOCKS.get(e.getId());
+        if (b == null) return g;
+        float t = secs(b.at);
+        if (t > 0.4f || t < 0) return g;
+        float meet = t < 0.06f ? t / 0.06f : t < 0.16f ? 1 : 1 - (t - 0.16f) / 0.24f;
+        meet = meet * meet * (3 - 2 * meet);
+        boolean r = (b.packed & 1) != 0;
+        float s = r ? 1 : -1;
+        int pi = (b.packed >> 1) - 1;
+        Path path = pi >= 0 && pi < Path.values().length ? Path.values()[pi] : Path.HOOK;
+        Bone arm = r ? Bone.RIGHT_ARM : Bone.LEFT_ARM, fore = r ? Bone.RIGHT_FOREARM : Bone.LEFT_FOREARM;
+        Bone oArm = r ? Bone.LEFT_ARM : Bone.RIGHT_ARM, oFore = r ? Bone.LEFT_FOREARM : Bone.RIGHT_FOREARM;
+        Pose w = g.copy();
+        switch (path) {
+            case STRAIGHT, PALM, SUPERMAN -> {
+                float push = MathHelper.clamp(t / 0.16f, 0, 1);
+                push = push * push * (3 - 2 * push);
+                w.set(arm, -86, (-4 - 24 * push) * s, (12 + 34 * push) * s).set(fore, 80 - 22 * push, 0, 0);
+                w.set(Bone.CHEST, Pose.YAW, g.get(Bone.CHEST, Pose.YAW) - 10 * s * push);
+            }
+            case OVERHAND -> w.set(arm, -152, -10 * s, 24 * s).set(fore, 62, 0, 0).set(Bone.HEAD, Pose.PITCH, g.get(Bone.HEAD, Pose.PITCH) + 8);
+            case UPPER -> {
+                w.set(Bone.RIGHT_ARM, -52, 24, 6).set(Bone.LEFT_ARM, -52, -24, -6);
+                w.set(Bone.RIGHT_FOREARM, 104, 0, 0).set(Bone.LEFT_FOREARM, 104, 0, 0);
+                w.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) + 10);
+            }
+            case ROUNDHOUSE, BACK_KICK, KNEE -> {
+                w.set(arm, -28, -6 * s, 16 * s).set(fore, 104, 0, 0);
+                w.set(oArm, -48, -32 * s, -4 * s).set(oFore, 58, 0, 0);
+                w.set(Bone.CHEST, Pose.ROLL, g.get(Bone.CHEST, Pose.ROLL) + 8 * s);
+                w.set(Bone.CHEST, Pose.YAW, g.get(Bone.CHEST, Pose.YAW) + 12 * s);
+            }
+            case FRONT_KICK, SIDE_KICK, DROPKICK -> {
+                w.set(Bone.RIGHT_ARM, -42, 20, 2).set(Bone.LEFT_ARM, -42, -20, -2);
+                w.set(Bone.RIGHT_FOREARM, 38, 0, 0).set(Bone.LEFT_FOREARM, 38, 0, 0);
+                w.set(Bone.CHEST, Pose.PITCH, g.get(Bone.CHEST, Pose.PITCH) + 14);
+            }
+            case LOW_KICK -> {
+                Bone leg = r ? Bone.RIGHT_LEG : Bone.LEFT_LEG, shin = r ? Bone.RIGHT_SHIN : Bone.LEFT_SHIN;
+                w.set(leg, -60, 0, 18 * s).set(shin, 85, 0, 0);
+            }
+            default -> w.set(arm, -75, -10 * s, 38 * s).set(fore, 70, 0, 0); // hooks, backfists, elbows
+        }
+        return Pose.lerp(g, w, meet);
     }
 
     /** Which way a strike kicks the view sideways (degrees, + to the right): hooks across, backfists out. */
@@ -1134,21 +1254,12 @@ public final class Fight {
         along = along.lengthSquared() > 1e-4 ? along.normalize() : Vec3d.fromPolar(0, he.getYaw());
         at = at.add(along.multiply(-0.3)); // on the near side of the body, where the limb met it
         var r = mc.world.random;
-        int sparks = heavy ? 10 + tier * 5 : 6;
+        int sparks = heavy ? 8 + tier * 4 : 5;
         for (int i = 0; i < sparks; i++) {
-            Vec3d sv = along.multiply(0.15 + r.nextDouble() * 0.25).add((r.nextDouble() - 0.5) * 0.35, r.nextDouble() * 0.25, (r.nextDouble() - 0.5) * 0.35);
+            Vec3d sv = along.multiply(0.3 + r.nextDouble() * 0.4).add((r.nextDouble() - 0.5) * 0.5, r.nextDouble() * 0.3, (r.nextDouble() - 0.5) * 0.5);
             mc.world.addParticle(i % 3 == 0 ? net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK : net.minecraft.particle.ParticleTypes.CRIT, at.x, at.y, at.z, sv.x, sv.y, sv.z);
         }
-        // The ring: in the plane square to the blow, spreading out from it.
-        Vec3d u = new Vec3d(-along.z, 0, along.x), w = new Vec3d(0, 1, 0);
-        int n = heavy ? 18 : 10;
-        double sp = heavy ? 0.16 + 0.1 * power : 0.09;
-        for (int i = 0; i < n; i++) {
-            double ang = Math.PI * 2 * i / n;
-            Vec3d dir = u.multiply(Math.cos(ang)).add(w.multiply(Math.sin(ang)));
-            mc.world.addParticle(net.minecraft.particle.ParticleTypes.WHITE_SMOKE, at.x + dir.x * 0.1, at.y + dir.y * 0.1, at.z + dir.z * 0.1,
-                dir.x * sp + along.x * 0.04, dir.y * sp, dir.z * sp + along.z * 0.04);
-        }
+        HitFx.add(at, along, heavy, power); // a hard ring of light and impact streaks, not smoke
         // A heavy lands with weight: a low thud under the crack.
         if (heavy) mc.world.playSound(at.x, at.y, at.z, net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, net.minecraft.sound.SoundCategory.PLAYERS,
             0.5f + 0.4f * power, 0.5f, false);
@@ -1764,15 +1875,8 @@ public final class Fight {
                 g.set(Bone.HEAD, Pose.PITCH, g.get(Bone.HEAD, Pose.PITCH) + 10 * strain);
             }
         }
-        // A strike just blocked: the arm on its side goes out to meet it, forearm up to take it.
-        React b = BLOCKS.get(p.getId());
-        float bs = b == null ? 9 : secs(b.at);
-        int bSide = mine(p) ? joltSide : (b != null && b.packed != 0 ? 1 : -1);
-        float meet = mine(p) ? jolt / 0.22f : bs < 0.25f ? 1 - bs / 0.25f : 0;
-        if (meet > 0 && guardUp(p)) {
-            if (bSide > 0) g = Pose.lerp(g, g.copy().set(Bone.RIGHT_ARM, -75, -10, 38).set(Bone.RIGHT_FOREARM, 70, 0, 0), meet);
-            else g = Pose.lerp(g, g.copy().set(Bone.LEFT_ARM, -75, 10, -38).set(Bone.LEFT_FOREARM, 70, 0, 0), meet);
-        }
+        // A strike just blocked: met with the limb that would really take it (see blockShape).
+        g = blockShape(g, p);
         // The same reactions on everyone: yours from your own state, others' from what the server sent.
         float jl;
         int jSide;
@@ -2204,6 +2308,7 @@ public final class Fight {
             }
         }
         if (wind_) senpuLegs(out, m, kk, right, out_);
+        if (Fighting.hop(m) > 0 && !p.isOnGround()) flyTuck(out, m, kk, right);
         if (m.from() == Fighting.From.AIR || m.heavy() || wind_) {
             Vector3f[] jj = Ragdoll.joints(out);
             Trails.add(p.getId(), Ragdoll.toWorld(m.path() == Path.KNEE ? jj[right ? Ragdoll.RK : Ragdoll.LK] : jj[right ? Ragdoll.RF : Ragdoll.LF], pos, bodyYaw), m.heavy());
@@ -2307,6 +2412,25 @@ public final class Fight {
             }
             default -> { }
         }
+    }
+
+    /**
+     * Tenkyaku-ryu's flying kicks, off the floor: the leg it isn't kicking with folds up tight under the
+     * body (knee high, heel to the seat) and the body lays back a little behind the kick, the arms out
+     * for balance, so the fighter hangs in the air on the kick instead of standing on nothing.
+     */
+    private static void flyTuck(Pose out, Move m, float kk, boolean right) {
+        float w = Math.min(1, Math.max(0, kk) * 3 + 0.35f);
+        Bone sLeg = right ? Bone.LEFT_LEG : Bone.RIGHT_LEG, sShin = right ? Bone.LEFT_SHIN : Bone.RIGHT_SHIN;
+        boolean scissor = m.hits() > 1 && m.alternate();
+        if (!scissor) {
+            toward(out, sLeg, w, -68, 0, 0);
+            toward(out, sShin, w, 118, 0, 0);
+        }
+        out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) - 8 * w);
+        out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) + 22 * w);
+        out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) - 22 * w);
+        out.offset[1] -= 1.5f * w; // drawn up off its feet
     }
 
     /** A Senpu-ryu move (it has its own way of moving: see apply and kick). */

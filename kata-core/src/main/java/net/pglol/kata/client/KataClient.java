@@ -69,6 +69,7 @@ public final class KataClient implements ClientModInitializer {
             if (ctx.consumers() != null) {
                 Afterimages.render(ctx.matrixStack(), ctx.consumers(), ctx.camera().getPos());
                 Trails.render(ctx.matrixStack(), ctx.consumers(), ctx.camera().getPos());
+                HitFx.render(ctx.matrixStack(), ctx.consumers(), ctx.camera().getPos());
                 Nametags.render(ctx.matrixStack(), ctx.consumers(), ctx.camera());
                 AwarenessFx.render(ctx.matrixStack(), ctx.consumers(), ctx.camera());
             }

@@ -556,3 +556,14 @@ moves the body somewhere the physics wouldn't.
 - The limp's drop is taken in the knees (bend from the sink, the good leg most), so the feet stay on the floor.
 - The Kata menu is the locker (kata-mod, key M): the team's Blockbench locker (kata-mod/inbox/locker.zip, copied into assets/kata/locker and textures/locker) loaded straight from the .bbmodel files by a small renderer (BbModel: bones, cubes, linear keyframes; Bedrock animation rotations X/Y flipped). It unlocks and swings open in a wall of lockers (the decorative ones beside it, closed rows above and below), drifts in the draft while open; each item lifts and glows on hover (its own rest/hover_start/hover/hover_end) and is a way in: headband = styles and moves (deck), bag = inventory, books = camera settings, manga = controls, shuriken = a sparring dummy. Choosing (or Esc) slams it shut first.
 - Dummies (the NPC template): a brain that picks one intent a tick (close, space, attack, guard, aerial); they dodge strikes (Fighting.dodgeOf, same i-frames as players), chase into the air with a double jump and a flip and throw air strikes, and their striking limb glows.
+
+## Combat feel (Absolver pass)
+- Lunge: ground strikes carry the fighter in, front-loaded over the first 70% of startup, soft-locked to the
+  nearest body in a 60° cone (or the lock), stopping just short of them; the body turns onto them (up to 18°/tick).
+- Hit-stop: `Fight.freeze` holds both bodies' poses (players and dummies); the server delays knockback by
+  `Fighting.stopTicks` (`AFTER_STOP`). Light hits root instead of push.
+- Impact: directional view jolt (`ImpactFrames.jolt`), no red hurt overlay (`HurtTintMixin`), no vanilla hurt
+  tilt after a Kata hit (`HurtTiltMixin`), `HitFx` shockwave ring and impact streaks.
+- Blocks: `BLOCKED` carries side | (path+1)<<1; `Fight.blockShape` meets each kind of strike with its own limb.
+- Moves: at most two hits each. Tenkyaku-ryu (tenkyaku.json): kicks with `hop`, which spring the fighter up
+  and float them at the apex; a chain from a hop carries into the air row.

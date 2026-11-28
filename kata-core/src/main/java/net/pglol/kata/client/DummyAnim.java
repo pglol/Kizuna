@@ -47,7 +47,7 @@ public final class DummyAnim {
     /**
      * Turn bone b of `out` part way (f) from how it was last frame, as one rotation (never angle by angle:
      * the same turn can be written two ways, and easing each angle separately between the two swings the
-     * limb through poses it never had). Written back in the form nearest last frame's angles.
+     * limb through poses it never had). Written back as plain angles.
      */
     private static void blendTurn(Pose out, Pose prev, Bone b, float f) {
         org.joml.Quaternionf qa = new org.joml.Quaternionf().rotationZYX(prev.rad(b, Pose.ROLL), prev.rad(b, Pose.YAW), prev.rad(b, Pose.PITCH));
@@ -55,17 +55,12 @@ public final class DummyAnim {
         if (qa.dot(qb) < 0) qb.mul(-1);
         Vector3f e = new org.joml.Matrix3f().set(qa.slerp(qb, f)).getEulerAnglesZYX(new Vector3f());
         float pd = (float) Math.toDegrees(e.x), yd = (float) Math.toDegrees(e.y), rd = (float) Math.toDegrees(e.z);
-        float cp = prev.get(b, Pose.PITCH), cy = prev.get(b, Pose.YAW), cr = prev.get(b, Pose.ROLL);
-        float ap = pd + 180, ay = 180 - yd, ar = rd + 180;
-        float d1 = Math.abs(MathHelper.wrapDegrees(pd - cp)) + Math.abs(MathHelper.wrapDegrees(yd - cy)) + Math.abs(MathHelper.wrapDegrees(rd - cr));
-        float d2 = Math.abs(MathHelper.wrapDegrees(ap - cp)) + Math.abs(MathHelper.wrapDegrees(ay - cy)) + Math.abs(MathHelper.wrapDegrees(ar - cr));
-        if (d2 < d1) {
-            pd = ap;
-            yd = ay;
-            rd = ar;
-        }
-        // Keep the numbers next to last frame's (no 359 -> -1 jumps for anything reading them).
-        out.set(b, cp + MathHelper.wrapDegrees(pd - cp), cy + MathHelper.wrapDegrees(yd - cy), cr + MathHelper.wrapDegrees(rd - cr));
+        // Always the plain form (yaw within a quarter turn). The same turn written the other way round
+        // (pitch and roll half a turn over, yaw mirrored) looks the same this frame, but it stuck: every
+        // reaction and strike added on top of it next frame bent the wrong way (the head pinned looking
+        // down, the body twisted off where it stood) until a knockdown reset the body.
+        // Nor wound round by whole turns frame on frame (that drifted too): plain angles, every frame.
+        out.set(b, pd, yd, rd);
     }
 
     static Pose current(Dummy d, float td) {
@@ -208,6 +203,7 @@ public final class DummyAnim {
                 default -> { }
             }
         }
+        o = Fight.blockShape(o, d); // met with the limb that takes it, as a player's block is
         if (d.staggered() > 0) {
             o.set(Bone.CHEST, -16, 0, 0).set(Bone.HEAD, -20, 0, 0);
             o.set(Bone.RIGHT_ARM, -25, 0, 38).set(Bone.LEFT_ARM, -25, 0, -38);

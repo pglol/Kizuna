@@ -307,7 +307,8 @@ public class Dummy extends PathAwareEntity {
             Vec3d to = foe.getPos().subtract(getPos()).multiply(1, 0, 1);
             double dist = to.length();
             if (dist < (swing.leg() ? 1.4 : 1.1)) lungeLeft = 0; // there
-            double step = lungeLeft / lungeTicks;
+            // Front-loaded: a burst in, tailing off into the strike.
+            double step = lungeLeft * 2.0 / (lungeTicks + 1);
             lungeLeft -= step;
             lungeTicks--;
             if (dist > 1e-3) {
@@ -423,9 +424,9 @@ public class Dummy extends PathAwareEntity {
         // The lunge: carried in behind the strike through its startup, to just in front of them (never
         // into them), as a player's strike carries the player.
         if (!air && isOnGround()) {
-            double stop = m.leg() ? 1.45 : 1.15, max = m.heavy() ? 1.2 : 0.6;
+            double stop = m.leg() ? 1.45 : 1.15, max = m.heavy() ? 1.6 : 0.9;
             lungeLeft = MathHelper.clamp(d - stop, 0, max);
-            lungeTicks = Math.max(2, Math.round(m.contactOf(0) * 20));
+            lungeTicks = Math.max(2, Math.round(m.contactOf(0) * 20 * 0.7f));
         }
         dataTracker.set(MOVE, Fighting.id(m));
         dataTracker.set(MOVE_AT, age);

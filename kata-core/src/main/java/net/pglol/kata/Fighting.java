@@ -127,6 +127,14 @@ public final class Fighting {
         }
     }
 
+    /** Ground kicks that spring the fighter up off the floor, and how hard (vertical speed, blocks a tick). */
+    private static final Map<String, Float> HOP = new HashMap<>();
+
+    /** How hard this move springs you off the ground (0: it doesn't). */
+    public static float hop(Move m) {
+        return m == null ? 0 : HOP.getOrDefault(m.id(), 0f);
+    }
+
     /** Every style, loaded from the mod's kata_core/styles/ files (see index.json there). */
     public static final Style[] STYLES;
     /** Every move of every style, numbered in style order (the same on both sides, for the network). */
@@ -168,6 +176,7 @@ public final class Fighting {
             // (lights most, heavies a little less, air strings least so juggles still connect).
             boolean heavyM = "heavy".equals(m.get("kind").getAsString()), airM = "air".equals(from);
             float tempo = airM ? 1.2f : heavyM ? 1.25f : 1.35f;
+            if (m.has("hop")) HOP.put(sid + ":" + m.get("id").getAsString(), m.get("hop").getAsFloat());
             pool.add(new Move(sid + ":" + m.get("id").getAsString(), m.get("name").getAsString(),
                 Path.valueOf(m.get("path").getAsString().toUpperCase(java.util.Locale.ROOT)),
                 "lead".equals(m.get("hand").getAsString()), "heavy".equals(m.get("kind").getAsString()),
@@ -395,7 +404,9 @@ public final class Fighting {
             setPoise(victim, po - cost);
             w.playSound(null, victim.getX(), victim.getY(), victim.getZ(), SoundEvents.ITEM_SHIELD_BLOCK, SoundCategory.PLAYERS, 0.8f, 1.2f + w.random.nextFloat() * 0.2f);
             tell(victim, KataNet.GUARD_HIT, side);
-            if (victim instanceof ServerPlayerEntity vp) relayAround(vp, KataNet.BLOCKED, side > 0 ? 1 : 0); // everyone sees the block
+            // Everyone sees the block, and with what it was met (a punch pushed aside, a kick caught...): the side,
+            // and the strike's path.
+            relayAround(victim, KataNet.BLOCKED, (side > 0 ? 1 : 0) | (striking != null ? (striking.path().ordinal() + 1) << 1 : 0));
             if (victim instanceof Dummy d) d.blocked(side);
             shove(victim, new Vec3d(-to.x / len, 0, -to.z / len), 0.05 + amount * 0.008); // the guard gives a little
             refusal = 10;

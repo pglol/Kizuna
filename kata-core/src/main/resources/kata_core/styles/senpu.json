@@ -35,19 +35,16 @@
       "role": "opener"
     },
     {
-      "id": "petal_storm",
-      "name": "Petal storm",
-      "path": "palm",
+      "id": "knife_hand",
+      "name": "Knife hand",
+      "path": "hook",
       "hand": "lead",
       "kind": "light",
       "from": "front",
-      "contact": 0.12,
-      "length": 0.74,
-      "damage": 1.2,
-      "push": 0.12,
-      "hits": 5,
-      "interval": 0.13,
-      "alternate": true,
+      "contact": 0.17,
+      "length": 0.44,
+      "damage": 3.2,
+      "push": 0.3,
       "role": "link"
     },
     {
@@ -302,7 +299,7 @@
     ],
     "top_left": [
       "twin_palms",
-      "petal_storm",
+      "knife_hand",
       "rising_crescent",
       "tempest_palm"
     ],
