@@ -14,6 +14,7 @@ public final class KataMod implements ModInitializer {
     @Override
     public void onInitialize() {
         Town.register();
+        Tournament.register();
         KataCore.LOG.info("Kata ready");
     }
 }

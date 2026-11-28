@@ -567,3 +567,17 @@ moves the body somewhere the physics wouldn't.
 - Blocks: `BLOCKED` carries side | (path+1)<<1; `Fight.blockShape` meets each kind of strike with its own limb.
 - Moves: at most two hits each. Tenkyaku-ryu (tenkyaku.json): kicks with `hop`, which spring the fighter up
   and float them at the apex; a chain from a hop carries into the air row.
+
+## Meditation menu and the kit
+- E opens `MeditationScreen` (non-pausing). Server `Meditation`: settle 30 ticks, untouchable only after 100 ticks out of combat
+  (ALLOW_DAMAGE cancelled, mobs drop target, dummies calm); moving 0.8 off the spot, striking, or being hit while settling ends it.
+- `Kit` (server): hand = inventory slot 8 kept empty; 0-2 quick slots; storage 3-7, 9-35; paper doll 10 slots (head/chest/legs/feet
+  are vanilla armour, the rest a persistent attachment, tags `kata_core:gear/<slot>`). Ops via KataNet.KIT.
+- `KitClient`: F interaction and prompt, manual pickup (ItemPickupMixin stops auto pickup), quick use (1-3), X draw/sheathe.
+  Creative/spectator keep vanilla.
+- Hooks for game mods: `Fighting.LANDED` (every landed strike), `Fighting.spare` (no killing blows), `Dummy.engage/calm/setHome`.
+
+## Tournament (kata-mod `Tournament`)
+- Budokan mat; PvP or vs a Dummy bot after 10 s alone. Shobu sanbon: yuko 1 (hand), waza-ari 2 (body kick), ippon 3 (head kick
+  or a knockdown). Fouls: legs, back of head, after yame, jogai. Penalties chukoku → keikoku (+1) → hansoku-chui (+1) → hansoku.
+  Ends at 3 points, KO, tap-out (/tapout or hold crouch still 3 s), DQ, leaving, or 3 minutes.

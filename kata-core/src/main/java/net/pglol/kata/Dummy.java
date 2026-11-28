@@ -168,6 +168,25 @@ public class Dummy extends PathAwareEntity {
         return super.damage(source, Math.min(amount, getMaxHealth() - 1));
     }
 
+    /** Fight this one (a tournament bout): set on them, and stays set for as long as it's told to again within ticks. */
+    public void engage(LivingEntity by, int ticks) {
+        provoke(by);
+        calmAt = age + ticks;
+    }
+
+    /** Leave off whoever it's fighting (a referee's "yame"). */
+    public void calm() {
+        foe = null;
+        dataTracker.set(FOE, -1);
+        cancelSwing();
+        getNavigation().stop();
+    }
+
+    /** Where it walks back to when it's done fighting. */
+    public void setHome(BlockPos p) {
+        home = p;
+    }
+
     private void provoke(LivingEntity by) {
         foe = by;
         dataTracker.set(FOE, by.getId());

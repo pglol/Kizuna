@@ -1018,6 +1018,7 @@ public final class Fighting {
                     if (victim.isInvulnerableTo(own)) invulnerableNote = true;
                     float left = victim.getHealth() - dmg;
                     if (left > 0) victim.setHealth(left);
+                    else if (spare.test(victim)) victim.setHealth(1); // a bout: knocked out, not killed
                     else {
                         victim.setHealth(0);
                         victim.onDeath(own);
@@ -1038,6 +1039,8 @@ public final class Fighting {
         if (hit) Injuries.struck(t, part, power, m.heavy());
         // A creative-mode player takes no damage, but still feels the hit (unless it was blocked).
         if (!hit && !(t instanceof net.minecraft.entity.player.PlayerEntity pl && pl.isCreative() && !guarding(t))) return false;
+        boolean downs = !tanked && m.from() != From.AIR && (m.heavy() ? power >= 0.98f : m.knockdown());
+        for (Landed l : LANDED) l.landed(by, t, m, part, power, downs);
         // The hit's reaction, for everyone to see: where it landed, what kind of strike, from which side.
         Vec3d from = by.getPos().subtract(t.getPos());
         double ty = Math.toRadians(t.getYaw());
@@ -1095,6 +1098,15 @@ public final class Fighting {
             SoundCategory.PLAYERS, 0.9f, (m.heavy() ? 0.75f : 1f) + t.getRandom().nextFloat() * 0.2f);
         return true;
     }
+
+    /** Told of every strike that lands on a body (not blocked): who, on whom, what, where, how hard, whether it put them down. */
+    public interface Landed {
+        void landed(LivingEntity by, LivingEntity t, Move m, Part part, float power, boolean down);
+    }
+
+    public static final java.util.List<Landed> LANDED = new java.util.ArrayList<>();
+    /** Bodies a finishing strike must not kill (a tournament bout): left on one health instead. */
+    public static java.util.function.Predicate<LivingEntity> spare = e -> false;
 
     /** Something to do once a hit-stop is over (the push of the blow), at a server tick. */
     private record Later(LivingEntity e, int at, Runnable run) { }
