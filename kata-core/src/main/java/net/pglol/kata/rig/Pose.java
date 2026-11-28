@@ -57,6 +57,12 @@ public final class Pose {
         return p;
     }
 
+    /** In place: this pose eased back towards before, keeping t (0..1) of what changed since. */
+    public void keep(Pose before, float t) {
+        for (int i = 0; i < deg.length; i++) for (int k = 0; k < 3; k++) deg[i][k] = before.deg[i][k] + (deg[i][k] - before.deg[i][k]) * t;
+        for (int k = 0; k < 3; k++) offset[k] = before.offset[k] + (offset[k] - before.offset[k]) * t;
+    }
+
     /** Blends a towards b by t (0..1), per bone and axis. */
     public static Pose lerp(Pose a, Pose b, float t) {
         Pose p = new Pose();

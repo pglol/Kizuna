@@ -123,6 +123,7 @@ public final class Animator {
             STATES.keySet().removeIf(id -> w == null || w.getEntityById(id) == null);
         }
         if (dt <= 0 && !s.first) return s.out;
+        if (!s.first && s.out != null && Fight.frozen(p)) return s.out; // the hit-stop: held exactly where the strike met
 
         // Ragdoll: the body is physics until it has got back up.
         Parkour.View rv = Parkour.view(p);
@@ -285,9 +286,49 @@ public final class Animator {
      * down onto the good one each step, a broken arm is held in across the stomach (the other hand
      * cradling it, standing), cracked ribs hunch the chest. Strikes still go over the top of this.
      */
+    /** How much of the limp shows, per body (eased: 1 walking about, 0 hanging, climbing, on a wall, flying). */
+    private static final java.util.Map<Integer, Float> LIMP_K = new java.util.HashMap<>();
+
     private static void injured(PlayerEntity p, float td, Pose out) {
         int id = p.getId(), m = Fight.injuries(id);
-        if (m == 0) return;
+        if (m == 0) {
+            LIMP_K.remove(id);
+            return;
+        }
+        // Hanging from a ledge, climbing, on a wall or in the air, every limb belongs to that move (the
+        // hands grip, the legs climb): the limp would fight it, so it eases out and the hurt shows another way.
+        Parkour.Mode pm = Parkour.view(p).mode();
+        boolean free = p.isOnGround() && (pm == Parkour.Mode.NONE || pm == Parkour.Mode.LAND) && !Fight.wallBound(p);
+        float k = LIMP_K.getOrDefault(id, free ? 1f : 0f);
+        k += ((free ? 1 : 0) - k) * (free ? 0.08f : 0.35f);
+        if (LIMP_K.size() > 256) LIMP_K.clear();
+        LIMP_K.put(id, k);
+        Pose before = out.copy();
+        if (k > 0.01f) limp(p, td, out, m);
+        if (k < 0.99f) out.keep(before, k);
+        // Off the ground with a broken leg: it hangs dead straight, the good one does the climbing.
+        if (k < 0.99f && pm != Parkour.Mode.VAULT) {
+            float off = 1 - k;
+            if ((m & 2) != 0) dangle(out, Bone.RIGHT_LEG, Bone.RIGHT_SHIN, Fight.hurt(id, 1) * off, 1);
+            if ((m & 1) != 0) dangle(out, Bone.LEFT_LEG, Bone.LEFT_SHIN, Fight.hurt(id, 0) * off, -1);
+            // A broken arm still grips (it has to), but it shakes with the strain.
+            float tt = (System.nanoTime() % 6_283_000_000L) / 1e9f;
+            if ((m & 8) != 0) add(out, Bone.RIGHT_FOREARM, Pose.PITCH, MathHelper.sin(tt * 41) * 2.5f * Fight.hurt(id, 3) * off);
+            if ((m & 4) != 0) add(out, Bone.LEFT_FOREARM, Pose.PITCH, MathHelper.sin(tt * 37 + 1) * 2.5f * Fight.hurt(id, 2) * off);
+        }
+    }
+
+    /** A broken leg left hanging: straight down under the hip, knee barely bent, a little out to the side. */
+    private static void dangle(Pose out, Bone leg, Bone shin, float k, float side) {
+        k = Math.min(1, k * 1.3f);
+        out.set(leg, Pose.PITCH, MathHelper.lerp(k, out.get(leg, Pose.PITCH), 4));
+        out.set(leg, Pose.YAW, MathHelper.lerp(k, out.get(leg, Pose.YAW), 0));
+        out.set(leg, Pose.ROLL, MathHelper.lerp(k, out.get(leg, Pose.ROLL), side * 4));
+        out.set(shin, Pose.PITCH, MathHelper.lerp(k, out.get(shin, Pose.PITCH), 6));
+    }
+
+    private static void limp(PlayerEntity p, float td, Pose out, int m) {
+        int id = p.getId();
         float sinkWas = out.offset[1];
         float speed = MathHelper.clamp(p.limbAnimator.getSpeed(td) * 1.6f, 0, 1);
         float phase = p.limbAnimator.getPos(td) * 0.6662f;

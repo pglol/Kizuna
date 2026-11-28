@@ -79,6 +79,7 @@ public final class DummyAnim {
         long now = System.nanoTime();
         float dt = s.last == 0 ? 0 : MathHelper.clamp((now - s.last) / 1e9f, 0, 0.1f);
         s.last = now;
+        if (s.shown != null && !s.ragdoll && s.prev != null && Fight.frozen(d)) return s.shown; // the hit-stop
         float by = MathHelper.lerpAngleDegrees(td, d.prevBodyYaw, d.bodyYaw);
 
         // Knocked down: limp, then up again.

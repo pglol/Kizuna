@@ -595,6 +595,12 @@ public final class Fight {
         jumpWas = jumpNow;
         landRoll(p);
         dashTick(p);
+        lungeTick(p);
+        // Held in a hit-stop: you don't drift on through it.
+        if (frozen(p) && p.isOnGround()) {
+            Vec3d v = p.getVelocity();
+            p.setVelocity(v.x * 0.1, v.y, v.z * 0.1);
+        }
         boolean aloft = !p.isOnGround() && !p.isTouchingWater() && !p.getAbilities().flying && Parkour.view(p).mode() == Parkour.Mode.NONE;
         if (wallRunning()) runTick(p, fresh);
         else if (clinging()) {
@@ -727,9 +733,13 @@ public final class Fight {
                 float late = c + (cur.heavy() ? 0.12f : 0.08f);
                 if (drawn && s >= c - cur.contact() * 0.85f && s <= late) {
                     var others = nearby(p);
-                    double r = cur.leg() ? 0.13 : 0.1; // a fist or shin's thickness
-                    Hitbox.Contact touch = limbPrev != null && limbPrev.squaredDistanceTo(limbNow) > 1e-6 ? Hitbox.sweep(others, td, limbPrev, limbNow, r) : null;
-                    if (touch == null && limbMid != null) touch = Hitbox.sweep(others, td, limbMid, limbNow, r);
+                    double r = cur.leg() ? 0.15 : 0.12; // a fist or shin's thickness, and a little
+                    // The tip reaches a touch past the drawn fist or foot (a strike that visibly meets
+                    // someone always counts).
+                    Vec3d tip = limbMid != null && limbNow.squaredDistanceTo(limbMid) > 1e-6
+                        ? limbNow.add(limbNow.subtract(limbMid).normalize().multiply(cur.leg() ? 0.16 : 0.13)) : limbNow;
+                    Hitbox.Contact touch = limbPrev != null && limbPrev.squaredDistanceTo(limbNow) > 1e-6 ? Hitbox.sweep(others, td, limbPrev, tip, r) : null;
+                    if (touch == null && limbMid != null) touch = Hitbox.sweep(others, td, limbMid, tip, r);
                     if (touch == null && limbMid != null && limbMidPrev != null) touch = Hitbox.sweep(others, td, limbMidPrev, limbMid, r); // the elbow (or knee) on its way
                     if (touch != null) {
                         lastPart = touch.hit().part();
@@ -781,8 +791,15 @@ public final class Fight {
                     // It lands: the strike holds still for a moment (the impact), longer for a heavy.
                     if (hit >= 0) {
                         // The hit stop: a heavy holds on contact longer the more it was charged.
-                        float stop = cur.heavy() ? (curPower >= 0.8f ? 0.15f : curPower >= 0.4f ? 0.11f : 0.07f) : 0.05f;
+                        float stop = stopOf(cur.heavy(), curPower);
                         curStart += (long) (stop * 1e9);
+                        // Both bodies hold still for it, and you stop where you are (you don't skate on through them).
+                        freeze(p.getId(), stop);
+                        freeze(hit, stop);
+                        lungeConnect(p);
+                        // The view kicks the way the strike went: a hook from the right swings it left, a
+                        // straight or a kick drives it in.
+                        ImpactFrames.jolt(joltYaw(cur, right, true), joltPitch(cur, true), cur.heavy() ? 0.6f + 0.6f * curPower : 0.45f);
                         // Landing it gives back half of what it cost (the first contact only).
                         if (!curLanded) net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + curCost * 0.5f);
                         curLanded = true;
@@ -925,10 +942,221 @@ public final class Fight {
                 double up = tg != null ? MathHelper.clamp((tg.getY() - p.getY()) * 0.25 + 0.06, -0.1, 0.3) : Math.max(v.y, 0.1);
                 p.setVelocity(v.x * 0.3 + dir.x * drift, up, v.z * 0.3 + dir.z * drift);
             }
-        } else if (p.isOnGround() && !m.leg()) {
-            double step = m.heavy() ? 0.06 + 0.1 * curPower : 0.035;
-            p.addVelocity(f.x * step, 0, f.z * step);
+        } else if (p.isOnGround()) startLunge(p, m);
+    }
+
+    // ---- the lunge: every ground strike carries the body in behind it ----
+
+    /** Ticks of the lunge left, how far it still has to carry you, which way, and who it's carrying you at. */
+    private static int lungeTicks;
+    private static double lungeLeft;
+    private static Vec3d lungeDir = Vec3d.ZERO;
+    private static int lungeAt = -1;
+
+    /**
+     * A strike drives you forward through its startup (Absolver's skating): half a block to a block and a
+     * half, more for a heavy the longer it was held. With someone in front of you it's soft-locked onto
+     * them and scaled so the strike lands just in front of them, never running into their body.
+     */
+    private static void startLunge(ClientPlayerEntity p, Move m) {
+        Entity tg = targetEntity(MinecraftClient.getInstance());
+        if (tg == null) tg = softTarget(p, m);
+        Vec3d f = Vec3d.fromPolar(0, p.getYaw());
+        double max = m.heavy() ? 0.7 + 0.8 * curPower : m.leg() ? 0.55 : 0.6;
+        double stop = m.leg() ? 1.45 : 1.15; // centre to centre where the limb lands at full extension
+        if (tg != null) {
+            Vec3d to = tg.getPos().subtract(p.getPos()).multiply(1, 0, 1);
+            double d = to.length();
+            lungeDir = d > 1e-3 ? to.multiply(1 / d) : f;
+            lungeLeft = MathHelper.clamp(d - stop, 0, max);
+            lungeAt = tg.getId();
+        } else {
+            lungeDir = f;
+            lungeLeft = max * 0.45; // nobody there: a short step in, not a charge at the air
+            lungeAt = -1;
         }
+        lungeTicks = Math.max(2, Math.round(m.contactOf(0) * 20));
+    }
+
+    private static void lungeTick(ClientPlayerEntity p) {
+        if (lungeTicks <= 0) return;
+        if (cur == null || !p.isOnGround() || frozen(p)) {
+            if (cur == null || !p.isOnGround()) lungeTicks = 0;
+            return;
+        }
+        Entity tg = lungeAt >= 0 && p.getWorld() != null ? p.getWorld().getEntityById(lungeAt) : null;
+        if (tg != null) {
+            // Magnetism: the body turns in onto them a little each tick (never a snap), and the lunge
+            // follows if they step aside.
+            Vec3d to = tg.getPos().subtract(p.getPos()).multiply(1, 0, 1);
+            double d = to.length();
+            if (d > 1e-3) {
+                lungeDir = lungeDir.multiply(0.6).add(to.multiply(0.4 / d)).normalize();
+                if (target < 0) {
+                    float want = (float) Math.toDegrees(Math.atan2(-to.x, to.z));
+                    float diff = MathHelper.wrapDegrees(want - p.getYaw());
+                    if (Math.abs(diff) < 70) {
+                        float turn = MathHelper.clamp(diff * 0.3f, -8, 8);
+                        p.setYaw(p.getYaw() + turn);
+                        p.setBodyYaw(p.getYaw());
+                    }
+                }
+            }
+            if (d < (cur.leg() ? 1.4 : 1.1)) lungeLeft = 0; // there: no further, or you'd be in them
+        }
+        double step = lungeLeft / lungeTicks;
+        lungeLeft -= step;
+        lungeTicks--;
+        Vec3d v = p.getVelocity();
+        // The lunge replaces most of your own running for its moment (a strike, not a sprint).
+        p.setVelocity(v.x * 0.25 + lungeDir.x * step, v.y, v.z * 0.25 + lungeDir.z * step);
+    }
+
+    /** The lunge stops dead the moment the strike connects. */
+    private static void lungeConnect(ClientPlayerEntity p) {
+        lungeTicks = 0;
+        lungeLeft = 0;
+        Vec3d v = p.getVelocity();
+        p.setVelocity(v.x * 0.15, v.y, v.z * 0.15);
+    }
+
+    // ---- hit-stop: both bodies freeze for a beat when a strike lands ----
+
+    /** Who's held still by a landing strike, until when (fight clock). */
+    private static final Map<Integer, Long> FREEZE = new HashMap<>();
+
+    /** Held in a hit-stop right now (the body's pose doesn't move). */
+    public static boolean frozen(Entity e) {
+        Long u = FREEZE.get(e.getId());
+        if (u == null) return false;
+        if (clock() < u) return true;
+        FREEZE.remove(e.getId());
+        return false;
+    }
+
+    private static void freeze(int id, float secs) {
+        FREEZE.merge(id, clock() + (long) (secs * 1e9), Math::max);
+        if (FREEZE.size() > 128) FREEZE.clear();
+    }
+
+    /** Which way a strike kicks the view sideways (degrees, + to the right): hooks across, backfists out. */
+    static float joltYaw(Move m, boolean right, boolean attacker) {
+        float side = right ? 1 : -1;
+        return switch (m.path()) {
+            case HOOK, ROUNDHOUSE, ELBOW, BACK_KICK -> -side * (attacker ? 1.6f : 2.6f);
+            case BACKFIST -> side * (attacker ? 1.4f : 2.2f);
+            case OVERHAND -> -side * (attacker ? 0.8f : 1.4f);
+            default -> 0;
+        };
+    }
+
+    /** Which way a strike kicks the view up or down (degrees, + down). */
+    static float joltPitch(Move m, boolean attacker) {
+        return switch (m.path()) {
+            case UPPER -> attacker ? -1.4f : -3.0f;
+            case OVERHAND, SUPERMAN, DROPKICK -> attacker ? 1.2f : 1.8f;
+            case LOW_KICK -> attacker ? 0.6f : 1.0f;
+            case STRAIGHT, PALM, FRONT_KICK, SIDE_KICK, KNEE -> attacker ? 0.7f : -1.8f; // in, or the head snapped back
+            default -> attacker ? 0.3f : -0.6f;
+        };
+    }
+
+    /**
+     * A strike landed on someone (seen by anyone near): both bodies hold for the hit-stop (the struck one,
+     * and whoever's strike it was, their move paused right where it met), the view of the one it landed
+     * on kicks the way it came from, and where it met: sparks and a ring of air thrown out round it.
+     */
+    private static void impact(MinecraftClient mc, int entity, int a) {
+        if (mc.world == null || mc.player == null) return;
+        Entity he = mc.world.getEntityById(entity);
+        if (he == null || he.squaredDistanceTo(mc.player) > 40 * 40) return;
+        int pathI = (a >> 2) & 0x1F;
+        Path path = pathI < Path.values().length ? Path.values()[pathI] : Path.STRAIGHT;
+        boolean heavy = (a & 1 << 8) != 0, fromRight = (a & 1 << 7) != 0;
+        int tier = (a >> 9) & 3;
+        float power = !heavy ? 1 : tier == 2 ? 1 : tier == 1 ? 0.6f : 0.3f;
+        float stop = stopOf(heavy, power);
+        boolean mine = entity == lastStruck && clock() - lastStruckAt < 800_000_000L;
+        if (!FREEZE.containsKey(entity) || !mine) freeze(entity, stop);
+        // Whoever threw it (not you: your own strike already held on contact), mid-strike right beside them.
+        if (!mine) {
+            int best = -1;
+            double bd = 4.5 * 4.5;
+            for (var en : MOVES.entrySet()) {
+                Entity o = mc.world.getEntityById(en.getKey());
+                if (o == null || o == he || o == mc.player) continue;
+                double d = o.squaredDistanceTo(he);
+                if (d < bd && secs(en.getValue().start) < en.getValue().move.length()) {
+                    bd = d;
+                    best = en.getKey();
+                }
+            }
+            if (best >= 0) {
+                Act was = MOVES.get(best);
+                MOVES.put(best, new Act(was.move, was.stance, was.power, was.start + (long) (stop * 1e9)));
+                freeze(best, stop);
+            } else {
+                for (Entity o : mc.world.getOtherEntities(he, he.getBoundingBox().expand(4))) {
+                    if (o instanceof net.pglol.kata.Dummy d && d.move() >= 0) {
+                        freeze(o.getId(), stop);
+                        break;
+                    }
+                }
+            }
+        }
+        // The one it landed on: the view snaps the way the blow drove the head.
+        if (entity == mc.player.getId()) {
+            Move like = null;
+            for (Move m : Fighting.MOVES) if (m.path() == path && m.heavy() == heavy) { like = m; break; }
+            float yaw = like != null ? joltYaw(like, fromRight, false) : (fromRight ? -2 : 2);
+            float pitch = like != null ? joltPitch(like, false) : -1;
+            ImpactFrames.jolt(yaw, pitch, heavy ? 0.7f + 0.5f * power : 0.55f);
+            ImpactFrames.struck();
+        }
+        // Where it met: sparks thrown off it and a ring of air pushed out round the blow.
+        int part = a & 3;
+        double hgt = he.getHeight();
+        double y = switch (part) { case 0 -> hgt * 0.88; case 3 -> hgt * 0.3; default -> hgt * 0.62; };
+        Vec3d at = he.getLerpedPos(1).add(0, y, 0);
+        Vec3d along = he.getPos().subtract(mc.player.getPos()).multiply(1, 0, 1);
+        Entity src = mine ? mc.player : null;
+        if (src == null) {
+            Entity best = null;
+            double bd = 16;
+            for (Entity o : mc.world.getOtherEntities(he, he.getBoundingBox().expand(3.5))) {
+                if (!(o instanceof LivingEntity) || o.squaredDistanceTo(he) >= bd) continue;
+                bd = o.squaredDistanceTo(he);
+                best = o;
+            }
+            src = best;
+        }
+        if (src != null) along = he.getPos().subtract(src.getPos()).multiply(1, 0, 1);
+        along = along.lengthSquared() > 1e-4 ? along.normalize() : Vec3d.fromPolar(0, he.getYaw());
+        at = at.add(along.multiply(-0.3)); // on the near side of the body, where the limb met it
+        var r = mc.world.random;
+        int sparks = heavy ? 10 + tier * 5 : 6;
+        for (int i = 0; i < sparks; i++) {
+            Vec3d sv = along.multiply(0.15 + r.nextDouble() * 0.25).add((r.nextDouble() - 0.5) * 0.35, r.nextDouble() * 0.25, (r.nextDouble() - 0.5) * 0.35);
+            mc.world.addParticle(i % 3 == 0 ? net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK : net.minecraft.particle.ParticleTypes.CRIT, at.x, at.y, at.z, sv.x, sv.y, sv.z);
+        }
+        // The ring: in the plane square to the blow, spreading out from it.
+        Vec3d u = new Vec3d(-along.z, 0, along.x), w = new Vec3d(0, 1, 0);
+        int n = heavy ? 18 : 10;
+        double sp = heavy ? 0.16 + 0.1 * power : 0.09;
+        for (int i = 0; i < n; i++) {
+            double ang = Math.PI * 2 * i / n;
+            Vec3d dir = u.multiply(Math.cos(ang)).add(w.multiply(Math.sin(ang)));
+            mc.world.addParticle(net.minecraft.particle.ParticleTypes.WHITE_SMOKE, at.x + dir.x * 0.1, at.y + dir.y * 0.1, at.z + dir.z * 0.1,
+                dir.x * sp + along.x * 0.04, dir.y * sp, dir.z * sp + along.z * 0.04);
+        }
+        // A heavy lands with weight: a low thud under the crack.
+        if (heavy) mc.world.playSound(at.x, at.y, at.z, net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, net.minecraft.sound.SoundCategory.PLAYERS,
+            0.5f + 0.4f * power, 0.5f, false);
+    }
+
+    /** How long a landing strike holds both bodies (seconds): a beat for a light, longer the more a heavy was held. */
+    static float stopOf(boolean heavy, float power) {
+        return !heavy ? 0.07f : power >= 0.8f ? 0.2f : power >= 0.4f ? 0.14f : 0.1f;
     }
 
     private static void stanceTo(int s) {
@@ -1211,6 +1439,7 @@ public final class Fight {
             } else if (kind == KataNet.DODGE && a < 16) Afterimages.dodge(entity);
         }
         if (kind == KataNet.HIT) {
+            impact(mc, entity, a);
             // A heavy landing (half charged or more): an impact frame for anyone close enough to see it.
             int tier = (a >> 9) & 3;
             if (tier > 0 && mc.world != null && mc.player != null) {
@@ -2339,6 +2568,12 @@ public final class Fight {
         tipAboutWaist(out, new Vector3f(1, 0, 0), start + (360 - start) * ease(u));
     }
 
+    /** Mid flip, cling, wall run, needle or roll (anyone): the body belongs to that move, not a limp. */
+    static boolean wallBound(LivingEntity e) {
+        React d = DODGES.get(e.getId());
+        return d != null && d.packed >= 16 && secs(d.at) < 1.4f;
+    }
+
     /** A dodge or flip shown on anyone's body (dummies and NPCs use this too). */
     static void dodgeShape(LivingEntity e, Pose out) {
         dodgePose(e, out);
@@ -2607,6 +2842,8 @@ public final class Fight {
         if (charging) s *= 0.8f;
         if (staggered()) s *= 0.5f;
         if (concussed(p)) s *= 0.55f;
+        // Reeling from a hit: rooted where you stand for its moment, so the next one in the string finds you.
+        if (flinching()) s *= 0.35f;
         return s;
     }
 

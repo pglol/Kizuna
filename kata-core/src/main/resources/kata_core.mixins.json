@@ -24,7 +24,9 @@
     "GravityMixin",
     "CameraMixin",
     "NametagMixin",
-    "CrouchToggleMixin"
+    "CrouchToggleMixin",
+    "HurtTintMixin",
+    "HurtTiltMixin"
   ],
   "injectors": {
     "defaultRequire": 1

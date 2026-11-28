@@ -250,7 +250,7 @@ public final class Fighting {
 
     /** Reach from the eyes (blocks). */
     /** How far a punch reaches (from the eyes); kicks reach a little further (KICK_EXTRA). */
-    public static final double REACH = 2.4, KICK_EXTRA = 0.4;
+    public static final double REACH = 2.55, KICK_EXTRA = 0.45; // a touch longer: the limb's tip counts
     /** A heavy held this long (seconds) is fully charged: full power, and it breaks guard. */
     public static final float FULL_CHARGE = 0.35f;
     /** Pressed longer than this, a click becomes a charged heavy. */
@@ -577,6 +577,15 @@ public final class Fighting {
     static void tick(net.minecraft.server.MinecraftServer server) {
         KataCore.moveCheck = false; // never left on past a tick (it only means "checking a move right now")
         int now = server.getTicks();
+        // Knockback held back through a hit-stop, now let go.
+        if (!AFTER_STOP.isEmpty()) {
+            for (var it = AFTER_STOP.iterator(); it.hasNext(); ) {
+                Later l = it.next();
+                if (now < l.at()) continue;
+                it.remove();
+                if (!l.e().isRemoved() && l.e().isAlive()) l.run().run();
+            }
+        }
         if (!FLOAT_UNTIL.isEmpty()) {
             for (var it = FLOAT_UNTIL.entrySet().iterator(); it.hasNext(); ) {
                 var en = it.next();
@@ -1016,11 +1025,16 @@ public final class Fighting {
         relayAround(t, KataNet.HIT, react);
         if (tanked) {
             t.getWorld().playSound(null, t.getX(), t.getY(), t.getZ(), SoundEvents.ENTITY_PLAYER_ATTACK_WEAK, SoundCategory.PLAYERS, 0.8f, 0.8f);
+            Vec3d tv = t.getVelocity();
+            t.setVelocity(tv.x * 0.2, Math.min(tv.y, 0.05), tv.z * 0.2); // Minecraft's own knockback taken back out
+            t.velocityModified = true;
             return true; // no flinch, no push: the heavy goes on
         }
         // Hitstun: long enough for the attacker's next strike in the string to arrive first.
-        int stun = Math.round(m.length() * 20 * 0.85f) + (m.heavy() ? 6 : 3);
+        int stop = stopTicks(m, power);
+        int stun = Math.round(m.length() * 20 * 0.85f) + (m.heavy() ? 6 : 3) + stop;
         flinch(t, stun);
+        if (by instanceof Dummy d) d.hitStop(stop); // its strike holds where it met, as a player's does
         // In the air: hits keep them up there (a juggle); the held one smashes them into the ground.
         if (m.from() == From.AIR) {
             if (m.heavy()) smash(by, t, look);
@@ -1032,23 +1046,58 @@ public final class Fighting {
         // Heavies push people back across the ground, harder the longer they were held; only a full hold
         // puts them down.
         boolean down = m.heavy() ? power >= 0.98f : m.knockdown();
+        final float sh = shove;
         if (down) {
             // Knocked down a couple of body lengths, not across the field: further only with more might.
-            knockdown(t, look.multiply(shove * 0.5).add(0, 0.15 + m.lift() * 0.6, 0));
+            Vec3d kv = look.multiply(sh * 0.5).add(0, 0.15 + m.lift() * 0.6, 0);
+            afterStop(t, stop, () -> knockdown(t, kv));
         } else {
-            // An ordinary hit moves you back a step along the ground, never off it: fighters stay in range
-            // to trade. Only knockdowns send anyone flying.
+            // A light hit doesn't push anyone away: it snaps the body (the reaction) and roots them there for
+            // the hitstun, so the next strike in the string finds them where they stood. A heavy pushes them
+            // back across the ground once the hit-stop lets go, harder the longer it was held. Only
+            // knockdowns send anyone flying.
             Vec3d flat = new Vec3d(look.x, 0, look.z);
-            if (flat.lengthSquared() > 1e-4) shove(t, flat.normalize(), shove * (m.heavy() ? 0.45 + 0.6 * power : 0.42));
-            if (m.lift() > 0) {
-                t.addVelocity(0, m.lift() * (m.heavy() ? 0.6f + 0.6f * power : 1), 0);
-                t.velocityModified = true;
-            }
+            double k = m.heavy() ? 0.45 + 0.6 * power : 0.06;
+            float lift = m.lift() > 0 ? m.lift() * (m.heavy() ? 0.6f + 0.6f * power : 1) : 0;
+            afterStop(t, stop, () -> {
+                if (flat.lengthSquared() > 1e-4) shove(t, flat.normalize(), sh * k);
+                if (lift > 0) {
+                    t.addVelocity(0, lift, 0);
+                    t.velocityModified = true;
+                }
+            });
         }
         t.getWorld().playSound(null, t.getX(), t.getY(), t.getZ(),
             m.heavy() || down ? SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK : SoundEvents.ENTITY_PLAYER_ATTACK_STRONG,
             SoundCategory.PLAYERS, 0.9f, (m.heavy() ? 0.75f : 1f) + t.getRandom().nextFloat() * 0.2f);
         return true;
+    }
+
+    /** Something to do once a hit-stop is over (the push of the blow), at a server tick. */
+    private record Later(LivingEntity e, int at, Runnable run) { }
+
+    private static final java.util.List<Later> AFTER_STOP = new java.util.ArrayList<>();
+
+    /**
+     * The hit-stop (server ticks): both bodies hold where the strike met before anything moves, a beat for
+     * a light, longer the more a heavy was held. The same as the clients show (Fight.stopOf).
+     */
+    static int stopTicks(Move m, float power) {
+        return !m.heavy() ? 1 : power >= 0.8f ? 4 : power >= 0.4f ? 3 : 2;
+    }
+
+    /** Push the struck one after the hit-stop: held still through it, then the blow carries them. */
+    private static void afterStop(LivingEntity t, int ticks, Runnable r) {
+        var server = t.getServer();
+        if (server == null || ticks <= 0) {
+            r.run();
+            return;
+        }
+        Vec3d v = t.getVelocity();
+        t.setVelocity(0, Math.min(v.y, 0), 0);
+        t.velocityModified = true;
+        if (AFTER_STOP.size() > 512) AFTER_STOP.clear();
+        AFTER_STOP.add(new Later(t, server.getTicks() + ticks, r));
     }
 
     /** Tell everyone who can see e (and e itself, if a player) about something that happened to it. */

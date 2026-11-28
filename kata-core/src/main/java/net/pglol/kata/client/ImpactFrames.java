@@ -21,8 +21,8 @@ import java.util.Random;
 
 /**
  * The feel of a heavy landing. For the two fighters in it: a surge, a tint closing in from the edges of
- * the screen and a faint wash over the whole view (warm for the one who landed it, deep red for the one
- * it landed on), the view punching in a touch and shaking for a moment; well charged, faint speed lines
+ * the screen and a faint wash over the whole view (warm for the one who landed it, a cold white shock
+ * for the one it landed on: never a red flash), the view punching in a touch and shaking for a moment; well charged, faint speed lines
  * towards the hit too. For anyone else nearby nothing on screen at all, unless the hit is out of view:
  * then a soft glow on the edge of the screen on the side it came from.
  */
@@ -69,15 +69,50 @@ public final class ImpactFrames {
 
     /** The view punching in (a multiplier on the field of view). */
     public static float fovScale() {
-        return 1 - 0.06f * amp();
+        return 1 - 0.06f * amp() - 0.035f * joltK() * joltS;
+    }
+
+    // ---- the jolt: every landed strike kicks the view the way the blow went (G-force), then it settles ----
+
+    private static long joltAt;
+    private static float joltYaw, joltPitch, joltS;
+    private static long struckAt;
+
+    /** A strike landed (yours or on you): the view snaps yaw/pitch degrees that way, scaled by s, and eases back. */
+    public static void jolt(float yaw, float pitch, float s) {
+        long now = Util.getMeasuringTimeMs();
+        // A bigger one overrides a smaller one still going; a smaller one waits its turn.
+        if (now - joltAt < 120 && s < joltS * joltK()) return;
+        joltAt = now;
+        joltYaw = yaw;
+        joltPitch = pitch;
+        joltS = s;
+    }
+
+    /** A Kata strike landed on you just now: Minecraft's own hurt tilt is left out (the jolt is the feel). */
+    public static void struck() {
+        struckAt = Util.getMeasuringTimeMs();
+    }
+
+    public static boolean struckRecently() {
+        return Util.getMeasuringTimeMs() - struckAt < 700;
+    }
+
+    /** The jolt's shape over time: a snap out in 35 ms, then a damped settle back (a touch past, then home). */
+    private static float joltK() {
+        long t = Util.getMeasuringTimeMs() - joltAt;
+        if (t > 420) return 0;
+        if (t < 35) return t / 35f;
+        float u = (t - 35) / 385f;
+        return (float) (Math.exp(-u * 4.5) * Math.cos(u * 5.5));
     }
 
     /** A shake of the view, in degrees (yaw, pitch). */
     public static float[] shake() {
-        float a = amp();
-        if (a < 0.02f) return null;
+        float a = amp(), j = joltK() * joltS;
+        if (a < 0.02f && Math.abs(j) < 0.01f) return null;
         long t = Util.getMeasuringTimeMs();
-        return new float[] {(float) Math.sin(t * 0.09) * 0.9f * a, (float) Math.cos(t * 0.11) * 0.7f * a};
+        return new float[] {(float) Math.sin(t * 0.09) * 0.9f * a + joltYaw * j, (float) Math.cos(t * 0.11) * 0.7f * a + joltPitch * j};
     }
 
     private static float winded;
@@ -89,9 +124,9 @@ public final class ImpactFrames {
         Matrix4f m = c.getMatrices().peek().getPositionMatrix();
         float a = amp();
         if (a > 0.01f) {
-            int rgb = role == ATTACKER ? 0xFFD49A : 0xC4161C;
+            int rgb = role == ATTACKER ? 0xFFD49A : 0xDCE6F2; // a cold white shock, not a red flash
             // The wash over everything, then the tint pressing in from the edges.
-            fill(m, w, h, argb(a * (role == ATTACKER ? 0.08f : 0.14f), rgb));
+            fill(m, w, h, argb(a * (role == ATTACKER ? 0.08f : 0.1f), rgb));
             vignette(m, w, h, argb(Math.min(0.75f, a * 0.62f), rgb), 0.24f);
             if (strength >= 0.8f && where != null) {
                 float[] o = screen(mc, where, w, h);

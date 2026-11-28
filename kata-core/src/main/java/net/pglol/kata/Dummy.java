@@ -62,6 +62,9 @@ public class Dummy extends PathAwareEntity {
     private int calmAt, guardAt = -999, guardUntil, raiseAt = -1, cooldown = 40, contactAt = -1;
     private Fighting.Move swing;
     private int stuck, string, airCooldown, dodgeAt = -1, dodgeDir;
+    /** The lunge behind its strike: how far it still carries it in, over how many ticks. */
+    private double lungeLeft;
+    private int lungeTicks;
     private boolean secondJump;
 
     public Dummy(EntityType<? extends PathAwareEntity> type, World world) {
@@ -233,6 +236,16 @@ public class Dummy extends PathAwareEntity {
     }
 
     /** Hit: whatever it was throwing is gone, and it can't throw again for a moment (it can still guard). */
+    /** Its strike just landed: held where it met for the hit-stop (the swing and the string wait with it). */
+    void hitStop(int ticks) {
+        if (swing == null) return;
+        dataTracker.set(MOVE_AT, dataTracker.get(MOVE_AT) + ticks);
+        cooldown += ticks;
+        lungeLeft = 0;
+        setVelocity(0, getVelocity().y, 0);
+        velocityModified = true;
+    }
+
     void flinch(int ticks) {
         cancelSwing();
         cooldown = Math.max(cooldown, ticks);
@@ -289,7 +302,20 @@ public class Dummy extends PathAwareEntity {
         }
         if (isOnGround() && airCooldown > 0) airCooldown--;
 
-        // Its own strike: contact, then done.
+        // Its own strike: carried in behind it through the startup, then contact, then done.
+        if (swing != null && lungeTicks > 0 && foe != null && isOnGround() && !busy) {
+            Vec3d to = foe.getPos().subtract(getPos()).multiply(1, 0, 1);
+            double dist = to.length();
+            if (dist < (swing.leg() ? 1.4 : 1.1)) lungeLeft = 0; // there
+            double step = lungeLeft / lungeTicks;
+            lungeLeft -= step;
+            lungeTicks--;
+            if (dist > 1e-3) {
+                Vec3d v = getVelocity();
+                setVelocity(v.x * 0.25 + to.x / dist * step, v.y, v.z * 0.25 + to.z / dist * step);
+                velocityModified = true;
+            }
+        } else if (swing == null) lungeTicks = 0;
         if (swing != null) {
             if (age == contactAt && foe != null && !busy) hit(foe, swing);
             // The hit can end the swing (parried, staggered, knocked down by a counter): check again.
@@ -388,16 +414,19 @@ public class Dummy extends PathAwareEntity {
     private void attack(LivingEntity foe, double d, boolean air) {
         getNavigation().stop();
         if (swing != null || --cooldown > 0) return;
-        if (!air && d > 1.5) {
-            Vec3d in = foe.getPos().subtract(getPos()).multiply(1, 0, 1).normalize().multiply(Math.min(0.2, (d - 1.2) * 0.16));
-            if (isOnGround()) addVelocity(in.x, 0, in.z);
-        }
         Fighting.Style s = Fighting.style("taijutsu");
         String[] picks = air ? new String[] {"air_jab", "air_hook", "air_knee", "whirl_kick"}
             : new String[] {"jab", "jab", "straight", "straight", "one_two", "lead_hook", "rear_hook", "front_kick", "roundhouse", "low_kick", "uppercut"};
         Fighting.Move m = s.move(s.index(picks[random.nextInt(picks.length)]));
         if (m == null) return;
         swing = m;
+        // The lunge: carried in behind the strike through its startup, to just in front of them (never
+        // into them), as a player's strike carries the player.
+        if (!air && isOnGround()) {
+            double stop = m.leg() ? 1.45 : 1.15, max = m.heavy() ? 1.2 : 0.6;
+            lungeLeft = MathHelper.clamp(d - stop, 0, max);
+            lungeTicks = Math.max(2, Math.round(m.contactOf(0) * 20));
+        }
         dataTracker.set(MOVE, Fighting.id(m));
         dataTracker.set(MOVE_AT, age);
         contactAt = age + Math.max(1, Math.round(m.contact() * 20));
@@ -477,7 +506,7 @@ public class Dummy extends PathAwareEntity {
         var b = foe.getBoundingBox();
         Vec3d near = new Vec3d(MathHelper.clamp(from.x, b.minX, b.maxX), MathHelper.clamp(from.y, b.minY, b.maxY), MathHelper.clamp(from.z, b.minZ, b.maxZ));
         Vec3d to = near.subtract(from);
-        double limb = m.leg() ? 1.25 : 0.95;
+        double limb = m.leg() ? 1.38 : 1.05; // a touch past the drawn limb: a strike that visibly meets counts
         if (to.length() > limb) return;
         Vec3d flat = new Vec3d(to.x, 0, to.z);
         if (flat.lengthSquared() > 0.04 && flat.normalize().dotProduct(fwd) < 0.2) return;
