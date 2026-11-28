@@ -1162,8 +1162,8 @@ public final class Parkour {
         Vec3d over = overThin(p, up, top);
         if (over != null) end = over;
         else {
-            if (!empty(p, column(end.x, end.y, end.z, 1.8))) return false;
-            if (empty(p, column(end.x, end.y - 0.1, end.z, 0.1))) return false; // nothing to stand on
+            end = standOn(p, up, top);
+            if (end == null) return false;
         }
         from = at;
         to = end;
@@ -1173,6 +1173,26 @@ public final class Parkour {
         p.fallDistance = 0;
         set(m);
         return true;
+    }
+
+    /**
+     * Where the pull-up ends, on top: just in over the edge if there's room to stand; on a stepped top (a
+     * roof of stairs, a ledge with a step up behind it) nearer the edge, or up onto the next step.
+     * null if nowhere up there takes a standing body.
+     */
+    private static Vec3d standOn(ClientPlayerEntity p, Vec3d up, double top) {
+        for (double d : new double[] {0.8, 0.55, 1.05}) {
+            Vec3d e = ahead(up, d);
+            for (double rise = 0; rise <= 1.05 + 1e-6; rise += 1 / 16.0) {
+                Vec3d at = e.add(0, rise, 0);
+                if (!empty(p, column(at.x, at.y, at.z, 1.8))) continue;
+                if (empty(p, column(at.x, at.y - 0.1, at.z, 0.1))) break; // nothing under it: not this way
+                // The way up to a higher step is clear (nothing over the edge in between).
+                if (rise > 0.05 && !empty(p, column(up.x + (at.x - up.x) * 0.5, top + 0.05, up.z + (at.z - up.z) * 0.5, rise + 1.7))) break;
+                return at;
+            }
+        }
+        return null;
     }
 
     private static void set(Mode m) {

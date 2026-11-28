@@ -785,6 +785,7 @@ public final class Animator {
                     else if (k < 0.68f) want = Pose.lerp(Presets.VAULT, swing, ease((k - 0.3f) / 0.38f));
                     else want = Pose.lerp(swing, open, ease(Math.min(1, (k - 0.68f) / 0.32f)));
                     weight = k > 0.88f ? MathHelper.clamp((1.05f - k) / 0.17f, 0, 1) : 1;
+                    want.offset[1] += 2.2f * MathHelper.sin(MathHelper.PI * Math.min(1, k / 0.9f)); // carried a little lower over it
                 }
                 case HANG, CORNER -> want = Presets.HANG;
                 case RUNUP -> want = Presets.runUp(pv.phase());
