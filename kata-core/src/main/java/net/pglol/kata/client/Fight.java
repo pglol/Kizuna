@@ -65,6 +65,8 @@ public final class Fight {
     private static float curPower = 1;
     private static long curStart;
     private static boolean pendingLight;
+    /** This press already threw its light (on the press, not the release). */
+    private static boolean pressFired;
     private static int chain;
     private static long lastEnd;
     private static double flickX, flickY;
@@ -188,8 +190,18 @@ public final class Fight {
      * a flip whichever way you're pressing (once a jump), invulnerable while it starts.
      */
     private static void dodge(ClientPlayerEntity p) {
-        if (limp(p) || cur != null || charging || staggered() || recovering() || flinching() || p.getAbilities().flying) return;
-        if (net.pglol.kata.client.Move.winded() || net.pglol.kata.client.Move.stamina < DODGE_COST) return;
+        if (limp(p) || staggered() || p.getAbilities().flying) return;
+        // Pressed a beat too soon (finishing a strike, out of the last dodge, reeling): it isn't lost, it
+        // goes the moment it can (within a quarter second).
+        if (cur != null || charging || recovering() || flinching()) {
+            dodgeQueued = clock();
+            return;
+        }
+        dodgeQueued = 0;
+        // Cheap to dodge once; each one straight after another that didn't slip anything costs more.
+        if (secs(dodgeAt) > 1.2f) dodgeStreak = 0;
+        float cost = Math.min(0.3f, DODGE_COST * (1 + 0.6f * dodgeStreak));
+        if (net.pglol.kata.client.Move.winded() || net.pglol.kata.client.Move.stamina < Math.min(cost, 0.04f)) return;
         MinecraftClient mc = MinecraftClient.getInstance();
         float f = p.input.movementForward, sdw = p.input.movementSideways;
         Vec3d fw = Vec3d.fromPolar(0, p.getYaw()), left = new Vec3d(fw.z, 0, -fw.x);
@@ -220,7 +232,8 @@ public final class Fight {
             dodgeTick = 0;
             if (dir == 4) p.setVelocity(p.getVelocity().x * 0.5, 0.34, p.getVelocity().z * 0.5);
         }
-        net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - DODGE_COST); net.pglol.kata.client.Move.exert();
+        net.pglol.kata.client.Move.stamina = Math.max(0, net.pglol.kata.client.Move.stamina - cost); net.pglol.kata.client.Move.exert();
+        dodgeStreak++;
         dodgeAt = clock();
         pressing = false;
         DODGES.put(p.getId(), new React(dir, dodgeAt));
@@ -654,6 +667,8 @@ public final class Fight {
         if (mc.world != null && mc.world.getTime() % 3 == 0) stars(mc);
         tethers(mc);
         while (KataClient.dodgeKey.wasPressed()) dodge(p);
+        if (dodgeQueued != 0 && secs(dodgeQueued) < 0.25f && cur == null && !charging && !recovering() && !flinching()) dodge(p);
+        else if (dodgeQueued != 0 && secs(dodgeQueued) >= 0.25f) dodgeQueued = 0;
         dodgeStep(p);
         guard = free && !net.pglol.kata.client.Move.winded() && mc.options.useKey.isPressed() && cur == null && !charging && !staggered() && !recovering() && clock() > brokenUntil;
         if (guard && target < 0) target = pick(p, 8, 50); // raising a guard locks onto whoever's in front
@@ -693,7 +708,8 @@ public final class Fight {
                     // Still finishing the last strike (or the beat after it): it goes the moment it can.
                     if (cur != null || clock() < readyAt) pendingHeavy = power;
                     else begin(p, Deck.pick(row(p), true, 0), power);
-                } else light(p);
+                } else if (!pressFired) light(p);
+                pressFired = false;
             } else if (charging && airborne(p) && !pressInAir) {
                 // A charge from the ground doesn't carry into the air (no smash from a jump while holding).
                 charging = false;
@@ -708,7 +724,15 @@ public final class Fight {
                 begin(p, Deck.pick(Fighting.AIR, true, 0), 1);
             } else if (!charging && secs(pressAt) >= Fighting.HEAVY_AFTER && (cur == null || cur.from() != Fighting.From.AIR)) {
                 // Held: the heavy starts charging now, even while the last strike finishes (the charge
-                // isn't lost waiting for it), and goes as soon as it can.
+                // isn't lost waiting for it), and goes as soon as it can. A light this same press started
+                // (still winding up) is taken back: the hold was a heavy all along.
+                if (pressFired && cur != null && !cur.heavy() && secs(curStart) < cur.contactOf(0)) {
+                    net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + curCost);
+                    cur = null;
+                    lungeTicks = 0;
+                    chain = Math.max(0, chain - 1);
+                }
+                pressFired = false;
                 charging = true;
                 pendingLight = false;
                 chargeAt = clock();
@@ -818,7 +842,7 @@ public final class Fight {
             if (s >= cur.length()) {
                 stanceTo(Fighting.end(cur, curStance));
                 // A beat before the next: longer after a heavy, longer still after a miss.
-                readyAt = clock() + (long) (((cur.heavy() ? 0.16 : 0.07) + (curLanded ? 0 : 0.1)) * 1e9);
+                readyAt = clock() + (long) (((cur.heavy() ? 0.12 : 0.04) + (curLanded ? 0 : 0.05)) * 1e9);
                 cur = null;
                 lastEnd = clock();
             }
@@ -860,10 +884,22 @@ public final class Fight {
         if (p == null) return false;
         if (limp(p)) return true; // a limp body throws nothing (and doesn't swing either)
         if (!fists(p)) return false;
-        if (guard || staggered() || recovering() || flinching() || concussed(p)) return true; // hands up, off balance, out of a dodge or reeling: nothing to throw
+        // Coming out of a dodge: not lost, it goes the moment you can.
+        if (recovering() && !guard) {
+            pendingLight = true;
+            return true;
+        }
+        if (guard || staggered() || flinching() || concussed(p)) return true; // hands up, off balance or reeling: nothing to throw
         pressing = true;
         pressAt = clock();
         pressInAir = airborne(p); // a smash comes only from a press made in the air
+        // The light goes on the press itself, not on letting go (no waiting to see if it's a hold). Held
+        // on past that, it becomes the heavy's wind-up instead (see the charge below).
+        pressFired = false;
+        if (cur == null && !charging && clock() >= readyAt) {
+            light(p);
+            pressFired = cur != null;
+        }
         return true;
     }
 
@@ -872,7 +908,8 @@ public final class Fight {
         if (cur != null) {
             // Pressed during a strike: the next in the chain follows straight on (not across ground and air).
             // (A flying kick is the exception: it carries straight on into the air row, an aerial assault.)
-            if (secs(curStart) > cur.contact() * 0.5f && ((cur.from() == Fighting.From.AIR) == airborne(p) || hopping)) pendingLight = true;
+            // Any press during it is kept (never dropped for being early).
+            if ((cur.from() == Fighting.From.AIR) == airborne(p) || hopping) pendingLight = true;
             return;
         }
         if (clock() < readyAt) {
@@ -1021,7 +1058,7 @@ public final class Fight {
             else if (!floated && p.getVelocity().y < 0.06) {
                 floated = true;
                 float left = cur.length() - secs(curStart);
-                hangUntil = Math.max(hangUntil, clock() + (long) (MathHelper.clamp(left * 0.8f, 0.15f, 0.55f) * 1e9));
+                hangUntil = Math.max(hangUntil, clock() + (long) (MathHelper.clamp(left * 0.9f, 0.25f, 0.75f) * 1e9));
             }
         }
         if (lungeTicks <= 0) return;
@@ -1412,7 +1449,10 @@ public final class Fight {
     private static final Map<Integer, React> JOLTS = new HashMap<>(), PARRIES = new HashMap<>(), DODGES = new HashMap<>();
     private static long dodgeAt;
     /** A dodge: how fast it carries you (blocks a tick), what it costs, how long until you can act again. */
-    private static final float DODGE_COST = 0.16f, DODGE_RECOVER = 0.3f, FLIP_TIME = 0.5f;
+    private static final float DODGE_COST = 0.09f, DODGE_RECOVER = 0.18f, FLIP_TIME = 0.5f;
+    /** Dodges in a row that slipped nothing (a clean dodge resets it), and a press waiting to go. */
+    private static int dodgeStreak;
+    private static long dodgeQueued;
     private static final double[] DODGE_PROFILE = {0.24, 0.2, 0.13, 0.06};
     private static Vec3d dodgeDir;
     private static float dodgeSpeed;
@@ -1509,6 +1549,14 @@ public final class Fight {
     private static final Map<Integer, Long> CHARGES = new HashMap<>(), HANGS = new HashMap<>(), CONCUSSED = new HashMap<>();
 
     static void remote(int entity, int kind, int a) {
+        if (kind == KataNet.MEDITATE) {
+            Meditate.heard(entity, a);
+            return;
+        }
+        if (kind == KataNet.GRAB) {
+            KitClient.grabbed(entity);
+            return;
+        }
         if (kind == KataNet.AWARE) {
             AwarenessFx.heard(entity, a);
             return;
@@ -1537,6 +1585,7 @@ public final class Fight {
                 if (mc.player != null && entity == mc.player.getId()) {
                     slowDown(); // you slipped it: time stretches
                     net.pglol.kata.client.Move.stamina = Math.min(1, net.pglol.kata.client.Move.stamina + 0.18f); // and a clean dodge puts breath back
+                    dodgeStreak = 0; // and isn't spam
                 }
             } else if (kind == KataNet.WHIFFED) {
                 if (mc.player != null && entity == mc.player.getId()) slowDown(); // yours went through nothing
@@ -1985,6 +2034,8 @@ public final class Fight {
             }
         }
         if (m == null) return;
+        moveS = s;
+        moveWind = wind;
 
         // Which hit of the move is going (a combo throws several), and how far out it is: 0 at the guard,
         // 1 at full extension. Speeding up all the way into contact, a beat held there, then drawn back.
@@ -2309,6 +2360,7 @@ public final class Fight {
         }
         if (wind_) senpuLegs(out, m, kk, right, out_);
         if (Fighting.hop(m) > 0 && !p.isOnGround()) flyTuck(out, m, kk, right);
+        if (Fighting.flip(m) != 0 && moveWind <= 0) flyFlip(out, m, moveS, right);
         if (m.from() == Fighting.From.AIR || m.heavy() || wind_) {
             Vector3f[] jj = Ragdoll.joints(out);
             Trails.add(p.getId(), Ragdoll.toWorld(m.path() == Path.KNEE ? jj[right ? Ragdoll.RK : Ragdoll.LK] : jj[right ? Ragdoll.RF : Ragdoll.LF], pos, bodyYaw), m.heavy());
@@ -2431,6 +2483,51 @@ public final class Fight {
         out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) + 22 * w);
         out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) - 22 * w);
         out.offset[1] -= 1.5f * w; // drawn up off its feet
+    }
+
+    /** The move being drawn right now: seconds in, and how charged its wind-up (for kick's flips). */
+    private static float moveS, moveWind;
+
+    /**
+     * The whole body turning over through a kick, about the waist:
+     *  - back: a moonsault. Laid back and over, so the kicking foot sweeps up through them and over the
+     *    top (a flash kick), coming round to land on the feet.
+     *  - front: a somersault, heel coming down over the top onto them.
+     *  - corkscrew: a butterfly twist, the body laid out flat and spun round through the turn.
+     * Over 85% of the move, slow at the ends, fast through the middle where the kick lands.
+     */
+    private static void flyFlip(Pose out, Move m, float s, boolean right) {
+        float u = MathHelper.clamp(s / (m.length() * 0.85f), 0, 1);
+        float e = u * u * (3 - 2 * u);
+        float mid = MathHelper.sin(MathHelper.PI * u);
+        Bone sLeg = right ? Bone.LEFT_LEG : Bone.RIGHT_LEG, sShin = right ? Bone.LEFT_SHIN : Bone.RIGHT_SHIN;
+        switch (Fighting.flip(m)) {
+            case 1 -> {
+                toward(out, sLeg, mid, -40, 0, 0);
+                toward(out, sShin, mid, 95, 0, 0);
+                out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) + 40 * mid);
+                out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) - 40 * mid);
+                out.offset[1] -= 6 * mid; // up off the ground through the turn
+                tipAboutWaist(out, new Vector3f(1, 0, 0), -360 * e);
+            }
+            case 2 -> {
+                toward(out, sLeg, mid, -95, 0, 0);
+                toward(out, sShin, mid, 120, 0, 0);
+                out.set(Bone.CHEST, Pose.PITCH, out.get(Bone.CHEST, Pose.PITCH) + 25 * mid);
+                out.offset[1] -= 6 * mid;
+                tipAboutWaist(out, new Vector3f(1, 0, 0), 360 * e);
+            }
+            case 3 -> {
+                // Laid out flat (tipped onto its side) for the middle of the spin, upright at both ends.
+                float side = right ? 1 : -1;
+                toward(out, sLeg, mid, -20, 0, -side * 30);
+                out.set(Bone.RIGHT_ARM, Pose.ROLL, out.get(Bone.RIGHT_ARM, Pose.ROLL) + 55 * mid);
+                out.set(Bone.LEFT_ARM, Pose.ROLL, out.get(Bone.LEFT_ARM, Pose.ROLL) - 55 * mid);
+                out.offset[1] -= 5 * mid;
+                tipAboutWaist(out, new Vector3f(0, 0, 1), side * 75 * mid);
+            }
+            default -> { }
+        }
     }
 
     /** A Senpu-ryu move (it has its own way of moving: see apply and kick). */

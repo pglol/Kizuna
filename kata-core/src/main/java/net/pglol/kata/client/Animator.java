@@ -262,6 +262,8 @@ public final class Animator {
         hang(p, td, s, dt, out);
         touch(p, td, s, dt, out);
         injured(p, td, out);
+        Meditate.pose(p, dt, out);
+        KitClient.grabPose(p, out);
         // A strike lands on top of the springs: the body drives it, the fist travels its path.
         Fight.apply(p, td, out);
         Fight.react(p, out); // a hit landing: the body reacts to where and how it was struck

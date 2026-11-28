@@ -78,11 +78,16 @@ public final class KataCam {
     }
 
     /** This frame's camera, or null to leave Minecraft's. */
+    /** The camera this frame: the shoulder camera, or the meditation framing over it while the menu's open. */
     public static Cam camera(float td) {
-        MinecraftClient mc = MinecraftClient.getInstance();
         long now = Util.getMeasuringTimeMs();
         float dt = lastFrame == 0 ? 0.016f : MathHelper.clamp((now - lastFrame) / 1000f, 0.001f, 0.1f);
         lastFrame = now;
+        return Meditate.camera(shoulder(td, dt), td, dt);
+    }
+
+    private static Cam shoulder(float td, float dt) {
+        MinecraftClient mc = MinecraftClient.getInstance();
         weight = MathHelper.clamp(weight + (want(mc) ? dt : -dt) / 0.32f, 0, 1);
         if (weight <= 0.001f || mc.player == null || mc.world == null) {
             offset = null;

@@ -1,5 +1,5 @@
 {
-  "_doc": "See taijutsu.json for the fields. hop: how hard a ground kick springs the fighter up off the floor (they float through it, and the air row carries on from there).",
+  "_doc": "See taijutsu.json for the fields. hop: how hard a ground kick springs the fighter up off the floor (they float through it, and the air row carries on from there). flip: back | front | corkscrew: the whole body turns over through the kick (a moonsault, a somersault, a butterfly's twist).",
   "id": "tenkyaku",
   "name": "Tenkyaku-ryu",
   "blurb": "The Heaven-Leg School: the hands stay home and the feet do everything, springing off the floor into kicks that hang in the air and carry the fight up after them.",
@@ -16,7 +16,7 @@
       "length": 0.5,
       "damage": 3.0,
       "push": 0.35,
-      "hop": 0.3,
+      "hop": 0.38,
       "role": "opener"
     },
     {
@@ -30,7 +30,7 @@
       "length": 0.44,
       "damage": 3.0,
       "push": 0.3,
-      "hop": 0.26,
+      "hop": 0.34,
       "role": "opener"
     },
     {
@@ -44,7 +44,7 @@
       "length": 0.56,
       "damage": 3.6,
       "push": 0.45,
-      "hop": 0.4,
+      "hop": 0.48,
       "role": "link"
     },
     {
@@ -58,7 +58,7 @@
       "length": 0.6,
       "damage": 3.8,
       "push": 0.4,
-      "hop": 0.36,
+      "hop": 0.44,
       "role": "link"
     },
     {
@@ -72,7 +72,7 @@
       "length": 0.78,
       "damage": 3.2,
       "push": 0.35,
-      "hop": 0.5,
+      "hop": 0.58,
       "hits": 2,
       "interval": 0.3,
       "alternate": true,
@@ -89,7 +89,7 @@
       "length": 0.66,
       "damage": 4.4,
       "push": 0.3,
-      "hop": 0.55,
+      "hop": 0.63,
       "lift": 0.34,
       "role": "finisher"
     },
@@ -104,7 +104,7 @@
       "length": 0.82,
       "damage": 7.2,
       "push": 1.25,
-      "hop": 0.5,
+      "hop": 0.58,
       "knockdown": true
     },
     {
@@ -118,7 +118,7 @@
       "length": 0.9,
       "damage": 7.0,
       "push": 1.3,
-      "hop": 0.48,
+      "hop": 0.56,
       "knockdown": true
     },
     {
@@ -132,7 +132,7 @@
       "length": 0.6,
       "damage": 4.2,
       "push": 0.6,
-      "hop": 0.36,
+      "hop": 0.44,
       "spin": true,
       "role": "opener"
     },
@@ -147,7 +147,7 @@
       "length": 0.56,
       "damage": 4.0,
       "push": 0.45,
-      "hop": 0.42,
+      "hop": 0.5,
       "spin": true,
       "role": "link"
     },
@@ -162,9 +162,10 @@
       "length": 0.92,
       "damage": 7.8,
       "push": 1.1,
-      "hop": 0.6,
+      "hop": 0.68,
       "spin": true,
-      "knockdown": true
+      "knockdown": true,
+      "flip": "corkscrew"
     },
     {
       "id": "spinning_back_kick",
@@ -177,7 +178,7 @@
       "length": 0.82,
       "damage": 7.2,
       "push": 1.2,
-      "hop": 0.3,
+      "hop": 0.38,
       "spin": true,
       "knockdown": true
     },
@@ -234,24 +235,116 @@
       "length": 0.5,
       "damage": 6.4,
       "push": 0.1
+    },
+    {
+      "id": "moonsault_kick",
+      "name": "Moonsault kick",
+      "path": "front_kick",
+      "hand": "rear",
+      "kind": "light",
+      "from": "front",
+      "contact": 0.3,
+      "length": 0.72,
+      "damage": 4.6,
+      "push": 0.35,
+      "hop": 0.66,
+      "flip": "back",
+      "lift": 0.3,
+      "role": "finisher"
+    },
+    {
+      "id": "butterfly_kick",
+      "name": "Butterfly kick",
+      "path": "roundhouse",
+      "hand": "lead",
+      "kind": "light",
+      "from": "back",
+      "contact": 0.3,
+      "length": 0.7,
+      "damage": 4.4,
+      "push": 0.5,
+      "hop": 0.56,
+      "flip": "corkscrew",
+      "spin": true,
+      "role": "link"
+    },
+    {
+      "id": "flash_kick",
+      "name": "Flash kick",
+      "path": "front_kick",
+      "hand": "rear",
+      "kind": "heavy",
+      "from": "front",
+      "contact": 0.4,
+      "length": 0.95,
+      "damage": 7.6,
+      "push": 1.0,
+      "hop": 0.74,
+      "flip": "back",
+      "lift": 0.42,
+      "knockdown": true
+    },
+    {
+      "id": "somersault_heel",
+      "name": "Somersault heel",
+      "path": "front_kick",
+      "hand": "lead",
+      "kind": "light",
+      "from": "front",
+      "contact": 0.32,
+      "length": 0.74,
+      "damage": 4.8,
+      "push": 0.4,
+      "hop": 0.6,
+      "flip": "front",
+      "role": "finisher"
+    },
+    {
+      "id": "falling_moon",
+      "name": "Falling moon",
+      "path": "front_kick",
+      "hand": "rear",
+      "kind": "light",
+      "from": "air",
+      "contact": 0.18,
+      "length": 0.48,
+      "damage": 3.6,
+      "push": 0.05,
+      "flip": "back",
+      "role": "finisher"
+    },
+    {
+      "id": "air_corkscrew",
+      "name": "Air corkscrew",
+      "path": "roundhouse",
+      "hand": "lead",
+      "kind": "light",
+      "from": "air",
+      "contact": 0.18,
+      "length": 0.5,
+      "damage": 3.6,
+      "push": 0.05,
+      "flip": "corkscrew",
+      "spin": true,
+      "role": "link"
     }
   ],
   "starter": {
     "top_right": [
       "rising_snap",
       "hien_kick",
-      "scissor_kick",
+      "somersault_heel",
       "flying_side_kick"
     ],
     "top_left": [
       "stepping_knee",
       "hopping_roundhouse",
-      "skyward_kick",
-      "dropkick"
+      "moonsault_kick",
+      "flash_kick"
     ],
     "back_right": [
       "tornado_hook",
-      "butterfly_knee",
+      "butterfly_kick",
       null,
       "kick_540"
     ],
@@ -263,8 +356,8 @@
     ],
     "air": [
       "air_snap",
-      "air_side_kick",
-      "air_scissor",
+      "air_corkscrew",
+      "falling_moon",
       "meteor_dropkick"
     ]
   }

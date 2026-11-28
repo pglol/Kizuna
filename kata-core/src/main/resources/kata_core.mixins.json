@@ -35,6 +35,7 @@
     "FlightMixin",
     "AirMoveMixin",
     "MoveCheckMixin",
-    "FallMixin"
+    "FallMixin",
+    "ItemPickupMixin"
   ]
 }

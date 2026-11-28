@@ -88,6 +88,11 @@ public final class KataCore implements ModInitializer {
         KataNet.register();
         Fighting.register();
         Injuries.register();
+        Meditation.register();
+        Kit.GEAR.identifier(); // the gear attachment is registered with the player's data
+        ServerTickEvents.END_SERVER_TICK.register(Meditation::tick);
+        ServerTickEvents.END_SERVER_TICK.register(Kit::tick);
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((h, s, server) -> Kit.sync(h.getPlayer()));
         Awareness.register();
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((h, s, server) -> body(h.getPlayer()));
         net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldP, newP, alive) -> body(newP));

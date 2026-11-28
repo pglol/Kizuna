@@ -65,6 +65,8 @@ public final class KataClient implements ClientModInitializer {
             if (renderer instanceof net.minecraft.client.render.entity.PlayerEntityRenderer pr) helper.register(new StrikeGlow<>(pr));
         });
         HudRenderCallback.EVENT.register((c, tick) -> AwarenessFx.hud(c));
+        HudRenderCallback.EVENT.register((c, tick) -> KitClient.hud(c));
+        KitClient.init();
         net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.AFTER_ENTITIES.register(ctx -> {
             if (ctx.consumers() != null) {
                 Afterimages.render(ctx.matrixStack(), ctx.consumers(), ctx.camera().getPos());
@@ -79,6 +81,7 @@ public final class KataClient implements ClientModInitializer {
     /** The number keys don't pick hotbar slots any more (no hotbar; they're for moves later). */
     private static void early(MinecraftClient mc) {
         if (mc.player == null) return;
+        if (!KitClient.early(mc) && mc.player.isCreative()) return; // creative builds with Minecraft's own hotbar
         for (KeyBinding k : mc.options.hotbarKeys) while (k.wasPressed()) { }
     }
 
@@ -86,6 +89,8 @@ public final class KataClient implements ClientModInitializer {
         Move.tick(mc);
         Parkour.tick(mc);
         Fight.tick(mc);
+        KitClient.tick(mc);
+        Meditate.tick(mc);
         KataCam.tick(mc);
         if (mc.player != null) Ragdoll.syncOut(mc.player);
         // Kata is played in third person, always (the body is the point).

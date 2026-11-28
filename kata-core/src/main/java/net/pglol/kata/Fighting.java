@@ -130,6 +130,13 @@ public final class Fighting {
     /** Ground kicks that spring the fighter up off the floor, and how hard (vertical speed, blocks a tick). */
     private static final Map<String, Float> HOP = new HashMap<>();
 
+    /** Moves the whole body turns over through: 1 a backflip, 2 a front flip, 3 a corkscrew. */
+    private static final Map<String, Integer> FLIP = new HashMap<>();
+
+    public static int flip(Move m) {
+        return m == null ? 0 : FLIP.getOrDefault(m.id(), 0);
+    }
+
     /** How hard this move springs you off the ground (0: it doesn't). */
     public static float hop(Move m) {
         return m == null ? 0 : HOP.getOrDefault(m.id(), 0f);
@@ -177,6 +184,7 @@ public final class Fighting {
             boolean heavyM = "heavy".equals(m.get("kind").getAsString()), airM = "air".equals(from);
             float tempo = airM ? 1.2f : heavyM ? 1.25f : 1.35f;
             if (m.has("hop")) HOP.put(sid + ":" + m.get("id").getAsString(), m.get("hop").getAsFloat());
+            if (m.has("flip")) FLIP.put(sid + ":" + m.get("id").getAsString(), switch (m.get("flip").getAsString()) { case "front" -> 2; case "corkscrew" -> 3; default -> 1; });
             pool.add(new Move(sid + ":" + m.get("id").getAsString(), m.get("name").getAsString(),
                 Path.valueOf(m.get("path").getAsString().toUpperCase(java.util.Locale.ROOT)),
                 "lead".equals(m.get("hand").getAsString()), "heavy".equals(m.get("kind").getAsString()),
@@ -919,6 +927,7 @@ public final class Fighting {
             return;
         }
         relay(p, KataNet.STRIKE, packed);
+        Meditation.stop(p); // a strike thrown ends any meditation
         if (target < 0 || guarding(p)) {
             dbg(p, target < 0 ? 4 : 5, 0);
             return;
@@ -977,6 +986,9 @@ public final class Fighting {
 
     /** A strike landing (from a player or a dummy): damage by part, guard, parry, knockback, launch, knockdown. */
     static boolean land(LivingEntity by, LivingEntity t, Move m, float power, Part part, Vec3d look, net.minecraft.entity.damage.DamageSource src) {
+        if (Meditation.untouchable(t)) return false; // settled in meditation: nothing touches them
+        Meditation.combat(by);
+        Meditation.combat(t);
         float dmg = m.damage() * (m.heavy() ? 0.5f + 0.5f * power : 1) * part.share * Injuries.strikeScale(by, m.leg());
         // A light into someone throwing a heavy: they take it (a little less) and keep going.
         boolean tanked = !m.heavy() && armoured(t);

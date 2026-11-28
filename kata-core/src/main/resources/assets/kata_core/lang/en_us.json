@@ -6,5 +6,7 @@
   "key.kata_core.shoulder": "Swap camera shoulder",
   "entity.kata_core.dummy": "Training dummy",
   "key.kata_core.deck": "Combat deck",
-  "item.kata_core.bandage": "Bandage"
+  "item.kata_core.bandage": "Bandage",
+  "key.kata_core.interact": "Interact / pick up",
+  "key.kata_core.draw": "Draw / sheathe"
 }

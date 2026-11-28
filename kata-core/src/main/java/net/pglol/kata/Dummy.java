@@ -324,7 +324,7 @@ public class Dummy extends PathAwareEntity {
         }
 
         // Calm: let it go after a while, or if they're gone or far off.
-        if (foe != null && (!foe.isAlive() || foe.isSpectator() || age > calmAt || foe.squaredDistanceTo(this) > 20 * 20
+        if (foe != null && (!foe.isAlive() || foe.isSpectator() || Meditation.untouchable(foe) || age > calmAt || foe.squaredDistanceTo(this) > 20 * 20
             || (foe instanceof PlayerEntity pl && pl.isCreative() && age > calmAt - 100))) {
             foe = null;
             dataTracker.set(FOE, -1);

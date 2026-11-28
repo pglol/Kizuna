@@ -74,6 +74,18 @@ public final class KataNet {
     }
 
     /** Client -> server: a fighting action. kind GUARD (a: 1 on, 0 off), STRIKE (a: move, b: target entity or -1), STANCE (a: stance). */
+    /** A player's own Kata gear slots (shoulder, elbow, gloves, belt, weapon I, weapon II). */
+    public record GearOf(java.util.List<net.minecraft.item.ItemStack> items) implements CustomPayload {
+        public static final Id<GearOf> ID = new Id<>(Identifier.of(KataCore.ID, "gear_of"));
+        public static final PacketCodec<RegistryByteBuf, GearOf> CODEC = PacketCodec.tuple(
+            net.minecraft.item.ItemStack.OPTIONAL_PACKET_CODEC.collect(net.minecraft.network.codec.PacketCodecs.toList()), GearOf::items, GearOf::new);
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
     public record Fight(int kind, int a, int b) implements CustomPayload {
         public static final Id<Fight> ID = new Id<>(Identifier.of(KataCore.ID, "fight"));
         public static final PacketCodec<RegistryByteBuf, Fight> CODEC = PacketCodec.of((v, buf) -> {
@@ -96,6 +108,8 @@ public final class KataNet {
     }
 
     public static final int GUARD = 0, STRIKE = 1, STANCE = 2, GUARD_HIT = 3, GUARD_BROKEN = 4, WINDUP = 5, STAGGER = 6, PARRY = 7, KNOCKDOWN = 8, DUMMY_REST = 9, DUMMY_AT = 10, HIT = 11, BLOCKED = 12, DODGE = 13, POISE = 14, FLINCH = 15, PARRIED = 16, EVADED = 17, CHARGE = 18, AIR_HIT = 19, CONCUSS = 20, DEBUG = 21, TETHER = 22, WHIFFED = 23, SMASH_LAND = 24, INJURY = 25, AWARE = 26;
+    /** The meditation menu (MEDITATE: 0 off, 1 settling, 2 untouchable), F pickups, kit actions (see Kit), a grab shown. */
+    public static final int MEDITATE = 40, PICKUP = 41, KIT = 42, GRAB = 43;
 
     /** Act mode meaning "crouched to catch a landing" (for the server's fall damage; not shown). */
     public static final int BRACE = 31;
@@ -112,6 +126,7 @@ public final class KataNet {
         PayloadTypeRegistry.playS2C().register(FightOf.ID, FightOf.CODEC);
         PayloadTypeRegistry.playC2S().register(Rag.ID, Rag.CODEC);
         PayloadTypeRegistry.playS2C().register(RagOf.ID, RagOf.CODEC);
+        PayloadTypeRegistry.playS2C().register(GearOf.ID, GearOf.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(Rag.ID, (payload, ctx) -> {
             ServerPlayerEntity p = ctx.player();
             for (ServerPlayerEntity other : PlayerLookup.tracking(p)) {
@@ -131,6 +146,9 @@ public final class KataNet {
                 case WINDUP -> Fighting.windup(p, payload.a(), payload.b());
                 case DUMMY_REST -> Fighting.dummyRest(p, payload.a(), payload.b(), true);
                 case DUMMY_AT -> Fighting.dummyRest(p, payload.a(), payload.b(), false);
+                case MEDITATE -> Meditation.request(p, payload.a() != 0);
+                case PICKUP -> Kit.pickup(p, payload.a());
+                case KIT -> Kit.handle(p, payload.a(), payload.b());
                 default -> { }
             }
         });
